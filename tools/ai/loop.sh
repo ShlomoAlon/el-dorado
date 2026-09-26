@@ -14,9 +14,9 @@ fi
 best=-1; [ -f $D/$C.best.score ] && best=$(cat $D/$C.best.score)
 for i in $(seq 1 $N); do
   it=$(( $( (ls $D/$C.it*.json 2>/dev/null || true) | wc -l) + 1 ))
-  eps=$(python3 -c "print(round(max(0.02, 0.08-0.003*$it),3))")
-  log "STAGE iter $it: 600 self-play games (random-move rate $eps, random-buy rate 0.15)"
-  out=$(EPS=$eps BUYEPS=0.15 node tools/ai/gen.mjs self 600 $D/$C.it$it $NET $C) || { log "ERROR gen failed"; exit 1; }
+  eps=$(python3 -c "print(round(max(0.01, 0.04-0.001*$it),3))"); temp=$(python3 -c "print(round(max(0.005, 0.03-0.0008*$it),4))")
+  log "STAGE iter $it: 600 self-play games (exploration: softmax temp $temp, random-move rate $eps, random-buy turns 10%)"
+  out=$(EPS=$eps TEMP=$temp BUYEPS=0.1 node tools/ai/gen.mjs self 600 $D/$C.it$it $NET $C) || { log "ERROR gen failed"; exit 1; }
   log "GEN $out"
   prev=$(ls -t $D/$C.it*.json | head -3 | sed 's/\.json$//' | tr '\n' ' ')
   log "TRAIN $(python3 tools/ai/train.py $NET $C 3 $prev 2>/dev/null)"

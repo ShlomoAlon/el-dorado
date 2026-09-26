@@ -21,7 +21,7 @@ for (const r of rows) md += `| ${r.it} | ${r.games.toLocaleString()} | **${pct(r
 if (!rows.length) md += `| – | – | – | – | – | – | – |\n`;
 if (lastGen && (lastGen.buysNet || lastGen.buysHeur)) {
   const b = lastGen.mode === 'self' ? lastGen.buysNet : lastGen.buysHeur, tot = Object.values(b || {}).reduce((a, x) => a + x, 0) || 1;
-  md += `\n### What it buys (latest ${lastGen.mode === 'self' ? 'self-play' : 'heuristic'} batch, ${lastGen.games} games${lastGen.mode === 'self' ? ', includes 15% random purchases for exploration' : ''})\n\n| Card | Bought | Share |\n|---|---|---|\n`;
+  md += `\n### What it buys (latest ${lastGen.mode === 'self' ? 'self-play' : 'heuristic'} batch, ${lastGen.games} games${lastGen.mode === 'self' ? ', includes exploration: softmax choices, a few random moves, and a random purchase on 10% of turns' : ''})\n\n| Card | Bought | Share |\n|---|---|---|\n`;
   for (const [t, c] of Object.entries(b || {}).sort((a, b) => b[1] - a[1])) md += `| ${NAMES[t] || t} | ${c} | ${(c / tot * 100).toFixed(1)}% |\n`;
   const never = Object.keys(NAMES).filter(t => !['explorer', 'traveler', 'sailor'].includes(t) && !(b || {})[t]); if (never.length) md += `\nNever bought in this batch: ${never.map(t => NAMES[t]).join(', ')}\n`;
 }

@@ -23,13 +23,17 @@ if (!isMainThread) {
     else if (mode === 'self') { const np = rnd() < .2 ? 2 : rnd() < .55 ? 3 : 4; pols = Array.from({ length: np }, () => rnd() < .25 ? 'heur' : 'net'); if (!pols.includes('net')) pols[0] = 'net'; }
     else pols = g % 4 === 3 ? ['net', 'net', 'net'] : ['net', 'heur', 'heur'].map((_, i, a) => a[(i + g) % 3]);
     E.newGame({ course: C, seed: (rnd() * 2 ** 31) | 0, fullRace: true, players: pols.map((_, i) => ({ name: 'B' + i, color: '#fff' })) });
-    const traj = pols.map(() => []); let acts = 0;
+    const traj = pols.map(() => []); let acts = 0, lastMe = -1, lastRound = -1, turnState = null;
     const eps = mode === 'self' ? workerData.eps : 0;
     while (!E.S.over) {
       const S = E.S; S.log.length = 0;
       if (S.round > CAP || acts > 15000) { E.endGame(); st.capped++; break; }
       const me = S.cur, isNet = pols[me] === 'net';
-      const c = E.botChoose({ mode: isNet ? 'net' : 'heur', eps: isNet ? eps : (mode === 'eval' ? 0 : .03), buyEps: mode === 'self' && isNet ? workerData.buyEps : 0, noise: mode === 'eval' ? 0 : isNet ? .01 : .3, rnd });
+      // exploration (self-play only): per turn, sometimes force one random purchase; per decision, softmax + a little uniform randomness
+      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; turnState = { forceBuy: mode === 'self' && isNet && rnd() < workerData.buyEps }; }
+      const c = mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : 'heur', rnd })
+        : isNet ? E.botChoose({ mode: 'net', eps, temp: workerData.temp, turnState, rnd })
+        : E.botChoose({ mode: 'heur', eps: .03, noise: .3, rnd });
       if (c.a.t === 'buy' || c.a.t === 'transmit') { const stk = c.a.src === 'm' ? S.market[c.a.idx] : S.reserve[c.a.idx]; if (stk) { const b = isNet ? st.buysNet : st.buysHeur; b[stk.t] = (b[stk.t] || 0) + 1; } }
       if (c.a.t === 'end' && isNet) st.turnsNet++;
       const r = E.applyAction(me, c.a); acts++;
@@ -59,9 +63,9 @@ if (isMainThread) {
   const [, , mode = 'heur', G = '100', out = '-', netPath = '', course = 'first'] = process.argv;
   const net = netPath ? JSON.parse(readFileSync(netPath, 'utf8')) : null;
   const W = cpus().length, t0 = Date.now();
-  const eps = +(process.env.EPS || 0.05), buyEps = +(process.env.BUYEPS || 0.15);
+  const eps = +(process.env.EPS || 0.03), buyEps = +(process.env.BUYEPS || 0.1), temp = +(process.env.TEMP || 0.02);
   const rs = await Promise.all(Array.from({ length: W }, (_, i) => new Promise((res, rej) => {
-    const w = new Worker(new URL(import.meta.url), { workerData: { mode, games: Math.ceil(+G / W), seed0: (Math.random() * 2 ** 31) | 0, net, course, eps, buyEps } });
+    const w = new Worker(new URL(import.meta.url), { workerData: { mode, games: Math.ceil(+G / W), seed0: (Math.random() * 2 ** 31) | 0, net, course, eps, buyEps, temp } });
     w.on('message', res); w.on('error', rej);
   })));
   const st = {}; for (const r of rs) for (const k in r.st) { const v = r.st[k];

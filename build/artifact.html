@@ -792,40 +792,39 @@ function botDist(){
 const botCost=k=>k==='done'?0:(botDist().cost.get(k)??60);
 /* ---- legal atomic actions for the player to move (deduplicated by card type) ---- */
 function botWorth(t){const d=CT[t];if(!d)return 0;if(d.c==='p')return t==='native'?3:t==='transmitter'?3.5:2.5;return d.p*(d.c==='x'?1.25:1)+(d.once?-.5:0);}
+/* every distinct subset (by card types) of `ids` with exactly k cards */
+function botCombos(ids,k){const out=[],seen=new Set(),cur=[];
+  const rec=i=>{if(cur.length===k){const sig=cur.map(typeOf).sort().join();if(!seen.has(sig)){seen.add(sig);out.push(cur.slice());}return;}
+    for(let j=i;j<ids.length;j++){cur.push(ids[j]);rec(j+1);cur.pop();}};rec(0);return out;}
 function botActions(){
   const seat=S.cur,P=S.players[seat],T=S.turn,out=[];
-  if(T.pending){const hand=P.hand.slice().sort((a,b)=>botWorth(typeOf(a))-botWorth(typeOf(b)));out.push({t:'trash',cards:[]});
-    for(let k=1;k<=Math.min(T.pending.max,hand.length);k++)out.push({t:'trash',cards:hand.slice(0,k)});
-    // also: remove only starting cards
-    return out;}
-  const seen=new Set(),uniq=ids=>ids.filter(id=>{const t=typeOf(id);if(seen.has(t))return false;seen.add(t);return true;});
-  const hand=uniq(P.hand.slice());seen.clear();
+  // Scientist / Travel Log: remove nothing, or any distinct choice of up to `max` cards
+  if(T.pending){for(let k=0;k<=Math.min(T.pending.max,P.hand.length);k++)for(const c of botCombos(P.hand,k))out.push({t:'trash',cards:c});return out;}
+  const seen=new Set(),hand=P.hand.filter(id=>{const t=typeOf(id);if(seen.has(t))return false;seen.add(t);return true;}); // one of each type
   P.pieces.forEach((pk,pi)=>{if(pk==='done')return;
     if(T.active&&T.active.pi===pi)for(const[k]of reach(seat,pi,[T.active.sym],T.active.left))out.push({t:'move',card:T.active.id,pi,to:k});
     for(const id of hand){const d=def(id),t=typeOf(id);
       if(t==='native'){for(const[k]of nativeTargets(seat,pi))out.push({t:'native',card:id,pi,to:k});continue;}
       if(d.c==='p')continue;
       for(const[k]of reach(seat,pi,d.s==='*'?['j','w','v']:[d.s],d.p))out.push({t:'move',card:id,pi,to:k});}
-    for(const[k,tg]of payTargets(seat,pi)){const cards=P.hand.slice().sort((a,b)=>botWorth(typeOf(a))-botWorth(typeOf(b))).slice(0,tg.need);out.push({t:'pay',pi,to:k,cards});}
+    // rubble / base camp / rubble blockade: every distinct choice of cards to give up
+    for(const[k,tg]of payTargets(seat,pi))for(const c of botCombos(P.hand,tg.need))out.push({t:'pay',pi,to:k,cards:c});
   });
   for(const id of hand){const t=typeOf(id);if(['cartographer','compass','scientist','travellog'].includes(t))out.push({t:'action',card:id});}
   const open=S.market.some(s=>s.n===0);
   const tr=hand.find(id=>typeOf(id)==='transmitter');
   if(tr){S.market.forEach((s,i)=>{if(s.n>0)out.push({t:'transmit',card:tr,src:'m',idx:i});});S.reserve.forEach((s,i)=>{if(s.n>0)out.push({t:'transmit',card:tr,src:'r',idx:i});});}
   if(!T.bought){
-    const cash=P.hand.reduce((a,id)=>a+coinVal(id),0);
-    const pay=cost=>{ // coin cards first (largest), then the weakest others; drop what isn't needed
-      const coins=P.hand.filter(id=>'yx'.includes(def(id).c)).sort((a,b)=>coinVal(b)-coinVal(a)),rest=P.hand.filter(id=>!'yx'.includes(def(id).c)).sort((a,b)=>botWorth(typeOf(a))-botWorth(typeOf(b)));
-      const pick=[];let tot=0;for(const id of[...coins,...rest]){if(tot>=cost)break;pick.push(id);tot+=coinVal(id);}
-      if(tot<cost)return null;for(let i=pick.length-1;i>=0;i--){if(tot-coinVal(pick[i])>=cost){tot-=coinVal(pick[i]);pick.splice(i,1);}}return pick;};
-    const tryStack=(src,s,i)=>{if(s.n<=0||CT[s.t].cost>cash)return;const cards=pay(CT[s.t].cost);if(cards)out.push({t:'buy',src,idx:i,cards});};
+    // every minimal way to pay (no card could be left out), distinct by card types
+    const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),pays=new Map();
+    const payFor=cost=>{if(pays.has(cost))return pays.get(cost);const res=[];
+      for(let k=1;k<=P.hand.length&&res.length<8;k++)for(const c of botCombos(P.hand,k)){const tot=c.reduce((a,id)=>a+coinVal(id),0);if(tot>=cost&&c.every(id=>tot-coinVal(id)<cost))res.push(c);}
+      pays.set(cost,res);return res;};
+    const tryStack=(src,s,i)=>{if(s.n<=0||CT[s.t].cost>cash)return;for(const cards of payFor(CT[s.t].cost))out.push({t:'buy',src,idx:i,cards});};
     S.market.forEach((s,i)=>tryStack('m',s,i));if(open)S.reserve.forEach((s,i)=>tryStack('r',s,i));
   }
-  // end turn: discard all, or keep one / two of the best cards
-  out.push({t:'end',keep:[]});
-  const byWorth=P.hand.slice().sort((a,b)=>botWorth(typeOf(b))-botWorth(typeOf(a)));
-  if(byWorth.length>=1)out.push({t:'end',keep:[byWorth[0]]});
-  if(byWorth.length>=2)out.push({t:'end',keep:byWorth.slice(0,2)});
+  // end turn keeping any distinct choice of 0–3 cards
+  for(let k=0;k<=Math.min(3,P.hand.length);k++)for(const c of botCombos(P.hand,k))out.push({t:'end',keep:c});
   return out;
 }
 /* ---- features: everything a player can see at a glance, from `me`'s point of view ----
@@ -929,18 +928,26 @@ function botClone(st){
     turn:{...t,active:t.active&&{...t.active},pending:t.pending&&{...t.pending}},
     winners:st.winners&&st.winners.slice(),places:st.places&&st.places.slice()};
 }
+/* Pick an action. Greedy by default. Training exploration:
+   eps    – chance of a uniformly random legal action (tries even options it rates badly)
+   temp   – softmax over the looked-ahead values: near-best options get tried often, clearly bad ones rarely
+   buyEps – chance (once per turn, see opts.turnState) of buying a random affordable card */
 function botChoose(opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
   const me=S.cur,acts=botActions(),root=S;if(mode==='net'&&!botNetReady())mode='heur';
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)]};
-  if(opts.buyEps&&rnd()<opts.buyEps){const buys=acts.filter(a=>a.t==='buy');if(buys.length)return{a:buys[Math.floor(rnd()*buys.length)]};} // try cards it wouldn't pick
-  let best=null,bv=-Infinity;
+  const ts=opts.turnState;
+  if(ts&&ts.forceBuy&&!S.turn.bought){const buys=acts.filter(a=>a.t==='buy');if(buys.length){ts.forceBuy=false;return{a:buys[Math.floor(rnd()*buys.length)]};}}
+  const vals=[];let best=null,bv=-Infinity;
   for(const a of acts){
     S=botClone(root);shuffle(S.players[me].deck,rnd); // don't peek at the real draw order
     const r=applyAction(me,a);
-    if(r.ok){const v=botValue(me,mode)+(opts.noise?(rnd()-.5)*opts.noise:0);if(v>bv){bv=v;best=a;}}
+    const v=r.ok?botValue(me,mode)+(opts.noise?(rnd()-.5)*opts.noise:0):-Infinity;vals.push(v);
+    if(v>bv){bv=v;best=a;}
     S=root;
   }
+  if(opts.temp&&acts.length>1){const w=vals.map(v=>v===-Infinity?0:Math.exp((v-bv)/opts.temp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
+    for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i]};}}
   return{a:best||{t:'end',keep:[]},v:bv};
 }
 /* play one whole turn for the player to move (used by the UI and the simulator) */
