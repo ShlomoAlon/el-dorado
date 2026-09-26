@@ -316,7 +316,7 @@ function setupPanZoom(){
   $('#zout').onclick=()=>{const v2=vp();zoomAt(v2.clientWidth/2,v2.clientHeight/2,.8);};
   $('#zfit').onclick=()=>fit(true);
   let lastW=v.clientWidth;
-  new ResizeObserver(()=>{const w=v.clientWidth;const widthChanged=Math.abs(w-lastW)>2;lastW=w;
+  new ResizeObserver(()=>{updateMktH();const w=v.clientWidth;const widthChanged=Math.abs(w-lastW)>2;lastW=w;
     if(!userZoomed&&(widthChanged||!ptrs.size))fit();if(S)layoutCards();}).observe(v);
   ['gesturestart','gesturechange','gestureend'].forEach(t=>document.addEventListener(t,e=>e.preventDefault(),{passive:false}));
   document.addEventListener('touchmove',e=>{if(e.touches.length>1)e.preventDefault();},{passive:false});
@@ -582,7 +582,19 @@ window.addEventListener('pointerdown',e=>{aim.touch=e.pointerType!=='mouse';},{p
 /* ---------- market: floating strip (six market cards + "All cards" tile) and the all-cards spread ---------- */
 function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
   updateMktH();if(!userZoomed)setTimeout(()=>fit(true),10);}
-function updateMktH(){}
+/* size the right-hand market stack so it always ends above the action buttons (End turn / Undo);
+   shrink the cards, and add a column when that isn't enough */
+function updateMktH(){
+  const mk=$('#mkt');if(!mk)return;const v=vp(),W=v.clientWidth,H=v.clientHeight,phone=W<600;
+  const top=mk.offsetTop,ab=$('#actBtns'),abBottom=ab?parseFloat(getComputedStyle(ab).bottom)||0:0;
+  let avail=H-abBottom-150-top; // room for up to three stacked buttons below
+  if(avail<60&&ab)avail=ab.getBoundingClientRect().top-v.getBoundingClientRect().top-top-12; // very short screens: just stay above the current ones
+  const def=phone?44:72,min=phone?34:56,gap=phone?7:10,n=S?S.market.length+1:7;
+  let pick=null;
+  for(let cols=phone?1:2;cols<=n;cols++){const rows=Math.ceil(n/cols),mw=Math.min(def,(avail-(rows-1)*gap-8)/(rows*1.4));pick={cols,mw};if(mw>=min)break;}
+  const mw=Math.max(28,Math.floor(pick.mw));
+  if(mk.dataset.sz!==pick.cols+'/'+mw){mk.dataset.sz=pick.cols+'/'+mw;mk.style.setProperty('--mw',mw+'px');$('#market').style.gridTemplateColumns=`repeat(${pick.cols},var(--mw))`;}
+}
 function openAll(open){UI.allOpen=open;$('#allc').hidden=!open;if(open){$('#allc').scrollTop=0;renderMarket();}}
 const ALL_ICON='<svg viewBox="-10 -10 20 20"><rect x="-8.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".45" transform="rotate(-14)"/><rect x="-4.5" y="-7.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".7"/><rect x="-.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" transform="rotate(12)"/></svg>';
 function renderMarket(){
@@ -665,7 +677,7 @@ function btnWire(B,btns){
 function render(){
   if(!S)return;
   computeTargets();
-  renderHeader();renderMarket();renderPrompt();renderCards();
+  renderHeader();renderMarket();renderPrompt();updateMktH();renderCards(); // re-size the market once the buttons exist
   renderBlockades();renderTargets();renderPieces();
   aim.hot=null;if(aimWanted())startAim();else stopAim();
   save();updateTitle();renderTimer();$('#menuBtn').textContent=online()&&!S.over?'Leave game':'New game';

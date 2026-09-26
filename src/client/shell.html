@@ -250,7 +250,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
   .tbtn{padding:7px 10px;font-size:12.5px}
   #rulesBtn{display:none}
   #mkt{top:58px;right:6px;--mw:44px}
-  #market{grid-template-columns:var(--mw);gap:7px}
+  #market{gap:7px}
   #mkt .mslot:hover{transform:none}
   .mslot.can::after{content:'';width:8px;height:8px;padding:0;bottom:-4px}
   .alltile{font-size:9px;gap:2px;padding:2px}
@@ -261,7 +261,8 @@ details.jr:not([open]) summary h3::after{content:"▸"}
   .allc-in{padding:58px 12px 30px}
   .pstack{width:54px;height:76px}
   #actBtns{bottom:calc(16px + 76px + 34px)}
-  .zoomctl{display:none}
+  .zoomctl{top:auto;bottom:calc(16px + 76px + 34px);transform:none;left:12px}
+  .zoomctl button:not(#fsBtn){display:none}
   .btn.big{font-size:14px;padding:10px 16px}
 }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
@@ -288,7 +289,6 @@ details.jr:not([open]) summary h3::after{content:"▸"}
     <div class="brandbox glass"><span class="brand">El Dorado</span><span id="roundLbl"></span></div>
     <div id="players"></div>
     <div class="hbtns">
-      <button class="tbtn glass ico" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button>
       <button class="tbtn glass" id="mktBtn">Market</button>
       <button class="tbtn glass" id="rulesBtn">Rules</button>
       <button class="tbtn glass" id="menuBtn">New game</button>
@@ -305,7 +305,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
       <details class="jr allc-sect" id="journal"><summary><h3 style="display:inline-flex;margin:0">Journal</h3></summary><div id="log"></div></details>
     </div>
   </div>
-  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button></div>
+  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button></div>
   <div class="pile" id="deckPile" title="Draw pile — click to view"><div class="pstack" id="deckStack"></div><div class="lbl glass">Deck <b id="deckN">0</b></div></div>
   <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
   <div id="actBtns"></div>
