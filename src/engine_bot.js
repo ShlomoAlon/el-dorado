@@ -167,7 +167,8 @@ function botClone(st){
 function botChoose(opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
   const me=S.cur,acts=botActions(),root=S;if(mode==='net'&&!botNetReady())mode='heur';
-  if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],feat:null};
+  if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)]};
+  if(opts.buyEps&&rnd()<opts.buyEps){const buys=acts.filter(a=>a.t==='buy');if(buys.length)return{a:buys[Math.floor(rnd()*buys.length)]};} // try cards it wouldn't pick
   let best=null,bv=-Infinity;
   for(const a of acts){
     S=botClone(root);shuffle(S.players[me].deck,rnd); // don't peek at the real draw order

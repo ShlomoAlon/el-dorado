@@ -16,7 +16,7 @@ if (!isMainThread) {
   const C = E.COURSES.find(c => c.id === course) || E.COURSES[0];
   if (net) E.setNet(net);
   let s = seed0 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const X = [], Y = [], st = { netWins: 0, netSeats: 0, netArr: [], raceFirst: [], raceArr: [], heurArr: [], firstArr: [], capped: 0 };
+  const X = [], Y = [], st = { netWins: 0, netSeats: 0, netArr: [], raceFirst: [], raceArr: [], heurArr: [], firstArr: [], capped: 0, buysNet: {}, buysHeur: {}, turnsNet: 0 };
   for (let g = 0; g < games; g++) {
     let pols;
     if (mode === 'heur') pols = Array(rnd() < .2 ? 2 : rnd() < .55 ? 3 : 4).fill('heur');
@@ -29,7 +29,9 @@ if (!isMainThread) {
       const S = E.S; S.log.length = 0;
       if (S.round > CAP || acts > 15000) { E.endGame(); st.capped++; break; }
       const me = S.cur, isNet = pols[me] === 'net';
-      const c = E.botChoose({ mode: isNet ? 'net' : 'heur', eps: isNet ? eps : (mode === 'eval' ? 0 : .03), noise: mode === 'eval' ? 0 : isNet ? .01 : .3, rnd });
+      const c = E.botChoose({ mode: isNet ? 'net' : 'heur', eps: isNet ? eps : (mode === 'eval' ? 0 : .03), buyEps: mode === 'self' && isNet ? workerData.buyEps : 0, noise: mode === 'eval' ? 0 : isNet ? .01 : .3, rnd });
+      if (c.a.t === 'buy' || c.a.t === 'transmit') { const stk = c.a.src === 'm' ? S.market[c.a.idx] : S.reserve[c.a.idx]; if (stk) { const b = isNet ? st.buysNet : st.buysHeur; b[stk.t] = (b[stk.t] || 0) + 1; } }
+      if (c.a.t === 'end' && isNet) st.turnsNet++;
       const r = E.applyAction(me, c.a); acts++;
       if (!r.ok) E.applyAction(me, { t: 'end', keep: [] });
       if (mode !== 'eval' && !E.S.over) traj[me].push(E.botNetFeatures(me));
@@ -57,15 +59,16 @@ if (isMainThread) {
   const [, , mode = 'heur', G = '100', out = '-', netPath = '', course = 'first'] = process.argv;
   const net = netPath ? JSON.parse(readFileSync(netPath, 'utf8')) : null;
   const W = cpus().length, t0 = Date.now();
-  const eps = +(process.env.EPS || 0.05);
+  const eps = +(process.env.EPS || 0.05), buyEps = +(process.env.BUYEPS || 0.15);
   const rs = await Promise.all(Array.from({ length: W }, (_, i) => new Promise((res, rej) => {
-    const w = new Worker(new URL(import.meta.url), { workerData: { mode, games: Math.ceil(+G / W), seed0: (Math.random() * 2 ** 31) | 0, net, course, eps } });
+    const w = new Worker(new URL(import.meta.url), { workerData: { mode, games: Math.ceil(+G / W), seed0: (Math.random() * 2 ** 31) | 0, net, course, eps, buyEps } });
     w.on('message', res); w.on('error', rej);
   })));
-  const st = {}; for (const r of rs) for (const k in r.st) st[k] = Array.isArray(r.st[k]) ? (st[k] || []).concat(r.st[k]) : (st[k] || 0) + r.st[k];
+  const st = {}; for (const r of rs) for (const k in r.st) { const v = r.st[k];
+    if (Array.isArray(v)) st[k] = (st[k] || []).concat(v); else if (typeof v === 'object') { st[k] = st[k] || {}; for (const t in v) st[k][t] = (st[k][t] || 0) + v[t]; } else st[k] = (st[k] || 0) + v; }
   const avg = a => a && a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null;
   const summary = { mode, games: +G, secs: (Date.now() - t0) / 1000, capped: st.capped, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
-    netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), raceFirstArrival: avg(st.raceFirst), raceArrival: avg(st.raceArr), firstArrival: avg(st.firstArr) };
+    netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), raceFirstArrival: avg(st.raceFirst), raceArrival: avg(st.raceArr), firstArrival: avg(st.firstArr), buysNet: st.buysNet, buysHeur: st.buysHeur, netTurns: st.turnsNet };
   if (out !== '-' && mode !== 'eval') {
     const n = rs.reduce((a, r) => a + r.Y.length, 0), nf = rs.find(r => r.nf)?.nf || 0, cat = (k, T) => { const a = new T(rs.reduce((s, r) => s + r[k].length, 0)); let o = 0; for (const r of rs) { a.set(r[k], o); o += r[k].length; } return a; };
     const Y = cat('Y', Float32Array), len = cat('len', Uint32Array), idx = cat('idx', Uint16Array), val = cat('val', Float32Array);
