@@ -621,7 +621,7 @@ window.addEventListener('pointerdown',e=>{aim.touch=e.pointerType!=='mouse';},{p
    SIDE / HUD / PROMPT
    ========================================================= */
 /* ---------- market: floating strip (six market cards + "All cards" tile) and the all-cards spread ---------- */
-function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
+function setMkt(open){setTimeout(()=>{if(REPLAY)replayLayout();},0);UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
   updateMktH();if(!userZoomed)setTimeout(()=>fit(true),10);}
 /* size the right-hand market stack so it always ends above the action buttons (End turn / Undo);
    shrink the cards, and add a column when that isn't enough */

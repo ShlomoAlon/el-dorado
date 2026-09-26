@@ -235,7 +235,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 .rlist button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);color:var(--text);cursor:pointer;font:inherit}
 .rlist button b{font-size:14px}.rlist button span{font-size:12px;color:var(--muted)}.rlist button:hover{border-color:var(--line2)}
 /* replay controls: where the turn buttons normally sit */
-#rbar{position:absolute;right:16px;bottom:calc(16px + 104px + 34px);z-index:14;width:min(360px,calc(100% - 32px));padding:10px 12px;border-radius:14px;display:flex;flex-direction:column;gap:8px}
+#rbar{position:absolute;right:16px;bottom:170px;z-index:14;width:360px;padding:10px 12px;border-radius:14px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
 #rbar .rrow{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 #rbar button{min-width:34px;height:32px;border-radius:9px;border:1px solid var(--line2);background:#0c1512;color:var(--text);font:inherit;font-size:15px;cursor:pointer}
 #rbar button:hover{border-color:var(--gold)}
@@ -243,7 +243,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 #rbar select{height:32px;border-radius:9px;border:1px solid var(--line2);background:#0c1512;color:var(--text);font:inherit;font-size:13px;padding:0 4px;margin-left:4px}
 #rbPos{font-size:12px;color:var(--muted);margin-left:auto;white-space:nowrap}
 #rbR{width:100%;accent-color:var(--gold)}
-#rbWhy{display:flex;flex-direction:column;gap:3px;font-size:12.5px;max-height:30vh;overflow:auto}
+#rbWhy{display:flex;flex-direction:column;gap:3px;font-size:12.5px;flex:1 1 auto;min-height:0;overflow:auto}
 #rbWhy .rwh{color:var(--text);font-weight:700;margin-bottom:2px}#rbWhy .m{color:var(--muted);font-weight:500}
 #rbWhy .ralt{display:flex;gap:8px;align-items:baseline;padding:3px 6px;border-radius:7px;color:#cfd8d2}
 #rbWhy .ralt b{min-width:34px;text-align:right;color:var(--gold2)}
@@ -281,8 +281,8 @@ details.jr:not([open]) summary h3::after{content:"▸"}
   .pchip .st{display:none}
   #players{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
   #prompt{top:62px;font-size:13px}
-  #rbar{right:12px;left:12px;width:auto;bottom:calc(16px + 76px + 34px);padding:8px 10px;gap:6px;z-index:17}
-  #rbar button{min-width:0;flex:1;padding:0 4px}#rbar button.pri{min-width:0}#rbar select{margin-left:0}#rbPos{width:100%;margin:0;text-align:right}#rbWhy{max-height:22vh}
+  #rbar{padding:8px 10px;gap:6px}
+  #rbar button{min-width:0;flex:1;padding:0 4px}#rbar button.pri{min-width:0}#rbar select{margin-left:0}#rbPos{width:100%;margin:0;text-align:right}
 }
 @media (max-width:600px){
   :root{--cw:86px}

@@ -235,7 +235,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 .rlist button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);color:var(--text);cursor:pointer;font:inherit}
 .rlist button b{font-size:14px}.rlist button span{font-size:12px;color:var(--muted)}.rlist button:hover{border-color:var(--line2)}
 /* replay controls: where the turn buttons normally sit */
-#rbar{position:absolute;right:16px;bottom:calc(16px + 104px + 34px);z-index:14;width:min(360px,calc(100% - 32px));padding:10px 12px;border-radius:14px;display:flex;flex-direction:column;gap:8px}
+#rbar{position:absolute;right:16px;bottom:170px;z-index:14;width:360px;padding:10px 12px;border-radius:14px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
 #rbar .rrow{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 #rbar button{min-width:34px;height:32px;border-radius:9px;border:1px solid var(--line2);background:#0c1512;color:var(--text);font:inherit;font-size:15px;cursor:pointer}
 #rbar button:hover{border-color:var(--gold)}
@@ -243,7 +243,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 #rbar select{height:32px;border-radius:9px;border:1px solid var(--line2);background:#0c1512;color:var(--text);font:inherit;font-size:13px;padding:0 4px;margin-left:4px}
 #rbPos{font-size:12px;color:var(--muted);margin-left:auto;white-space:nowrap}
 #rbR{width:100%;accent-color:var(--gold)}
-#rbWhy{display:flex;flex-direction:column;gap:3px;font-size:12.5px;max-height:30vh;overflow:auto}
+#rbWhy{display:flex;flex-direction:column;gap:3px;font-size:12.5px;flex:1 1 auto;min-height:0;overflow:auto}
 #rbWhy .rwh{color:var(--text);font-weight:700;margin-bottom:2px}#rbWhy .m{color:var(--muted);font-weight:500}
 #rbWhy .ralt{display:flex;gap:8px;align-items:baseline;padding:3px 6px;border-radius:7px;color:#cfd8d2}
 #rbWhy .ralt b{min-width:34px;text-align:right;color:var(--gold2)}
@@ -281,8 +281,8 @@ details.jr:not([open]) summary h3::after{content:"▸"}
   .pchip .st{display:none}
   #players{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
   #prompt{top:62px;font-size:13px}
-  #rbar{right:12px;left:12px;width:auto;bottom:calc(16px + 76px + 34px);padding:8px 10px;gap:6px;z-index:17}
-  #rbar button{min-width:0;flex:1;padding:0 4px}#rbar button.pri{min-width:0}#rbar select{margin-left:0}#rbPos{width:100%;margin:0;text-align:right}#rbWhy{max-height:22vh}
+  #rbar{padding:8px 10px;gap:6px}
+  #rbar button{min-width:0;flex:1;padding:0 4px}#rbar button.pri{min-width:0}#rbar select{margin-left:0}#rbPos{width:100%;margin:0;text-align:right}
 }
 @media (max-width:600px){
   :root{--cw:86px}
@@ -2374,7 +2374,7 @@ window.addEventListener('pointerdown',e=>{aim.touch=e.pointerType!=='mouse';},{p
    SIDE / HUD / PROMPT
    ========================================================= */
 /* ---------- market: floating strip (six market cards + "All cards" tile) and the all-cards spread ---------- */
-function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
+function setMkt(open){setTimeout(()=>{if(REPLAY)replayLayout();},0);UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
   updateMktH();if(!userZoomed)setTimeout(()=>fit(true),10);}
 /* size the right-hand market stack so it always ends above the action buttons (End turn / Undo);
    shrink the cards, and add a column when that isn't enough */
@@ -2803,6 +2803,20 @@ function replayGo(i,anim){
   render();
 }
 const replayNext=()=>REPLAY&&REPLAY.log.actions[REPLAY.i];
+/* fit the replay panel into the free space: left of the market column, above the hand and piles, below the prompt;
+   the options list scrolls if that space is short; on narrow screens the zoom buttons move up out of its way */
+function replayLayout(){const b=$('#rbar');if(!b||!REPLAY)return;
+  const W=innerWidth,H=innerHeight,m=$('#mkt'),z=document.querySelector('.zoomctl');
+  const mr=m&&!m.classList.contains('hid')?m.getBoundingClientRect():null;
+  let low=H;for(const e of document.querySelectorAll('#cards .card,#deckPile,#discPile'))low=Math.min(low,e.getBoundingClientRect().top);
+  const top=$('#prompt').getBoundingClientRect().bottom+10,right=mr&&mr.width?W-mr.left+8:16,bottom=Math.max(16,H-low+8);
+  const narrow=W-right-12<380;
+  b.style.right=right+'px';b.style.bottom=bottom+'px';b.style.left=narrow?'12px':'auto';b.style.width=narrow?'auto':'360px';
+  b.style.maxHeight=Math.max(120,H-bottom-top)+'px';
+  if(z){z.style.cssText='';const zr=z.getBoundingClientRect(),br=b.getBoundingClientRect();
+    if(!(zr.right<=br.left||br.right<=zr.left||zr.bottom<=br.top||br.bottom<=zr.top)){z.style.top='auto';z.style.transform='none';z.style.bottom=(H-br.top+8)+'px';}}
+}
+addEventListener('resize',()=>{if(REPLAY)replayLayout();});
 /* jump to the start of the next / previous turn */
 function replayTurn(dir){const R=REPLAY;if(!R)return;let i=R.i;
   const turnAt=k=>{const s=JSON.parse(R.states[k]);return s.round*8+s.cur;};const t0=turnAt(i);
@@ -2814,7 +2828,7 @@ function replayPlay(){const R=REPLAY;if(!R)return;if(R.timer){replayStop();retur
   const tick=()=>{if(!REPLAY)return;if(REPLAY.i>=REPLAY.states.length-1){replayStop();return;}replayGo(REPLAY.i+1,true);REPLAY.timer=setTimeout(tick,(reduceMotion?500:750)/REPLAY.speed);};
   R.timer=setTimeout(tick,50);replayBar();}
 function replayStop(){const R=REPLAY;if(R&&R.timer){clearTimeout(R.timer);R.timer=0;}replayBar();}
-function exitReplay(){replayStop();REPLAY=null;const b=$('#rbar');if(b)b.remove();
+function exitReplay(){replayStop();REPLAY=null;const b=$('#rbar');if(b)b.remove();const z=document.querySelector('.zoomctl');if(z)z.style.cssText='';
   try{const u=new URL(location.href);u.searchParams.delete('replay');history.replaceState(null,'',u);}catch(e){}
   for(const[,el]of cardEls)el.remove();cardEls.clear();S=null;showSetup();}
 
@@ -2874,6 +2888,7 @@ function replayBar(){
       el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(o.to)){UI.targets=new Map([[o.to,{kind:'move'}]]);renderTargets();}};
       el.onpointerleave=()=>{computeTargets();replayDecorate();renderTargets();};});}
   else{w.innerHTML='';w.hidden=true;}
+  replayLayout();
 }
 /* replays list: upload a log file, or open a recent one */
 function showReplays(){
