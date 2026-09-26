@@ -14,7 +14,22 @@ function playerDone(p){return p.pieces.every(k=>k==='done');}
 function isActive(p){return !playerDone(p)&&!p.resigned;}
 
 function mapFor(st){return buildCourse(st.course,st.seed);}
+/* ---- game logs (replays) ----
+   {kind:'eldorado-replay', v:1, title, course, seed, rng, fullRace, players:[{name,color,bot}], actions:[[seat,action],…], notes:[…]}
+   Every shuffle draws from a generator seeded with log.rng, so re-applying the same actions rebuilds the identical game. */
+const REPLAY_MAX_ACTIONS=20000;
+function replayCheck(log){
+  if(!log||log.kind!=='eldorado-replay'||log.v!==1)return'Not an El Dorado game log.';
+  if(!courseById(log.course))return'Unknown course: '+log.course;
+  if(!Array.isArray(log.players)||log.players.length<2||log.players.length>4)return'A game log needs 2 to 4 players.';
+  if(!Number.isFinite(log.seed)||!Number.isFinite(log.rng))return'The game log is missing its seeds.';
+  if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
+  return null;}
+function replayStart(log){const g=mulberry32(log.rng>>>0);setRng(g);
+  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:COLORS[i%COLORS.length].hex}))});
+  return g;}
 function newGame(o){
+
   const course=o.course||COURSES[0];
   MAP=buildCourse(course,o.seed);
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};

@@ -179,6 +179,17 @@ Turn timer = DO alarm at `d.deadline`. Lobby DO keeps `{code → summary}` and p
 Free-tier notes: DO CPU limit 30 s/message (engine actions take <5 ms); Worker requests 100k/day (static assets free);
 incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning duration.
 
+### Replays (game logs)
+- A game log is `{kind:'eldorado-replay', v:1, title, course, seed, rng, fullRace, players:[{name,bot}], actions:[[seat,action],…], notes:[…]}`.
+  Shuffles draw from `RNG` (engine_data.js); `replayStart(log)` seeds it with `log.rng` and starts the game, so re-applying the
+  actions rebuilds the identical game. Normal play and the server keep `Math.random`.
+- `node tools/ai/record.mjs net,plan,plan [games] [seed] [--upload]` records bot games (the net's top options and win-chance
+  estimates go in `notes`); `FILTER=capped|netlost` keeps only those games. Bots' look-ahead runs with `setRng(null)` so it
+  can't consume the game's shuffle stream.
+- Server: `POST /api/replays` (public, ≤1.9 MB, `replayCheck` validation, newest 1000 kept in D1 `replays`), `GET /api/replays`,
+  `GET /api/replays/<id>`. Page: `/?replay=<id>`, or "Replays" on the start screen (upload + recent list).
+  Viewer: `src/client/ui_replay.js`; `REPLAY` non-null makes `canAct()` false and disables saving.
+
 ## 7. Testing recipes
 
 ```

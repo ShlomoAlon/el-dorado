@@ -670,6 +670,7 @@ function renderPrompt(){
   const pl=cur();const P=$('#prompt'),B=$('#actBtns');
   const who=`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>`;
   let txt='',btns=[];
+  if(REPLAY){P.innerHTML=replayPromptHTML();btnWire(B,[]);return;}
   const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};const tm=online()&&!S.over?'<span id="turnTimer" class="timer" hidden></span>':'';
   if(S.over){P.innerHTML='The expedition is over.';btnWire(B,[{t:'Results',id:'bRes',fn:()=>showGameOver(S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i])))},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
   if(!canAct()){P.innerHTML=tm+who+(online()&&S.owners[S.cur]===myId()?'<span class="m">Reconnecting…</span>':'is taking their turn…')+(NET.status?` <span class="m">${esc(NET.status)}</span>`:'');btnWire(B,[]);renderTimer();return;}
@@ -717,11 +718,12 @@ function btnWire(B,btns){
 }
 function render(){
   if(!S)return;
-  computeTargets();
+  computeTargets();if(REPLAY)replayDecorate();
   renderHeader();renderMarket();renderPrompt();updateMktH();renderBuySlot();renderCards(); // re-size the market once the buttons exist
   renderBlockades();renderTargets();renderPieces();
   aim.hot=null;if(aimWanted())startAim();else stopAim();
-  save();updateTitle();renderTimer();$('#menuBtn').textContent=online()&&!S.over?'Leave game':'New game';
+  save();updateTitle();renderTimer();$('#menuBtn').textContent=REPLAY?'Exit replay':online()&&!S.over?'Leave game':'New game';
+  if(REPLAY){replayAfterRender();replayBar();}
 }
 
 /* =========================================================
@@ -756,7 +758,7 @@ function showSetup(){
     <div class="field"><label>Course</label>${coursePicker('sC',setup.course)}<div id="rInfo">${routeTxt()}</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><button data-f="1" class="${setup.full?'on':''}">When all but one arrive</button><button data-f="0" class="${setup.full?'':'on'}">At the first arrival (official)</button></div></div>
     <div class="field"><label class="chk"><input type="checkbox" id="sPriv" ${setup.privacy?'checked':''}> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
-    <div class="mrow">${canResume?'<button class="btn" id="sResume">Resume saved game</button>':''}${S&&!S.over?'<button class="btn" id="sClose">Back to game</button>':''}<button class="btn pri big" id="sGo">Start expedition</button></div>`;
+    <div class="mrow"><button class="btn" id="sReplays">Replays</button>${canResume?'<button class="btn" id="sResume">Resume saved game</button>':''}${S&&!S.over?'<button class="btn" id="sClose">Back to game</button>':''}<button class="btn pri big" id="sGo">Start expedition</button></div>`;
   const preview=()=>{if(S&&!S.over)return;try{setup.cur=pickCourse(setup.course);MAP=buildCourse(setup.cur,setup.seed);buildBoard();fit();L.pieces.innerHTML='';const ri=document.getElementById('rInfo');if(ri)ri.innerHTML=routeTxt();}catch(e){console.error(e);}};
   const mount=sc=>{
     const m=sc.querySelector('.modal');
@@ -771,6 +773,7 @@ function showSetup(){
       m.querySelectorAll('#sFull button').forEach(b=>b.onclick=()=>{setup.full=b.dataset.f==='1';rerender();});
       const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{S=saved;MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
       const cl=m.querySelector('#sClose');if(cl)cl.onclick=closeModal;
+      m.querySelector('#sReplays').onclick=()=>{closeModal();setTimeout(showReplays,170);};
       m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];
         for(const[,el]of cardEls)el.remove();cardEls.clear();
         newGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>({name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex}))});

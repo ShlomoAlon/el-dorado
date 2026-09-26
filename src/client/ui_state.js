@@ -4,16 +4,17 @@
    which runs the same engine and sends back the new state.
    ========================================================= */
 let undoStack=[];
+let REPLAY=null; // set while watching a replay (ui_replay.js): nothing can be played then
 const UI={mode:'idle',card:null,piece:0,picks:[],targets:new Map(),cover:false,hover:null,mktOpen:true,allOpen:false};
 const cur=()=>S.players[S.cur];
 const NET={available:false,cfg:null,user:null,token:null,ws:null,lobbyWs:null,room:null,seat:-1,connected:false,deadline:null,skew:0,canUndo:false,busy:false,status:'',rooms:[]};
 const myId=()=>NET.user?NET.user.id:null;
 const online=()=>!!(S&&S.owners);
-const canAct=()=>!S||!online()||(S.owners[S.cur]===myId()&&NET.connected&&!S.over);
+const canAct=()=>!REPLAY&&(!S||!online()||(S.owners[S.cur]===myId()&&NET.connected&&!S.over));
 const viewIdx=()=>{if(!online())return S.cur;const i=S.owners.indexOf(myId());return i<0?S.cur:i;};
 const hp=()=>S.players[viewIdx()];
 function snapshot(){undoStack.push(JSON.stringify(S));if(undoStack.length>60)undoStack.shift();}
-function save(){if(online())return;try{localStorage.setItem('eldorado-save-v4',JSON.stringify(S));}catch(e){}}
+function save(){if(online()||REPLAY)return;try{localStorage.setItem('eldorado-save-v4',JSON.stringify(S));}catch(e){}}
 
 function computeTargets(){
   const T=new Map();UI.targets=T;if(!S||S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;

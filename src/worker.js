@@ -23,6 +23,8 @@ function ensureSchema(env) {
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS users_rating ON users(rating DESC)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS matches(id TEXT PRIMARY KEY, room TEXT, finished INTEGER, data TEXT)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT)`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS replays(id TEXT PRIMARY KEY, created INTEGER NOT NULL, title TEXT, players TEXT, actions INTEGER, body TEXT NOT NULL)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS replays_created ON replays(created DESC)`),
   ]).catch(e => { schemaReady = null; throw e; });
   return schemaReady;
 }
@@ -109,6 +111,8 @@ async function createRoom(env, uid, opts) {
   }
   return null;
 }
+const REPLAY_MAX_BYTES = 1.9e6, // D1 rows hold at most 2 MB
+      REPLAY_KEEP = 1000;
 const MATCH_SIZE = 3; // quick-match rooms start by themselves once this many have joined,
                       // or earlier (with 2+) when everyone in the room asks to start now
 
@@ -117,6 +121,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url); const p = url.pathname;
     if (!p.startsWith('/api/')) return env.ASSETS.fetch(req);
+    let m0;
     try {
       await ensureSchema(env);
       if (p === '/api/config') return json({ google: env.GOOGLE_CLIENT_ID || null, dev: env.DEV_AUTH === '1' });
@@ -132,6 +137,26 @@ export default {
         const { name } = await req.json();
         const { user, isNew } = await upsertUser(env, 'dev:' + cleanName(name).toLowerCase(), name);
         return json({ token: await makeToken(env, user.id), user, isNew });
+      }
+      // game logs anyone can upload and watch step by step (/?replay=<id>); the page rebuilds the game from the log
+      if (p === '/api/replays' && req.method === 'POST') {
+        const text = await req.text();
+        if (text.length > REPLAY_MAX_BYTES) return bad('That game log is too large.', 413);
+        let log; try { log = JSON.parse(text); } catch (e) { return bad('That file is not valid JSON.', 400); }
+        const err = E.replayCheck(log); if (err) return bad(err, 400);
+        const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+        const title = String(log.title || '').slice(0, 120), players = log.players.map(x => String(x.name || '').slice(0, 24)).join(', ');
+        await env.DB.prepare(`INSERT INTO replays(id,created,title,players,actions,body) VALUES(?,?,?,?,?,?)`).bind(id, Date.now(), title, players, log.actions.length, text).run();
+        await env.DB.prepare(`DELETE FROM replays WHERE id NOT IN (SELECT id FROM replays ORDER BY created DESC LIMIT ${REPLAY_KEEP})`).run();
+        return json({ id });
+      }
+      if (p === '/api/replays' && req.method === 'GET') {
+        const r = await env.DB.prepare(`SELECT id,created,title,players,actions FROM replays ORDER BY created DESC LIMIT 50`).all();
+        return json({ replays: r.results });
+      }
+      if ((m0 = p.match(/^\/api\/replays\/([a-z0-9]{6,12})$/)) && req.method === 'GET') {
+        const r = await env.DB.prepare(`SELECT body FROM replays WHERE id=?`).bind(m0[1]).first();
+        return r ? new Response(r.body, { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' } }) : bad('No replay with that id.', 404);
       }
       if (p === '/api/leaderboard') {
         const r = await env.DB.prepare(`SELECT id,name,rating,games,wins FROM users WHERE games>0 ORDER BY rating DESC LIMIT 100`).all();

@@ -79,7 +79,10 @@ const key=(q,r)=>q+','+r;
 const rot=(q,r,k)=>{for(let i=0;i<k;i++){const t=q;q=-r;r=t+r;}return[q,r];};
 const pxOf=(q,r)=>[R*SQ3*(q+r/2),R*1.5*r];
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
-function shuffle(a,rnd=Math.random){for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+/* where shuffles get their randomness: Math.random in play; a seeded generator while recording or replaying a game log */
+let RNG=Math.random;
+function setRng(f){RNG=f||Math.random;}
+function shuffle(a,rnd=RNG){for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 const hash=(x,y)=>{let h=Math.imul(x|0,374761393)+Math.imul(y|0,668265263);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
 
 /* =========================================================
@@ -163,7 +166,22 @@ function playerDone(p){return p.pieces.every(k=>k==='done');}
 function isActive(p){return !playerDone(p)&&!p.resigned;}
 
 function mapFor(st){return buildCourse(st.course,st.seed);}
+/* ---- game logs (replays) ----
+   {kind:'eldorado-replay', v:1, title, course, seed, rng, fullRace, players:[{name,color,bot}], actions:[[seat,action],…], notes:[…]}
+   Every shuffle draws from a generator seeded with log.rng, so re-applying the same actions rebuilds the identical game. */
+const REPLAY_MAX_ACTIONS=20000;
+function replayCheck(log){
+  if(!log||log.kind!=='eldorado-replay'||log.v!==1)return'Not an El Dorado game log.';
+  if(!courseById(log.course))return'Unknown course: '+log.course;
+  if(!Array.isArray(log.players)||log.players.length<2||log.players.length>4)return'A game log needs 2 to 4 players.';
+  if(!Number.isFinite(log.seed)||!Number.isFinite(log.rng))return'The game log is missing its seeds.';
+  if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
+  return null;}
+function replayStart(log){const g=mulberry32(log.rng>>>0);setRng(g);
+  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:COLORS[i%COLORS.length].hex}))});
+  return g;}
 function newGame(o){
+
   const course=o.course||COURSES[0];
   MAP=buildCourse(course,o.seed);
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
@@ -738,7 +756,7 @@ function botChoose(opts){
   }
   if(opts.temp&&acts.length>1){const w=vals.map(v=>v===-Infinity?0:Math.exp((v-bv)/opts.temp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
     for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],why:acts[i]===best?undefined:'softmax'};}}
-  return{a:best||{t:'end',keep:[]},v:bv};
+  return{a:best||{t:'end',keep:[]},v:bv,alts:opts.explain?acts.map((x,i)=>({a:x,v:vals[i]})).sort((x,y)=>y.v-x.v).slice(0,5):undefined};
 }
 /* play one whole turn for the player to move (used by the UI and the simulator) */
 function botTurn(opts){const me=S.cur;const steps=[];for(let g=0;g<40&&!S.over&&S.cur===me;g++){const{a}=botChoose(opts);const r=applyAction(me,a);steps.push(a);if(!r.ok){applyAction(me,{t:'end',keep:[]});break;}}return steps;}
@@ -772,4 +790,4 @@ function botRandomCourse(seed,nMid){
   return null;
 }
 
-export const E={get MAPX(){return MAP},botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
+export const E={get MAPX(){return MAP},setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};

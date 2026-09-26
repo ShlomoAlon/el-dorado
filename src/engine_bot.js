@@ -299,7 +299,7 @@ function botChoose(opts){
   }
   if(opts.temp&&acts.length>1){const w=vals.map(v=>v===-Infinity?0:Math.exp((v-bv)/opts.temp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
     for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],why:acts[i]===best?undefined:'softmax'};}}
-  return{a:best||{t:'end',keep:[]},v:bv};
+  return{a:best||{t:'end',keep:[]},v:bv,alts:opts.explain?acts.map((x,i)=>({a:x,v:vals[i]})).sort((x,y)=>y.v-x.v).slice(0,5):undefined};
 }
 /* play one whole turn for the player to move (used by the UI and the simulator) */
 function botTurn(opts){const me=S.cur;const steps=[];for(let g=0;g<40&&!S.over&&S.cur===me;g++){const{a}=botChoose(opts);const r=applyAction(me,a);steps.push(a);if(!r.ok){applyAction(me,{t:'end',keep:[]});break;}}return steps;}
