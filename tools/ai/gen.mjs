@@ -7,17 +7,19 @@
 // Result for each player, in [0,1]: 0.8 × placement (1 = first, 0 = last) + 0.2 × how far ahead of the others (distance).
 // Samples are sparse: <out>.len.bin (u32 non-zeros per row) .idx.bin (u16 columns) .val.bin (f32) .Y.bin (f32 target).
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { writeFileSync, readFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, appendFileSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 
 if (!isMainThread) {
-  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps } = workerData;
+  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile } = workerData;
   const C = E.COURSES.find(c => c.id === course) || E.COURSES[0];
   if (net) E.setNet(net);
   let s = seed0 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const X = [], Y = [], st = { win3: 0, seat3: 0, win4: 0, seat4: 0, netWins: 0, netSeats: 0, netRem: [], heurRem: [], netArr: [], heurArr: [], capped: 0, buysNet: {}, buysHeur: {}, transNet: {}, transHeur: {} };
+  const X = [], Y = [], st = { win3: 0, seat3: 0, win4: 0, seat4: 0, netWins: 0, netSeats: 0, netRem: [], heurRem: [], netArr: [], heurArr: [], capped: 0, buysNet: {}, buysHeur: {}, transNet: {}, transHeur: {}, dec: {}, explore: {}, stuck: 0 };
+  const inc = (k, sub, by = 1) => { const o = st.dec[k] = st.dec[k] || {}; o[sub] = (o[sub] || 0) + by; };
+  const T = id => E.S.cards[id];
   for (let g = 0; g < games; g++) {
     let pols;
     // 3- and 4-player games only (2-player games use different rules)
@@ -30,17 +32,39 @@ if (!isMainThread) {
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
       if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: !nb && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
-      const c = mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : 'heur', rnd })
-        : isNet ? E.botChoose({ mode: 'net', eps, temp, turnState, rnd })
-        : E.botChoose({ mode: 'heur', eps: .03, noise: .3, rnd });
+      const c = mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd })
+        : isNet ? E.botChoose({ mode: 'net', eps, temp, typeEps, turnState, rnd })
+        : E.botChoose({ mode: bench, eps: .03, noise: .3, rnd });
+      // track every kind of decision the network makes (and which of them were exploration)
+      if (isNet) {
+        const a = c.a, P = S.players[me];
+        if (c.why) st.explore[c.why] = (st.explore[c.why] || 0) + 1;
+        if (turnState && turnState.noBuy && !turnState.nbCounted) { turnState.nbCounted = 1; st.explore.noBuyTurn = (st.explore.noBuyTurn || 0) + 1; }
+        if (a.t === 'trash') { inc('Remove (Scientist / Travel Log): how many', a.cards.length + ''); for (const id of a.cards) inc('Remove (Scientist / Travel Log): which card', T(id)); }
+        else if (a.t === 'pay') { const kind = a.to[0] === 'B' ? 'Rubble blockade: cards given up' : E.MAPX.hexes.get(a.to).type === 'c' ? 'Base camp: cards removed from the game' : 'Rubble: cards discarded'; for (const id of a.cards) inc(kind, T(id)); }
+        else if (a.t === 'action') inc('Draw cards played', T(a.card));
+        else if (a.t === 'native') inc('Native', a.to[0] === 'B' ? 'tore down a blockade' : 'moved');
+        else if (a.t === 'end') {
+          inc('End of turn: cards kept', a.keep.length + ''); for (const id of a.keep) inc('End of turn: which cards kept', T(id));
+          for (const id of P.hand) if (!a.keep.includes(id) && ['cartographer', 'compass', 'scientist', 'travellog', 'native', 'transmitter'].includes(T(id))) inc('Ended the turn without playing', T(id));
+          if (!S.turn.bought) { const cash = P.hand.reduce((x, id) => x + ((E.CT[T(id)].c === 'y' || E.CT[T(id)].c === 'x') ? E.CT[T(id)].p : .5), 0), open = S.market.some(q => q.n === 0);
+            const cheapest = Math.min(...[...S.market, ...(open ? S.reserve : [])].filter(q => q.n > 0).map(q => E.CT[q.t].cost));
+            inc('Buying', cash >= cheapest ? 'could afford a card but bought nothing' : 'could not afford anything'); }
+          else inc('Buying', 'bought a card');
+        }
+      }
       if (c.a.t === 'buy' || c.a.t === 'transmit') { const stk = c.a.src === 'm' ? S.market[c.a.idx] : S.reserve[c.a.idx]; if (stk) { const b = c.a.t === 'transmit' ? (isNet ? st.transNet : st.transHeur) : (isNet ? st.buysNet : st.buysHeur); b[stk.t] = (b[stk.t] || 0) + 1; } }
       // sample = the position right after my action, as I'll see it: for "end turn", before the next hand is drawn
       const f = mode === 'self' ? (c.a.t === 'end' ? E.botEndFeatures(me, c.a.keep) : null) : null;
       const r = E.applyAction(me, c.a); acts++;
       if (!r.ok) E.applyAction(me, { t: 'end', keep: [] });
+      if (r.ok && isNet) for (const e of r.ev) if (e.e === 'block') inc('Blockades taken', '#' + e.n);
       if (mode === 'self' && !E.S.over) traj[me].push(f || E.botNetFeatures(me));
     }
     if (capped) st.capped++;
+    // a full-length game where someone still hasn't arrived by the cap is probably a bug: save it
+    if (capped && H >= 25 && stuckFile && st.stuck < 5) { st.stuck++; const S = E.S;
+      appendFileSync(stuckFile, JSON.stringify({ mode, round: S.round, pols, players: S.players.map((p, i) => ({ pieces: p.pieces, left: E.botRemaining(i), fin: p.fin, hand: p.hand.map(T), cards: [...p.deck, ...p.hand, ...p.discard, ...p.play].map(T).sort().join(',') })), blockades: S.blockades }) + '\n'); }
     const S = E.S, n = pols.length, rem = S.players.map((_, i) => E.botRemaining(i));
     S.players.forEach((p, i) => {
       const others = rem.filter((_, j) => j !== i), lead = others.reduce((a, x) => a + x, 0) / others.length - rem[i];
@@ -63,6 +87,9 @@ if (isMainThread) {
   // Exploration: one level EXPLORE in [0,1] (loop.sh lowers it as the bot improves) scales every rate, same for every course.
   const X = +(env.EXPLORE ?? 1);
   const wd = { mode, net, course, H: +(env.HORIZON || 60), explore: X,
+    bench: env.BENCH || 'plan',    // the benchmark / opponent bot (the planner heuristic)
+    stuckFile: `tools/ai/data/${course}.stuck.jsonl`,
+    typeEps: 0.05 * X,             // a random kind of decision (buy / remove / keep / rubble / draw card / …), then a random option of it
     eps: 0.03 * X,                 // a uniformly random legal action
     temp: Math.max(0.004, 0.02 * X), // softmax over action scores (near-best options tried often)
     buyEps: 0.10 * X,              // turns with one random purchase, and (same rate) turns where buying is off
@@ -72,14 +99,15 @@ if (isMainThread) {
     w.on('message', res); w.on('error', rej);
   })));
   const st = {}; for (const r of rs) for (const k in r.st) { const v = r.st[k];
-    if (Array.isArray(v)) st[k] = (st[k] || []).concat(v); else if (typeof v === 'object') { st[k] = st[k] || {}; for (const t in v) st[k][t] = (st[k][t] || 0) + v[t]; } else st[k] = (st[k] || 0) + v; }
+    const add = (dst, src) => { for (const t in src) { if (typeof src[t] === 'object') add(dst[t] = dst[t] || {}, src[t]); else dst[t] = (dst[t] || 0) + src[t]; } return dst; };
+    if (Array.isArray(v)) st[k] = (st[k] || []).concat(v); else if (typeof v === 'object') st[k] = add(st[k] || {}, v); else st[k] = (st[k] || 0) + v; }
   const avg = a => a && a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null;
   const r3 = st.seat3 ? st.win3 / st.seat3 : null, r4 = st.seat4 ? st.win4 / st.seat4 : null;
   // win rate relative to a fair share (1/3 in 3-player, 1/4 in 4-player); 1.0 = as good as the heuristic
   const rel = (st.seat3 || st.seat4) ? +((st.win3 + st.win4) / (st.seat3 / 3 + st.seat4 / 4)).toFixed(3) : null;
   const summary = { mode, horizon: wd.H, explore: X, games: +G, secs: (Date.now() - t0) / 1000, capped: st.capped, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
     win3p: r3 == null ? null : +r3.toFixed(3), win4p: r4 == null ? null : +r4.toFixed(3), vsFair: rel,
-    netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur, transNet: st.transNet, transHeur: st.transHeur };
+    netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur, transNet: st.transNet, transHeur: st.transHeur, decisions: st.dec, exploration: st.explore, stuck: st.stuck, bench: wd.bench };
   if (out !== '-' && mode === 'self') {
     const nf = rs.find(r => r.nf)?.nf || 0, cat = (k, T) => { const a = new T(rs.reduce((s, r) => s + r[k].length, 0)); let o = 0; for (const r of rs) { a.set(r[k], o); o += r[k].length; } return a; };
     const Y = cat('Y', Float32Array), len = cat('len', Uint32Array), idx = cat('idx', Uint16Array), val = cat('val', Float32Array);

@@ -127,6 +127,79 @@ function botHeuristic(me){ // hand-tuned: be close to the goal, own a strong dec
     v+=sumRed*.95;}
   return v;
 }
+/* Heuristic 2 (candidate benchmark): minimise the estimated number of turns still needed.
+   speed = how much of the route ahead one card covers on average, given the terrain mix ahead
+   (a card covers its strength on matching terrain, jokers match anything, any card pays 1 of rubble / base camp);
+   turns left = (route still ahead − what this turn's hand can still cover) / (4 cards × speed). */
+const BOT_ACT_SPEED={cartographer:1,compass:1.6,travellog:.9,scientist:.6,native:1.4,transmitter:.4};
+function botHeuristic2(me){
+  const P=S.players[me];if(playerDone(P))return 100-P.fin;
+  const bd=botDist(),live=P.pieces.filter(k=>k!=='done'),cost=P.pieces.reduce((a,k)=>a+botCost(k),0)/P.pieces.length;
+  const m={j:0,w:0,v:0,r:0,c:0};for(const k of live){const x=bd.mix.get(k);if(x)for(const s in m)m[s]+=x[s]/live.length;}
+  const mt=m.j+m.w+m.v+m.r+m.c||1,own=[...P.deck,...P.hand,...P.discard,...P.play],tot=own.length||1;
+  let move=0,acts=0;
+  for(const id of own){const d=CT[S.cards[id]];
+    if(d.c==='p'){acts+=BOT_ACT_SPEED[S.cards[id]]||.5;continue;}
+    for(const s of'jwv')if(d.s===s||d.s==='*')move+=d.p*m[s]/mt;
+    move+=(m.r+m.c)/mt;}
+  const base=move/Math.max(1,tot-0),speed=Math.max(.3,base+acts/tot*base); // action cards stand in for extra cards
+  let handRed=0;
+  if(S.cur===me&&!S.over&&S._endView!==me){
+    for(const id of P.hand){const d=def(id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const b=botCost(pk);for(const[k]of reach(me,pi,d.s==='*'?['j','w','v']:[d.s],d.p))if(k[0]!=='B')r=Math.max(r,b-botCost(k));});handRed+=r;}
+    const a=S.turn.active;if(a&&P.pieces[a.pi]!=='done'){const b=botCost(P.pieces[a.pi]);let r=0;for(const[k]of reach(me,a.pi,[a.sym],a.left))if(k[0]!=='B')r=Math.max(r,b-botCost(k));handRed+=r;}}
+  const turns=Math.max(0,cost-handRed*.9)/(4*speed);
+  return -turns*10+P.blocks.length*.3;
+}
+/* Planner heuristic (candidate benchmark, mode 'plan'): search this turn's movement exactly, then buy.
+   1. draw cards first (Scientist / Travel Log remove weak starting cards);
+   2. depth-first search over every order of moves / leftover strength / rubble / base camps / Native, keeping the
+      end position with the least route left (ties: more coin value left for buying);
+   3. buy the most useful affordable card for the terrain still ahead; stop buying when close to the end. */
+const BOT_STARTER={explorer:1,traveler:1,sailor:1};
+function botPlanMoves(me){
+  const root=S,P0=root.players[me],memo=new Map();let best=null,nodes=0;
+  const score=st=>{const P=st.players[me];const c=P.pieces.reduce((a,k)=>a+(k==='done'?-5:botCost(k)),0);const coin=P.hand.reduce((a,id)=>a+coinVal(id),0);return -c*10+coin;};
+  const dfs=(st,path,depth)=>{
+    if(++nodes>4000)return;
+    const sc=score(st);if(!best||sc>best.sc)best={sc,path:path.slice()};
+    if(depth>=9||st.over||st.cur!==me)return;
+    const P=st.players[me],key=P.pieces.join('|')+'#'+P.hand.map(id=>st.cards[id]).sort().join()+'#'+(st.turn.active?st.turn.active.id+st.turn.active.left:'');
+    if(memo.has(key)&&memo.get(key)<=depth)return;memo.set(key,depth);
+    S=st;const acts=botActions().filter(a=>a.t==='move'||a.t==='native'||a.t==='pay');S=root;
+    // per card and explorer keep the 3 targets that get closest (the search stays small)
+    const groups=new Map();for(const a of acts){const g=a.t+(a.card||'')+a.pi;if(!groups.has(g))groups.set(g,[]);groups.get(g).push(a);}
+    for(const[,list]of groups){
+      const ranked=list.map(a=>({a,c:a.to[0]==='B'?-1:botCost(a.to)})).sort((x,y)=>x.c-y.c).slice(0,3);
+      for(const{a}of ranked){S=botClone(st);const r=applyAction(me,a);const nx=S;S=root;if(!r.ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
+    }
+  };
+  dfs(botClone(root),[],0);S=root;return best?best.path:[];
+}
+function botCardWorth(t,me){ // how useful a new card is for the rest of the route
+  const P=S.players[me],bd=botDist(),live=P.pieces.filter(k=>k!=='done');const m={j:0,w:0,v:0,r:0,c:0};
+  for(const k of live){const x=bd.mix.get(k);if(x)for(const s in m)m[s]+=x[s]/Math.max(1,live.length);}
+  const mt=m.j+m.w+m.v+1,d=CT[t];
+  if(d.c==='p')return {cartographer:2.6,native:2.2,compass:2.3,scientist:2.2,travellog:2.2,transmitter:1.5}[t]||1;
+  const fit=d.s==='*'?1:(m[d.s]||0)/mt;return d.p*(0.35+fit)+(d.c==='y'?0.6:0);
+}
+function botPlanChoose(me){
+  const P=S.players[me],T=S.turn;
+  if(T.pending){const weak=P.hand.filter(id=>BOT_STARTER[typeOf(id)]).slice(0,T.pending.max);return{t:'trash',cards:weak}; }
+  const draw=P.hand.find(id=>BOT_DRAW[typeOf(id)]);if(draw)return{t:'action',card:draw};
+  const moves=botPlanMoves(me);if(moves.length)return moves[0];
+  // buy with what's left
+  const left=botRemaining(me);
+  if(!T.bought&&left>7){
+    const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),open=S.market.some(s=>s.n===0);let pick=null;
+    const consider=(src,s,i)=>{if(s.n<=0||CT[s.t].cost>cash)return;const w=botCardWorth(s.t,me)*(1+CT[s.t].cost*.08);if(!pick||w>pick.w)pick={w,src,idx:i};};
+    S.market.forEach((s,i)=>consider('m',s,i));if(open)S.reserve.forEach((s,i)=>consider('r',s,i));
+    if(pick&&pick.w>2){const buys=botActions().filter(a=>a.t==='buy'&&a.src===pick.src&&a.idx===pick.idx);
+      if(buys.length){buys.sort((a,b)=>a.cards.length-b.cards.length);return buys[0];}}
+  }
+  const tr=P.hand.find(id=>typeOf(id)==='transmitter');
+  if(tr&&left>7){let pick=null;const c=(src,s,i)=>{if(s.n<=0)return;const w=botCardWorth(s.t,me)+CT[s.t].cost*.3;if(!pick||w>pick.w)pick={w,src,idx:i};};S.market.forEach((s,i)=>c('m',s,i));S.reserve.forEach((s,i)=>c('r',s,i));if(pick)return{t:'transmit',card:tr,src:pick.src,idx:pick.idx};}
+  return{t:'end',keep:[]};
+}
 /* ---- per-map network input: the summary above + every space on this course + every tile connection ----
    Each space gets 4 slots (my explorer here / opponent 1, 2, 3 here, in turn order after me);
    each connection between tiles gets 8 (which blockade type was dealt there, its cost, owned by nobody / me / an opponent).
@@ -152,7 +225,7 @@ function botNetValue(f){const N=BOT_NET,H1=N.b1.length,H2=N.b2.length;const h1=F
 const botNetReady=()=>!!(BOT_NET&&MAP&&BOT_NET.course===MAP.course&&BOT_NET.nf===botNetNF());
 function botValue(me,mode){
   if(S.over){const pl=S.places[me],n=S.players.length;return mode==='net'?(n-pl)/(n-1):1e3-pl*100;}
-  return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me)):botHeuristic(me);
+  return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me)):mode==='heur2'?botHeuristic2(me):botHeuristic(me);
 }
 /* ---- choose and play ---- */
 /* fast structural copy of the game state (everything applyAction can change gets its own copy) */
@@ -179,13 +252,17 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
    Training exploration: eps = uniformly random action; temp = softmax over scores; turnState.forceBuy = a random purchase this turn. */
 function botChoose(opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
+  if(mode==='plan')return{a:botPlanChoose(S.cur)};
   const me=S.cur,root=S;let acts=botActions();if(mode==='net'&&!botNetReady())mode='heur';
   if(opts.turnState&&opts.turnState.noBuy){const f=acts.filter(a=>a.t!=='buy'&&a.t!=='transmit');if(f.length)acts=f;} // exploration: a turn without gaining a card
-  if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)]};
+  if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],why:'random'};
+  // typed exploration: a random KIND of decision (buy / remove / keep / pay rubble / play a draw card / …), then a random option of it,
+  // so rare decisions get explored as much as common ones
+  if(opts.typeEps&&rnd()<opts.typeEps){const kinds=[...new Set(acts.map(a=>a.t))],k=kinds[Math.floor(rnd()*kinds.length)],L=acts.filter(a=>a.t===k);return{a:L[Math.floor(rnd()*L.length)],why:'typed'};}
   const ts=opts.turnState;
-  if(ts&&ts.forceBuy&&!S.turn.bought){const buys=acts.filter(a=>a.t==='buy');if(buys.length){ts.forceBuy=false;return{a:buys[Math.floor(rnd()*buys.length)]};}}
+  if(ts&&ts.forceBuy&&!S.turn.bought){const buys=acts.filter(a=>a.t==='buy');if(buys.length){ts.forceBuy=false;return{a:buys[Math.floor(rnd()*buys.length)],why:'forceBuy'};}}
   if(ts&&ts.forceTransmit){const tr=acts.filter(a=>a.t==='transmit');if(tr.length){ts.forceTransmit=false; // a random card, reserve included, weighted toward expensive ones (cost²)
-    const w=tr.map(a=>{const s=a.src==='m'?S.market[a.idx]:S.reserve[a.idx];return CT[s.t].cost**2;});let r=rnd()*w.reduce((x,y)=>x+y,0);for(let i=0;i<tr.length;i++){r-=w[i];if(r<=0)return{a:tr[i]};}return{a:tr[tr.length-1]};}}
+    const w=tr.map(a=>{const s=a.src==='m'?S.market[a.idx]:S.reserve[a.idx];return CT[s.t].cost**2;});let r=rnd()*w.reduce((x,y)=>x+y,0);for(let i=0;i<tr.length;i++){r-=w[i];if(r<=0)return{a:tr[i],why:'forceTransmit'};}return{a:tr[tr.length-1],why:'forceTransmit'};}}
   const vals=[];let best=null,bv=-Infinity;const K=opts.draws||4;
   const one=a=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
     if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}
@@ -197,7 +274,7 @@ function botChoose(opts){
     vals.push(v);if(v>bv){bv=v;best=a;}
   }
   if(opts.temp&&acts.length>1){const w=vals.map(v=>v===-Infinity?0:Math.exp((v-bv)/opts.temp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
-    for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i]};}}
+    for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],why:acts[i]===best?undefined:'softmax'};}}
   return{a:best||{t:'end',keep:[]},v:bv};
 }
 /* play one whole turn for the player to move (used by the UI and the simulator) */

@@ -7,7 +7,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 C=${1:-first}; N=${2:-60}; D=tools/ai/data; NET=$D/$C.net.json; LOG=$D/$C.log; mkdir -p $D
-HS=(3 5 8 12 16 60)
+HS=(3 5 8 12 16 25)   # 25 = full game: nobody should still be racing by round 25
 # exploration level per curriculum stage (1 = most exploration); scales every exploration rate in gen.mjs
 EX=(1.0 0.85 0.7 0.5 0.35 0.2)
 log(){ echo "[$(date +%H:%M:%S)] $*" | tee -a $LOG; }
