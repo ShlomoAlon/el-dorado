@@ -157,7 +157,7 @@ function roomLobbyHTML(){
   const r=NET.room||{};const host=r.host===myId();const link=location.origin+location.pathname+'?room='+NET.code;
   const seats=(r.seats||[]).map(s=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line)"><span style="display:flex;align-items:center;gap:9px"><i style="width:13px;height:13px;border-radius:50%;background:${s.color};display:inline-block"></i><b>${esc(s.name)}</b>${s.uid===myId()?' <span class="note" style="margin:0">(you)</span>':''}</span><span class="note" style="margin:0">${s.now?'wants to start · ':''}${s.uid===r.host&&!(r.opts&&r.opts.auto)?'host · ':''}${s.online?'here':'away'}</span></div>`).join('');
   const mine=(r.seats||[]).find(s=>s.uid===myId());
-  const PC=['#e5484d','#efe9dc','#9d7df7','#ff9636','#35d0ba','#f07ab8'];
+  const PC=COLORS.map(c=>c.hex);
   return`<h2>Room ${esc(NET.code||'')}</h2>
   <p class="sub">${r.opts&&r.opts.auto?`Quick match: the game starts as soon as ${r.opts.max} players are here, or earlier if everyone here presses “Start now”.`:host?'Share the code or link. Start when everyone is here.':'Waiting for the host to start.'} ${r.opts?`${esc(courseName(r.opts.course))} · ${r.opts.auto?'':(r.opts.pub===false?'private · ':'public · ')+r.opts.max+' players max · '}${r.opts.turn}s per turn · ranked`:''}</p>
   <div class="prow"><input id="lkIn" readonly value="${esc(link)}"><button class="btn" id="lkCopy">Copy link</button></div>

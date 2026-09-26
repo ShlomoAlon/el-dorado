@@ -214,7 +214,7 @@ export class Lobby extends DurableObject {
 /* ---------------- Room: one live game ---------------- */
 const mapCache = new Map();
 function mapFor(S) { const k = S.course.id + ':' + S.seed; let m = mapCache.get(k); if (!m) { m = E.mapFor(S); mapCache.set(k, m); if (mapCache.size > 200) mapCache.delete(mapCache.keys().next().value); } return m; }
-const PCOLORS = ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636', '#35d0ba', '#f07ab8'];
+const PCOLORS = ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636']; // matches COLORS: one explorer figure per colour
 
 export class Room extends DurableObject {
   constructor(ctx, env) {
