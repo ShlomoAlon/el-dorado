@@ -55,6 +55,7 @@ function syncMode(turnChanged){
 /* animations and messages for engine events; call BEFORE render so the market DOM is still the old one */
 function playEvents(ev,viewer){
   for(const e of ev||[]){
+    sfxEvent(e,viewer);
     if(e.e==='move')animatePiece(e.pl,e.pi,e.path);
     else if(e.e==='block')toast(S.players[e.pl].name+' claims blockade #'+e.n);
     else if(e.e==='arrive')toast(S.players[e.pl].name+' reaches El Dorado!',2200);
@@ -69,7 +70,7 @@ function act(a){
   const prevCur=S.cur,prevRound=S.round;
   snapshot();
   const r=applyAction(S.cur,a);
-  if(!r.ok){undoStack.pop();toast(r.err);render();return;}
+  if(!r.ok){undoStack.pop();sfx('error');toast(r.err);render();return;}
   if(r.reveal||S.cur!==prevCur)undoStack=[];
   playEvents(r.ev);
   afterLocalChange(S.cur!==prevCur||S.round!==prevRound);
@@ -103,25 +104,25 @@ function startDiscard(tk,firstId){
   if(firstId)addDiscard(firstId);else render();
 }
 function addDiscard(id){
-  const P=UI.pending;if(!P||!cur().hand.includes(id))return;
+  const P=UI.pending;if(!P||!cur().hand.includes(id))return;sfx('discard');
   if(!UI.picks.includes(id)&&UI.picks.length<P.need)UI.picks.push(id);
   if(UI.picks.length>=P.need){confirmDiscardFor();return;}
   render();pulseDiscard();
 }
-function confirmDiscardFor(){const P=UI.pending;if(!P||UI.picks.length!==P.need)return;act({t:'pay',pi:P.pi,to:P.tk,cards:UI.picks.slice()});}
+function confirmDiscardFor(){const P=UI.pending;if(!P||UI.picks.length!==P.need)return;sfx(P.kind==='camp'?'trash':'discard');act({t:'pay',pi:P.pi,to:P.tk,cards:UI.picks.slice()});}
 function playAction(id){
   const t=typeOf(id);
   if(t==='native'){UI.mode='card';UI.card=id;render();return;}
   if(t==='transmitter'){UI.mode='transmit';UI.card=id;render();openAll(true);return;}
   act({t:'action',card:id});
 }
-function confirmTrash(){act({t:'trash',cards:UI.picks.slice()});}
+function confirmTrash(){if(UI.picks.length)sfx('trash');act({t:'trash',cards:UI.picks.slice()});}
 function pickFromMarket(src,idx){
-  if(!canAct()){toast('Wait for your turn to buy.');return;}
+  if(!canAct()){sfx('error');toast('Wait for your turn to buy.');return;}
   const stack=src==='m'?S.market[idx]:S.reserve[idx];if(!stack||stack.n<=0)return;
   if(UI.mode==='transmit'){openAll(false);act({t:'transmit',card:UI.card,src,idx});return;}
-  if(S.turn.bought){toast('You can buy only one card per turn.');return;}
-  if(src==='r'&&!S.market.some(s=>s.n===0)){toast('The reserve opens once a market slot is empty.');return;}
+  if(S.turn.bought){sfx('error');toast('You can buy only one card per turn.');return;}
+  if(src==='r'&&!S.market.some(s=>s.n===0)){sfx('error');toast('The reserve opens once a market slot is empty.');return;}
   if(UI.mode==='pay'&&UI.buy.src===src&&UI.buy.idx===idx){cancelMode();return;}
   UI.mode='pay';UI.buy={src,idx,t:stack.t};UI.picks=[];UI.card=null;
   render();

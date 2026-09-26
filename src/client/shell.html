@@ -62,6 +62,9 @@ html,body{overflow:clip;overscroll-behavior:none}
 .tbtn.ico svg{display:block}
 #fsBtn .fs-out,#fsBtn.full .fs-in{display:none}
 #fsBtn.full .fs-out{display:inline}
+#sndBtn .snd-off,#sndBtn.off .snd-on{display:none}
+#sndBtn.off .snd-off{display:inline}
+#sndBtn.off{opacity:.7}
 .tbtn:focus-visible,.btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 
 #prompt{position:absolute;left:50%;top:64px;transform:translateX(-50%);max-width:min(720px,calc(100% - 32px));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
@@ -262,7 +265,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
   .pstack{width:54px;height:76px}
   #actBtns{bottom:calc(16px + 76px + 34px)}
   .zoomctl{top:auto;bottom:calc(16px + 76px + 34px);transform:none;left:12px}
-  .zoomctl button:not(#fsBtn){display:none}
+  .zoomctl button:not(#fsBtn):not(#sndBtn){display:none}
   .btn.big{font-size:14px;padding:10px 16px}
 }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
@@ -305,7 +308,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
       <details class="jr allc-sect" id="journal"><summary><h3 style="display:inline-flex;margin:0">Journal</h3></summary><div id="log"></div></details>
     </div>
   </div>
-  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button></div>
+  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button><button class="glass" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button></div>
   <div class="pile" id="deckPile" title="Draw pile — click to view"><div class="pstack" id="deckStack"></div><div class="lbl glass">Deck <b id="deckN">0</b></div></div>
   <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
   <div id="actBtns"></div>
