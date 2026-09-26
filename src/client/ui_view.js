@@ -150,8 +150,15 @@ function renderBlockades(){
     const tt=sv('title',null,bg);tt.textContent='Blockade #'+B.n+': '+blkLabel(B)+'. The first explorer to pay it keeps it (tiebreaker).';
   });
 }
+function discardAnchor(tk){if(tk[0]==='B'){const p=blPos[+tk.slice(1)];return p?[p[0],p[1]-40]:null;}const h=hexAt(tk);return[h.x,h.y-R*.95];}
+function pulseDiscard(){const g=L.hl&&L.hl.querySelector('.dpips');if(g&&!reduceMotion)g.animate([{transform:g.getAttribute('data-t')+' scale(1.35)'},{transform:g.getAttribute('data-t')+' scale(1)'}],{duration:320,easing:'cubic-bezier(.2,.9,.3,1.3)'});}
 function renderTargets(){
   L.hl.innerHTML='';hideHover();tgtEls={};
+  if(UI.mode==='discardFor'&&UI.pending){const P=UI.pending,a=discardAnchor(P.tk);
+    if(a){const n=P.need,w=n*19+14,t=`translate(${a[0]} ${a[1]-4})`;
+      const g=sv('g',{class:'dpips',transform:t,'data-t':t,'pointer-events':'none'},L.aim);
+      sv('rect',{x:-w/2,y:-14,width:w,height:28,rx:14,fill:'#0b120f',stroke:P.kind==='camp'?'#e08a74':'#d8dcd6','stroke-width':1.5},g);
+      for(let i=0;i<n;i++)sv('circle',{cx:-(n-1)*9.5+i*19,cy:0,r:6.4,fill:i<UI.picks.length?(P.kind==='camp'?'#e08a74':'#eef2ec'):'none',stroke:P.kind==='camp'?'#e08a74':'#d8dcd6','stroke-width':2},g);}}
   for(const[k,t]of UI.targets){
     if(k[0]==='B')continue;
     const h=hexAt(k);
@@ -424,6 +431,7 @@ function renderCards(){
     if(acting&&(UI.mode==='idle'||UI.mode==='card')&&UI.card!==id)dim=!cardUsable(id);
     el.classList.toggle('sel',(UI.mode==='card'||UI.mode==='transmit')&&UI.card===id);
     el.classList.toggle('pick',UI.picks.includes(id));
+    const dp=UI.mode==='discardFor'&&UI.picks.includes(id);el.classList.toggle('dpick',dp);if(dp)el.dataset.pk=UI.pending.kind==='camp'?'Remove':'Discard';
     el.classList.toggle('dim',dim);el.classList.remove('inplay','act');
     const b=el.querySelector('.left');if(b)b.remove();
   }
@@ -458,8 +466,8 @@ function wireCard(el,id){
     const inHand=cur().hand.includes(id);const isAct=S.turn.active&&S.turn.active.id===id;
     if(!inHand&&!isAct)return;
     e.preventDefault();
-    const pickMode=['pay','discardFor','trashPick','endTurn','transmit'].includes(UI.mode);
-    drag={id,x0:e.clientX,y0:e.clientY,started:false,pid:e.pointerId,kind:pickMode?'none':(isAct||isTargeted(id)?'aim':'free'),inHand,wasSel:UI.mode==='card'&&UI.card===id};
+    const pickMode=['pay','trashPick','endTurn','transmit'].includes(UI.mode);
+    drag={id,x0:e.clientX,y0:e.clientY,started:false,pid:e.pointerId,kind:pickMode?'none':UI.mode==='discardFor'?(inHand&&!UI.picks.includes(id)?'free':'none'):(isAct||isTargeted(id)?'aim':'free'),inHand,wasSel:UI.mode==='card'&&UI.card===id};
     try{el.setPointerCapture(e.pointerId);}catch(_){}
   });
   el.addEventListener('pointermove',e=>{
@@ -470,7 +478,8 @@ function wireCard(el,id){
       else{el.classList.add('free');el.classList.remove('anim');}}
     if(drag.kind==='aim'){drag.cx=e.clientX;drag.cy=e.clientY;startAim();}
     else{const A=appRect(),cw=cardW(),ch=cw*1.4;setT(el,e.clientX-A.left-cw/2,e.clientY-A.top-ch*.4,dx*.02,1.08);el.style.zIndex=150;
-      el.classList.toggle('go',e.clientY<A.top+A.height-ch*1.25);}
+      const k=targetAt(e.clientX,e.clientY),dk=k&&isDisc(UI.targets.get(k))?k:null;setHot(dk);
+      el.classList.toggle('go',!!dk||(UI.mode!=='discardFor'&&e.clientY<A.top+A.height-ch*1.25));}
   });
   const end=e=>{
     if(!drag||drag.id!==id)return;const d=drag;d.hot=aim.hot;drag=null;
@@ -482,7 +491,9 @@ function wireCard(el,id){
       else render();
     }else if(d.kind==='free'){
       const A=appRect(),ch=cardW()*1.4;el.classList.remove('free','go');el.classList.add('anim');
-      if(e.clientY<A.top+A.height-ch*1.25)playAction(id);else layoutCards();
+      const k=targetAt(e.clientX,e.clientY),tg=k&&UI.targets.get(k);setHot(null);
+      if(isDisc(tg)&&!UI.anim){if(UI.mode==='discardFor')addDiscard(id);else startDiscard(k,id);}
+      else if(UI.mode!=='discardFor'&&e.clientY<A.top+A.height-ch*1.25)playAction(id);else layoutCards();
     }
   };
   el.addEventListener('pointerup',end);el.addEventListener('pointercancel',e=>{if(drag&&drag.id===id){setHot(null);end(e);}});
@@ -627,8 +638,8 @@ function renderPrompt(){
       txt=who+`Buy <b>${esc(CT[UI.buy.t].n)}</b> for ${c}. Tap cards to pay: <b>${fmt(t)}</b> / ${c}. <span class="m">Coin cards and jokers pay their value; others pay ½.</span>`;
       btns=[{t:'Cancel',id:'bCan',fn:cancelMode},{t:'Buy',id:'bBuy',pri:1,big:1,dis:t<c,fn:confirmBuy}];break;}
     case 'discardFor':{
-      const P2=UI.pending;const verb=P2.kind==='camp'?'remove from the game':'discard';
-      txt=who+`${P2.kind==='camp'?'Base camp':P2.kind==='blr'?'Blockade':'Rubble'}: choose <b>${P2.need}</b> card${P2.need>1?'s':''} to ${verb} (${UI.picks.length}/${P2.need}).`;
+      const P2=UI.pending;const verb=P2.kind==='camp'?'remove from the game':'discard';const left=P2.need-UI.picks.length;
+      txt=who+`${P2.kind==='camp'?'Base camp':P2.kind==='blr'?'Blockade':'Rubble'}: <b>${UI.picks.length} of ${P2.need}</b> cards to ${verb}. `+(left?`<span class="m">Drag ${left} more card${left>1?'s':''} onto it, or tap cards.</span>`:'');
       btns=[{t:'Cancel',id:'bCan',fn:cancelMode},{t:'Confirm',id:'bOk',pri:1,big:1,dis:UI.picks.length!==P2.need,fn:confirmDiscardFor}];break;}
     case 'trashPick':{
       txt=who+`You may remove up to <b>${UI.max}</b> card${UI.max>1?'s':''} in hand from the game (${UI.picks.length}/${UI.max}).`;
@@ -723,7 +734,7 @@ function showRules(){
   modal(`<h2>How to play</h2><div class="rules">
   <p>Race to El Dorado: move onto one of the three finishing spaces on the El Dorado tile at the end of the route. Your explorer then steps into the city, freeing the space.</p><p><b>Game end.</b> Online games (and local games by default) continue until all but one expedition has arrived, then the round is finished; this gives every player a place. Players arriving in the same round are split by blockades held. The official rule, where the game ends after the round in which the first player arrives, is available for local games.</p><p><b>Online.</b> Each turn has a timer; when it runs out the turn ends and leftover cards are discarded. Missing 3 turns in a row forfeits. Every online game is ranked (Elo).</p>
   <h4>Your turn</h4><ul><li><b>Play cards</b> in any order: move, play action cards, and buy <b>at most one</b> card.</li><li><b>End turn</b>: played cards go to your discard pile. You may discard any cards left in hand or keep them.</li><li><b>Draw</b> back up to 4 cards. An empty deck is refilled by shuffling your discard pile.</li></ul>
-  <h4>Moving</h4><ul><li><b>Drag</b> a card onto a highlighted space, or tap the card and then the space.</li><li>A jungle, water or village space needs one card of that symbol with at least the shown strength. Cards can't be combined for one space.</li><li>Leftover strength keeps moving the same explorer over further spaces of that type. It's lost once you do something else.</li><li>Jokers (white) count as any one symbol, chosen when played.</li><li><b>Rubble</b> (grey): discard as many cards as shown. <b>Base camp</b> (red): remove that many cards from the game.</li><li>Mountains are impassable. Occupied spaces can't be entered or crossed.</li></ul>
+  <h4>Moving</h4><ul><li><b>Drag</b> a card onto a highlighted space, or tap the card and then the space.</li><li>A jungle, water or village space needs one card of that symbol with at least the shown strength. Cards can't be combined for one space.</li><li>Leftover strength keeps moving the same explorer over further spaces of that type. It's lost once you do something else.</li><li>Jokers (white) count as any one symbol, chosen when played.</li><li><b>Rubble</b> (grey): discard as many cards as shown — drag cards onto it one by one; you move once enough are in. <b>Base camp</b> (red): remove that many cards from the game.</li><li>Mountains are impassable. Occupied spaces can't be entered or crossed.</li></ul>
   <h4>Blockades</h4><p>At the start, a random blockade from #1–6 is placed on each connection between two boards. The first explorer to cross pays its cost (a matching card, or discards for grey ones) and keeps it; the Native can also tear one down. Ties at the end go to whoever holds the most blockades, then the highest-numbered one.</p>
   <h4>Buying</h4><ul><li>Coin cards and jokers pay their value; every other card pays ½ coin. No change.</li><li>Bought cards go to your discard pile.</li><li>The reserve opens once a market slot is empty; that stack moves into the slot.</li></ul>
   <h4>Single-use cards</h4><p>Cards marked <b>Single use</b> are removed from the game after their effect. Spent only as ½ coin, they're discarded normally.</p>

@@ -26,15 +26,18 @@ function computeTargets(){
     const syms=isAct?[act.sym]:(d.s==='*'?['j','w','v']:[d.s]);
     const budget=isAct?act.left:d.p;
     for(const[k,v]of reach(S.cur,pi,syms,budget))T.set(k,v);
+    // a card from hand can also be dropped onto rubble / base camp / a rubble blockade next to the explorer
+    if(!isAct&&cur().hand.includes(id))for(const[k,v]of payTargets(S.cur,UI.piece))if(!T.has(k))T.set(k,v);
   }else if(UI.mode==='idle'){
     for(const[k,v]of payTargets(S.cur,UI.piece))T.set(k,v);
-  }
+  }else if(UI.mode==='discardFor'&&UI.pending){T.set(UI.pending.tk,UI.pending);}
 }
 function cardUsable(id){
   const t=typeOf(id),d=CT[t],pl=cur();if(!d)return false;const pk=pl.pieces[UI.piece];
   if(!pk||pk==='done')return d.c==='p'&&t!=='native';
   if(t==='native')return nativeTargets(S.cur,UI.piece).size>0;
   if(d.c==='p')return true;
+  if(payTargets(S.cur,UI.piece).size)return true;
   return reach(S.cur,UI.piece,d.s==='*'?['j','w','v']:[d.s],d.p).size>0;
 }
 const isTargeted=id=>{const d=def(id);return d&&(d.c!=='p'||typeOf(id)==='native');};
@@ -85,10 +88,25 @@ function afterLocalChange(turnChanged){
 
 /* ---------- UI actions (build an action from the current selection) ---------- */
 function doMove(tk){
+  if(UI.mode==='discardFor')return; // the pending space itself: cards are dragged or tapped in
   const tg=UI.targets.get(tk);if(!tg)return;
-  if(tg.kind==='rubble'||tg.kind==='camp'||tg.kind==='blr'){UI.mode='discardFor';UI.pending={tk,...tg};UI.picks=[];render();return;}
+  if(isDisc(tg)){startDiscard(tk,UI.card&&cur().hand.includes(UI.card)?UI.card:null);return;}
   if(tg.kind==='native'||tg.kind==='nativebl')act({t:'native',card:UI.card,pi:tg.pi,to:tk});
   else act({t:'move',card:UI.card,pi:tg.pi,to:tk});
+}
+const isDisc=tg=>!!tg&&(tg.kind==='rubble'||tg.kind==='camp'||tg.kind==='blr');
+/* Rubble / base camp / rubble blockade: each card dragged (or tapped) onto the space counts toward its cost.
+   The move happens as soon as enough cards are in. */
+function startDiscard(tk,firstId){
+  const tg=UI.targets.get(tk);if(!isDisc(tg))return;
+  UI.mode='discardFor';UI.pending={tk,...tg};UI.card=null;UI.picks=[];
+  if(firstId)addDiscard(firstId);else render();
+}
+function addDiscard(id){
+  const P=UI.pending;if(!P||!cur().hand.includes(id))return;
+  if(!UI.picks.includes(id)&&UI.picks.length<P.need)UI.picks.push(id);
+  if(UI.picks.length>=P.need){confirmDiscardFor();return;}
+  render();pulseDiscard();
 }
 function confirmDiscardFor(){const P=UI.pending;if(!P||UI.picks.length!==P.need)return;act({t:'pay',pi:P.pi,to:P.tk,cards:UI.picks.slice()});}
 function playAction(id){
