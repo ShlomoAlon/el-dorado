@@ -75,9 +75,10 @@ if (!isMainThread) {
     const S = E.S, n = pols.length, rem = S.players.map((_, i) => E.botRemaining(i));
     S.players.forEach((p, i) => {
       const others = rem.filter((_, j) => j !== i), lead = others.reduce((a, x) => a + x, 0) / others.length - rem[i];
-      // short horizons reward getting far; at the final 25-round cap, not arriving is a loss whoever got closest
-      const fail = capped && H >= 25 && !p.fin, win = S.places[i] === 1 && !fail;
-      const z = fail ? 0 : 0.8 * (n - S.places[i]) / (n - 1) + 0.2 / (1 + Math.exp(-lead / 5));
+      // result = what the place is worth (1st 1, each place about half the one above, last 0; E.botPlaceValue).
+      // Short horizons also reward getting far; at the final 25-round cap, not arriving is worth 0 whoever got closest.
+      const fail = capped && H >= 25 && !p.fin, win = S.places[i] === 1 && !fail, pv = E.botPlaceValue(S.places[i], n);
+      const z = fail ? 0 : H >= 25 ? pv : 0.8 * pv + 0.2 / (1 + Math.exp(-lead / 5));
       if (mode === 'self') { const T = traj[i]; let G = z; for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); G = (1 - LAMBDA) * (net ? E.botNetValue(T[t]) : G) + LAMBDA * G; } }
       if (pols[i] === 'net') { st.netSeats++; if (win) st.netWins++; st['seat' + n]++; if (win) st['win' + n]++; st.netRem.push(rem[i]); if (p.fin) st.netArr.push(p.fin); }
       else { st.heurRem.push(rem[i]); if (p.fin) st.heurArr.push(p.fin); }
