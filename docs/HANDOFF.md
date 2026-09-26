@@ -108,6 +108,8 @@ src/engine_rules.js       S/MAP globals, newGame, reach/nativeTargets/payTargets
                           endGame (placements), eloDeltas, redact
 src/client/shell.html     <title>, fonts, all CSS (design tokens in :root), SVG symbol defs, DOM skeleton
 src/client/ui_state.js    UI object, NET object, canAct/viewIdx/hp, computeTargets, act(), UI action builders
+src/client/ui_art.js      per-card background scenes (CARD_BG: 21 hand-made SVG scenes behind the emblem; the owner
+                          likes this silhouette/travel-poster style; no image generator available — match it for new cards)
 src/client/ui_view.js     board SVG render, pieces + animation, pan/zoom/pinch, card art/markup, card layout (fan),
                           drag + aim arrow, market/side panel, HUD/prompt/buttons, banner/toast/modal, setup,
                           rules, game-over, pile viewer
@@ -148,6 +150,9 @@ Local save key `eldorado-save-v4`; v3 saves are ignored; v3 rooms on the server 
   Pinch keeps the board point under the fingers' midpoint fixed; lifting one finger re-bases the pan (no jump).
   ResizeObserver refits only on width changes. Page-zoom gestures are blocked.
 - Market is a floating drawer (`setSide`), remembered in localStorage.
+- Cards: suit sets frame + scene palette; strength badge uses the suit colour and icon (only coin cards are gold);
+  action cards show `face` (short) text, `txt` in tooltips. Full-screen button `#fsBtn` is hidden where unsupported
+  (iPhone Safari); home-screen metas make the saved web app full screen there.
 - Design: single dark theme by choice. Fonts Young Serif (display) + Figtree (UI). Tokens in `:root` of shell.html.
   Terrain colors in `TFILL`, card frames `.k-g/.k-b/.k-y/.k-x/.k-p`.
 
