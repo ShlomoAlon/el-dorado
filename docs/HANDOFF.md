@@ -82,26 +82,20 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
 
 ## 5. Boards — what is real and what is reconstructed (important, owner asked about this)
 
-- Real (from the BoardGameHelpers tile catalogue): board set **A/B** (start), double-sided **C/D, E/F, G/H, I/J, K/L, M/N**
-  (a route uses one side of each physical board), **O–R** 16-space strips, 3-space **El Dorado end tile** (all jungle or
-  all water), and six blockades **#1 jungle, #2 village(coin), #3 rubble, #4 water, #5 jungle, #6 rubble**.
-  Each board's terrain **counts** match the catalogue exactly (e.g. C = J6 W12 M1 V9 R9).
-- Reconstructed/guessed: **space-by-space layouts and space values** (the catalogue only publishes pictures), blockade
-  **costs** (we use 1,1,1,1,2,2 in number order; tiebreak uses the blockade number), official suggested routes (not in),
-  strips O–R (not in). **No random generation any more** (owner's decision): games use fixed courses from `COURSES`
-  in `engine_data.js`. Currently one: **First Expedition** = the rulebook's first-game route B·C·N·I·K, positions
-  fitted to the rulebook illustration (page 5). Course format: `p:[[letter,q,r,rot],…]` (first = A/B), `e:[q,r]`
-  middle finish space next to the last board, `s:'j'|'w'`. `buildCourse(course, seed)` validates and builds MAP;
-  boards touching out of order are open ground (no blockade), per the rulebook's "shortcut" tips.
-  The rulebook (bghub.org/r/thequestforeldorado.pdf, page 10) also shows 6 suggested routes to add next:
-  Hills of Gold B C G K J N · Home Stretch B J Q K M C · Winding Paths B I F G C N · Serpentine A C E G J M ·
-  Swamplands A R D H E O K · Witch's Cauldron A L G D M I. Strips are 16 spaces in rows 5·6·5 (components photo).
-  Owner wants ~10 courses eventually (official + community routes found online); community sources (BoardGameHelpers
-  map list) were unreachable from the sandbox.
-- If the owner provides images of the boards (BoardGameHelpers GIFs or photos), transcribe them into `BOARDS` in
-  `engine_data.js`. Format: 7 rows of 4,5,6,7,6,5,4 tokens, top to bottom (radius-3 hexagon, pointy-top axial coords);
-  tokens `jN` jungle, `wN` water, `vN` village/coin, `rN` rubble, `cN` base camp, `mm` mountain, `ss` start.
-  The web tools in the first session could not read those images (WebFetch refuses images; the proxy blocked the host).
+- **Real, verified space by space** (terrain + strength): **B, C, I, K, N** — transcribed from the BoardGameHelpers tile
+  catalogue images (https://www.boardgamehelpers.com/QuestforElDorado/TileCatalogue.aspx, `Images/Q4eD.<n>.<L>.gif`;
+  reachable from the sandbox with curl), checked against the published terrain counts, and K rendered side by side
+  for the owner, who confirmed it. Image orientation = rotation 0 in `BOARDS` (rows 4·5·6·7·6·5·4, pointy-top).
+  Strength = number of icons (machetes, paddles, coins; cards on camps/rubble). Start spaces `s1`–`s4` carry the
+  printed numbers.
+- Still reconstructed: **A, D–H, J, L, M** (terrain counts right, layouts guessed) and strips **O–R** (not in).
+  Transcribe them from the same images the same way before adding courses that use them.
+- First Expedition layout and rotations come from Ravensburger's German setup sheet
+  (brettspiele-report.de …/Wettlauf nach El Dorado_Spielaufbau.pdf, page 1; page 2 has the 6 other official routes,
+  clear vector-ish art — much better than the English rulebook scans). That sheet is rotated ≈12° vs our lattice.
+- Blockade costs 1,1,1,1,2,2 are still a guess (BoardGameHelpers has blockade images too).
+- Board rendering: harder spaces are darker (`TSHADE` in ui_view.js), icons laid out 1 / 2 side by side / 3 triangle /
+  4 square — owner's request, mirrors the printed tiles.
 
 ## 6. Architecture
 
@@ -208,7 +202,7 @@ Playwright can't tap elements outside the viewport when `overflow: clip` is set;
 1. **Deploy verification**: first Workers Builds deploy relies on D1 auto-provisioning (`wrangler ≥ 4.45`, binding without
    `database_id`). If it fails in CI, have him create D1 `el-dorado` in the dashboard and add `database_id` to wrangler.jsonc.
    Then verify Google sign-in on the live URL (the only untested path).
-2. More courses (see §5): the 6 rulebook routes (needs strips O–R for two of them), then community routes.
+2. More courses (see §5): transcribe the remaining tiles, then the 6 rulebook routes (needs strips O–R for two of them), then community routes.
    Also: rulebook tiebreak "if tied players have no blockades, whoever reached El Dorado first wins" is not
    implemented yet (currently a shared place).
 3. Blockade costs — confirm from a photo of the tokens.

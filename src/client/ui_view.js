@@ -35,6 +35,13 @@ const SVGNS='http://www.w3.org/2000/svg';
 function sv(tag,attrs,parent){const e=document.createElementNS(SVGNS,tag);if(attrs)for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
 function hexPts(x,y,r){let s='';for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);s+=(x+r*Math.cos(a)).toFixed(1)+','+(y+r*Math.sin(a)).toFixed(1)+' ';}return s;}
 const TFILL={j:['#4a9b5f','#2a6a40'],w:['#4aa0dd','#2464a0'],v:['#f2cd6c','#d09632'],r:['#aeb2ad','#7a7f7b'],c:['#d4705a','#9a3e2d'],m:['#58615a','#2d332f'],s:['#e3d8b9','#b4a887'],g:['#ffe690','#e3a52b']};
+/* harder spaces are darker, like the printed tiles: [top,bottom] gradient per strength 1..4 */
+const TSHADE={j:[['#4a9b5f','#2a6a40'],['#347c49','#1c4f2e'],['#245e36','#123a21'],['#1a4a2a','#0c2c18']],
+  w:[['#4aa0dd','#2464a0'],['#2f82c2','#1a4d82'],['#2064a0','#123c66'],['#174e82','#0c2e52']],
+  v:[['#f2cd6c','#d09632'],['#e2a94c','#b87424'],['#c9893a','#955418'],['#a96b2c','#733c0e']],
+  r:[['#aeb2ad','#7a7f7b'],['#8f948f','#5e635f'],['#737873','#474b48'],['#5c605c','#363936']],
+  c:[['#d4705a','#9a3e2d'],['#bb5641','#7e2e1f'],['#9c4230','#652217'],['#80321f','#4f180e']]};
+const ICON_AT={1:[[0,0]],2:[[-9.6,0],[9.6,0]],3:[[-8.8,-6],[8.8,-6],[0,7.4]],4:[[-8.2,-7.4],[8.2,-7.4],[-8.2,7.4],[8.2,7.4]]};
 const ICOL={j:'#f4fff6',w:'#f2f9ff',v:'#5a3d07',g:'#5a3c05',r:'#f5f5f2',c:'#fff4ea',s:'#4b4436'};
 const CHIP={j:'rgba(10,40,22,.42)',w:'rgba(8,34,64,.42)',v:'rgba(255,248,225,.5)',r:'rgba(30,32,31,.45)',c:'rgba(70,16,8,.45)',g:'rgba(255,250,230,.55)'};
 let L={};
@@ -44,6 +51,7 @@ function buildBoard(){
   svg.setAttribute('viewBox',`${MAP.minX} ${MAP.minY} ${MAP.w} ${MAP.h}`);
   const defs=sv('defs',null,svg);
   for(const t in TFILL){const g=sv('linearGradient',{id:'gr-'+t,x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':TFILL[t][0]},g);sv('stop',{offset:1,'stop-color':TFILL[t][1]},g);}
+  for(const t in TSHADE)TSHADE[t].forEach(([a,b],i)=>{const g=sv('linearGradient',{id:'gr-'+t+(i+1),x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':a},g);sv('stop',{offset:1,'stop-color':b},g);});
   const rg=sv('radialGradient',{id:'cityGlow'},defs);sv('stop',{offset:0,'stop-color':'#ffd66b','stop-opacity':.6},rg);sv('stop',{offset:.6,'stop-color':'#ffc94a','stop-opacity':.15},rg);sv('stop',{offset:1,'stop-color':'#ffd66b','stop-opacity':0},rg);
   const hl=sv('radialGradient',{id:'hexShine',cx:.35,cy:.25,r:.8},defs);sv('stop',{offset:0,'stop-color':'#fff','stop-opacity':.2},hl);sv('stop',{offset:.6,'stop-color':'#fff','stop-opacity':0},hl);
   // terrain textures
@@ -65,7 +73,7 @@ function buildBoard(){
   for(const h of MAP.hexes.values()){
     const g=sv('g',null,L.terrain);
     const pts=hexPts(h.x,h.y,R-1.4);
-    sv('polygon',{points:pts,fill:'url(#gr-'+h.type+')'},g);
+    sv('polygon',{points:pts,fill:'url(#gr-'+h.type+(TSHADE[h.type]?Math.min(4,Math.max(1,h.val)):'')+')'},g);
     if(h.type!=='m'&&h.type!=='s'&&h.type!=='g')sv('polygon',{points:pts,fill:'url(#p-'+h.type+')'},g);
     sv('polygon',{points:pts,fill:'url(#hexShine)',stroke:'rgba(255,255,255,.16)','stroke-width':1},g);
     if(h.type==='m'){drawMountain(g,h);continue;}
@@ -76,10 +84,11 @@ function buildBoard(){
       const u=sv('use',{href:'#i-'+h.sym,x:h.x-9,y:h.y-2,width:18,height:18},g);u.style.color=h.sym==='j'?'#2b6b41':'#1f5a94';
       const t=sv('text',{x:h.x,y:h.y-8,'text-anchor':'middle','font-size':8,'font-weight':800,'letter-spacing':1.2,fill:'#6b4706','font-family':'Figtree, sans-serif'},g);t.textContent='FINISH';continue;}
     const sym=h.type,n=h.val;
-    const is=n===1?17:n===2?14:12,gap=is*.78;
-    const w=is+(n-1)*gap+8;
-    sv('rect',{x:h.x-w/2,y:h.y-is/2-4,width:w,height:is+8,rx:(is+8)/2,fill:CHIP[sym]},g);
-    for(let i=0;i<n;i++){const cx=h.x-(n-1)*gap/2+i*gap;const u=sv('use',{href:'#i-'+sym,x:cx-is/2,y:h.y-is/2,width:is,height:is},g);u.style.color=ICOL[sym];}
+    // icons spaced out so the count reads at a glance: 1 · 2 side by side · 3 in a triangle · 4 in a square
+    const at=ICON_AT[Math.min(4,n)]||ICON_AT[1],is=n===1?18:n===2?15:13.5;
+    if(n<=2){const w=n===1?28:44;sv('rect',{x:h.x-w/2,y:h.y-12,width:w,height:24,rx:12,fill:CHIP[sym]},g);}
+    else sv('circle',{cx:h.x,cy:h.y+(n===3?.4:0),r:n===3?19:19.5,fill:CHIP[sym]},g);
+    for(const[dx,dy]of at){const u=sv('use',{href:'#i-'+sym,x:h.x+dx-is/2,y:h.y+dy-is/2,width:is,height:is},g);u.style.color=ICOL[sym];}
   }
   // seams between boards
   const seam=sv('g',{stroke:'rgba(0,0,0,.55)','stroke-width':2.4,'stroke-linecap':'round'},L.terrain);
@@ -334,7 +343,7 @@ function cardHTML(t){
   const d=CT[t];let body;
   if(d.c==='p')body=`<div class="c-txt">${esc(d.txt)}</div>`;
   else{const sym=d.s==='*'?'*':d.s;body=`<div class="c-icons">${icon(sym).repeat(d.p)}</div><div class="c-sub">${d.s==='*'?'Any one symbol':plural(d.p,SYMNAME[d.s])}</div>`;}
-  const pow=d.c!=='p'?`<div class="c-pow"><b>${d.p}</b></div>`:'';
+  const pow=d.c!=='p'?`<div class="c-pow"><b>${d.p}</b>${icon(d.s)}</div>`:'';
   const foot=`<div class="c-foot">${d.cost!=null?`<span class="c-cost">${d.cost}</span>`:'<span></span>'}${d.once?'<span class="c-once">Single use</span>':''}</div>`;
   return `<div class="cface k-${d.c}"><div class="c-art">${cardArt(t)}</div>${pow}<div class="c-title">${esc(d.n)}</div><div class="c-body">${body}</div>${foot}</div>`;
 }
@@ -560,16 +569,17 @@ function setSide(open){UI.sideOpen=open;$('#side').classList.toggle('closed',!op
   if(!userZoomed)setTimeout(()=>fit(true),10);}
 function renderSide(){
   const m=$('#market');const canBuy=!S.turn.bought&&!S.over&&!UI.cover;const tr=UI.mode==='transmit';
-  const openSlot=S.market.some(s=>s.n===0);
+  const openSlot=S.market.some(s=>s.n===0);const aff=new Set(tr?[]:affordable().map(a=>a.src+a.idx));
+  $('#sideToggle').classList.toggle('canbuy',aff.size>0);
   m.innerHTML=S.market.map((s,i)=>{
     if(s.n<=0)return`<div class="mslot empty" data-i="${i}">Empty slot<br>reserve open</div>`;
     const active=(tr||canBuy);const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src==='m'&&UI.buy.idx===i;
-    return`<div class="mslot${active?'':' no'}${chosen?' chosen':''}" data-i="${i}" data-src="m" title="${esc(cardTitle(s.t))}"><div class="mcard">${cardHTML(s.t)}</div><span class="cnt">${s.n}</span></div>`;
+    return`<div class="mslot${active?'':' no'}${aff.has('m'+i)?' can':''}${chosen?' chosen':''}" data-i="${i}" data-src="m" title="${esc(cardTitle(s.t))}"><div class="mcard">${cardHTML(s.t)}</div><span class="cnt">${s.n}</span></div>`;
   }).join('');
   const r=$('#reserve');
   r.innerHTML=S.reserve.map((s,i)=>{const d=CT[s.t];const ok=tr||(canBuy&&openSlot);const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src==='r'&&UI.buy.idx===i;
     const col={g:'#4a9d63',b:'#4a95cf',y:'#e9b24a',x:'#ece5d3',p:'#8c68c4'}[d.c];
-    return`<div class="rrow${ok&&s.n>0?'':' no'}${chosen?' chosen':''}" data-i="${i}" data-src="r" title="${esc(cardTitle(s.t))}"><span class="sw" style="background:${col}"></span><span class="rn">${esc(d.n)}</span><span class="rq">×${s.n}</span><span class="rc">${d.cost}</span></div>`;}).join('');
+    return`<div class="rrow${ok&&s.n>0?'':' no'}${aff.has('r'+i)?' can':''}${chosen?' chosen':''}" data-i="${i}" data-src="r" title="${esc(cardTitle(s.t))}"><span class="sw" style="background:${col}"></span><span class="rn">${esc(d.n)}</span><span class="rq">×${s.n}</span><span class="rc">${d.cost}</span></div>`;}).join('');
   $('#resNote').textContent=tr?'Transmitter: take any card for free.':openSlot?'A market slot is empty, so you may buy from the reserve.':'Opens once a market slot sells out.';
   $('#buyState').textContent=S.turn.bought?'bought this turn':'1 purchase per turn';
   $('#resState').textContent=openSlot?'open':'locked';
@@ -618,6 +628,9 @@ function renderPrompt(){
       btns=[{t:UI.picks.length?'Remove':'Skip',id:'bOk',pri:1,big:1,fn:confirmTrash}];break;}
     case 'transmit':{txt=who+'<b>Transmitter</b>: choose any card in the market or reserve. It goes to your discard pile.';
       btns=[{t:'Cancel',id:'bCan',fn:cancelMode}];break;}
+    case 'buyWarn':{const names=[...new Set(affordable().map(a=>CT[a.t].n))];
+      txt=who+`You can still afford <b>${names.slice(0,3).map(esc).join(', ')}</b>${names.length>3?` and ${names.length-3} more`:''}. <span class="m">Buy one before ending your turn?</span>`;
+      btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:'Open market',id:'bMkt',fn:()=>{setSide(true);cancelMode();}},{t:'End turn anyway',id:'bEndA',pri:1,big:1,fn:startEndTurn}];break;}
     case 'endTurn':{const k=UI.picks.length;txt=who+(k?`Keeping <b>${k}</b> card${k>1?'s':''}; the rest are discarded.`:'Your leftover cards will be discarded.')+' <span class="m">Tap a card to keep it for next turn. Then you draw up to 4.</span>';
       btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:k===pl.hand.length?'Keep none':'Keep all',id:'bAll',fn:()=>{UI.picks=UI.picks.length===pl.hand.length?[]:pl.hand.slice();render();}},{t:k?'End turn':'Discard & end turn',id:'bEnd2',pri:1,big:1,fn:finishTurn}];break;}
   }
@@ -708,7 +721,7 @@ function showRules(){
   <h4>Buying</h4><ul><li>Coin cards and jokers pay their value; every other card pays ½ coin. No change.</li><li>Bought cards go to your discard pile.</li><li>The reserve opens once a market slot is empty; that stack moves into the slot.</li></ul>
   <h4>Single-use cards</h4><p>Cards marked <b>Single use</b> are removed from the game after their effect. Spent only as ½ coin, they're discarded normally.</p>
   <h4>Two players</h4><p>Each player leads two explorers (starting spaces 1 & 3, and 2 & 4) and wins only when both reach El Dorado. Each card moves one of them.</p>
-  <h4>About the boards</h4><p>Courses are fixed routes, starting with the rulebook's route for a first game (B · C · N · I · K). Board positions follow the rulebook illustration. Each board has the published terrain mix, but the exact space-by-space layout is reconstructed, not copied from the printed boards.</p>
+  <h4>About the boards</h4><p>Courses are fixed routes, starting with the rulebook's route for a first game (B · C · N · I · K), laid out as on the official setup sheet. Tiles B, C, I, K and N are copied space by space from the printed tiles; darker spaces are harder to cross.</p>
   <h4>Controls</h4><ul><li>Drag or scroll to pan, pinch or ctrl+scroll to zoom. <b>Esc</b> cancels, <b>Ctrl+Z</b> undoes until new cards are drawn.</li></ul>
   </div><div class="mrow"><button class="btn pri" id="rClose">Close</button></div>`,sc=>sc.querySelector('#rClose').onclick=closeModal,true);
 }

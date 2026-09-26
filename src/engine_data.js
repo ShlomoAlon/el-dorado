@@ -48,12 +48,12 @@ const BOARDS={
  F:['w1 w1 j1 j1','w2 r1 r1 j1 j2','w1 r1 mm c1 j1 j1','w1 r2 mm v1 mm j1 w1','j1 r1 r1 v2 mm w1','j1 j2 r2 c2 w1','j1 v1 r1 j1'],
  G:['j1 v1 v1 j1','j1 v2 v1 v1 j1','j2 v1 mm mm v2 j1','j1 v1 v3 c1 v1 j1 j1','j1 r1 mm v1 v2 j1','j1 j2 mm r2 j1','j1 j1 v1 j1'],
  H:['v1 v1 w1 j1','v2 v1 w1 w1 j1','v1 v3 v1 w2 j1 j1','j1 v1 v2 mm w1 w1 j2','j1 v1 v1 v4 w1 j1','j1 j2 v1 w2 w1','j1 v1 j1 w1'],
- I:['j1 j2 mm j1','j1 mm mm j1 v1','w1 w1 j1 j2 v1 v1','j1 w2 mm c1 j1 v2 j1','j1 w1 j1 mm r1 j1','j2 w1 j1 mm v1','j1 w1 j1 v1'],
+ I:['j1 j1 j1 j1','v1 j1 mm j1 j1','v1 v2 j1 mm j2 j1','v1 v2 j1 j2 c2 mm mm','v2 r3 mm mm j2 j1','w2 w1 w1 j1 j1','w2 w2 w1 j1'],
  J:['r1 r1 v1 v1','w1 r2 r1 v2 v1','w1 w1 mm r1 v1 j1','w2 w1 r3 c1 r1 v1 j1','w1 w1 r1 mm v3 j1','w1 w1 r1 v1 j2','j1 j1 v1 v1'],
  K:['c1 j2 j2 j1','j1 j1 w3 j1 j2','j1 j2 j1 j3 j1 j2','j2 j1 j3 j1 j3 j1 j2','j2 j1 j3 j1 j2 j1','j2 j1 v4 j1 j1','j1 j2 j2 c1'],
  L:['j1 j1 j1 mm','j2 c1 j1 j1 j1','j1 j1 j2 mm j1 w1','c2 j1 j1 j1 j3 w1 j1','j1 mm j1 v1 j1 w1','j1 j2 j1 c1 j1','j1 v2 j1 j1'],
  M:['j1 mm mm j1','j1 j2 mm j1 j1','mm j1 r1 j2 mm j1','w1 j1 mm c1 j1 j1 mm','w1 mm j1 r2 j1 j1','w1 j1 v1 mm j2','w1 j1 r1 v1'],
- N:['j1 j1 w1 w1','j1 v1 v1 w2 j1','j2 v2 v1 w1 j1 j1','j1 v1 v3 w1 w1 j2 j1','j1 v1 v2 j1 w1 j1','j1 j1 v1 w2 j1','j2 v1 w1 j1'],
+ N:['j1 j1 j1 j1','v1 j1 j2 j1 w1','v1 v2 j1 w1 w1 w1','w1 w1 v3 v4 v2 v2 v1','w1 w1 w1 j1 v2 v1','j1 j1 j2 j1 j1','j1 j1 j1 j1'],
 };
 function parseTok(t){
   if(t==='mm')return{type:'m',val:0};if(t[0]==='s')return{type:'s',val:0,num:+t[1]||0}; // s1–s4: numbered start spaces
@@ -90,9 +90,9 @@ const hash=(x,y)=>{let h=Math.imul(x|0,374761393)+Math.imul(y|0,668265263);h=Mat
    Blockades are dealt at random onto the connections when a game starts (rulebook).
    ========================================================= */
 const COURSES=[
-  // Board positions fitted to the rulebook's setup illustration (page 5). Board contents are reconstructed.
+  // Positions and rotations taken from Ravensburger's setup sheet (first game); El Dorado water side on K's top-right corner.
   {id:'first',name:'First Expedition',src:'Rulebook route for your first game',diff:'Easy',
-   p:[['B',0,0,2],['C',7,-4,0],['N',12,-2,0],['I',16,1,0],['K',23,-4,0]],e:[25,-8],s:'j'},
+   p:[['B',0,0,2],['C',7,-3,5],['N',11,0,2],['I',14,4,2],['K',21,-1,0]],e:[25,-5],s:'w'},
 ];
 const courseById=id=>COURSES.find(c=>c.id===id)||null;
 function buildCourse(C,seed){

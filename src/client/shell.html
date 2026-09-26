@@ -83,6 +83,11 @@ html,body{overflow:clip;overscroll-behavior:none}
 .mslot:hover{transform:translateY(-3px)}
 .mslot.no{cursor:default;opacity:.42}
 .mslot.no:hover{transform:none}
+.mslot.can .cface{box-shadow:0 0 0 2px #8fe3a8,0 0 18px rgba(120,220,150,.45)}
+.mslot.can::after{content:'Can buy';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);background:#8fe3a8;color:#0d2a18;font-size:9.5px;font-weight:800;letter-spacing:.04em;padding:1px 7px;border-radius:9px;white-space:nowrap;z-index:4;pointer-events:none}
+.rrow.can{border-color:rgba(143,227,168,.6);background:rgba(143,227,168,.09)}
+.rrow.can .rc{color:#9ef0b8}
+#sideToggle.canbuy{box-shadow:0 0 0 1.5px #8fe3a8,0 0 14px rgba(120,220,150,.35)}
 .mslot.chosen .cface{box-shadow:0 0 0 2px var(--gold2),0 0 20px rgba(233,178,74,.5)}
 .mslot.empty{width:84px;height:118px;border:1.5px dashed var(--line2);border-radius:9px;display:grid;place-items:center;color:var(--faint);font-size:11px;text-align:center;cursor:default;line-height:1.3}
 .mslot.empty:hover{transform:none}
@@ -148,8 +153,14 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 .c-art svg{width:100%;height:100%;display:block}
 .c-body{position:absolute;left:.42em;right:.42em;top:calc(55% + .42em);bottom:.42em;background:linear-gradient(180deg,var(--body),color-mix(in srgb,var(--body) 70%,#000));border-radius:.2em .2em .45em .45em;display:flex;flex-direction:column;align-items:center;padding:1.05em .5em .4em}
 .c-title{position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);background:linear-gradient(#2b2217,#15100a);border:.07em solid rgba(255,220,150,.7);color:#fbe7b8;font-family:var(--display);font-size:.98em;padding:.18em .7em .2em;border-radius:.35em;white-space:nowrap;max-width:88%;overflow:hidden;text-overflow:ellipsis;box-shadow:0 .15em .35em rgba(0,0,0,.5);z-index:2;letter-spacing:.01em}
-.c-pow{position:absolute;left:.1em;top:.1em;width:2.9em;height:2.9em;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff3cf,#e9b24a 45%,#9a6414 100%);box-shadow:0 .12em .3em rgba(0,0,0,.55),inset 0 0 0 .1em rgba(90,55,5,.6);display:grid;place-items:center;z-index:3;color:#3a2505;font-family:var(--display);font-size:1em}
-.c-pow b{font-size:1.75em;font-weight:400;line-height:1;margin-top:-.06em}
+/* strength badge, top left: a coin only on coin cards; machete, paddle and joker cards use their own colour and icon */
+.c-pow{position:absolute;left:.1em;top:.1em;width:2.9em;height:2.9em;border-radius:50%;background:var(--pow);box-shadow:0 .12em .3em rgba(0,0,0,.55),inset 0 0 0 .1em var(--powRim);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:3;color:var(--powInk);font-family:var(--display);font-size:1em}
+.c-pow b{font-size:1.45em;font-weight:400;line-height:1;margin-top:-.02em}
+.c-pow svg{width:1em;height:1em;margin-top:.02em;color:var(--powInk)}
+.k-g{--pow:radial-gradient(circle at 35% 30%,#b8f0c8,#3f9a5c 50%,#1d5233 100%);--powRim:rgba(10,40,20,.6);--powInk:#f4fff6}
+.k-b{--pow:radial-gradient(circle at 35% 30%,#cfeaff,#3a8ad0 50%,#1b4f84 100%);--powRim:rgba(8,30,60,.6);--powInk:#f2f9ff}
+.k-y{--pow:radial-gradient(circle at 35% 30%,#fff3cf,#e9b24a 45%,#9a6414 100%);--powRim:rgba(90,55,5,.6);--powInk:#3a2505}
+.k-x{--pow:radial-gradient(circle at 35% 30%,#ffffff,#e6dcc4 55%,#a8997a 100%);--powRim:rgba(80,70,50,.55);--powInk:#3b3325}
 .c-icons{display:flex;gap:.12em;justify-content:center;flex-wrap:wrap;max-width:100%}
 .c-icons svg{width:1.45em;height:1.45em;color:var(--acc);filter:drop-shadow(0 .06em 0 rgba(0,0,0,.6))}
 .c-txt{font-size:.8em;line-height:1.28;text-align:center;color:#e7e0f3;font-weight:600}

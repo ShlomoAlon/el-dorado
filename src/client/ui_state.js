@@ -114,8 +114,17 @@ function cancelMode(){
   if(S&&S.turn.pending)return;
   UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;render();
 }
+/* cards the player to act could buy right now with the cards in hand */
+function affordable(){
+  if(!S||S.over||UI.cover||!canAct()||S.turn.bought)return[];
+  const cash=cur().hand.reduce((a,id)=>a+coinVal(id),0),open=S.market.some(s=>s.n===0),out=[];
+  S.market.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash)out.push({src:'m',idx:i,t:s.t});});
+  if(open)S.reserve.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash)out.push({src:'r',idx:i,t:s.t});});
+  return out;
+}
 function startEndTurn(){
   if(!canAct()||S.turn.pending)return;
+  if(UI.mode!=='buyWarn'&&affordable().length){UI.mode='buyWarn';UI.card=null;UI.picks=[];UI.buy=null;render();return;} // nudge before skipping a purchase
   if(cur().hand.length){UI.mode='endTurn';UI.picks=[];UI.card=null;render();}
   else finishTurn();
 }
