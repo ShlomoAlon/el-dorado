@@ -163,6 +163,23 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 
 /* ---------- cards */
 #cards{position:absolute;inset:0;pointer-events:none;z-index:25}
+/* purchase in progress: the card waits above the hand until it's paid for */
+#buySlot{position:absolute;left:0;top:0;z-index:24;--bw:92px;width:var(--bw);height:calc(var(--bw)*1.4);transform:translate3d(var(--bx,0),var(--by,0),0);transition:opacity .2s}
+#buySlot[hidden]{display:none}
+#buySlot .bs-card{position:absolute;inset:0;border-radius:calc(var(--bw)*.08);outline:2px dashed var(--gold2);outline-offset:4px;animation:bsIn .28s var(--ease)}
+#buySlot .bs-card .mcard{--cw:var(--bw)}
+#buySlot .bs-card .cface{filter:saturate(.8) brightness(.9)}
+#buySlot.paid .bs-card .cface{filter:none}
+@keyframes bsIn{from{transform:translateY(-14px) scale(.9);opacity:0}}
+.bs-ring{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);background:#0b120f;border:1.5px solid var(--gold2);border-radius:14px;padding:3px 11px;font-weight:800;font-size:14px;color:var(--gold2);white-space:nowrap;display:flex;gap:4px;font-variant-numeric:tabular-nums;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.bs-ring b{color:#fff}
+#buySlot.paid .bs-ring{background:var(--gold);color:var(--goldInk);border-color:var(--gold)}
+#buySlot.paid .bs-ring b{color:var(--goldInk)}
+.bs-x{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);background:#0b120f;color:var(--muted);cursor:pointer;font-size:12px;display:grid;place-items:center;z-index:2}
+.bs-x:hover{color:var(--text)}
+.mghost{pointer-events:none!important;z-index:300!important;filter:drop-shadow(0 12px 18px rgba(0,0,0,.55))}
+#mkt .mslot{touch-action:none}
+#allc .mslot{touch-action:pan-y}
 .card{position:absolute;left:0;top:0;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1);transform-origin:50% 50%;will-change:transform;pointer-events:auto;cursor:pointer;touch-action:none}
 .card.anim{transition:transform .32s var(--ease),opacity .3s}
 .card.fast{transition:transform .16s var(--ease)}
@@ -325,6 +342,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
   <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
   <div id="actBtns"></div>
   <div id="playLbl">In play</div>
+  <div id="buySlot" hidden><div class="bs-card"></div><div class="bs-ring"><b id="bsPaid">0</b><span>/</span><span id="bsCost">0</span></div><button class="bs-x" id="bsCancel" aria-label="Cancel purchase">✕</button></div>
   <div id="cards"></div>
   <svg id="arrow"></svg>
 </div>
@@ -1055,7 +1073,7 @@ function playEvents(ev,viewer){
     if(e.e==='move')animatePiece(e.pl,e.pi,e.path);
     else if(e.e==='block')toast(S.players[e.pl].name+' claims blockade #'+e.n);
     else if(e.e==='arrive')toast(S.players[e.pl].name+' reaches El Dorado!',2200);
-    else if(e.e==='gain'&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.t,marketRect(e.src,e.idx));
+    else if(e.e==='gain'&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.t,takeBuyFrom()||marketRect(e.src,e.idx));
     else if(e.e==='timeout')toast(S.players[e.pl].name+' ran out of time');
     else if(e.e==='resign')toast(S.players[e.pl].name+' left the game');
   }
@@ -1124,7 +1142,8 @@ function pickFromMarket(src,idx){
   render();
 }
 function payTotal(){return UI.picks.reduce((a,id)=>a+coinVal(id),0);}
-function confirmBuy(){const B=UI.buy;if(!B||payTotal()<CT[B.t].cost)return;act({t:'buy',src:B.src,idx:B.idx,cards:UI.picks.slice()});}
+let buyFrom=null;const takeBuyFrom=()=>{const r=buyFrom;buyFrom=null;return r&&Date.now()-r.at<3000?r:null;};
+function confirmBuy(){const B=UI.buy;if(!B||payTotal()<CT[B.t].cost)return;{const e=document.querySelector('#buySlot .mcard');if(e){const r=e.getBoundingClientRect();buyFrom={left:r.left,top:r.top,width:r.width,height:r.height,at:Date.now()};}}act({t:'buy',src:B.src,idx:B.idx,cards:UI.picks.slice()});}
 function cancelMode(){
   if(S&&S.turn.pending)return;
   UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;render();
@@ -1603,7 +1622,14 @@ function onHandCard(id){
   if(def(id).c==='p'&&typeOf(id)!=='native'){playAction(id);return;}
   UI.mode='card';UI.card=id;render();
 }
-function togglePick(id){if(UI.picks.includes(id))rm(UI.picks,id);else UI.picks.push(id);render();}
+function togglePick(id){const add=!UI.picks.includes(id);if(add)UI.picks.push(id);else rm(UI.picks,id);render();if(add&&UI.mode==='pay')payProgress();}
+/* after a card goes into the spending tray: finish the purchase once the coins cover it */
+function payProgress(){if(UI.mode!=='pay'||!UI.buy)return;const c=CT[UI.buy.t].cost;if(payTotal()<c)return;
+  $('#buySlot').classList.add('paid');const b=UI.buy;setTimeout(()=>{if(UI.mode==='pay'&&UI.buy===b&&payTotal()>=c)confirmBuy();},300);}
+function renderBuySlot(){const bs=$('#buySlot');if(!bs)return;const on=UI.mode==='pay'&&!!UI.buy&&!UI.cover;
+  if(!on){if(!bs.hidden){bs.hidden=true;bs.dataset.t='';}return;}
+  if(bs.dataset.t!==UI.buy.src+UI.buy.idx){bs.dataset.t=UI.buy.src+UI.buy.idx;bs.querySelector('.bs-card').innerHTML=`<div class="mcard">${cardHTML(UI.buy.t)}</div>`;}
+  const c=CT[UI.buy.t].cost,t=payTotal();$('#bsPaid').textContent=fmt(t);$('#bsCost').textContent=c;bs.classList.toggle('paid',t>=c);bs.hidden=false;}
 function onPlayCard(id){
   if(S.turn.active&&S.turn.active.id===id){
     if(UI.mode==='card'&&UI.card===id){UI.mode='idle';UI.card=null;}else{UI.mode='card';UI.card=id;UI.piece=S.turn.active.pi;UI.picks=[];}
@@ -1966,12 +1992,18 @@ function layoutCards(){
   const avail=W-2*(pileW+32)-(W>900?140:0);
   const step=n>1?Math.min(cw*.86,Math.max(cw*.32,(avail-cw)/(n-1))):0;
   const hi=hand.indexOf(UI.hover);
-  const lifted=id=>(UI.mode==='card'&&UI.card===id)||UI.picks.includes(id)||(drag&&drag.started&&drag.id===id);
+  const paying=UI.mode==='pay'&&UI.buy&&!hidden;
+  const lifted=id=>(UI.mode==='card'&&UI.card===id)||(!paying&&UI.picks.includes(id))||(drag&&drag.started&&drag.id===id);
+  // purchase slot above the hand, spending tray to its right
+  const bw=Math.round(cw*(W<600?.78:.72)),bx=W/2-bw/2,by=H-ch*1.02-14-bw*1.4-26;
+  const bs=$('#buySlot');if(bs){bs.style.setProperty('--bw',bw+'px');bs.style.setProperty('--bx',bx+'px');bs.style.setProperty('--by',by+'px');}
+  const tsc=bw/cw*.78,tw=cw*tsc;let tk=0;
   hand.forEach((id,i)=>{
     const el=cardEls.get(id);if(!el||el.classList.contains('free'))return;
     const off=i-(n-1)/2;
     let x=W/2+off*step-cw/2,y=H-ch*(W<600?.78:.9)+Math.abs(off)*Math.abs(off)*(W<600?1.6:2.6),rot=off*(W<600?2.4:3.2),sc=1,z=10+i;
     if(hi>=0&&i!==hi)x+=Math.sign(i-hi)*cw*.16;
+    if(paying&&UI.picks.includes(id)){const k=tk++;x=bx+bw+18+k*tw*.55-(cw-tw)/2;y=by+bw*1.4*.5-ch/2+k*3;rot=4+k*3;sc=tsc;z=70+k;el.style.zIndex=z;setT(el,x,y,rot,sc);return;}
     if(lifted(id)){y=H-ch*1.02-14;rot*=.4;z=60+i;}
     if(i===hi&&!drag){y=H-ch*1.12-14;rot=0;sc=1.14;z=90;}
     el.style.zIndex=z;setT(el,x,y,rot,sc);
@@ -2046,6 +2078,36 @@ function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpe
    DRAG TO PLAY (aim arrow for moves, free drag for actions)
    ========================================================= */
 let drag=null;
+/* ---- drag a card out of the market (strip or All cards) toward your hand to start buying it ---- */
+let mdrag=null,mdragJustEnded=false;
+function marketDown(e){
+  if(e.button>0||!S||S.over||UI.cover||!canAct())return;
+  const s=e.target.closest('.mslot[data-src]');if(!s||s.classList.contains('no'))return;
+  mdrag={src:s.dataset.src,idx:+s.dataset.i,x0:e.clientX,y0:e.clientY,el:s,started:false,ghost:null,pid:e.pointerId};
+  window.addEventListener('pointermove',marketMove);window.addEventListener('pointerup',marketUp);window.addEventListener('pointercancel',marketCancel);
+}
+function marketMove(e){const d=mdrag;if(!d||e.pointerId!==d.pid)return;
+  if(!d.started){if(Math.hypot(e.clientX-d.x0,e.clientY-d.y0)<7)return;d.started=true;
+    const stack=d.src==='m'?S.market[d.idx]:S.reserve[d.idx];if(!stack)return marketCancel();
+    const g=document.createElement('div');g.className='card mghost';g.innerHTML=cardHTML(stack.t);$('#cards').appendChild(g);d.ghost=g;d.t=stack.t;
+    const r=d.el.querySelector('.mcard').getBoundingClientRect();placeAt(g,r,0);d.el.style.opacity=.35;
+    if(UI.allOpen)openAll(false);sfx('pick');}
+  const A=appRect(),cw=cardW(),ch=cw*1.4,sc=.72;setT(d.ghost,e.clientX-A.left-cw/2,e.clientY-A.top-ch*.45,(e.clientX-d.x0)*.015,sc);
+}
+function marketUp(e){const d=mdrag;if(!d||e.pointerId!==d.pid)return;marketEnd();
+  if(!d.started)return; // plain click → handled by the click listener
+  mdragJustEnded=true;setTimeout(()=>{mdragJustEnded=false;},0);
+  const mk=$('#mkt').getBoundingClientRect(),overMarket=UI.mktOpen&&e.clientX>=mk.left-10&&e.clientY<=mk.bottom+10;
+  if(overMarket){d.ghost.classList.add('anim');placeAt(d.ghost,d.el.querySelector('.mcard').getBoundingClientRect(),0);setTimeout(()=>d.ghost.remove(),260);return;}
+  const transmit=UI.mode==='transmit';pickFromMarket(d.src,d.idx);
+  // settle into the purchase slot (or fade for the Transmitter, whose card flies to the discard pile)
+  const slot=document.querySelector('#buySlot:not([hidden]) .bs-card');
+  d.ghost.classList.add('anim');
+  if(slot&&!transmit){placeAt(d.ghost,slot.getBoundingClientRect(),0);setTimeout(()=>d.ghost.remove(),280);}
+  else{d.ghost.style.opacity=0;setTimeout(()=>d.ghost.remove(),250);}
+}
+function marketCancel(){const d=mdrag;marketEnd();if(d&&d.ghost)d.ghost.remove();}
+function marketEnd(){const d=mdrag;mdrag=null;if(d&&d.el)d.el.style.opacity='';window.removeEventListener('pointermove',marketMove);window.removeEventListener('pointerup',marketUp);window.removeEventListener('pointercancel',marketCancel);}
 function wireCard(el,id){
   el.addEventListener('pointerenter',()=>{if(drag||!S||UI.cover)return;if(hp().hand.includes(id)){UI.hover=id;layoutCards();}});
   el.addEventListener('pointerleave',()=>{if(UI.hover===id){UI.hover=null;if(!drag)layoutCards();}});
@@ -2054,8 +2116,8 @@ function wireCard(el,id){
     const inHand=cur().hand.includes(id);const isAct=S.turn.active&&S.turn.active.id===id;
     if(!inHand&&!isAct)return;
     e.preventDefault();
-    const pickMode=['pay','trashPick','endTurn','transmit'].includes(UI.mode);
-    drag={id,x0:e.clientX,y0:e.clientY,started:false,pid:e.pointerId,kind:pickMode?'none':UI.mode==='discardFor'?(inHand&&!UI.picks.includes(id)?'free':'none'):(isAct||isTargeted(id)?'aim':'free'),inHand,wasSel:UI.mode==='card'&&UI.card===id};
+    const pickMode=['trashPick','endTurn','transmit'].includes(UI.mode);
+    drag={id,x0:e.clientX,y0:e.clientY,started:false,pid:e.pointerId,kind:pickMode?'none':UI.mode==='discardFor'||UI.mode==='pay'?(inHand&&!UI.picks.includes(id)?'free':'none'):(isAct||isTargeted(id)?'aim':'free'),inHand,wasSel:UI.mode==='card'&&UI.card===id};
     try{el.setPointerCapture(e.pointerId);}catch(_){}
   });
   el.addEventListener('pointermove',e=>{
@@ -2067,7 +2129,7 @@ function wireCard(el,id){
     if(drag.kind==='aim'){drag.cx=e.clientX;drag.cy=e.clientY;startAim();}
     else{const A=appRect(),cw=cardW(),ch=cw*1.4;setT(el,e.clientX-A.left-cw/2,e.clientY-A.top-ch*.4,dx*.02,1.08);el.style.zIndex=150;
       const k=targetAt(e.clientX,e.clientY),dk=k&&isDisc(UI.targets.get(k))?k:null;setHot(dk);
-      el.classList.toggle('go',!!dk||(UI.mode!=='discardFor'&&e.clientY<A.top+A.height-ch*1.25));}
+      el.classList.toggle('go',!!dk||(UI.mode!=='discardFor'&&e.clientY<A.top+A.height-ch*1.25));if(UI.mode==='pay')$('#buySlot').classList.toggle('hot',e.clientY<A.top+A.height-ch*1.25);}
   });
   const end=e=>{
     if(!drag||drag.id!==id)return;const d=drag;d.hot=aim.hot;drag=null;
@@ -2080,7 +2142,8 @@ function wireCard(el,id){
     }else if(d.kind==='free'){
       const A=appRect(),ch=cardW()*1.4;el.classList.remove('free','go');el.classList.add('anim');
       const k=targetAt(e.clientX,e.clientY),tg=k&&UI.targets.get(k);setHot(null);
-      if(isDisc(tg)&&!UI.anim){if(UI.mode==='discardFor')addDiscard(id);else startDiscard(k,id);}
+      if(UI.mode==='pay'){$('#buySlot').classList.remove('hot');if(e.clientY<A.top+A.height-ch*1.25&&!UI.picks.includes(id)){sfx('pick');togglePick(id);}else layoutCards();}
+      else if(isDisc(tg)&&!UI.anim){if(UI.mode==='discardFor')addDiscard(id);else startDiscard(k,id);}
       else if(UI.mode!=='discardFor'&&e.clientY<A.top+A.height-ch*1.25)playAction(id);else layoutCards();
     }
   };
@@ -2235,7 +2298,7 @@ function renderPrompt(){
       btns=[undoBtn,{t:act?'Done':'Cancel',id:'bCan',fn:cancelMode},{t:'End turn',id:'bEnd',pri:1,big:1,fn:startEndTurn}];break;}
     case 'pay':{
       const c=CT[UI.buy.t].cost,t=payTotal();
-      txt=who+`Buy <b>${esc(CT[UI.buy.t].n)}</b> for ${c}. Tap cards to pay: <b>${fmt(t)}</b> / ${c}. <span class="m">Coin cards and jokers pay their value; others pay ½.</span>`;
+      txt=who+`Buying <b>${esc(CT[UI.buy.t].n)}</b>: <b>${fmt(t)}</b> of ${c} paid. <span class="m">Drag or tap cards to pay. Coin cards and jokers pay their value, others ½.</span>`;
       btns=[{t:'Cancel',id:'bCan',fn:cancelMode},{t:'Buy',id:'bBuy',pri:1,big:1,dis:t<c,fn:confirmBuy}];break;}
     case 'discardFor':{
       const P2=UI.pending;const verb=P2.kind==='camp'?'remove from the game':'discard';const left=P2.need-UI.picks.length;
@@ -2264,7 +2327,7 @@ function btnWire(B,btns){
 function render(){
   if(!S)return;
   computeTargets();
-  renderHeader();renderMarket();renderPrompt();updateMktH();renderCards(); // re-size the market once the buttons exist
+  renderHeader();renderMarket();renderPrompt();updateMktH();renderBuySlot();renderCards(); // re-size the market once the buttons exist
   renderBlockades();renderTargets();renderPieces();
   aim.hot=null;if(aimWanted())startAim();else stopAim();
   save();updateTitle();renderTimer();$('#menuBtn').textContent=online()&&!S.over?'Leave game':'New game';
@@ -2336,7 +2399,7 @@ function showRules(){
   <h4>Your turn</h4><ul><li><b>Play cards</b> in any order: move, play action cards, and buy <b>at most one</b> card.</li><li><b>End turn</b>: played cards go to your discard pile. You may discard any cards left in hand or keep them.</li><li><b>Draw</b> back up to 4 cards. An empty deck is refilled by shuffling your discard pile.</li></ul>
   <h4>Moving</h4><ul><li><b>Drag</b> a card onto a highlighted space, or tap the card and then the space.</li><li>A jungle, water or village space needs one card of that symbol with at least the shown strength. Cards can't be combined for one space.</li><li>Leftover strength keeps moving the same explorer over further spaces of that type. It's lost once you do something else.</li><li>Jokers (white) count as any one symbol, chosen when played.</li><li><b>Rubble</b> (grey): discard as many cards as shown — drag cards onto it one by one; you move once enough are in. <b>Base camp</b> (red): remove that many cards from the game.</li><li>Mountains are impassable. Occupied spaces can't be entered or crossed.</li></ul>
   <h4>Blockades</h4><p>At the start, a random blockade from #1–6 is placed on each connection between two boards. The first explorer to cross pays its cost (a matching card, or discards for grey ones) and keeps it; the Native can also tear one down. Ties at the end go to whoever holds the most blockades, then the highest-numbered one.</p>
-  <h4>Buying</h4><ul><li>Coin cards and jokers pay their value; every other card pays ½ coin. No change.</li><li>Bought cards go to your discard pile.</li><li>The reserve opens once a market slot is empty; that stack moves into the slot.</li></ul>
+  <h4>Buying</h4><ul><li>Coin cards and jokers pay their value; every other card pays ½ coin. No change.</li><li>Drag a market card toward your hand (or tap it), then drag or tap cards from your hand to pay. The purchase completes as soon as it's covered.</li><li>Bought cards go to your discard pile.</li><li>The reserve opens once a market slot is empty; that stack moves into the slot.</li></ul>
   <h4>Single-use cards</h4><p>Cards marked <b>Single use</b> are removed from the game after their effect. Spent only as ½ coin, they're discarded normally.</p>
   <h4>Two players</h4><p>Each player leads two explorers (starting spaces 1 & 3, and 2 & 4) and wins only when both reach El Dorado. Each card moves one of them.</p>
   <h4>About the boards</h4><p>Courses are fixed routes, starting with the rulebook's route for a first game (B · C · N · I · K), laid out as on the official setup sheet. Tiles B, C, I, K and N are copied space by space from the printed tiles; darker spaces are harder to cross.</p>
@@ -2559,7 +2622,8 @@ function boot(){
   setupPanZoom();
   const pick=e=>{if(!S||UI.cover||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;
     const inAll=!!e.target.closest('#allc');pickFromMarket(s.dataset.src,+s.dataset.i);if(inAll&&UI.mode==='pay')openAll(false);};
-  $('#market').addEventListener('click',pick);$('#allMarket').addEventListener('click',pick);$('#reserve').addEventListener('click',pick);
+  for(const c of['#market','#allMarket','#reserve']){$(c).addEventListener('click',e=>{if(mdragJustEnded){mdragJustEnded=false;return;}pick(e);});$(c).addEventListener('pointerdown',marketDown);}
+  $('#bsCancel').onclick=cancelMode;
   $('#allClose').onclick=()=>openAll(false);$('#allc').addEventListener('click',e=>{if(e.target.id==='allc'||e.target.classList.contains('allc-in'))openAll(false);});
   $('#deckPile').onclick=()=>showPile('deck');$('#discPile').onclick=()=>showPile('discard');
   $('#rulesBtn').onclick=showRules;

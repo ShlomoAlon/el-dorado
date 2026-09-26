@@ -5,7 +5,8 @@ function boot(){
   setupPanZoom();
   const pick=e=>{if(!S||UI.cover||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;
     const inAll=!!e.target.closest('#allc');pickFromMarket(s.dataset.src,+s.dataset.i);if(inAll&&UI.mode==='pay')openAll(false);};
-  $('#market').addEventListener('click',pick);$('#allMarket').addEventListener('click',pick);$('#reserve').addEventListener('click',pick);
+  for(const c of['#market','#allMarket','#reserve']){$(c).addEventListener('click',e=>{if(mdragJustEnded){mdragJustEnded=false;return;}pick(e);});$(c).addEventListener('pointerdown',marketDown);}
+  $('#bsCancel').onclick=cancelMode;
   $('#allClose').onclick=()=>openAll(false);$('#allc').addEventListener('click',e=>{if(e.target.id==='allc'||e.target.classList.contains('allc-in'))openAll(false);});
   $('#deckPile').onclick=()=>showPile('deck');$('#discPile').onclick=()=>showPile('discard');
   $('#rulesBtn').onclick=showRules;
