@@ -524,7 +524,7 @@ function drawCards(p,n){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(
 function log(pi,t){S.log.push({p:pi,t});if(S.log.length>200)S.log.shift();}
 function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
 function blockAt(a,b){const c=MAP.edgeConn.get(a+'|'+b);if(c===undefined)return null;const bi=S.blockades.findIndex(x=>x.conn===c);if(bi<0||S.blockades[bi].owner!==null)return null;return bi;}
-function neighbors(k){const h=hexAt(k);return DIRS.map(([dq,dr])=>key(h.q+dq,h.r+dr)).filter(n=>MAP.hexes.has(n));}
+function neighbors(k){const nb=MAP._nb||(MAP._nb=new Map());let r=nb.get(k);if(!r){const h=hexAt(k);r=DIRS.map(([dq,dr])=>key(h.q+dq,h.r+dr)).filter(n=>MAP.hexes.has(n));nb.set(k,r);}return r;} // cached per map
 function coinVal(id){const d=def(id);if(d.c==='y'||d.c==='x')return d.p;return .5;}
 function blkLabel(B){return B.k==='r'?'discard '+plural(B.v,'card'):plural(B.v,SYMNAME[B.k]);}
 
@@ -535,7 +535,7 @@ function reach(pl,pi,syms,budget){
     const dist=new Map([[from,0]]),prev=new Map(),pq=[[0,from]];
     while(pq.length){
       let bi=0;for(let i=1;i<pq.length;i++)if(pq[i][0]<pq[bi][0])bi=i;
-      const[d,u]=pq.splice(bi,1)[0];if(d>dist.get(u))continue;
+      const[d,u]=pq[bi];pq[bi]=pq[pq.length-1];pq.pop();if(d>dist.get(u))continue;
       if(u!==from&&hexAt(u).type==='g')continue;
       for(const n of neighbors(u)){
         const h=hexAt(n);
@@ -903,29 +903,56 @@ function botHeuristic(me){ // hand-tuned: be close to the goal, own a strong dec
     v+=sumRed*.95;}
   return v;
 }
-let BOT_NET=null; // {w1,b1,w2,b2,w3,b3,h1,h2}
-function botNetValue(f){const N=BOT_NET;const h1=new Float32Array(N.h1),h2=new Float32Array(N.h2);
-  for(let j=0;j<N.h1;j++){let s=N.b1[j];const o=j*BOT_NF;for(let k=0;k<BOT_NF;k++)s+=N.w1[o+k]*f[k];h1[j]=s>0?s:.01*s;}
-  for(let j=0;j<N.h2;j++){let s=N.b2[j];const o=j*N.h1;for(let k=0;k<N.h1;k++)s+=N.w2[o+k]*h1[k];h2[j]=s>0?s:.01*s;}
-  let s=N.b3[0];for(let k=0;k<N.h2;k++)s+=N.w3[k]*h2[k];return 1/(1+Math.exp(-s));}
+/* ---- per-map network input: the summary above + every space on this course + every tile connection ----
+   Each space gets 4 slots (my explorer here / opponent 1, 2, 3 here, in turn order after me);
+   each connection between tiles gets 8 (which blockade type was dealt there, its cost, owned by nobody / me / an opponent).
+   The terrain itself never changes on a given course, so the network learns it per slot. */
+function botMapOrder(){if(MAP._bo)return MAP._bo;const keys=[...MAP.hexes.keys()].filter(k=>MAP.hexes.get(k).type!=='m').sort();const idx=new Map(keys.map((k,i)=>[k,i]));MAP._bo={keys,idx};return MAP._bo;}
+function botNetNF(){return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8;}
+function botNetFeatures(me){
+  const{keys,idx}=botMapOrder(),n=S.players.length,f=new Float32Array(botNetNF());
+  f.set(botFeatures(me),0);let o=BOT_NF;
+  S.players.forEach((p,j)=>{const rel=(j-me+n)%n;if(rel>3)return;for(const k of p.pieces){if(k==='done')continue;const x=idx.get(k);if(x!=null)f[o+x*4+rel]=1;}});
+  o+=keys.length*4;
+  S.blockades.forEach(B=>{const c=o+B.conn*8;const t='jwvr'.indexOf(B.k);if(t>=0)f[c+t]=1;f[c+4]=B.v/2;f[c+5]=B.owner===null?1:0;f[c+6]=B.owner===me?1:0;f[c+7]=B.owner!==null&&B.owner!==me?1:0;});
+  return f;
+}
+/* network: {course, nf, w1T (input-major, nf×h1), b1, w2 (h2×h1), b2, w3 (h2), b3}; leaky-ReLU, sigmoid out.
+   The first layer only touches non-zero inputs (most board slots are empty), so it stays fast in the browser. */
+let BOT_NET=null;
+function botNetValue(f){const N=BOT_NET,H1=N.b1.length,H2=N.b2.length;const h1=Float32Array.from(N.b1);
+  for(let k=0;k<f.length;k++){const x=f[k];if(x===0)continue;const r=k*H1,w=N.w1T;for(let j=0;j<H1;j++)h1[j]+=w[r+j]*x;}
+  for(let j=0;j<H1;j++)if(h1[j]<0)h1[j]*=.01;
+  let s=N.b3[0];for(let j=0;j<H2;j++){let a=N.b2[j];const r=j*H1;for(let k=0;k<H1;k++)a+=N.w2[r+k]*h1[k];s+=N.w3[j]*(a>0?a:.01*a);}
+  return 1/(1+Math.exp(-s));}
+const botNetReady=()=>!!(BOT_NET&&MAP&&BOT_NET.course===MAP.course&&BOT_NET.nf===botNetNF());
 function botValue(me,mode){
   if(S.over){const pl=S.places[me],n=S.players.length;return mode==='net'?(n-pl)/(n-1):1e3-pl*100;}
-  return mode==='net'&&BOT_NET?botNetValue(botFeatures(me)):botHeuristic(me);
+  return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me)):botHeuristic(me);
 }
 /* ---- choose and play ---- */
-function botClone(st){const c=JSON.parse(JSON.stringify(st));c.log=[];return c;}
+/* fast structural copy of the game state (everything applyAction can change gets its own copy) */
+function botClone(st){
+  const t=st.turn;
+  // cards (id → type) is shared: look-ahead only ever adds new ids, which the real game later overwrites with its own
+  return{...st,log:[],trash:st.trash.slice(),
+    players:st.players.map(p=>({...p,pieces:p.pieces.slice(),deck:p.deck.slice(),hand:p.hand.slice(),discard:p.discard.slice(),play:p.play.slice(),blocks:p.blocks.slice()})),
+    market:st.market.map(x=>({...x})),reserve:st.reserve.map(x=>({...x})),blockades:st.blockades.map(b=>({...b})),
+    turn:{...t,active:t.active&&{...t.active},pending:t.pending&&{...t.pending}},
+    winners:st.winners&&st.winners.slice(),places:st.places&&st.places.slice()};
+}
 function botChoose(opts){
   opts=opts||{};const mode=opts.mode||(BOT_NET?'net':'heur'),eps=opts.eps||0,rnd=opts.rnd||Math.random;
-  const me=S.cur,acts=botActions(),root=S;
+  const me=S.cur,acts=botActions(),root=S;if(mode==='net'&&!botNetReady())mode='heur';
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],feat:null};
-  let best=null,bv=-Infinity,bf=null;
+  let best=null,bv=-Infinity;
   for(const a of acts){
     S=botClone(root);shuffle(S.players[me].deck,rnd); // don't peek at the real draw order
     const r=applyAction(me,a);
-    if(r.ok){const v=botValue(me,mode)+(opts.noise?(rnd()-.5)*opts.noise:0);if(v>bv){bv=v;best=a;bf=opts.wantFeat?(S.over?null:botFeatures(me)):null;}}
+    if(r.ok){const v=botValue(me,mode)+(opts.noise?(rnd()-.5)*opts.noise:0);if(v>bv){bv=v;best=a;}}
     S=root;
   }
-  return{a:best||{t:'end',keep:[]},v:bv,feat:bf};
+  return{a:best||{t:'end',keep:[]},v:bv};
 }
 /* play one whole turn for the player to move (used by the UI and the simulator) */
 function botTurn(opts){const me=S.cur;const steps=[];for(let g=0;g<40&&!S.over&&S.cur===me;g++){const{a}=botChoose(opts);const r=applyAction(me,a);steps.push(a);if(!r.ok){applyAction(me,{t:'end',keep:[]});break;}}return steps;}

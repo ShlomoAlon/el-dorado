@@ -37,7 +37,7 @@ function drawCards(p,n){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(
 function log(pi,t){S.log.push({p:pi,t});if(S.log.length>200)S.log.shift();}
 function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
 function blockAt(a,b){const c=MAP.edgeConn.get(a+'|'+b);if(c===undefined)return null;const bi=S.blockades.findIndex(x=>x.conn===c);if(bi<0||S.blockades[bi].owner!==null)return null;return bi;}
-function neighbors(k){const h=hexAt(k);return DIRS.map(([dq,dr])=>key(h.q+dq,h.r+dr)).filter(n=>MAP.hexes.has(n));}
+function neighbors(k){const nb=MAP._nb||(MAP._nb=new Map());let r=nb.get(k);if(!r){const h=hexAt(k);r=DIRS.map(([dq,dr])=>key(h.q+dq,h.r+dr)).filter(n=>MAP.hexes.has(n));nb.set(k,r);}return r;} // cached per map
 function coinVal(id){const d=def(id);if(d.c==='y'||d.c==='x')return d.p;return .5;}
 function blkLabel(B){return B.k==='r'?'discard '+plural(B.v,'card'):plural(B.v,SYMNAME[B.k]);}
 
@@ -48,7 +48,7 @@ function reach(pl,pi,syms,budget){
     const dist=new Map([[from,0]]),prev=new Map(),pq=[[0,from]];
     while(pq.length){
       let bi=0;for(let i=1;i<pq.length;i++)if(pq[i][0]<pq[bi][0])bi=i;
-      const[d,u]=pq.splice(bi,1)[0];if(d>dist.get(u))continue;
+      const[d,u]=pq[bi];pq[bi]=pq[pq.length-1];pq.pop();if(d>dist.get(u))continue;
       if(u!==from&&hexAt(u).type==='g')continue;
       for(const n of neighbors(u)){
         const h=hexAt(n);
