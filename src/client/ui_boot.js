@@ -7,6 +7,12 @@ function boot(){
   $('#reserve').addEventListener('click',e=>{const s=e.target.closest('[data-src]');if(!s||!S||UI.cover||S.over)return;pickFromMarket('r',+s.dataset.i);});
   $('#deckPile').onclick=()=>showPile('deck');$('#discPile').onclick=()=>showPile('discard');
   $('#rulesBtn').onclick=showRules;
+  // full screen (hidden where the browser can't do it, e.g. iPhone Safari — there, Add to Home Screen gives a full-screen app)
+  const fsEl=document.documentElement,fsOn=()=>document.fullscreenElement||document.webkitFullscreenElement;
+  if(fsEl.requestFullscreen||fsEl.webkitRequestFullscreen){const fb=$('#fsBtn');fb.hidden=false;
+    fb.onclick=()=>{try{if(fsOn())(document.exitFullscreen||document.webkitExitFullscreen).call(document);else(fsEl.requestFullscreen||fsEl.webkitRequestFullscreen).call(fsEl,{navigationUI:'hide'});}catch(e){}};
+    const sync=()=>{const on=!!fsOn();fb.classList.toggle('full',on);fb.title=fb.ariaLabel=on?'Exit full screen':'Full screen';};
+    document.addEventListener('fullscreenchange',sync);document.addEventListener('webkitfullscreenchange',sync);}
   $('#menuBtn').onclick=()=>{if(online()&&!S.over)resignOnline();else if(online()){exitOnline();showHub();}else showSetup();};
   $('#sideToggle').onclick=()=>setSide(!UI.sideOpen);$('#sideClose').onclick=()=>setSide(false);
   let so=null;try{so=localStorage.getItem('eldorado-side');}catch(e){}

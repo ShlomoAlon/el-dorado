@@ -18,12 +18,12 @@ const CT={
   jack:{n:'Jack of All Trades',c:'x',s:'*',p:1,cost:2},
   adventurer:{n:'Adventurer',c:'x',s:'*',p:2,cost:4},
   plane:{n:'Prop Plane',c:'x',s:'*',p:4,cost:4,once:1},
-  transmitter:{n:'Transmitter',c:'p',cost:4,once:1,txt:'Take any card from the market or reserve for free.'},
+  transmitter:{n:'Transmitter',c:'p',cost:4,once:1,txt:'Take any card from the market or reserve for free.',face:'Take any market or reserve card for free.'},
   cartographer:{n:'Cartographer',c:'p',cost:4,txt:'Draw 2 cards.'},
-  scientist:{n:'Scientist',c:'p',cost:4,txt:'Draw 1 card. You may remove 1 card in hand from the game.'},
+  scientist:{n:'Scientist',c:'p',cost:4,txt:'Draw 1 card. You may remove 1 card in hand from the game.',face:'Draw 1 card. You may remove 1 card from the game.'},
   compass:{n:'Compass',c:'p',cost:2,once:1,txt:'Draw 3 cards.'},
-  travellog:{n:'Travel Log',c:'p',cost:3,once:1,txt:'Draw 2 cards. You may remove up to 2 cards in hand from the game.'},
-  native:{n:'Native',c:'p',cost:5,txt:'Move to an adjacent space, ignoring its requirement. Can tear down a blockade.'},
+  travellog:{n:'Travel Log',c:'p',cost:3,once:1,txt:'Draw 2 cards. You may remove up to 2 cards in hand from the game.',face:'Draw 2 cards. You may remove up to 2 from the game.'},
+  native:{n:'Native',c:'p',cost:5,txt:'Move to an adjacent space, ignoring its requirement. Can tear down a blockade.',face:'Move 1 space, ignoring its cost. Can tear down a blockade.'},
 };
 const MARKET0=['scout','trailblazer','jack','photographer','chest','transmitter'];
 const RESERVE0=['pioneer','giant','captain','journalist','millionaire','adventurer','plane','cartographer','scientist','compass','travellog','native'];

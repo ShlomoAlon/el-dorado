@@ -96,7 +96,7 @@ const CARD_BG={
   cartographer:()=>artSky('p')+'<g stroke="#d7c2ff" stroke-width=".4" opacity=".25"><path d="M0 14 H100 M0 28 H100 M0 42 H100 M0 56 H100 M16 0 V70 M32 0 V70 M48 0 V70 M64 0 V70 M80 0 V70"/></g>'
     +'<g transform="translate(14 54)" stroke="#d7c2ff" fill="none" opacity=".5"><circle r="9" stroke-width=".6"/><path d="M0 -12 L2 0 L0 12 L-2 0Z M-12 0 L0 2 L12 0 L0 -2Z" stroke-width=".6"/></g>'
     +'<path d="M70 60 Q76 44 86 40 T96 20" stroke="#ffd66b" stroke-width=".9" stroke-dasharray="1.6 1.4" fill="none" opacity=".7"/>',
-  scientist:()=>artSky('p')+artStars([[8,10,.6],[20,20,.5],[88,10,.7],[94,26,.5]])+'<g stroke="#d7c2ff" stroke-width=".4" opacity=".35"><path d="M8 10 L20 20 L14 30 M88 10 L94 26 L80 30"/></g>'
+  scientist:()=>artSky('p')+artStars([[8,10,.6],[20,20,.5],[88,10,.7],[94,26,.5]])+'<g stroke="#d7c2ff" stroke-width=".4" fill="none" opacity=".35"><path d="M8 10 L20 20 L14 30 M88 10 L94 26 L80 30"/></g>'
     +'<g fill="#8ef0c4" opacity=".45"><circle cx="16" cy="52" r="2"/><circle cx="22" cy="44" r="1.3"/><circle cx="84" cy="50" r="1.6"/><circle cx="90" cy="42" r="1"/><circle cx="12" cy="40" r="1"/></g>'
     +'<g fill="#140b2b"><path d="M76 66 L80 56 V50 H86 V56 L90 66Z"/><rect x="8" y="58" width="16" height="8" rx="1"/><path d="M12 58 L16 46 L20 48 L17 58Z"/></g>',
   compass:()=>artSky('p')+'<g transform="translate(50 36)" stroke="#d7c2ff" fill="none" opacity=".3"><circle r="30" stroke-width=".7"/><circle r="24" stroke-width=".4"/><path d="M0 -34 V34 M-34 0 H34 M-24 -24 L24 24 M24 -24 L-24 24" stroke-width=".4"/></g>'
