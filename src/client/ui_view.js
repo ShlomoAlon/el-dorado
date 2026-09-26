@@ -264,7 +264,8 @@ function applyView(){if(!viewRaf)viewRaf=requestAnimationFrame(()=>{viewRaf=0;st
 function safeRect(){const v=vp();const W=v.clientWidth,H=v.clientHeight;const cw=cardW();
   // top: just under the prompt, which sits under the floating market strip
   let t=W<600?108:112;const pr=$('#prompt'),vr=v.getBoundingClientRect();if(pr&&pr.offsetHeight)t=Math.max(t,pr.getBoundingClientRect().bottom-vr.top+10);
-  return{l:W<600?8:62,t,r:W-16,b:H-cw*1.4*.62,W,H};}
+  const mk=$('#mkt'),mr=UI.mktOpen&&S&&mk?mk.offsetWidth+(W<600?10:28):0; // market column on the right
+  return{l:W<600?8:62,t,r:W-16-mr,b:H-cw*1.4*.62,W,H};}
 function fit(anim){
   if(!MAP)return;const r=safeRect();if(!r.W)return;
   const aw=r.r-r.l,ah=r.b-r.t;
@@ -581,7 +582,7 @@ window.addEventListener('pointerdown',e=>{aim.touch=e.pointerType!=='mouse';},{p
 /* ---------- market: floating strip (six market cards + "All cards" tile) and the all-cards spread ---------- */
 function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
   updateMktH();if(!userZoomed)setTimeout(()=>fit(true),10);}
-function updateMktH(){document.documentElement.style.setProperty('--mktH',UI.mktOpen&&S?($('#mkt').offsetHeight+8)+'px':'0px');}
+function updateMktH(){}
 function openAll(open){UI.allOpen=open;$('#allc').hidden=!open;if(open){$('#allc').scrollTop=0;renderMarket();}}
 const ALL_ICON='<svg viewBox="-10 -10 20 20"><rect x="-8.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".45" transform="rotate(-14)"/><rect x="-4.5" y="-7.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".7"/><rect x="-.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" transform="rotate(12)"/></svg>';
 function renderMarket(){
@@ -590,7 +591,7 @@ function renderMarket(){
   const slot=(src,s,i,ok)=>{
     if(s.n<=0)return`<div class="mslot empty" data-i="${i}">Sold out${src==='m'?'<br>reserve open':''}</div>`;
     const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src===src&&UI.buy.idx===i;
-    return`<div class="mslot${ok?'':' no'}${aff.has(src+i)?' can':''}${chosen?' chosen':''}" data-i="${i}" data-src="${src}" title="${esc(cardTitle(s.t))}"><div class="mcard">${cardHTML(s.t)}</div><span class="cnt">${s.n}</span></div>`;};
+    return`<div class="mslot${ok?'':' no'}${aff.has(src+i)?' can':chosen?'':' dimc'}${chosen?' chosen':''}" data-i="${i}" data-src="${src}" title="${esc(cardTitle(s.t))}"><div class="mcard">${cardHTML(s.t)}</div><span class="cnt">${s.n}</span></div>`;};
   const mOk=tr||canBuy,rOk=tr||(canBuy&&openSlot),resAff=[...aff].some(k=>k[0]==='r');
   $('#market').innerHTML=S.market.map((s,i)=>slot('m',s,i,mOk)).join('')+`<button class="alltile${openSlot||tr?' open':''}${resAff?' can':''}" id="allTile" title="See every card, including the reserve">${ALL_ICON}<span>All cards</span><small>${tr?'Pick any card':openSlot?'Reserve open':'Reserve locked'}</small></button>`;
   $('#mktBtn').classList.toggle('canbuy',aff.size>0&&!UI.mktOpen);

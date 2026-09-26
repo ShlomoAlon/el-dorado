@@ -149,9 +149,9 @@ Local save key `eldorado-save-v4`; v3 saves are ignored; v3 rooms on the server 
 - Pan/zoom: `view{s,x,y}` applied as one `translate3d … scale` on `#stage` via rAF; `will-change` only while moving.
   Pinch keeps the board point under the fingers' midpoint fixed; lifting one finger re-bases the pan (no jump).
   ResizeObserver refits only on width changes. Page-zoom gestures are blocked.
-- Market: the 6 market cards float over the top of the board (`#mkt`, toggled by the Market button, `setMkt`,
+- Market: the 6 market cards float in a 2-column stack on the right edge (1 column on phones) (`#mkt`, toggled by the Market button, `setMkt`,
   remembered as `eldorado-mkt`) plus an "All cards" tile that opens a full-screen spread of market + reserve + journal
-  (`#allc`, `openAll`). Affordable cards pulse with the same gold breathing ring as reachable board spaces.
+  (`#allc`, `openAll`). Affordable cards are bright with a static "Can buy" tag, the rest are dimmed (owner: no pulsing — it's always on).
   The board fit leaves room under the prompt (safeRect measures it).
 - Cards: suit sets frame + scene palette; strength badge uses the suit colour and icon (only coin cards are gold);
   action cards show `face` (short) text, `txt` in tooltips. Full-screen button `#fsBtn` is hidden where unsupported

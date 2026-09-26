@@ -64,7 +64,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 #fsBtn.full .fs-out{display:inline}
 .tbtn:focus-visible,.btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 
-#prompt{position:absolute;left:50%;top:calc(64px + var(--mktH,0px));transform:translateX(-50%);max-width:min(720px,calc(100% - 32px));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
+#prompt{position:absolute;left:50%;top:64px;transform:translateX(-50%);max-width:min(720px,calc(100% - 32px));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
 #prompt b{color:var(--gold2)}
 #prompt .who{display:inline-flex;align-items:center;gap:7px;font-weight:800;margin-right:8px;color:var(--text)}
 #prompt .who i{width:11px;height:11px;border-radius:50%}
@@ -73,27 +73,29 @@ html,body{overflow:clip;overscroll-behavior:none}
 .timer.low{background:rgba(232,99,79,.28);color:#ffb3a5;animation:pulse 1s ease-in-out infinite}
 
 /* ---------- market: six cards floating over the top of the board, plus an "all cards" spread */
-#mkt{position:absolute;left:50%;top:62px;transform:translateX(-50%);z-index:16;display:flex;align-items:flex-start;gap:10px;transition:transform .35s var(--ease),opacity .25s;--mw:84px}
-#mkt.hid{transform:translate(-50%,-26px);opacity:0;pointer-events:none}
-#market{display:flex;gap:10px;align-items:flex-start}
+#mkt{position:absolute;right:16px;top:66px;z-index:16;transition:transform .35s var(--ease),opacity .25s;--mw:72px}
+#mkt.hid{transform:translateX(30px);opacity:0;pointer-events:none}
+#market{display:grid;grid-template-columns:repeat(2,var(--mw));gap:10px 8px}
 #mkt .mslot{filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
-#mkt .mslot:not(.no):hover{transform:translateY(2px) scale(1.6);z-index:6}
+#mkt .mslot{transform-origin:100% 25%}
+#mkt .mslot:hover{transform:scale(1.9);z-index:6}
 .mslot{position:relative;cursor:pointer;transition:transform .2s var(--ease);transform-origin:50% 0}
 .mslot .mcard{--cw:var(--mw)}
-.mslot.no{cursor:default;opacity:.42}
+.mslot.no{cursor:default}
+/* affordable cards are bright with a small tag; everything else sits back (static, no animation) */
+.mslot.dimc .mcard{filter:brightness(.55) saturate(.7)}
+.mslot.can .cface{box-shadow:0 0 0 2px #8fe3a8,0 .25em .6em rgba(0,0,0,.45)}
+.mslot.can::after{content:'Can buy';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);background:#8fe3a8;color:#0d2a18;font-size:9.5px;font-weight:800;letter-spacing:.04em;padding:1px 7px;border-radius:9px;white-space:nowrap;z-index:4;pointer-events:none}
 .mslot.chosen .cface{box-shadow:0 0 0 2px var(--gold2),0 0 20px rgba(233,178,74,.5)}
 .mslot.empty{width:var(--mw);height:calc(var(--mw)*1.4);border:1.5px dashed var(--line2);border-radius:9px;display:grid;place-items:center;color:var(--faint);font-size:10.5px;text-align:center;cursor:default;line-height:1.3;background:rgba(8,14,12,.45)}
-/* affordable: the same breathing gold ring as reachable spaces on the board (opacity only) */
-.mslot.can::before{content:"";position:absolute;inset:-4px;border-radius:calc(var(--mw)*.1);box-shadow:0 0 0 2px var(--gold2),0 0 18px 3px rgba(248,220,151,.55);animation:canPulse 1.6s ease-in-out infinite;pointer-events:none;z-index:3}
-.mslot.can:hover::before{animation:none}
-@keyframes canPulse{0%,100%{opacity:1}50%{opacity:.2}}
 .alltile{width:var(--mw);height:calc(var(--mw)*1.4);border-radius:9px;border:1.5px solid var(--line2);background:rgba(10,18,15,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--text);font:800 12px var(--ui);cursor:pointer;text-align:center;line-height:1.2;padding:4px;position:relative;transition:border-color .15s,background .15s}
 .alltile:hover{border-color:var(--gold);background:rgba(20,32,27,.78)}
 .alltile svg{width:26px;height:26px;color:var(--gold2)}
 .alltile small{font-weight:600;color:var(--muted);font-size:10px}
 .alltile.open small{color:var(--gold2)}
-.alltile.can::before{content:"";position:absolute;inset:-4px;border-radius:11px;box-shadow:0 0 0 2px var(--gold2),0 0 16px 2px rgba(248,220,151,.5);animation:canPulse 1.6s ease-in-out infinite;pointer-events:none}
-#mktBtn.canbuy{box-shadow:0 0 0 1.5px var(--gold2),0 0 14px rgba(248,220,151,.35)}
+.alltile.can{border-color:#8fe3a8}
+.alltile.can small{color:#8fe3a8}
+#mktBtn.canbuy{box-shadow:0 0 0 1.5px #8fe3a8}
 .mcard{--cw:86px;position:relative;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1)}
 .cnt{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;border-radius:11px;background:#0a1210;border:1px solid var(--line2);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;font-variant-numeric:tabular-nums;z-index:4}
 #allc{position:absolute;inset:0;z-index:40;background:rgba(4,9,7,.76);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);overflow-y:auto;overscroll-behavior:contain;animation:fade .2s}
@@ -106,7 +108,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 .allc-sect h3 span,.allc-head span{font-family:var(--ui);font-size:10.5px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
 .agrid{display:flex;flex-wrap:wrap;gap:22px 16px;--mw:112px}
 .agrid .mslot{filter:drop-shadow(0 8px 14px rgba(0,0,0,.5));animation:rise .3s var(--ease) backwards}
-.agrid .mslot:not(.no):hover{transform:translateY(-4px)}
+.agrid .mslot:hover{transform:translateY(-4px)}
 #allClose{position:fixed;top:14px;right:16px;z-index:41;width:36px;height:36px;font-size:17px}
 .sclose{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:rgba(0,0,0,.35);cursor:pointer;display:grid;place-items:center;font-size:15px;color:var(--muted)}
 .sclose:hover{color:var(--text)}
@@ -239,7 +241,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
   .brandbox .brand{font-size:16px}
   .pchip .st{display:none}
   #players{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
-  #prompt{top:calc(62px + var(--mktH,0px));font-size:13px}
+  #prompt{top:62px;font-size:13px}
 }
 @media (max-width:600px){
   :root{--cw:86px}
@@ -247,14 +249,14 @@ details.jr:not([open]) summary h3::after{content:"▸"}
   .brandbox{display:none}
   .tbtn{padding:7px 10px;font-size:12.5px}
   #rulesBtn{display:none}
-  #mkt{top:54px;gap:5px;--mw:46px}
-  #market{gap:5px}
-  #mkt .mslot:not(.no):hover{transform:none}
+  #mkt{top:58px;right:6px;--mw:44px}
+  #market{grid-template-columns:var(--mw);gap:7px}
+  #mkt .mslot:hover{transform:none}
+  .mslot.can::after{content:'';width:8px;height:8px;padding:0;bottom:-4px}
   .alltile{font-size:9px;gap:2px;padding:2px}
   .alltile svg{width:16px;height:16px}
   .alltile small{font-size:8px}
   #mkt .cnt{min-width:15px;height:15px;font-size:8.5px;top:-5px;right:-4px;padding:0 3px}
-  #mkt .mslot.can::before{inset:-2px;box-shadow:0 0 0 1.5px var(--gold2),0 0 10px 1px rgba(248,220,151,.5)}
   .agrid{--mw:98px;gap:18px 12px;justify-content:center}
   .allc-in{padding:58px 12px 30px}
   .pstack{width:54px;height:76px}
