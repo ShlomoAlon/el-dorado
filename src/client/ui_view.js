@@ -184,7 +184,7 @@ function renderPieces(){
       const inner=sv('g',{class:'pin'},g);
       sv('circle',{class:'selring',r:R*.8,fill:'none',stroke:'#f8dc97','stroke-width':3,'stroke-dasharray':'5 4',opacity:0},inner);
       sv('ellipse',{cx:0,cy:13.5,rx:14,ry:5,fill:'rgba(0,0,0,.5)'},inner);
-      inner.insertAdjacentHTML('beforeend',meepleSVG(p.color,pl%4,p.pieces.length>1?i+1:0));
+      inner.insertAdjacentHTML('beforeend',meepleSVG(p.color,p.pieces.length>1?i+1:0));
       pieceEls[id]=g;
       g.addEventListener('click',e=>{e.stopPropagation();if(dragMoved)return;onPiece(pl,i);});
     }
