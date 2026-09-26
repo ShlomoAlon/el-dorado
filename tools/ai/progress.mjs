@@ -13,7 +13,7 @@ for (const l of lines) {
   if (l.includes('] EVAL ')) { const j = J(l); if (j) { rows.push({ it, ...j, games }); games += j.games; } }
 }
 const pct = x => x == null ? '–' : (x * 100).toFixed(0) + '%', n = x => x == null ? '–' : x;
-let md = `# Bot training: First Expedition\n\n_Updated ${new Date().toISOString().slice(11, 19)} UTC · started ${t0} · refreshes every 2 minutes_\n\n`;
+let md = `# Bot training: First Expedition\n\n_Updated ${new Date().toISOString().slice(11, 19)} UTC · started ${t0} · pushed within seconds of every change_\n\n`;
 md += `**Now:** ${stage || 'starting…'}\n\n**Games played so far:** ${games.toLocaleString()}\n\n`;
 md += `**How it trains:** the network starts untrained and learns only from its own games (self-play). Games are cut short at the current **horizon** (3 rounds, then 5, 8, 12, 16, full game) and ranked by who got closest to El Dorado. The horizon grows once the bot beats the heuristic in two tests in a row (or stops improving while at least as good).\n\n`;
 if (events.length) md += `**Milestones:** ${events.join(' → ')}\n\n`;
