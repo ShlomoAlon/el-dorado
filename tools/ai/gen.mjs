@@ -7,7 +7,7 @@
 // Result for each player, in [0,1]: 0.8 × placement (1 = first, 0 = last) + 0.2 × how far ahead of the others (distance).
 // Samples are sparse: <out>.len.bin (u32 non-zeros per row) .idx.bin (u16 columns) .val.bin (f32) .Y.bin (f32 target).
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { writeFileSync, readFileSync, appendFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, appendFileSync, mkdirSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
@@ -25,7 +25,10 @@ if (!isMainThread) {
     // 3- and 4-player games only (2-player games use different rules)
     if (mode === 'self') { const np = rnd() < .5 ? 3 : 4; pols = Array.from({ length: np }, () => rnd() < .25 ? 'heur' : 'net'); if (!pols.includes('net')) pols[0] = 'net'; }
     else { const np = g % 2 ? 4 : 3, a = ['net', ...Array(np - 1).fill('heur')]; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); } // half 3-player, half 4-player, seats rotated
-    E.newGame({ course: C, seed: (rnd() * 2 ** 31) | 0, fullRace: true, players: pols.map((_, i) => ({ name: 'B' + i, color: '#fff' })) });
+    // every game is recorded as a replayable log (seeded shuffles); games that hit the final cap are saved for viewing
+    const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: (rnd() * 2 ** 31) | 0, rng: (rnd() * 2 ** 32) >>> 0, fullRace: true,
+      players: pols.map((p, i) => ({ name: `${p === 'net' ? 'Bot (net)' : 'Planner'} ${i + 1}`, bot: p === 'net' ? 'net' : bench })), actions: [] };
+    const shuf = E.replayStart(glog); E.setRng(null);
     const traj = pols.map(() => []); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
     while (!E.S.over) {
       const S = E.S; S.log.length = 0;
@@ -56,14 +59,18 @@ if (!isMainThread) {
       if (c.a.t === 'buy' || c.a.t === 'transmit') { const stk = c.a.src === 'm' ? S.market[c.a.idx] : S.reserve[c.a.idx]; if (stk) { const b = c.a.t === 'transmit' ? (isNet ? st.transNet : st.transHeur) : (isNet ? st.buysNet : st.buysHeur); b[stk.t] = (b[stk.t] || 0) + 1; } }
       // sample = the position right after my action, as I'll see it: for "end turn", before the next hand is drawn
       const f = mode === 'self' ? (c.a.t === 'end' ? E.botEndFeatures(me, c.a.keep) : null) : null;
-      const r = E.applyAction(me, c.a); acts++;
+      E.setRng(shuf); const r = E.applyAction(me, c.a); acts++;
       if (!r.ok) E.applyAction(me, { t: 'end', keep: [] });
+      E.setRng(null); glog.actions.push([me, r.ok ? c.a : { t: 'end', keep: [] }]);
       if (r.ok && isNet) for (const e of r.ev) if (e.e === 'block') inc('Blockades taken', '#' + e.n);
       if (mode === 'self' && !E.S.over) traj[me].push(f || E.botNetFeatures(me));
     }
     if (capped) st.capped++;
+    if (process.env.REPLAYALL) writeFileSync(`${process.env.REPLAYALL}/g-${glog.seed}.json`, JSON.stringify(glog)); // testing: keep every game
     // a full-length game where someone still hasn't arrived by the cap is probably a bug: save it
     if (capped && H >= 25 && stuckFile && st.stuck < 5) { st.stuck++; const S = E.S;
+      glog.title = `training ${mode} game · hit the 25-round cap`; glog.result = { capped: true, arrived: S.players.map(p => p.fin) };
+      mkdirSync('tools/ai/data/replays', { recursive: true }); writeFileSync(`tools/ai/data/replays/stuck-${glog.seed}.json`, JSON.stringify(glog));
       appendFileSync(stuckFile, JSON.stringify({ mode, round: S.round, pols, players: S.players.map((p, i) => ({ pieces: p.pieces, left: E.botRemaining(i), fin: p.fin, hand: p.hand.map(T), cards: [...p.deck, ...p.hand, ...p.discard, ...p.play].map(T).sort().join(',') })), blockades: S.blockades }) + '\n'); }
     const S = E.S, n = pols.length, rem = S.players.map((_, i) => E.botRemaining(i));
     S.players.forEach((p, i) => {
