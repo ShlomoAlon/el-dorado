@@ -337,8 +337,8 @@ const BLOCKADES=[{n:1,k:'j',v:1},{n:2,k:'v',v:1},{n:3,k:'r',v:1},{n:4,k:'w',v:1}
    ========================================================= */
 const BOARDS={
  A:['j1 j1 v1 j1','j1 w1 j1 j2 j1','j1 w1 mm j1 v1 j1','v1 j1 w1 j1 j1 c1 j1','j1 j1 j1 mm v1 j1','j1 j1 v1 j1 j1','ss ss ss ss'],
- B:['j1 w1 j1 j1','j1 w1 j1 v1 j1','v1 j1 w1 j1 j1 j1','j1 j1 w1 mm j1 v1 j1','j1 c1 j1 j1 j1 j1','v1 j1 j1 j1 j2','ss ss ss ss'],
- C:['w1 w1 r1 v1','w2 w1 r1 v2 v1','j1 w1 r2 mm v1 j1','j1 w1 w1 r1 v2 v1 j2','w1 w2 r1 r1 v1 j1','w1 w1 r2 v3 j1','r1 r1 w1 v1'],
+ B:['j1 w1 c1 w1','j1 j1 v1 mm j1','j1 v1 j1 j1 j1 j1','w1 j1 v1 j1 v1 j1 j1','j1 j1 w1 j1 j1 j1','j1 j1 j1 j1 j1','s4 s3 s2 s1'],
+ C:['j1 j1 r1 r1','j1 v1 r1 w1 w1','w1 w1 v1 v1 r1 w1','w1 v1 r1 mm w1 r1 r1','v1 r1 w1 w1 v1 v1','v1 r1 j1 v1 w1','j1 j1 w1 w1'],
  D:['j1 j1 w1 j1','j2 j1 w1 j1 mm','j1 mm w2 w1 j1 j1','j1 j1 w1 w3 w1 j2 j1','v1 j1 w1 w1 mm j1','v2 j1 j1 w2 j1','mm w1 v1 j1'],
  E:['j1 j1 r1 j1','j1 mm r2 mm j1','w1 j2 r1 j1 v1 j1','w1 mm r1 c1 r1 mm j1','w1 j1 r2 j1 v2 j1','w1 j2 r1 mm v1','j1 r1 j1 v1'],
  F:['w1 w1 j1 j1','w2 r1 r1 j1 j2','w1 r1 mm c1 j1 j1','w1 r2 mm v1 mm j1 w1','j1 r1 r1 v2 mm w1','j1 j2 r2 c2 w1','j1 v1 r1 j1'],
@@ -352,7 +352,7 @@ const BOARDS={
  N:['j1 j1 w1 w1','j1 v1 v1 w2 j1','j2 v2 v1 w1 j1 j1','j1 v1 v3 w1 w1 j2 j1','j1 v1 v2 j1 w1 j1','j1 j1 v1 w2 j1','j2 v1 w1 j1'],
 };
 function parseTok(t){
-  if(t==='mm')return{type:'m',val:0};if(t==='ss')return{type:'s',val:0};
+  if(t==='mm')return{type:'m',val:0};if(t[0]==='s')return{type:'s',val:0,num:+t[1]||0}; // s1–s4: numbered start spaces
   if(t[0]==='g')return{type:'g',sym:t[1],val:1};
   return{type:t[0],val:+t[1]};
 }
@@ -426,7 +426,7 @@ function buildCourse(C,seed){
   const sc=starts.reduce((a,h)=>[a[0]+h.x/starts.length,a[1]+h.y/starts.length],[0,0]);
   const ang=Math.atan2(tiles[1].y-tiles[0].y,tiles[1].x-tiles[0].x)+Math.PI/2;
   const proj=h=>(h.x-sc[0])*Math.cos(ang)+(h.y-sc[1])*Math.sin(ang);
-  starts.sort((a,b)=>proj(a)-proj(b));starts.forEach((s,i)=>s.num=i+1);
+  if(starts.every(s=>s.num))starts.sort((a,b)=>a.num-b.num);else{starts.sort((a,b)=>proj(a)-proj(b));starts.forEach((s,i)=>s.num=i+1);}
   // a random blockade on each connection
   const deal=shuffle(BLOCKADES.slice(),mulberry32(seed^0x2c1b3c6d));
   if(conns.length>deal.length)throw new Error('Too many connections for 6 blockades.');
