@@ -2,7 +2,7 @@
 # Self-play training for one course with a horizon curriculum.   tools/ai/loop.sh <course-id> <iterations>
 # Starts from an untrained network (TD-Gammon style). Games stop after HORIZON rounds and unfinished players
 # are ranked by how close they got; the horizon grows 3 → 5 → 8 → 12 → 16 → full once the bot stops improving.
-# Each iteration: 600 self-play games → train on this horizon's last 3 batches → test vs 2 heuristic bots (160 games).
+# Each iteration: 600 self-play games (3- and 4-player) → train on this horizon's last 3 batches → test vs heuristic bots (160 games, half 3-player, half 4-player).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 C=${1:-first}; N=${2:-60}; D=tools/ai/data; NET=$D/$C.net.json; LOG=$D/$C.log; mkdir -p $D
@@ -24,11 +24,11 @@ for i in $(seq 1 $N); do
   prev=$( (grep -l "\"horizon\":$H," $D/$C.it*.json 2>/dev/null || true) | xargs -r ls -t | head -3 | sed 's/\.json$//' | tr '\n' ' ')
   log "TRAIN $(python3 tools/ai/train.py $NET $C 3 $prev 2>/dev/null)"
   ev=$(HORIZON=$H node tools/ai/gen.mjs eval 160 - $NET $C); log "EVAL $ev"
-  wr=$(echo "$ev" | num netWinRate)
+  wr=$(echo "$ev" | num vsFair)   # 1.0 = wins its fair share (as good as the heuristic)
   cp $NET $D/$C.h$H.json
-  if python3 -c "import sys;sys.exit(0 if $wr>$bestH+0.02 else 1)"; then bestH=$wr; stall=0; else stall=$((stall+1)); fi
+  if python3 -c "import sys;sys.exit(0 if $wr>$bestH+0.05 else 1)"; then bestH=$wr; stall=0; else stall=$((stall+1)); fi
   # next horizon once this one has plateaued (3 iterations without a new best) and the bot is at least even with the heuristic
-  if (( stall >= 3 )) && python3 -c "import sys;sys.exit(0 if $bestH>=0.33 else 1)" && (( hi < ${#HS[@]}-1 )); then
+  if (( stall >= 3 )) && python3 -c "import sys;sys.exit(0 if $bestH>=1.0 else 1)" && (( hi < ${#HS[@]}-1 )); then
     hi=$((hi+1)); echo $hi > $D/$C.hi; bestH=-1; stall=0; log "HORIZON up to ${HS[$hi]} rounds"
   fi
 done

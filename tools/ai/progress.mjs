@@ -17,10 +17,10 @@ let md = `# Bot training: First Expedition\n\n_Updated ${new Date().toISOString(
 md += `**Now:** ${stage || 'starting…'}\n\n**Games played so far:** ${games.toLocaleString()}\n\n`;
 md += `**How it trains:** the network starts untrained and learns only from its own games (self-play). Games are cut short at the current **horizon** (3 rounds, then 5, 8, 12, 16, full game) and ranked by who got closest to El Dorado. The horizon grows once the bot stops improving and is at least as good as the heuristic bot.\n\n`;
 if (events.length) md += `**Milestones:** ${events.join(' → ')}\n\n`;
-md += `### Test after each iteration: trained bot vs two heuristic bots (3 players, same horizon)\n**Win rate 33% = as good as the heuristic.** "Route left" = cost of the remaining route when the game stops (lower = got further).\n\n`;
-md += `| Iter | Horizon (rounds) | Games so far | Bot win rate | Bot route left | Heuristic route left | Bot arrives in round | Heuristic arrives in round |\n|---|---|---|---|---|---|---|---|\n`;
-for (const r of rows) md += `| ${r.it} | ${r.horizon} | ${r.games.toLocaleString()} | **${pct(r.netWinRate)}** | ${n(r.netRemaining)} | ${n(r.heurRemaining)} | ${n(r.netArrival)} | ${n(r.heurArrival)} |\n`;
-if (!rows.length) md += `| – | – | – | – | – | – | – | – |\n`;
+md += `### Test after each iteration: trained bot vs heuristic bots, same horizon (half 3-player, half 4-player; no 2-player games anywhere)\n**vs fair share: 1.00 = as good as the heuristic** (a fair share is 33% of 3-player games, 25% of 4-player games). "Route left" = cost of the remaining route when the game stops (lower = got further).\n\n`;
+md += `| Iter | Horizon (rounds) | Games so far | vs fair share | Wins 3p / 4p | Bot route left | Heuristic route left | Bot arrives in round | Heuristic arrives in round |\n|---|---|---|---|---|---|---|---|---|\n`;
+for (const r of rows) md += `| ${r.it} | ${r.horizon} | ${r.games.toLocaleString()} | **${r.vsFair == null ? '–' : r.vsFair.toFixed(2)}** | ${r.win3p == null ? pct(r.netWinRate) + ' (3p)' : pct(r.win3p) + ' / ' + pct(r.win4p)} | ${n(r.netRemaining)} | ${n(r.heurRemaining)} | ${n(r.netArrival)} | ${n(r.heurArrival)} |\n`;
+if (!rows.length) md += `| – | – | – | – | – | – | – | – | – |\n`;
 if (lastGen && (lastGen.buysNet || lastGen.buysHeur)) {
   const b = lastGen.mode === 'self' ? lastGen.buysNet : lastGen.buysHeur, tot = Object.values(b || {}).reduce((a, x) => a + x, 0) || 1;
   md += `\n### What it buys (latest ${lastGen.mode === 'self' ? 'self-play' : 'heuristic'} batch, ${lastGen.games} games${lastGen.mode === 'self' ? `, horizon ${lastGen.horizon} rounds; includes exploration: softmax choices, a few random moves, a random purchase on 10% of turns` : ''})\n\n| Card | Bought | Share |\n|---|---|---|\n`;

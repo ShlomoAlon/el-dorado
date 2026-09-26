@@ -17,11 +17,12 @@ if (!isMainThread) {
   const C = E.COURSES.find(c => c.id === course) || E.COURSES[0];
   if (net) E.setNet(net);
   let s = seed0 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const X = [], Y = [], st = { netWins: 0, netSeats: 0, netRem: [], heurRem: [], netArr: [], heurArr: [], capped: 0, buysNet: {}, buysHeur: {} };
+  const X = [], Y = [], st = { win3: 0, seat3: 0, win4: 0, seat4: 0, netWins: 0, netSeats: 0, netRem: [], heurRem: [], netArr: [], heurArr: [], capped: 0, buysNet: {}, buysHeur: {} };
   for (let g = 0; g < games; g++) {
     let pols;
-    if (mode === 'self') { const np = rnd() < .2 ? 2 : rnd() < .55 ? 3 : 4; pols = Array.from({ length: np }, () => rnd() < .25 ? 'heur' : 'net'); if (!pols.includes('net')) pols[0] = 'net'; }
-    else pols = ['net', 'heur', 'heur'].map((_, i, a) => a[(i + g) % 3]);
+    // 3- and 4-player games only (2-player games use different rules)
+    if (mode === 'self') { const np = rnd() < .5 ? 3 : 4; pols = Array.from({ length: np }, () => rnd() < .25 ? 'heur' : 'net'); if (!pols.includes('net')) pols[0] = 'net'; }
+    else { const np = g % 2 ? 4 : 3, a = ['net', ...Array(np - 1).fill('heur')]; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); } // half 3-player, half 4-player, seats rotated
     E.newGame({ course: C, seed: (rnd() * 2 ** 31) | 0, fullRace: true, players: pols.map((_, i) => ({ name: 'B' + i, color: '#fff' })) });
     const traj = pols.map(() => []); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
     while (!E.S.over) {
@@ -45,7 +46,7 @@ if (!isMainThread) {
       const others = rem.filter((_, j) => j !== i), lead = others.reduce((a, x) => a + x, 0) / others.length - rem[i];
       const z = 0.8 * (n - S.places[i]) / (n - 1) + 0.2 / (1 + Math.exp(-lead / 5));
       if (mode === 'self') { const T = traj[i]; let G = z; for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); G = (1 - LAMBDA) * (net ? E.botNetValue(T[t]) : G) + LAMBDA * G; } }
-      if (pols[i] === 'net') { st.netSeats++; if (S.places[i] === 1) st.netWins++; st.netRem.push(rem[i]); if (p.fin) st.netArr.push(p.fin); }
+      if (pols[i] === 'net') { st.netSeats++; if (S.places[i] === 1) st.netWins++; st['seat' + n]++; if (S.places[i] === 1) st['win' + n]++; st.netRem.push(rem[i]); if (p.fin) st.netArr.push(p.fin); }
       else { st.heurRem.push(rem[i]); if (p.fin) st.heurArr.push(p.fin); }
     });
   }
@@ -67,7 +68,11 @@ if (isMainThread) {
   const st = {}; for (const r of rs) for (const k in r.st) { const v = r.st[k];
     if (Array.isArray(v)) st[k] = (st[k] || []).concat(v); else if (typeof v === 'object') { st[k] = st[k] || {}; for (const t in v) st[k][t] = (st[k][t] || 0) + v[t]; } else st[k] = (st[k] || 0) + v; }
   const avg = a => a && a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null;
+  const r3 = st.seat3 ? st.win3 / st.seat3 : null, r4 = st.seat4 ? st.win4 / st.seat4 : null;
+  // win rate relative to a fair share (1/3 in 3-player, 1/4 in 4-player); 1.0 = as good as the heuristic
+  const rel = (st.seat3 || st.seat4) ? +((st.win3 + st.win4) / (st.seat3 / 3 + st.seat4 / 4)).toFixed(3) : null;
   const summary = { mode, horizon: wd.H, games: +G, secs: (Date.now() - t0) / 1000, capped: st.capped, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
+    win3p: r3 == null ? null : +r3.toFixed(3), win4p: r4 == null ? null : +r4.toFixed(3), vsFair: rel,
     netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur };
   if (out !== '-' && mode === 'self') {
     const nf = rs.find(r => r.nf)?.nf || 0, cat = (k, T) => { const a = new T(rs.reduce((s, r) => s + r[k].length, 0)); let o = 0; for (const r of rs) { a.set(r[k], o); o += r[k].length; } return a; };
