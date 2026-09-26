@@ -35,7 +35,7 @@ From then on **every push to `main` redeploys the site in about a minute.**
 1. Open <https://console.cloud.google.com/>, create a project.
 2. **APIs & Services → OAuth consent screen**: External, app name "El Dorado", your email. Then **Publish app** (so it isn't limited to test users). Only basic profile scopes are used, so no review is needed.
 3. **Credentials → Create credentials → OAuth client ID → Web application**. Under **Authorized JavaScript origins** add your workers.dev address from step 2.4. Create, and copy the **Client ID**.
-4. Back in Cloudflare: your Worker → **Settings → Variables and Secrets → Add** → name `GOOGLE_CLIENT_ID`, type Text, value = the Client ID. Save (it redeploys).
+4. Put the Client ID in `wrangler.jsonc` under `vars.GOOGLE_CLIENT_ID` and push (it's public; the client secret isn't used).
 
 ### 4. Let Claude make changes
 Connect this repository to Claude (Claude Code on the web / GitHub app) so future sessions can push to it. After that, ask for a change; Claude edits, runs the tests, pushes, and Cloudflare deploys it.

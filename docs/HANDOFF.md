@@ -36,8 +36,8 @@ His user preference: think carefully before every answer, even simple ones.
 ## 3. Current status at handoff
 
 - Code complete and tested locally (engine test + 3-browser online e2e against `wrangler dev`).
-- **Not yet deployed.** The owner was about to: upload the repo contents to GitHub, connect Cloudflare Workers Builds,
-  create a Google OAuth client, set `GOOGLE_CLIENT_ID`. Steps are in `README.md`.
+- **Deployed** at `https://el-dorado.shlomoalon9.workers.dev` via Cloudflare Workers Builds from `main` (preview builds off).
+  D1 auto-provisioned fine on the first deploy. Google OAuth client created; its ID is in `wrangler.jsonc` `vars`.
   First thing in a new session: check `git log`, ask for the `*.workers.dev` URL if you don't have it, and ask whether
   sign-in works. If the first Cloudflare deploy failed on D1 (see §9), fix it.
 - A **claude.ai artifact** (local play only, no networking allowed there) exists at

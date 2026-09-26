@@ -15,8 +15,9 @@
     ]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "Lobby"] }],
-  // GOOGLE_CLIENT_ID is set once in the Cloudflare dashboard (Settings → Variables);
-  // keep_vars stops deploys from wiping it.
+  // Google OAuth Web client ID (public; the browser sees it via /api/config anyway).
+  "vars": { "GOOGLE_CLIENT_ID": "1035625687997-84toqn5qir80bpbpial56cmivj602t7c.apps.googleusercontent.com" },
+  // keep_vars stops deploys from wiping any variables added in the dashboard.
   "keep_vars": true,
   "observability": { "enabled": true }
 }

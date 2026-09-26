@@ -36,6 +36,7 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
 - State shape changes: bump `S.v` and the local save key (`eldorado-save-v3`) and handle old saves.
 - New/renamed Durable Object classes need a new `migrations` entry in `wrangler.jsonc` (never edit old tags).
 - D1 tables are created in `ensureSchema()` (worker.js); add columns with `ALTER TABLE` in try/catch, never drop data.
-- `GOOGLE_CLIENT_ID` lives in the Cloudflare dashboard; `keep_vars: true` keeps deploys from wiping it.
+- `GOOGLE_CLIENT_ID` (public OAuth client ID) is in `wrangler.jsonc` `vars`; its authorized JavaScript origin is
+  `https://el-dorado.shlomoalon9.workers.dev` (add any new domain in Google Cloud Console → Clients). The client secret is not used.
 - Only animate `transform`/`opacity`; keep pan/zoom, card fan and arrow at 60 fps (measure with a rAF counter).
 - Respect `prefers-reduced-motion`. Keep it working at 390 px wide (phone) and 1440 px.
