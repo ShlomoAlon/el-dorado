@@ -29,7 +29,7 @@ if (!isMainThread) {
       const S = E.S; S.log.length = 0;
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
-      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; turnState = { forceBuy: mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
+      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: !nb && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
       const c = mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : 'heur', rnd })
         : isNet ? E.botChoose({ mode: 'net', eps, temp, turnState, rnd })
         : E.botChoose({ mode: 'heur', eps: .03, noise: .3, rnd });
@@ -65,7 +65,7 @@ if (isMainThread) {
   const wd = { mode, net, course, H: +(env.HORIZON || 60), explore: X,
     eps: 0.03 * X,                 // a uniformly random legal action
     temp: Math.max(0.004, 0.02 * X), // softmax over action scores (near-best options tried often)
-    buyEps: 0.10 * X,              // turns with one random purchase
+    buyEps: 0.10 * X,              // turns with one random purchase, and (same rate) turns where buying is off
     transEps: 0.10 * X };          // Transmitter turns with a forced pick (weighted toward expensive cards)
   const rs = await Promise.all(Array.from({ length: W }, () => new Promise((res, rej) => {
     const w = new Worker(new URL(import.meta.url), { workerData: { ...wd, games: Math.ceil(+G / W), seed0: (Math.random() * 2 ** 31) | 0 } });

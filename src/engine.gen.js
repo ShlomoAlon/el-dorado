@@ -618,7 +618,8 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
    Training exploration: eps = uniformly random action; temp = softmax over scores; turnState.forceBuy = a random purchase this turn. */
 function botChoose(opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
-  const me=S.cur,acts=botActions(),root=S;if(mode==='net'&&!botNetReady())mode='heur';
+  const me=S.cur,root=S;let acts=botActions();if(mode==='net'&&!botNetReady())mode='heur';
+  if(opts.turnState&&opts.turnState.noBuy){const f=acts.filter(a=>a.t!=='buy'&&a.t!=='transmit');if(f.length)acts=f;} // exploration: a turn without gaining a card
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)]};
   const ts=opts.turnState;
   if(ts&&ts.forceBuy&&!S.turn.bought){const buys=acts.filter(a=>a.t==='buy');if(buys.length){ts.forceBuy=false;return{a:buys[Math.floor(rnd()*buys.length)]};}}
