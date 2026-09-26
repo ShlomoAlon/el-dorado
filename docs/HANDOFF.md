@@ -183,6 +183,9 @@ Playwright can't tap elements outside the viewport when `overflow: clip` is set;
   WebFetch works for text pages but not images.
 - GitHub access goes through a proxy that only allows repositories attached to the session. If a push is refused with
   "not in this session's authorized repository set", the owner must start a task with the repo attached.
+- Workers Builds once showed "This project is disconnected from your Git account" and ignored pushes. Fix: reconnect
+  the repo under Worker → Settings → Builds (and check github.com/settings/installations → Cloudflare Workers and Pages).
+  After every push, confirm the deploy landed (e.g. `curl …/api/config`), not just that the push succeeded.
 - The owner uses the Claude app (Cowork, web). Deliver files via the outputs folder / SendUserFile when needed.
 
 ## 9. Known gaps / next steps (roughly by value)
