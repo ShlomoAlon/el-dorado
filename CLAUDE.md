@@ -22,6 +22,8 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
    - server: `src/worker.js`
 2. `node build.mjs` → regenerates `public/index.html`, `src/engine.gen.js`, `build/artifact.html` (all committed; never hand-edit them).
 3. `node test/engine.test.mjs` → must print `ok: 60 games …`.
+   Also `npx wrangler deploy --dry-run --outdir /tmp/wdry` — Cloudflare's bundler (esbuild) rejects some things Node accepts
+   (e.g. assigning to a `const`); a failed bundle means the push never deploys.
 4. UI changes: load `public/index.html` in Playwright (Chromium is preinstalled; `NODE_PATH=$(npm root -g)`), take screenshots, look at them, check for page errors.
    Online/server changes: `printf 'DEV_AUTH=1\n' > .dev.vars; npx wrangler dev --ip 127.0.0.1 --port 8787` then `node test/e2e.cjs` (3 browsers, full ranked game).
 5. Commit (clear message + the attribution lines your environment asks for) and `git push origin main`.

@@ -942,7 +942,7 @@ function botClone(st){
     winners:st.winners&&st.winners.slice(),places:st.places&&st.places.slice()};
 }
 function botChoose(opts){
-  opts=opts||{};const mode=opts.mode||(BOT_NET?'net':'heur'),eps=opts.eps||0,rnd=opts.rnd||Math.random;
+  opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
   const me=S.cur,acts=botActions(),root=S;if(mode==='net'&&!botNetReady())mode='heur';
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],feat:null};
   let best=null,bv=-Infinity;
