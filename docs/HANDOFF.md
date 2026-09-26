@@ -57,7 +57,8 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
   of that symbol; lost once you do anything else (`S.turn.active`). Jokers = any one symbol, chosen per card play.
   Rubble (grey): discard N cards. Base camp (red): remove N cards from the game. Mountains impassable.
   Occupied spaces can't be entered or passed. Start spaces can't be re-entered.
-- Blockades between consecutive boards; first to pay keeps it. Leftover strength can pay a blockade and continue.
+- Blockades between consecutive boards, **dealt at random** at game start (rulebook: shuffle face down, one per
+  connection; with strips, only one at the strip's starting side). First to pay keeps it. Leftover strength can pay a blockade and continue.
   **Native can tear down blockades** (rulebook: "The Native can also tear down blockades") and ignores space requirements.
 - Buying: coin cards and jokers pay face value, any other card ½. One purchase per turn. Reserve opens only when a market
   slot is empty; the bought stack moves into that slot. Single-use cards are removed after their *effect*; spent as ½ coin
@@ -87,8 +88,16 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
   Each board's terrain **counts** match the catalogue exactly (e.g. C = J6 W12 M1 V9 R9).
 - Reconstructed/guessed: **space-by-space layouts and space values** (the catalogue only publishes pictures), blockade
   **costs** (we use 1,1,1,1,2,2 in number order; tiebreak uses the blockade number), official suggested routes (not in),
-  strips O–R (not in). Routes are generated: start board → N terrain boards (random side, rotation, winding path that
-  never touches non-adjacent boards) → end tile placed against the far edge.
+  strips O–R (not in). **No random generation any more** (owner's decision): games use fixed courses from `COURSES`
+  in `engine_data.js`. Currently one: **First Expedition** = the rulebook's first-game route B·C·N·I·K, positions
+  fitted to the rulebook illustration (page 5). Course format: `p:[[letter,q,r,rot],…]` (first = A/B), `e:[q,r]`
+  middle finish space next to the last board, `s:'j'|'w'`. `buildCourse(course, seed)` validates and builds MAP;
+  boards touching out of order are open ground (no blockade), per the rulebook's "shortcut" tips.
+  The rulebook (bghub.org/r/thequestforeldorado.pdf, page 10) also shows 6 suggested routes to add next:
+  Hills of Gold B C G K J N · Home Stretch B J Q K M C · Winding Paths B I F G C N · Serpentine A C E G J M ·
+  Swamplands A R D H E O K · Witch's Cauldron A L G D M I. Strips are 16 spaces in rows 5·6·5 (components photo).
+  Owner wants ~10 courses eventually (official + community routes found online); community sources (BoardGameHelpers
+  map list) were unreachable from the sandbox.
 - If the owner provides images of the boards (BoardGameHelpers GIFs or photos), transcribe them into `BOARDS` in
   `engine_data.js`. Format: 7 rows of 4,5,6,7,6,5,4 tokens, top to bottom (radius-3 hexagon, pointy-top axial coords);
   tokens `jN` jungle, `wN` water, `vN` village/coin, `rN` rubble, `cN` base camp, `mm` mountain, `ss` start.
@@ -120,11 +129,12 @@ inside it). The server imports `E` from `engine.gen.js` and sets `E.S`/`E.MAP` b
 synchronous around the engine).
 
 ### 6.2 Game state `S` (JSON, v3)
-`{v, seed, nMid, players[{name,color,pieces[hexKey|'done'],deck[],hand[],discard[],play[],blocks[blockadeIdx],fin(round|0),resigned(order|0)}],
+`{v:4, seed, course{id,name,p,e,s}, players[{name,color,pieces[hexKey|'done'],deck[],hand[],discard[],play[],blocks[blockadeIdx],fin(round|0),resigned(order|0)}],
 cards{id:type}, nid, market[{t,n}], reserve[{t,n}], blockades[{n,k,v,conn,owner}], cur, start, round, endTriggered, over,
 winners[], places[], fullRace, turn{bought, active{id,pi,sym,left}|null, pending{max}|null}, trash[], log[{p,t}], privacy, resigns,
 owners[uid] (online only), room (online only)}`.
-`MAP` is derived from `(nMid, seed)` by `genMap` — deterministic, never stored.
+`MAP` is derived from `(course, seed)` by `buildCourse` (seed deals the blockades) — deterministic, never stored.
+Local save key `eldorado-save-v4`; v3 saves are ignored; v3 rooms on the server are closed on load.
 
 ### 6.3 Actions (`applyAction(seat, a)` → `{ok, err, ev[], reveal}`)
 `move{card,pi,to}` · `native{card,pi,to}` · `pay{pi,to,cards}` · `action{card}` · `trash{cards}` ·
@@ -149,7 +159,7 @@ owners[uid] (online only), room (online only)}`.
 
 ### 6.5 Server (`src/worker.js`)
 HTTP: `GET /api/config` → `{google, dev}` · `POST /api/auth/google {credential}` · `POST /api/auth/dev {name}` (only with
-`DEV_AUTH=1`) · `GET /api/leaderboard` · `GET/PATCH /api/me` · `POST /api/rooms {max,len,turn}` → `{code}` ·
+`DEV_AUTH=1`) · `GET /api/leaderboard` · `GET/PATCH /api/me` · `POST /api/rooms {max,course,turn}` (course id or `'random'`) → `{code}` ·
 `GET /api/rooms/:CODE/ws?t=token` (WebSocket) · `GET /api/lobby/ws?t=token` (WebSocket). Everything else = static assets.
 Auth token: `uid.exp.hmac` (60 days), secret generated once and stored in D1 `settings`. Google ID tokens verified
 against Google JWKS (RS256, aud = `GOOGLE_CLIENT_ID`).
@@ -193,7 +203,9 @@ Playwright can't tap elements outside the viewport when `overflow: clip` is set;
 1. **Deploy verification**: first Workers Builds deploy relies on D1 auto-provisioning (`wrangler ≥ 4.45`, binding without
    `database_id`). If it fails in CI, have him create D1 `el-dorado` in the dashboard and add `database_id` to wrangler.jsonc.
    Then verify Google sign-in on the live URL (the only untested path).
-2. Real board layouts (see §5) — ask for images; add strips O–R and the official preset routes once data exists.
+2. More courses (see §5): the 6 rulebook routes (needs strips O–R for two of them), then community routes.
+   Also: rulebook tiebreak "if tied players have no blockades, whoever reached El Dorado first wins" is not
+   implemented yet (currently a shared place).
 3. Blockade costs — confirm from a photo of the tokens.
 4. Online niceties not built: rematch button, in-game chat/emotes, spectator list, match history page, reconnect
    indicator per player in the HUD (presence exists in `room.seats[].online`), local-game turn timer.

@@ -140,7 +140,7 @@ export default {
       }
       if (p === '/api/rooms' && req.method === 'POST') {
         const b = await req.json().catch(() => ({}));
-        const opts = { max: Math.min(4, Math.max(2, +b.max || 4)), len: Math.min(6, Math.max(3, +b.len || 4)), turn: TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90 };
+        const opts = { max: Math.min(4, Math.max(2, +b.max || 4)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn: TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90 };
         for (let i = 0; i < 8; i++) {
           const code = genCode();
           const room = env.ROOMS.get(env.ROOMS.idFromName(code));
@@ -171,7 +171,7 @@ export default {
 export class Lobby extends DurableObject {
   constructor(ctx, env) { super(ctx, env); this.rooms = null; ctx.blockConcurrencyWhile(async () => { this.rooms = (await ctx.storage.get('rooms')) || {}; }); }
   prune() { const now = Date.now(); for (const c in this.rooms) { const r = this.rooms[c]; if (now - r.updated > (r.status === 'playing' ? 12 : 2) * 3600e3) delete this.rooms[c]; } }
-  list() { return Object.values(this.rooms).filter(r => r.status === 'lobby' || r.status === 'playing').map(r => ({ code: r.code, host: r.host, names: r.names, count: r.names.length, max: r.max, status: r.status, len: r.len, turn: r.turn })); }
+  list() { return Object.values(this.rooms).filter(r => r.status === 'lobby' || r.status === 'playing').map(r => ({ code: r.code, host: r.host, names: r.names, count: r.names.length, max: r.max, status: r.status, course: r.course, turn: r.turn })); }
   broadcast() { const msg = JSON.stringify({ t: 'rooms', rooms: this.list() }); for (const ws of this.ctx.getWebSockets()) { try { ws.send(msg); } catch (e) { } } }
   async fetch(req) {
     const url = new URL(req.url);
@@ -190,20 +190,21 @@ export class Lobby extends DurableObject {
 
 /* ---------------- Room: one live game ---------------- */
 const mapCache = new Map();
-function mapFor(S) { const k = S.nMid + ':' + S.seed; let m = mapCache.get(k); if (!m) { m = E.genMap(S.nMid, S.seed); mapCache.set(k, m); if (mapCache.size > 200) mapCache.delete(mapCache.keys().next().value); } return m; }
+function mapFor(S) { const k = S.course.id + ':' + S.seed; let m = mapCache.get(k); if (!m) { m = E.mapFor(S); mapCache.set(k, m); if (mapCache.size > 200) mapCache.delete(mapCache.keys().next().value); } return m; }
 const PCOLORS = ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636', '#35d0ba', '#f07ab8'];
 
 export class Room extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env); this.d = null; this.S = null; this.undo = [];
-    ctx.blockConcurrencyWhile(async () => { this.d = (await ctx.storage.get('d')) || null; this.S = (await ctx.storage.get('S')) || null; this.undo = (await ctx.storage.get('undo')) || []; });
+    ctx.blockConcurrencyWhile(async () => { this.d = (await ctx.storage.get('d')) || null; this.S = (await ctx.storage.get('S')) || null; this.undo = (await ctx.storage.get('undo')) || [];
+      if (this.S && !this.S.course) { this.S = null; this.undo = []; if (this.d) this.d.status = 'closed'; } }); // pre-course (v3) games can't be rebuilt
   }
   async persist(parts = 'dSu') {
     const w = {}; if (parts.includes('d')) w.d = this.d; if (parts.includes('S')) w.S = this.S; if (parts.includes('u')) w.undo = this.undo;
     await this.ctx.storage.put(w);
   }
   engine() { E.S = this.S; E.MAP = mapFor(this.S); return E; }
-  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, len: d.opts.len, turn: d.opts.turn }; }
+  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn }; }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.summary()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
   roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, online: this.online(s.uid) })), results: d.results || null }; }
@@ -258,8 +259,8 @@ export class Room extends DurableObject {
       else if (m.t === 'start') {
         if (uid !== d.host) return err('Only the host can start.');
         if (d.seats.length < 2) return err('You need at least 2 players.');
-        E.newGame({ nMid: d.opts.len, seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color })), fullRace: true });
-        this.S = E.S; this.S.owners = d.seats.map(s => s.uid); this.S.room = d.code; mapCache.set(this.S.nMid + ':' + this.S.seed, E.MAP);
+        E.newGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color })), fullRace: true });
+        this.S = E.S; this.S.owners = d.seats.map(s => s.uid); this.S.room = d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
         d.status = 'playing'; d.timeouts = {}; this.undo = [];
         await this.startTurnTimer(); await this.persist(); this.tellLobby(); this.sendAll([{ e: 'start' }]);
       }

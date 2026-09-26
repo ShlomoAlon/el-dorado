@@ -181,6 +181,12 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 .seg{display:inline-flex;background:#0c1512;border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px;flex-wrap:wrap}
 .seg button{border:0;background:none;padding:7px 14px;border-radius:7px;cursor:pointer;font-weight:700;font-size:13.5px;color:var(--muted);transition:background .15s,color .15s}
 .seg button.on{background:#1f2f28;color:var(--text);box-shadow:0 0 0 1px var(--line2) inset}
+.clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.clist button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:10px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);color:var(--text);cursor:pointer;font:inherit;transition:border-color .15s,background .15s}
+.clist button b{font-size:14px}
+.clist button span{font-size:12px;color:var(--muted)}
+.clist button:hover{border-color:var(--line2)}
+.clist button.on{border-color:var(--gold);background:rgba(233,178,74,.1)}
 .prow{display:flex;gap:10px;align-items:center;margin-bottom:8px}
 .prow input{flex:1;min-width:0;background:#0c1512;border:1px solid var(--line2);border-radius:9px;padding:9px 12px;font:inherit;font-size:14px;color:var(--text);outline:none;user-select:text;-webkit-user-select:text}
 .prow input:focus{border-color:var(--gold)}
@@ -337,7 +343,6 @@ const BOARDS={
  M:['j1 mm mm j1','j1 j2 mm j1 j1','mm j1 r1 j2 mm j1','w1 j1 mm c1 j1 j1 mm','w1 mm j1 r2 j1 j1','w1 j1 v1 mm j2','w1 j1 r1 v1'],
  N:['j1 j1 w1 w1','j1 v1 v1 w2 j1','j2 v2 v1 w1 j1 j1','j1 v1 v3 w1 w1 j2 j1','j1 v1 v2 j1 w1 j1','j1 j1 v1 w2 j1','j2 v1 w1 j1'],
 };
-const PAIRS=[['C','D'],['E','F'],['G','H'],['I','J'],['K','L'],['M','N']];
 function parseTok(t){
   if(t==='mm')return{type:'m',val:0};if(t==='ss')return{type:'s',val:0};
   if(t[0]==='g')return{type:'g',sym:t[1],val:1};
@@ -357,7 +362,6 @@ const TPL={};for(const k in BOARDS)TPL[k]=parseTpl(BOARDS[k]);
    ========================================================= */
 const SQ3=Math.sqrt(3),R=34;
 const DIRS=[[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
-const TV=[[7,-3],[3,4],[-4,7],[-7,3],[-3,-4],[4,-7]];
 const key=(q,r)=>q+','+r;
 const rot=(q,r,k)=>{for(let i=0;i<k;i++){const t=q;q=-r;r=t+r;}return[q,r];};
 const pxOf=(q,r)=>[R*SQ3*(q+r/2),R*1.5*r];
@@ -365,93 +369,74 @@ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a
 function shuffle(a,rnd=Math.random){for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 const hash=(x,y)=>{let h=Math.imul(x|0,374761393)+Math.imul(y|0,668265263);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
 
-function genMap(nMid,seed){
-  const rng=mulberry32(seed);
-  for(let attempt=0;attempt<600;attempt++){
-    const centers=[[0,0]],dirs=[];let ok=true;
-    const base=rng()<.5?0:1;
-    for(let i=0;i<=nMid;i++){ // nMid terrain boards + one slot where the El Dorado tile goes
-      const x=rng();
-      let pref=x<.42?[0,1]:x<.84?[1,0]:(rng()<.5?[5,0,1]:[2,1,0]);
-      if(base===1&&x<.84)pref=pref.slice().reverse();
-      let placed=false;
-      for(const d of pref){
-        const L=centers[centers.length-1],c=[L[0]+TV[d][0],L[1]+TV[d][1]];
-        let bad=false;
-        for(let j=0;j<centers.length&&!bad;j++){const p=centers[j];
-          if(p[0]===c[0]&&p[1]===c[1])bad=true;
-          else if(j<centers.length-1&&TV.some(v=>p[0]+v[0]===c[0]&&p[1]+v[1]===c[1]))bad=true;}
-        if(bad)continue;centers.push(c);dirs.push(d);placed=true;break;
-      }
-      if(!placed){ok=false;break;}
-    }
-    if(!ok)continue;
-    const startL=rng()<.5?'A':'B';
-    const mids=shuffle(PAIRS.slice(),rng).slice(0,nMid).map(p=>p[rng()<.5?0:1]);
-    const endSym=rng()<.5?'j':'w';
-    const m=buildMap(centers,dirs,startL,mids,endSym,rng);
-    if(m)return m;
-  }
-  throw new Error('map generation failed');
-}
-function buildMap(centers,dirs,startL,mids,endSym,rng){
-  const hexes=new Map(),tiles=[];const nT=centers.length-1; // last centre = El Dorado side
-  for(let ti=0;ti<nT;ti++){
-    const c=centers[ti];let cells,k,name;
-    if(ti===0){cells=TPL[startL];k=(dirs[0]+1)%6;name=startL;}
-    else{name=mids[ti-1];cells=TPL[name];k=Math.floor(rng()*6);}
-    tiles.push({c,name,k});
-    for(const cell of cells){const[lq,lr]=rot(cell.q,cell.r,k);const q=c[0]+lq,r=c[1]+lr;const K=key(q,r);
-      const[x,y]=pxOf(q,r);hexes.set(K,{...cell.d,q,r,k:K,tile:ti,x,y});}
-  }
-  // El Dorado tile: 3 finishing spaces set against the far edge of the last board
-  const last=centers[nT-1],nc=centers[nT];
-  const mid=pxOf((last[0]+nc[0])/2,(last[1]+nc[1])/2);
-  const cand=[];
-  for(let dq=-3;dq<=3;dq++)for(let dr=Math.max(-3,-dq-3);dr<=Math.min(3,-dq+3);dr++){
-    const q=nc[0]+dq,r=nc[1]+dr;
-    if(DIRS.some(([a,b])=>{const n=hexes.get(key(q+a,r+b));return n&&n.tile===nT-1&&n.type!=='m';})){const[x,y]=pxOf(q,r);cand.push({q,r,x,y,d:Math.hypot(x-mid[0],y-mid[1])});}
-  }
-  cand.sort((a,b)=>a.d-b.d);
-  const goalsC=[];
-  for(const c of cand){if(goalsC.length===0||goalsC.some(g=>DIRS.some(([a,b])=>g.q+a===c.q&&g.r+b===c.r)))goalsC.push(c);if(goalsC.length===3)break;}
-  if(goalsC.length<3)return null;
-  for(const g of goalsC){const K=key(g.q,g.r);hexes.set(K,{type:'g',sym:endSym,val:1,q:g.q,r:g.r,k:K,tile:nT,x:g.x,y:g.y});}
-  tiles.push({c:nc,name:'El Dorado',k:0,end:true});
-  // seams between consecutive terrain boards
-  const conns=[];for(let i=0;i<nT-1;i++)conns.push({a:i,b:i+1,edges:[]});
-  const edgeConn=new Map();
+/* =========================================================
+   COURSES — fixed routes (no random generation).
+   p: the boards in route order as [letter, q, r, rotation]; the first is start board A or B.
+      (q,r) is where the board's central space goes; rotation is in 60° steps.
+   e: [q,r] the middle finishing space of the El Dorado tile, next to the last board.
+   s: El Dorado side, 'j' jungle or 'w' water.
+   Blockades are dealt at random onto the connections when a game starts (rulebook).
+   ========================================================= */
+const COURSES=[
+  // Board positions fitted to the rulebook's setup illustration (page 5). Board contents are reconstructed.
+  {id:'first',name:'First Expedition',src:'Rulebook route for your first game',diff:'Easy',
+   p:[['B',0,0,2],['C',7,-4,0],['N',12,-2,0],['I',16,1,0],['K',23,-4,0]],e:[25,-8],s:'j'},
+];
+const courseById=id=>COURSES.find(c=>c.id===id)||null;
+function buildCourse(C,seed){
+  const hexes=new Map(),tiles=[];
+  C.p.forEach(([name,cq,cr,k],ti)=>{
+    const tpl=TPL[name];if(!tpl)throw new Error('Unknown board '+name);
+    if((ti===0)!==(name==='A'||name==='B'))throw new Error('A route starts with board A or B, and only there.');
+    let sx=0,sy=0;
+    for(const cell of tpl){const[lq,lr]=rot(cell.q,cell.r,k);const q=cq+lq,r=cr+lr,K=key(q,r);
+      if(hexes.has(K))throw new Error('Boards '+tiles[hexes.get(K).tile].name+' and '+name+' overlap.');
+      const[x,y]=pxOf(q,r);hexes.set(K,{...cell.d,q,r,k:K,tile:ti,x,y});sx+=x;sy+=y;}
+    tiles.push({c:[cq,cr],name,k,x:sx/tpl.length,y:sy/tpl.length});
+  });
+  const nT=tiles.length;
+  // El Dorado tile: the given space plus its two neighbours along the last board's edge
+  const touch=(q,r)=>!hexes.has(key(q,r))&&DIRS.some(([a,b])=>{const n=hexes.get(key(q+a,r+b));return n&&n.tile===nT-1&&n.type!=='m';});
+  const[eq,er]=C.e;if(!touch(eq,er))throw new Error('El Dorado must sit against the last board.');
+  let side=null;
+  for(let d=0;d<3&&!side;d++){const a=[eq+DIRS[d][0],er+DIRS[d][1]],b=[eq-DIRS[d][0],er-DIRS[d][1]];if(touch(...a)&&touch(...b))side=[a,b];}
+  if(!side){const fr=DIRS.map(([a,b])=>[eq+a,er+b]).filter(c=>touch(...c));if(fr.length<2)throw new Error('No room for El Dorado there.');side=fr.slice(0,2);}
+  for(const[q,r]of[[eq,er],...side]){const K=key(q,r),[x,y]=pxOf(q,r);hexes.set(K,{type:'g',sym:C.s,val:1,q,r,k:K,tile:nT,x,y});}
+  // connections between consecutive boards (only these carry blockades; other touching boards are open)
+  const conns=[];const edgeConn=new Map();
+  for(let i=0;i<nT-1;i++)conns.push({a:i,b:i+1,edges:[]});
   for(const h of hexes.values())for(const[dq,dr]of DIRS){const n=hexes.get(key(h.q+dq,h.r+dr));
-    if(n&&n.tile!==h.tile&&h.tile<nT&&n.tile<nT){const c=Math.min(h.tile,n.tile);edgeConn.set(h.k+'|'+n.k,c);if(h.tile<n.tile)conns[c].edges.push([h.k,n.k]);}}
+    if(n&&n.tile===h.tile+1&&n.tile<nT){conns[h.tile].edges.push([h.k,n.k]);edgeConn.set(h.k+'|'+n.k,h.tile);edgeConn.set(n.k+'|'+h.k,h.tile);}}
+  conns.forEach((c,i)=>{if(c.edges.filter(([a,b])=>hexes.get(a).type!=='m'&&hexes.get(b).type!=='m').length<2)throw new Error('Boards '+tiles[i].name+' and '+tiles[i+1].name+' are not properly connected.');});
   const starts=[...hexes.values()].filter(h=>h.type==='s');
   const goals=[...hexes.values()].filter(h=>h.type==='g');
-  // path check
   const seen=new Set(starts.map(s=>s.k)),q=[...starts];let found=false;
   while(q.length){const h=q.shift();if(h.type==='g'){found=true;break;}
     for(const[dq,dr]of DIRS){const n=hexes.get(key(h.q+dq,h.r+dr));if(!n||seen.has(n.k)||n.type==='m'||n.type==='s')continue;seen.add(n.k);q.push(n);}}
-  if(!found)return null;
-  for(const c of conns){if(c.edges.filter(([a,b])=>hexes.get(a).type!=='m'&&hexes.get(b).type!=='m').length<2)return null;}
-  // start numbering along the edge
-  const sc=starts.reduce((a,h)=>[a[0]+h.x/4,a[1]+h.y/4],[0,0]);
-  const f=pxOf(...centers[1]);const ang=Math.atan2(f[1],f[0])+Math.PI/2;
+  if(!found)throw new Error('There is no path from the start to El Dorado.');
+  // start spaces numbered along their edge
+  const sc=starts.reduce((a,h)=>[a[0]+h.x/starts.length,a[1]+h.y/starts.length],[0,0]);
+  const ang=Math.atan2(tiles[1].y-tiles[0].y,tiles[1].x-tiles[0].x)+Math.PI/2;
   const proj=h=>(h.x-sc[0])*Math.cos(ang)+(h.y-sc[1])*Math.sin(ang);
   starts.sort((a,b)=>proj(a)-proj(b));starts.forEach((s,i)=>s.num=i+1);
-  const blockDefs=BLOCKADES.slice(0,conns.length).map((b,i)=>({...b,conn:i}));
-  // city
+  // a random blockade on each connection
+  const deal=shuffle(BLOCKADES.slice(),mulberry32(seed^0x2c1b3c6d));
+  if(conns.length>deal.length)throw new Error('Too many connections for 6 blockades.');
+  const blockDefs=conns.map((c,i)=>({...deal[i],conn:i}));
   const gc=goals.reduce((a,h)=>[a[0]+h.x/3,a[1]+h.y/3],[0,0]);
-  const tc=pxOf(...last);let dx=gc[0]-tc[0],dy=gc[1]-tc[1];const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
+  const last=tiles[nT-1];let dx=gc[0]-last.x,dy=gc[1]-last.y;const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
   const city={x:gc[0]+dx*R*2.5,y:gc[1]+dy*R*2.5,dx,dy};
+  tiles.push({c:[eq,er],name:'El Dorado',k:0,end:true,x:gc[0],y:gc[1]});
   let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
   for(const h of hexes.values()){minX=Math.min(minX,h.x-R);maxX=Math.max(maxX,h.x+R);minY=Math.min(minY,h.y-R);maxY=Math.max(maxY,h.y+R);}
   minX=Math.min(minX,city.x-R*2.6);maxX=Math.max(maxX,city.x+R*2.6);minY=Math.min(minY,city.y-R*2.6);maxY=Math.max(maxY,city.y+R*2.6);
   const pad=R*.6;minX-=pad;minY-=pad;maxX+=pad;maxY+=pad;
-  return{hexes,tiles,conns,edgeConn,starts:starts.map(s=>s.k),goals:goals.map(g=>g.k),blockDefs,city,endSym,minX,minY,w:maxX-minX,h:maxY-minY,route:[startL,...mids]};
+  return{hexes,tiles,conns,edgeConn,starts:starts.map(s=>s.k),goals:goals.map(g=>g.k),blockDefs,city,endSym:C.s,minX,minY,w:maxX-minX,h:maxY-minY,route:C.p.map(x=>x[0]),name:C.name,course:C.id};
 }
-
 
 /* =========================================================
    RULES ENGINE — pure game logic shared by the browser and the server.
-   Works on the module-level S (game state) and MAP (board derived from S.seed).
+   Works on the module-level S (game state) and MAP (board built from S.course + S.seed).
    Nothing in here touches the page.
    ========================================================= */
 let S=null,MAP=null;
@@ -464,8 +449,10 @@ function rm(arr,id){const i=arr.indexOf(id);if(i>=0)arr.splice(i,1);}
 function playerDone(p){return p.pieces.every(k=>k==='done');}
 function isActive(p){return !playerDone(p)&&!p.resigned;}
 
+function mapFor(st){return buildCourse(st.course,st.seed);}
 function newGame(o){
-  MAP=genMap(o.nMid,o.seed);
+  const course=o.course||COURSES[0];
+  MAP=buildCourse(course,o.seed);
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
     const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
@@ -474,11 +461,11 @@ function newGame(o){
   const st=MAP.starts;
   if(players.length===2){players[0].pieces=[st[0],st[2]];players[1].pieces=[st[1],st[3]];}
   else players.forEach((p,i)=>p.pieces=[st[i]]);
-  S={v:3,seed:o.seed,nMid:o.nMid,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
+  S={v:4,seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
      blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,start:0,round:1,endTriggered:false,over:false,winners:null,places:null,
      fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[],privacy:!!o.privacy,resigns:0};
   players.forEach(p=>drawCards(p,4));
-  log(null,'The expedition sets out: '+players.map(p=>p.name).join(', ')+'. Route '+MAP.route.join(' · ')+' · El Dorado.');
+  log(null,'The expedition sets out: '+players.map(p=>p.name).join(', ')+'. Course: '+MAP.name+' ('+MAP.route.join(' · ')+' · El Dorado).');
   return S;
 }
 function newCard(t){const id='c'+(S.nid++);S.cards[id]=t;return id;}
@@ -752,7 +739,7 @@ const canAct=()=>!S||!online()||(S.owners[S.cur]===myId()&&NET.connected&&!S.ove
 const viewIdx=()=>{if(!online())return S.cur;const i=S.owners.indexOf(myId());return i<0?S.cur:i;};
 const hp=()=>S.players[viewIdx()];
 function snapshot(){undoStack.push(JSON.stringify(S));if(undoStack.length>60)undoStack.shift();}
-function save(){if(online())return;try{localStorage.setItem('eldorado-save-v3',JSON.stringify(S));}catch(e){}}
+function save(){if(online())return;try{localStorage.setItem('eldorado-save-v4',JSON.stringify(S));}catch(e){}}
 
 function computeTargets(){
   const T=new Map();UI.targets=T;if(!S||S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
@@ -1521,21 +1508,28 @@ function modal(html,onMount,dismiss){const o=$('#overlay');o.innerHTML=`<div cla
   if(dismiss)sc.addEventListener('click',e=>{if(e.target===sc)closeModal();});onMount&&onMount(sc);}
 function closeModal(){const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');const mo=sc.querySelector('.modal');if(mo)mo.className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
 
-let setup={mode:'local',full:true,oMax:4,oTurn:90,oLen:4,n:3,names:['Ana','Ben','Cleo','Dev'],colors:['crimson','ivory','violet','orange'],len:4,privacy:false,seed:(Math.random()*1e9)|0};
+/* course list: official routes first; 'random' picks one of them */
+function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:(courseById(id)||COURSES[0]);}
+function courseName(id){return id==='random'?'Random course':(courseById(id)||COURSES[0]).name;}
+function coursePicker(gid,sel){
+  const opts=COURSES.map(c=>[c.id,c.name,`${c.diff?c.diff+' · ':''}${c.p.map(x=>x[0]).join(' · ')}`]);
+  if(COURSES.length>1)opts.push(['random','Random course','Any course from this list']);
+  return `<div class="clist" id="${gid}">${opts.map(([id,n,d])=>`<button data-c="${id}" class="${sel===id?'on':''}"><b>${esc(n)}</b><span>${esc(d)}</span></button>`).join('')}</div>`;
+}
+let setup={mode:'local',full:true,oMax:4,oTurn:90,oCourse:'first',n:3,names:['Ana','Ben','Cleo','Dev'],colors:['crimson','ivory','violet','orange'],course:'first',privacy:false,seed:(Math.random()*1e9)|0};
 function showSetup(){
-  let saved=null;try{saved=JSON.parse(localStorage.getItem('eldorado-save-v3')||'null');}catch(e){}
-  const canResume=saved&&!saved.over&&saved.v===3&&(!S||S.over);
-  const routeTxt=()=>MAP&&(!S||S.over)?`<div class="routeInfo">Boards: <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} finish) · ${MAP.blockDefs.length} blockades</div>`:'';
+  let saved=null;try{saved=JSON.parse(localStorage.getItem('eldorado-save-v4')||'null');}catch(e){}
+  const canResume=saved&&!saved.over&&saved.v===4&&(!S||S.over);
+  const routeTxt=()=>MAP&&(!S||S.over)?`<div class="routeInfo">Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random</div>`:'';
   const html=()=>`<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
     <div class="field"><label>How are you playing?</label><div class="seg" id="sMode"><button data-m="local" class="on">On this device</button><button data-m="online">Online</button></div></div>
     <div class="field"><label>Players</label><div class="seg" id="sN">${[2,3,4].map(n=>`<button data-n="${n}" class="${setup.n===n?'on':''}">${n}</button>`).join('')}</div>${setup.n===2?'<p class="note">Two players each lead two explorers. Both must reach El Dorado.</p>':''}</div>
     <div class="field"><label>Expedition leaders</label>${[...Array(setup.n)].map((_,i)=>`<div class="prow"><input id="pn${i}" maxlength="14" value="${esc(setup.names[i])}" aria-label="Player ${i+1} name"><div class="sws">${COLORS.map(c=>`<button data-p="${i}" data-c="${c.id}" style="--c:${c.hex}" class="${setup.colors[i]===c.id?'on':''}" ${setup.colors.slice(0,setup.n).some((x,j)=>j!==i&&x===c.id)?'disabled':''} aria-label="${c.name}"></button>`).join('')}</div></div>`).join('')}</div>
-    <div class="field"><label>Route length</label><div class="seg" id="sL">${[[3,'Short · 4 boards'],[4,'Standard · 5 boards'],[5,'Long · 6 boards'],[6,'Epic · 7 boards']].map(([v,t])=>`<button data-l="${v}" class="${setup.len===v?'on':''}">${t}</button>`).join('')}</div>
-      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn" id="sReroll">New route</button><span class="note" style="margin:0">The board behind this panel previews the route.</span></div><div id="rInfo">${routeTxt()}</div></div>
+    <div class="field"><label>Course</label>${coursePicker('sC',setup.course)}<div id="rInfo">${routeTxt()}</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><button data-f="1" class="${setup.full?'on':''}">When all but one arrive</button><button data-f="0" class="${setup.full?'':'on'}">At the first arrival (official)</button></div></div>
     <div class="field"><label class="chk"><input type="checkbox" id="sPriv" ${setup.privacy?'checked':''}> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
     <div class="mrow">${canResume?'<button class="btn" id="sResume">Resume saved game</button>':''}${S&&!S.over?'<button class="btn" id="sClose">Back to game</button>':''}<button class="btn pri big" id="sGo">Start expedition</button></div>`;
-  const preview=()=>{if(S&&!S.over)return;try{MAP=genMap(setup.len,setup.seed);buildBoard();fit();L.pieces.innerHTML='';const ri=document.getElementById('rInfo');if(ri)ri.innerHTML=routeTxt();}catch(e){console.error(e);}};
+  const preview=()=>{if(S&&!S.over)return;try{setup.cur=pickCourse(setup.course);MAP=buildCourse(setup.cur,setup.seed);buildBoard();fit();L.pieces.innerHTML='';const ri=document.getElementById('rInfo');if(ri)ri.innerHTML=routeTxt();}catch(e){console.error(e);}};
   const mount=sc=>{
     const m=sc.querySelector('.modal');
     const sync=()=>{for(let i=0;i<setup.n;i++){const e=m.querySelector('#pn'+i);if(e)setup.names[i]=e.value.trim()||('Player '+(i+1));}const jc=m.querySelector('#jCode');if(jc)setup.code=jc.value.trim().toUpperCase();};
@@ -1543,16 +1537,15 @@ function showSetup(){
     const wire=()=>{
       m.querySelectorAll('#sMode button').forEach(b=>b.onclick=()=>{if(b.dataset.m==='online'){closeModal();setTimeout(showHub,170);}});
       m.querySelectorAll('#sN button').forEach(b=>b.onclick=()=>{setup.n=+b.dataset.n;rerender();});
-      m.querySelectorAll('#sL button').forEach(b=>b.onclick=()=>{setup.len=+b.dataset.l;preview();rerender();});
+      m.querySelectorAll('#sC button').forEach(b=>b.onclick=()=>{setup.course=b.dataset.c;preview();rerender();});
       m.querySelectorAll('.sws button').forEach(b=>b.onclick=()=>{setup.colors[+b.dataset.p]=b.dataset.c;rerender();});
-      m.querySelector('#sReroll').onclick=()=>{setup.seed=(Math.random()*1e9)|0;preview();};
       m.querySelector('#sPriv').onchange=e=>setup.privacy=e.target.checked;
       m.querySelectorAll('#sFull button').forEach(b=>b.onclick=()=>{setup.full=b.dataset.f==='1';rerender();});
-      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{S=saved;MAP=genMap(S.nMid,S.seed);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
+      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{S=saved;MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
       const cl=m.querySelector('#sClose');if(cl)cl.onclick=closeModal;
       m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];
         for(const[,el]of cardEls)el.remove();cardEls.clear();
-        newGame({nMid:setup.len,seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>({name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex}))});
+        newGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>({name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex}))});
         buildBoard();UI.mode='idle';UI.piece=0;UI.cover=S.privacy;lastPlayer=-1;closeModal();fit();render();
         if(!UI.cover)banner(cur().name,'Round 1');
         setup.seed=(Math.random()*1e9)|0;};
@@ -1568,11 +1561,11 @@ function showRules(){
   <p>Race to El Dorado: move onto one of the three finishing spaces on the El Dorado tile at the end of the route. Your explorer then steps into the city, freeing the space.</p><p><b>Game end.</b> Online games (and local games by default) continue until all but one expedition has arrived, then the round is finished; this gives every player a place. Players arriving in the same round are split by blockades held. The official rule, where the game ends after the round in which the first player arrives, is available for local games.</p><p><b>Online.</b> Each turn has a timer; when it runs out the turn ends and leftover cards are discarded. Missing 3 turns in a row forfeits. Every online game is ranked (Elo).</p>
   <h4>Your turn</h4><ul><li><b>Play cards</b> in any order: move, play action cards, and buy <b>at most one</b> card.</li><li><b>End turn</b>: played cards go to your discard pile. You may discard any cards left in hand or keep them.</li><li><b>Draw</b> back up to 4 cards. An empty deck is refilled by shuffling your discard pile.</li></ul>
   <h4>Moving</h4><ul><li><b>Drag</b> a card onto a highlighted space, or tap the card and then the space.</li><li>A jungle, water or village space needs one card of that symbol with at least the shown strength. Cards can't be combined for one space.</li><li>Leftover strength keeps moving the same explorer over further spaces of that type. It's lost once you do something else.</li><li>Jokers (white) count as any one symbol, chosen when played.</li><li><b>Rubble</b> (grey): discard as many cards as shown. <b>Base camp</b> (red): remove that many cards from the game.</li><li>Mountains are impassable. Occupied spaces can't be entered or crossed.</li></ul>
-  <h4>Blockades</h4><p>Blockades #1–6 seal the seams between boards, in number order along the route. The first explorer to cross pays its cost (a matching card, or discards for grey ones) and keeps it; the Native can also tear one down. Ties at the end go to whoever holds the most blockades, then the highest-numbered one.</p>
+  <h4>Blockades</h4><p>At the start, a random blockade from #1–6 is placed on each connection between two boards. The first explorer to cross pays its cost (a matching card, or discards for grey ones) and keeps it; the Native can also tear one down. Ties at the end go to whoever holds the most blockades, then the highest-numbered one.</p>
   <h4>Buying</h4><ul><li>Coin cards and jokers pay their value; every other card pays ½ coin. No change.</li><li>Bought cards go to your discard pile.</li><li>The reserve opens once a market slot is empty; that stack moves into the slot.</li></ul>
   <h4>Single-use cards</h4><p>Cards marked <b>Single use</b> are removed from the game after their effect. Spent only as ½ coin, they're discarded normally.</p>
   <h4>Two players</h4><p>Each player leads two explorers (starting spaces 1 & 3, and 2 & 4) and wins only when both reach El Dorado. Each card moves one of them.</p>
-  <h4>About the boards</h4><p>Routes use the base game's boards: start board A or B, one side each of the double-sided boards C/D, E/F, G/H, I/J, K/L and M/N, and the 3-space El Dorado tile (jungle or water). Each board has the published terrain mix, but the exact space-by-space layout is reconstructed, not copied from the printed boards. The 16-space strips O–R aren't in yet.</p>
+  <h4>About the boards</h4><p>Courses are fixed routes, starting with the rulebook's route for a first game (B · C · N · I · K). Board positions follow the rulebook illustration. Each board has the published terrain mix, but the exact space-by-space layout is reconstructed, not copied from the printed boards.</p>
   <h4>Controls</h4><ul><li>Drag or scroll to pan, pinch or ctrl+scroll to zoom. <b>Esc</b> cancels, <b>Ctrl+Z</b> undoes until new cards are drawn.</li></ul>
   </div><div class="mrow"><button class="btn pri" id="rClose">Close</button></div>`,sc=>sc.querySelector('#rClose').onclick=closeModal,true);
 }
@@ -1639,15 +1632,15 @@ function hubHTML(){
     <p class="note">${plural(u.wins,'win')} in ${plural(u.games,'game')}. Everyone starts at 1200; ratings move faster during your first 10 games.</p>
     <div class="mrow"><button class="btn" id="hOut">Sign out</button><button class="btn" id="hBack">Back</button></div>`;
   const rooms=NET.rooms.filter(r=>r.status==='lobby');const live=NET.rooms.filter(r=>r.status==='playing');
-  const rrow=r=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line)"><span><b>${esc(r.host)}</b>’s room <span class="note" style="margin:0">· ${r.count}/${r.max} · ${r.turn}s turns · ${['','','','Short','Standard','Long','Epic'][r.len]}</span></span>${r.status==='lobby'&&r.count<r.max?`<button class="btn" data-join="${r.code}">Join</button>`:'<span class="note" style="margin:0">in progress</span>'}</div>`;
+  const rrow=r=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line)"><span><b>${esc(r.host)}</b>’s room <span class="note" style="margin:0">· ${r.count}/${r.max} · ${r.turn}s turns · ${esc(courseName(r.course))}</span></span>${r.status==='lobby'&&r.count<r.max?`<button class="btn" data-join="${r.code}">Join</button>`:'<span class="note" style="margin:0">in progress</span>'}</div>`;
   return head+tabs+`
     ${NET.active?`<div class="prow" style="padding:10px 12px;border-radius:10px;border:1px solid var(--gold);background:rgba(233,178,74,.1);justify-content:space-between"><span>You have a game in progress.</span><button class="btn pri" data-join="${NET.active}">Rejoin</button></div>`:''}
     <div class="field"><label>Create a room</label>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <div class="seg" id="cMax">${[2,3,4].map(n=>`<button data-v="${n}" class="${setup.oMax===n?'on':''}">${n} players</button>`).join('')}</div>
         <div class="seg" id="cTurn">${[60,90,120,180].map(n=>`<button data-v="${n}" class="${setup.oTurn===n?'on':''}">${n<120?n+'s':(n/60)+' min'}</button>`).join('')}</div>
-        <div class="seg" id="cLen">${[[3,'Short'],[4,'Standard'],[5,'Long'],[6,'Epic']].map(([v,t])=>`<button data-v="${v}" class="${setup.oLen===v?'on':''}">${t}</button>`).join('')}</div>
       </div>
+      <div style="margin-top:10px">${coursePicker('cCourse',setup.oCourse)}</div>
       <p class="note">Turn timer: when it runs out the turn ends automatically. Missing 3 turns in a row forfeits the game.</p>
       <div style="margin-top:10px"><button class="btn pri big" id="cGo">Create room</button></div></div>
     <div class="field"><label>Join with a code</label><div class="prow"><input id="jCode" maxlength="5" placeholder="e.g. K7Q2M" style="text-transform:uppercase;letter-spacing:.15em;font-weight:700" autocomplete="off"><button class="btn" id="jGo">Join</button></div></div>
@@ -1681,8 +1674,9 @@ function renderHub(){
     l.innerHTML=r.players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${r.players.map((p,i)=>`<span style="color:var(--muted)">${i+1}</span><b style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</b><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`).join('')}</div>`:'<p class="note">No ranked games yet.</p>';}).catch(e=>{const l=q('#lbList');if(l)l.textContent=e.message;});return;}
   if(hubTab==='me'){q('#meSave').onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};q('#hOut').onclick=signOut;return;}
   const seg=(id,key)=>m.querySelectorAll(id+' button').forEach(b=>b.onclick=()=>{setup[key]=+b.dataset.v;renderHub();});
-  seg('#cMax','oMax');seg('#cTurn','oTurn');seg('#cLen','oLen');
-  q('#cGo').onclick=async()=>{try{const r=await api('/api/rooms',{method:'POST',body:JSON.stringify({max:setup.oMax,turn:setup.oTurn,len:setup.oLen})});joinRoom(r.code);}catch(e){err(e.message);}};
+  seg('#cMax','oMax');seg('#cTurn','oTurn');
+  m.querySelectorAll('#cCourse button').forEach(b=>b.onclick=()=>{setup.oCourse=b.dataset.c;renderHub();});
+  q('#cGo').onclick=async()=>{try{const r=await api('/api/rooms',{method:'POST',body:JSON.stringify({max:setup.oMax,turn:setup.oTurn,course:setup.oCourse})});joinRoom(r.code);}catch(e){err(e.message);}};
   const jc=q('#jCode');q('#jGo').onclick=()=>{const c=(jc.value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length<4){err('Enter the 5-letter room code.');return;}joinRoom(c);};
   jc.onkeydown=e=>{if(e.key==='Enter')q('#jGo').click();};
   m.querySelectorAll('[data-join]').forEach(b=>b.onclick=()=>joinRoom(b.dataset.join));
@@ -1726,7 +1720,7 @@ function onRoomMsg(m){
 function applyServerState(S2,ev){
   const old=S;const fresh=!old||!old.owners||old.seed!==S2.seed||old.room!==S2.room;
   S=S2;
-  if(fresh){for(const[,el]of cardEls)el.remove();cardEls.clear();MAP=genMap(S.nMid,S.seed);buildBoard();closeModal();lastPlayer=-1;UI.cover=false;fit();}
+  if(fresh){for(const[,el]of cardEls)el.remove();cardEls.clear();MAP=mapFor(S);buildBoard();closeModal();lastPlayer=-1;UI.cover=false;fit();}
   const turnChanged=fresh||old.cur!==S.cur||old.round!==S.round;
   if(!fresh)playEvents(ev,viewIdx());
   // the only thing that changes the game during my turn is me, so any new state closes pick modes
@@ -1749,7 +1743,7 @@ function roomLobbyHTML(){
   const mine=(r.seats||[]).find(s=>s.uid===myId());
   const PC=['#e5484d','#efe9dc','#9d7df7','#ff9636','#35d0ba','#f07ab8'];
   return`<h2>Room ${esc(NET.code||'')}</h2>
-  <p class="sub">${host?'Share the code or link. Start when everyone is here.':'Waiting for the host to start.'} ${r.opts?`${r.opts.max} players max · ${r.opts.turn}s per turn · ranked`:''}</p>
+  <p class="sub">${host?'Share the code or link. Start when everyone is here.':'Waiting for the host to start.'} ${r.opts?`${esc(courseName(r.opts.course))} · ${r.opts.max} players max · ${r.opts.turn}s per turn · ranked`:''}</p>
   <div class="prow"><input id="lkIn" readonly value="${esc(link)}"><button class="btn" id="lkCopy">Copy link</button></div>
   <div class="field" style="margin-top:14px"><label>Players ${(r.seats||[]).length}/${r.opts?r.opts.max:4}</label>${seats||'<p class="note">Connecting…</p>'}</div>
   ${mine?`<div class="field"><label>Your colour</label><div class="sws">${PC.map(c=>`<button data-col="${c}" style="--c:${c}" class="${mine.color===c?'on':''}" ${(r.seats||[]).some(s=>s!==mine&&s.color===c)?'disabled':''}></button>`).join('')}</div></div>`:(r.status==='lobby'&&r.seats?'<p class="note">This room is full.</p>':'')}
@@ -1798,9 +1792,9 @@ function boot(){
     let room=null;try{room=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'')||null;}catch(e){}
     if(room&&NET.available){if(NET.user){joinRoom(room);return;}NET.pendingRoom=room;showHub();return;}
     if(NET.user&&NET.active){showHub();return;}
-    let saved=null;try{saved=JSON.parse(localStorage.getItem('eldorado-save-v3')||'null');}catch(e){}
-    if(saved&&!saved.over&&saved.v===3&&!saved.owners){
-      try{S=saved;MAP=genMap(S.nMid,S.seed);buildBoard();UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();requestAnimationFrame(()=>fit());
+    let saved=null;try{saved=JSON.parse(localStorage.getItem('eldorado-save-v4')||'null');}catch(e){}
+    if(saved&&!saved.over&&saved.v===4&&!saved.owners){
+      try{S=saved;MAP=mapFor(S);buildBoard();UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();requestAnimationFrame(()=>fit());
         if(!UI.cover)banner(cur().name,'Round '+S.round);return;}catch(e){console.error(e);S=null;}
     }
     showSetup();

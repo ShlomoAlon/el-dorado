@@ -43,15 +43,15 @@ function hubHTML(){
     <p class="note">${plural(u.wins,'win')} in ${plural(u.games,'game')}. Everyone starts at 1200; ratings move faster during your first 10 games.</p>
     <div class="mrow"><button class="btn" id="hOut">Sign out</button><button class="btn" id="hBack">Back</button></div>`;
   const rooms=NET.rooms.filter(r=>r.status==='lobby');const live=NET.rooms.filter(r=>r.status==='playing');
-  const rrow=r=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line)"><span><b>${esc(r.host)}</b>’s room <span class="note" style="margin:0">· ${r.count}/${r.max} · ${r.turn}s turns · ${['','','','Short','Standard','Long','Epic'][r.len]}</span></span>${r.status==='lobby'&&r.count<r.max?`<button class="btn" data-join="${r.code}">Join</button>`:'<span class="note" style="margin:0">in progress</span>'}</div>`;
+  const rrow=r=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line)"><span><b>${esc(r.host)}</b>’s room <span class="note" style="margin:0">· ${r.count}/${r.max} · ${r.turn}s turns · ${esc(courseName(r.course))}</span></span>${r.status==='lobby'&&r.count<r.max?`<button class="btn" data-join="${r.code}">Join</button>`:'<span class="note" style="margin:0">in progress</span>'}</div>`;
   return head+tabs+`
     ${NET.active?`<div class="prow" style="padding:10px 12px;border-radius:10px;border:1px solid var(--gold);background:rgba(233,178,74,.1);justify-content:space-between"><span>You have a game in progress.</span><button class="btn pri" data-join="${NET.active}">Rejoin</button></div>`:''}
     <div class="field"><label>Create a room</label>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <div class="seg" id="cMax">${[2,3,4].map(n=>`<button data-v="${n}" class="${setup.oMax===n?'on':''}">${n} players</button>`).join('')}</div>
         <div class="seg" id="cTurn">${[60,90,120,180].map(n=>`<button data-v="${n}" class="${setup.oTurn===n?'on':''}">${n<120?n+'s':(n/60)+' min'}</button>`).join('')}</div>
-        <div class="seg" id="cLen">${[[3,'Short'],[4,'Standard'],[5,'Long'],[6,'Epic']].map(([v,t])=>`<button data-v="${v}" class="${setup.oLen===v?'on':''}">${t}</button>`).join('')}</div>
       </div>
+      <div style="margin-top:10px">${coursePicker('cCourse',setup.oCourse)}</div>
       <p class="note">Turn timer: when it runs out the turn ends automatically. Missing 3 turns in a row forfeits the game.</p>
       <div style="margin-top:10px"><button class="btn pri big" id="cGo">Create room</button></div></div>
     <div class="field"><label>Join with a code</label><div class="prow"><input id="jCode" maxlength="5" placeholder="e.g. K7Q2M" style="text-transform:uppercase;letter-spacing:.15em;font-weight:700" autocomplete="off"><button class="btn" id="jGo">Join</button></div></div>
@@ -85,8 +85,9 @@ function renderHub(){
     l.innerHTML=r.players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${r.players.map((p,i)=>`<span style="color:var(--muted)">${i+1}</span><b style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</b><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`).join('')}</div>`:'<p class="note">No ranked games yet.</p>';}).catch(e=>{const l=q('#lbList');if(l)l.textContent=e.message;});return;}
   if(hubTab==='me'){q('#meSave').onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};q('#hOut').onclick=signOut;return;}
   const seg=(id,key)=>m.querySelectorAll(id+' button').forEach(b=>b.onclick=()=>{setup[key]=+b.dataset.v;renderHub();});
-  seg('#cMax','oMax');seg('#cTurn','oTurn');seg('#cLen','oLen');
-  q('#cGo').onclick=async()=>{try{const r=await api('/api/rooms',{method:'POST',body:JSON.stringify({max:setup.oMax,turn:setup.oTurn,len:setup.oLen})});joinRoom(r.code);}catch(e){err(e.message);}};
+  seg('#cMax','oMax');seg('#cTurn','oTurn');
+  m.querySelectorAll('#cCourse button').forEach(b=>b.onclick=()=>{setup.oCourse=b.dataset.c;renderHub();});
+  q('#cGo').onclick=async()=>{try{const r=await api('/api/rooms',{method:'POST',body:JSON.stringify({max:setup.oMax,turn:setup.oTurn,course:setup.oCourse})});joinRoom(r.code);}catch(e){err(e.message);}};
   const jc=q('#jCode');q('#jGo').onclick=()=>{const c=(jc.value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length<4){err('Enter the 5-letter room code.');return;}joinRoom(c);};
   jc.onkeydown=e=>{if(e.key==='Enter')q('#jGo').click();};
   m.querySelectorAll('[data-join]').forEach(b=>b.onclick=()=>joinRoom(b.dataset.join));
@@ -130,7 +131,7 @@ function onRoomMsg(m){
 function applyServerState(S2,ev){
   const old=S;const fresh=!old||!old.owners||old.seed!==S2.seed||old.room!==S2.room;
   S=S2;
-  if(fresh){for(const[,el]of cardEls)el.remove();cardEls.clear();MAP=genMap(S.nMid,S.seed);buildBoard();closeModal();lastPlayer=-1;UI.cover=false;fit();}
+  if(fresh){for(const[,el]of cardEls)el.remove();cardEls.clear();MAP=mapFor(S);buildBoard();closeModal();lastPlayer=-1;UI.cover=false;fit();}
   const turnChanged=fresh||old.cur!==S.cur||old.round!==S.round;
   if(!fresh)playEvents(ev,viewIdx());
   // the only thing that changes the game during my turn is me, so any new state closes pick modes
@@ -153,7 +154,7 @@ function roomLobbyHTML(){
   const mine=(r.seats||[]).find(s=>s.uid===myId());
   const PC=['#e5484d','#efe9dc','#9d7df7','#ff9636','#35d0ba','#f07ab8'];
   return`<h2>Room ${esc(NET.code||'')}</h2>
-  <p class="sub">${host?'Share the code or link. Start when everyone is here.':'Waiting for the host to start.'} ${r.opts?`${r.opts.max} players max · ${r.opts.turn}s per turn · ranked`:''}</p>
+  <p class="sub">${host?'Share the code or link. Start when everyone is here.':'Waiting for the host to start.'} ${r.opts?`${esc(courseName(r.opts.course))} · ${r.opts.max} players max · ${r.opts.turn}s per turn · ranked`:''}</p>
   <div class="prow"><input id="lkIn" readonly value="${esc(link)}"><button class="btn" id="lkCopy">Copy link</button></div>
   <div class="field" style="margin-top:14px"><label>Players ${(r.seats||[]).length}/${r.opts?r.opts.max:4}</label>${seats||'<p class="note">Connecting…</p>'}</div>
   ${mine?`<div class="field"><label>Your colour</label><div class="sws">${PC.map(c=>`<button data-col="${c}" style="--c:${c}" class="${mine.color===c?'on':''}" ${(r.seats||[]).some(s=>s!==mine&&s.color===c)?'disabled':''}></button>`).join('')}</div></div>`:(r.status==='lobby'&&r.seats?'<p class="note">This room is full.</p>':'')}

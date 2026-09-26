@@ -1,6 +1,6 @@
 /* =========================================================
    RULES ENGINE — pure game logic shared by the browser and the server.
-   Works on the module-level S (game state) and MAP (board derived from S.seed).
+   Works on the module-level S (game state) and MAP (board built from S.course + S.seed).
    Nothing in here touches the page.
    ========================================================= */
 let S=null,MAP=null;
@@ -13,8 +13,10 @@ function rm(arr,id){const i=arr.indexOf(id);if(i>=0)arr.splice(i,1);}
 function playerDone(p){return p.pieces.every(k=>k==='done');}
 function isActive(p){return !playerDone(p)&&!p.resigned;}
 
+function mapFor(st){return buildCourse(st.course,st.seed);}
 function newGame(o){
-  MAP=genMap(o.nMid,o.seed);
+  const course=o.course||COURSES[0];
+  MAP=buildCourse(course,o.seed);
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
     const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
@@ -23,11 +25,11 @@ function newGame(o){
   const st=MAP.starts;
   if(players.length===2){players[0].pieces=[st[0],st[2]];players[1].pieces=[st[1],st[3]];}
   else players.forEach((p,i)=>p.pieces=[st[i]]);
-  S={v:3,seed:o.seed,nMid:o.nMid,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
+  S={v:4,seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
      blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,start:0,round:1,endTriggered:false,over:false,winners:null,places:null,
      fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[],privacy:!!o.privacy,resigns:0};
   players.forEach(p=>drawCards(p,4));
-  log(null,'The expedition sets out: '+players.map(p=>p.name).join(', ')+'. Route '+MAP.route.join(' · ')+' · El Dorado.');
+  log(null,'The expedition sets out: '+players.map(p=>p.name).join(', ')+'. Course: '+MAP.name+' ('+MAP.route.join(' · ')+' · El Dorado).');
   return S;
 }
 function newCard(t){const id='c'+(S.nid++);S.cards[id]=t;return id;}

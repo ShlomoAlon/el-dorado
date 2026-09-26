@@ -3,12 +3,25 @@
 // and redaction never leaks another player's hand or deck order.
 import { E } from '../src/engine.gen.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL:', m); process.exit(1); } };
-const t0 = performance.now(); for (let i = 0; i < 200; i++) E.genMap(3 + (i % 4), (Math.random() * 1e9) | 0);
+const t0 = performance.now(); for (let i = 0; i < 200; i++) E.buildCourse(E.COURSES[i % E.COURSES.length], i);
 const mapMs = (performance.now() - t0) / 200;
+// every course builds; blockades are dealt at random, one per connection, and only seal consecutive boards
+for (const C of E.COURSES) {
+  const deals = new Set();
+  for (let s = 0; s < 40; s++) {
+    const M = E.buildCourse(C, s);
+    assert(M.blockDefs.length === C.p.length - 1, C.id + ': one blockade per connection');
+    assert(new Set(M.blockDefs.map(b => b.n)).size === M.blockDefs.length, C.id + ': blockade dealt twice');
+    for (const [e, c] of M.edgeConn) { const [a, b] = e.split('|').map(k => M.hexes.get(k).tile); assert(Math.abs(a - b) === 1 && Math.min(a, b) === c, C.id + ': bad seam'); }
+    assert(M.starts.length === 4 && M.goals.length === 3, C.id + ': starts/goals');
+    deals.add(M.blockDefs.map(b => b.n).join());
+  }
+  assert(deals.size > 5, C.id + ': blockades not random');
+}
 let games = 0, maxAct = 0;
 for (let g = 0; g < 60; g++) {
   const np = 2 + (g % 3);
-  E.newGame({ nMid: 3 + (g % 4), seed: (Math.random() * 1e9) | 0, fullRace: g % 5 !== 0, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
+  E.newGame({ course: E.COURSES[g % E.COURSES.length], seed: (Math.random() * 1e9) | 0, fullRace: g % 5 !== 0, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
   const M = E.MAP, goals = M.goals.map(k => M.hexes.get(k));
   const dg = k => { if (k === 'done') return -1; const h = M.hexes.get(k); return Math.min(...goals.map(q => Math.hypot(q.x - h.x, q.y - h.y))); };
   let turns = 0;

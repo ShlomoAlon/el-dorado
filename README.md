@@ -49,6 +49,7 @@ npm test           # rules engine: 60 random games + invariants
 `test/e2e.cjs` drives three browsers through a full online game against `npm run dev` (needs Playwright).
 
 ## Rules notes
+- Games use fixed courses (currently the rulebook's first-game route); blockades are dealt at random.
 - Online games (and local games by default) continue until all but one player reaches El Dorado; players arriving in the same round are split by blockades. Local games can use the official "first arrival" ending instead.
 - Ratings: pairwise multiplayer Elo from the finishing order, start 1200, K = 32 split across opponents (48 for a player's first 10 games).
 - Turn timer: 60 s to 3 min per turn (host's choice). A timeout ends the turn and discards leftovers; 3 timeouts in a row forfeit.

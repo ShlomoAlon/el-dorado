@@ -8,7 +8,7 @@ const BASE=process.env.BASE||'http://127.0.0.1:8787/'; // run against `npm run d
   await signin(A,'Alice');await signin(B,'Bob');await signin(C,'Cara');
   await A.screenshot({path:'/tmp/e_hub.png'});
   // create a room with 3 players and a short dev timer via API from page context
-  const code=await A.evaluate(async()=>{const r=await fetch('/api/rooms',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+__ED.NET.token},body:JSON.stringify({max:3,turn:8,len:3})});const j=await r.json();__ED.joinRoom(j.code);return j.code;});
+  const code=await A.evaluate(async()=>{const r=await fetch('/api/rooms',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+__ED.NET.token},body:JSON.stringify({max:3,turn:8,course:'first'})});const j=await r.json();__ED.joinRoom(j.code);return j.code;});
   await A.waitForTimeout(1200);
   console.log('room',code);
   await B.waitForTimeout(500);await B.screenshot({path:'/tmp/e_hub_b.png'});

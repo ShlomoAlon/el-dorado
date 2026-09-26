@@ -13,7 +13,7 @@ const canAct=()=>!S||!online()||(S.owners[S.cur]===myId()&&NET.connected&&!S.ove
 const viewIdx=()=>{if(!online())return S.cur;const i=S.owners.indexOf(myId());return i<0?S.cur:i;};
 const hp=()=>S.players[viewIdx()];
 function snapshot(){undoStack.push(JSON.stringify(S));if(undoStack.length>60)undoStack.shift();}
-function save(){if(online())return;try{localStorage.setItem('eldorado-save-v3',JSON.stringify(S));}catch(e){}}
+function save(){if(online())return;try{localStorage.setItem('eldorado-save-v4',JSON.stringify(S));}catch(e){}}
 
 function computeTargets(){
   const T=new Map();UI.targets=T;if(!S||S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
