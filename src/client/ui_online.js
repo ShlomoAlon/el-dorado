@@ -129,7 +129,7 @@ function connectRoom(){
   clearInterval(NET.pingT);NET.pingT=setInterval(()=>{if(NET.ws&&NET.ws.readyState===1)NET.ws.send('ping');},25000);
 }
 function onRoomMsg(m){
-  if(m.t==='error'){NET.busy=false;toast(m.msg);if(S)render();return;}
+  if(m.t==='error'){NET.busy=false;sfx('error');toast(m.msg);if(S)render();return;}
   if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');closeModal();setTimeout(showHub,200);return;}renderRoomLobby();return;}
   if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.deadline=m.deadline;NET.skew=m.now-Date.now();NET.busy=false;applyServerState(m.S,m.ev);}
 }
@@ -182,6 +182,7 @@ function timeLeft(){if(!online()||!NET.deadline||S.over)return null;return Math.
 function renderTimer(){
   const el=document.getElementById('turnTimer');if(!el)return;
   const t=timeLeft();if(t===null){el.hidden=true;return;}
+  if(t<10&&t>0&&t!==SND.lastT&&canAct())sfx('timer');SND.lastT=t;
   el.hidden=false;const mm=Math.floor(t/60),ss=String(t%60).padStart(2,'0');
   el.textContent=mm+':'+ss;el.classList.toggle('low',t<=15);
 }
