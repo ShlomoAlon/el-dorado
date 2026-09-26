@@ -38,13 +38,19 @@ if (!isMainThread) {
       if (c.a.t === 'end' && isNet) st.turnsNet++;
       const r = E.applyAction(me, c.a); acts++;
       if (!r.ok) E.applyAction(me, { t: 'end', keep: [] });
-      if (mode !== 'eval' && !E.S.over) traj[me].push(E.botNetFeatures(me));
+      if (mode !== 'eval' && !E.S.over) {
+        const f = E.botNetFeatures(me);
+        // stage 0 (distill): target = the heuristic's own opinion of this afterstate, me vs. the average opponent, squashed to 0–1
+        if (mode === 'heur') { const hm = E.botValue(me, 'heur'); let ho = 0, k = 0; E.S.players.forEach((_, j) => { if (j !== me) { ho += E.botValue(j, 'heur'); k++; } }); f.h = 1 / (1 + Math.exp(-(hm - ho / k) / 4)); }
+        traj[me].push(f);
+      }
     }
     const S = E.S, n = pols.length, race = pols.every(p => p === 'net');
     S.players.forEach((p, i) => {
       if (mode !== 'eval') {
         const z = (n - S.places[i]) / (n - 1), T = traj[i]; let G = z;
-        for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); const v = mode === 'self' ? E.botNetValue(T[t]) : G; G = (1 - LAMBDA) * v + LAMBDA * G; }
+        if (mode === 'heur') { for (const x of T) { X.push(x); Y.push(x.h); } }
+        else for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); const v = E.botNetValue(T[t]); G = (1 - LAMBDA) * v + LAMBDA * G; }
       }
       if (race) { if (p.fin) st.raceArr.push(p.fin); }
       else if (pols[i] === 'net') { st.netSeats++; if (S.places[i] === 1) st.netWins++; if (p.fin) st.netArr.push(p.fin); }

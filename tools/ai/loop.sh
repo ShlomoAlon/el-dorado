@@ -6,7 +6,7 @@ cd "$(dirname "$0")/../.."
 C=${1:-first}; N=${2:-30}; D=tools/ai/data; NET=$D/$C.net.json; LOG=$D/$C.log; mkdir -p $D
 log(){ echo "[$(date +%H:%M:%S)] $*" | tee -a $LOG; }
 if [ ! -f $NET ]; then
-  log "STAGE iter 0: learn from 2000 heuristic games"
+  log "STAGE iter 0: copy the heuristic bot (distil its position scores from 2000 games)"
   for k in a b c d; do log "GEN0 $(node tools/ai/gen.mjs heur 500 $D/$C.h0$k '' $C)"; done
   log "TRAIN $(python3 tools/ai/train.py $NET $C 6 $D/$C.h0a $D/$C.h0b $D/$C.h0c $D/$C.h0d 2>/dev/null)"
   log "EVAL0 $(node tools/ai/gen.mjs eval 160 - $NET $C)"
