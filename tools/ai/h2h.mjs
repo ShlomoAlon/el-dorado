@@ -18,12 +18,12 @@ if (!isMainThread) {
     const n = g % 2 ? 4 : 3, nA = n === 4 && g % 4 === 3 ? 2 : 1;
     const base = [...Array(nA).fill(A), ...Array(n - nA).fill(B)], rot = Math.floor(g / 2) % n, pols = base.map((_, i) => base[(i + rot) % n]);
     E.newGame({ course: E.COURSES[0], seed: 20000 + g, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
-    let acts = 0;
-    while (!E.S.over) { E.S.log.length = 0; if (E.S.round > 25 || acts++ > 20000) { E.endGame(); break; }
+    let acts = 0, capped = false;
+    while (!E.S.over) { E.S.log.length = 0; if (E.S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
       const me = E.S.cur, res = E.applyAction(me, E.botChoose({ mode: pols[me] }).a); if (!res.ok) E.applyAction(me, { t: 'end', keep: [] }); }
     E.S.players.forEach((p, i) => { const isA = pols[i] === A;
-      if (isA) { r.seatsA++; r.expA += 1 / n; if (E.S.places[i] === 1 && p.fin) r.wA++; }
-      if (p.fin) (isA ? r.arrA : r.arrB).push(p.fin); else r[isA ? 'capA' : 'capB']++; });
+      if (isA) { r.seatsA++; r.expA += 1 / n; if (E.S.places[i] === 1 && !(capped && !p.fin)) r.wA++; }
+      if (p.fin) (isA ? r.arrA : r.arrB).push(p.fin); else if (capped) r[isA ? 'capA' : 'capB']++; });
   }
   parentPort.postMessage(r);
 } else {

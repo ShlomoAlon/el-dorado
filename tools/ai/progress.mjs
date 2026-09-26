@@ -8,7 +8,7 @@ const t0 = lines.length ? lines[0].slice(1, 9) : '';
 let stage = '', games = 0, rows = [], it = 0, H = null, lastGen = null, events = [];
 for (const l of lines) {
   if (l.includes('STAGE')) { stage = l.replace(/^\[.*?\] STAGE /, ''); const m = l.match(/iter (\d+)/); if (m) it = +m[1]; }
-  if (l.includes('HORIZON up') || l.includes('START')) events.push(l.replace(/^\[(.*?)\] /, '$1 · '));
+  if (l.includes('HORIZON') || l.includes('START') || l.includes('] FIX ')) events.push(l.replace(/^\[(.*?)\] /, '$1 · '));
   if (l.includes('] GEN ')) { const j = J(l); if (j) { games += j.games; lastGen = j; H = j.horizon; } }
   if (l.includes('] EVAL ')) { const j = J(l); if (j) { rows.push({ it, ...j, games }); games += j.games; } }
 }
