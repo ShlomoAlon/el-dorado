@@ -243,9 +243,10 @@ function botNetValue(f){const N=BOT_NET,H1=N.b1.length,H2=N.b2.length;const h1=F
   let s=N.b3[0];for(let j=0;j<H2;j++){let a=N.b2[j];const r=j*H1;for(let k=0;k<H1;k++)a+=N.w2[r+k]*h1[k];s+=N.w3[j]*(a>0?a:.01*a);}
   return 1/(1+Math.exp(-s));}
 const botNetReady=()=>!!(BOT_NET&&MAP&&BOT_NET.course===MAP.course&&BOT_NET.nf===botNetNF());
-/* what a finishing place is worth: 1st = 1, each place below about half the one above, last = 0
-   (3 players: 1, 1/3, 0 · 4 players: 1, 3/7, 1/7, 0). Training targets use the same values (tools/ai/gen.mjs). */
-function botPlaceValue(pl,n){return(2**(n-pl)-1)/(2**(n-1)-1);}
+/* what a finishing place is worth: 1st = 1, 2nd = 1/BOT_FIRST_RATIO, each further place half the one above, last = 0
+   (3 players: 1, ¼, 0 · 4 players: 1, ¼, ⅛, 0). Training targets use the same values (tools/ai/gen.mjs). */
+const BOT_FIRST_RATIO=4;
+function botPlaceValue(pl,n){return pl>=n?0:pl<=1?1:1/BOT_FIRST_RATIO/2**(pl-2);}
 function botValue(me,mode){
   if(S.over){const pl=S.places[me],n=S.players.length;return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
   const P=S.players[me];

@@ -75,7 +75,7 @@ if (!isMainThread) {
     const S = E.S, n = pols.length, rem = S.players.map((_, i) => E.botRemaining(i));
     S.players.forEach((p, i) => {
       const others = rem.filter((_, j) => j !== i), lead = others.reduce((a, x) => a + x, 0) / others.length - rem[i];
-      // result = what the place is worth (1st 1, each place about half the one above, last 0; E.botPlaceValue).
+      // result = what the place is worth (1st 1, 2nd ¼, 3rd ⅛, last 0; E.botPlaceValue).
       // Short horizons also reward getting far; at the final 25-round cap, not arriving is worth 0 whoever got closest.
       const fail = capped && H >= 25 && !p.fin, win = S.places[i] === 1 && !fail, pv = E.botPlaceValue(S.places[i], n);
       const z = fail ? 0 : H >= 25 ? pv : 0.8 * pv + 0.2 / (1 + Math.exp(-lead / 5));
