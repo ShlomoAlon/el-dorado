@@ -622,6 +622,7 @@ function botChoose(opts){
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)]};
   const ts=opts.turnState;
   if(ts&&ts.forceBuy&&!S.turn.bought){const buys=acts.filter(a=>a.t==='buy');if(buys.length){ts.forceBuy=false;return{a:buys[Math.floor(rnd()*buys.length)]};}}
+  if(ts&&ts.forceTransmit){const tr=acts.filter(a=>a.t==='transmit');if(tr.length){ts.forceTransmit=false;return{a:tr[Math.floor(rnd()*tr.length)]};}} // take a random card, reserve included
   const vals=[];let best=null,bv=-Infinity;const K=opts.draws||4;
   const one=a=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
     if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}

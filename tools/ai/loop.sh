@@ -15,7 +15,7 @@ if [ ! -f $NET ]; then  # untrained network with the right input size
   python3 tools/ai/train.py $NET $C 0 $D/$C.init > /dev/null 2>&1; rm -f $D/$C.init.*
   log "START untrained network, horizon ${HS[$hi]}"
 fi
-bestH=-1; stall=0
+bestH=-1; stall=0; beat=0
 for i in $(seq 1 $N); do
   H=${HS[$hi]}; it=$(( $( (ls $D/$C.it*.json 2>/dev/null || true) | wc -l) + 1 ))
   log "STAGE iter $it · horizon $H rounds · 600 self-play games"
@@ -27,9 +27,10 @@ for i in $(seq 1 $N); do
   wr=$(echo "$ev" | num vsFair)   # 1.0 = wins its fair share (as good as the heuristic)
   cp $NET $D/$C.h$H.json
   if python3 -c "import sys;sys.exit(0 if $wr>$bestH+0.05 else 1)"; then bestH=$wr; stall=0; else stall=$((stall+1)); fi
-  # next horizon once this one has plateaued (3 iterations without a new best) and the bot is at least even with the heuristic
-  if (( stall >= 3 )) && python3 -c "import sys;sys.exit(0 if $bestH>=1.0 else 1)" && (( hi < ${#HS[@]}-1 )); then
-    hi=$((hi+1)); echo $hi > $D/$C.hi; bestH=-1; stall=0; log "HORIZON up to ${HS[$hi]} rounds"
+  if python3 -c "import sys;sys.exit(0 if $wr>=1.15 else 1)"; then beat=$((beat+1)); else beat=0; fi
+  # next horizon once it beats the heuristic in 2 tests in a row (≥1.15× its fair share), or has plateaued at ≥1.0
+  if { (( beat >= 2 )) || { (( stall >= 3 )) && python3 -c "import sys;sys.exit(0 if $bestH>=1.0 else 1)"; }; } && (( hi < ${#HS[@]}-1 )); then
+    hi=$((hi+1)); echo $hi > $D/$C.hi; bestH=-1; stall=0; beat=0; log "HORIZON up to ${HS[$hi]} rounds"
   fi
 done
 log "STAGE done"

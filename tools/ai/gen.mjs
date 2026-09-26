@@ -17,7 +17,7 @@ if (!isMainThread) {
   const C = E.COURSES.find(c => c.id === course) || E.COURSES[0];
   if (net) E.setNet(net);
   let s = seed0 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const X = [], Y = [], st = { win3: 0, seat3: 0, win4: 0, seat4: 0, netWins: 0, netSeats: 0, netRem: [], heurRem: [], netArr: [], heurArr: [], capped: 0, buysNet: {}, buysHeur: {} };
+  const X = [], Y = [], st = { win3: 0, seat3: 0, win4: 0, seat4: 0, netWins: 0, netSeats: 0, netRem: [], heurRem: [], netArr: [], heurArr: [], capped: 0, buysNet: {}, buysHeur: {}, transNet: {}, transHeur: {} };
   for (let g = 0; g < games; g++) {
     let pols;
     // 3- and 4-player games only (2-player games use different rules)
@@ -29,11 +29,11 @@ if (!isMainThread) {
       const S = E.S; S.log.length = 0;
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
-      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; turnState = { forceBuy: mode === 'self' && isNet && rnd() < buyEps }; }
+      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; turnState = { forceBuy: mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < 0.25 }; }
       const c = mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : 'heur', rnd })
         : isNet ? E.botChoose({ mode: 'net', eps, temp, turnState, rnd })
         : E.botChoose({ mode: 'heur', eps: .03, noise: .3, rnd });
-      if (c.a.t === 'buy' || c.a.t === 'transmit') { const stk = c.a.src === 'm' ? S.market[c.a.idx] : S.reserve[c.a.idx]; if (stk) { const b = isNet ? st.buysNet : st.buysHeur; b[stk.t] = (b[stk.t] || 0) + 1; } }
+      if (c.a.t === 'buy' || c.a.t === 'transmit') { const stk = c.a.src === 'm' ? S.market[c.a.idx] : S.reserve[c.a.idx]; if (stk) { const b = c.a.t === 'transmit' ? (isNet ? st.transNet : st.transHeur) : (isNet ? st.buysNet : st.buysHeur); b[stk.t] = (b[stk.t] || 0) + 1; } }
       // sample = the position right after my action, as I'll see it: for "end turn", before the next hand is drawn
       const f = mode === 'self' ? (c.a.t === 'end' ? E.botEndFeatures(me, c.a.keep) : null) : null;
       const r = E.applyAction(me, c.a); acts++;
@@ -73,7 +73,7 @@ if (isMainThread) {
   const rel = (st.seat3 || st.seat4) ? +((st.win3 + st.win4) / (st.seat3 / 3 + st.seat4 / 4)).toFixed(3) : null;
   const summary = { mode, horizon: wd.H, games: +G, secs: (Date.now() - t0) / 1000, capped: st.capped, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
     win3p: r3 == null ? null : +r3.toFixed(3), win4p: r4 == null ? null : +r4.toFixed(3), vsFair: rel,
-    netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur };
+    netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur, transNet: st.transNet, transHeur: st.transHeur };
   if (out !== '-' && mode === 'self') {
     const nf = rs.find(r => r.nf)?.nf || 0, cat = (k, T) => { const a = new T(rs.reduce((s, r) => s + r[k].length, 0)); let o = 0; for (const r of rs) { a.set(r[k], o); o += r[k].length; } return a; };
     const Y = cat('Y', Float32Array), len = cat('len', Uint32Array), idx = cat('idx', Uint16Array), val = cat('val', Float32Array);
