@@ -25,6 +25,7 @@ function botDist(){
   MAP._bd={cost,steps,mix};return MAP._bd;
 }
 const botCost=k=>k==='done'?0:(botDist().cost.get(k)??60);
+function botRemaining(pl){const p=S.players[pl];return p.pieces.reduce((a,k)=>a+botCost(k),0)/p.pieces.length;} // route cost still ahead
 /* ---- legal atomic actions for the player to move (deduplicated by card type) ---- */
 function botWorth(t){const d=CT[t];if(!d)return 0;if(d.c==='p')return t==='native'?3:t==='transmitter'?3.5:2.5;return d.p*(d.c==='x'?1.25:1)+(d.once?-.5:0);}
 /* every distinct subset (by card types) of `ids` with exactly k cards */
@@ -71,7 +72,7 @@ const BOT_NF=16*9+14+BOT_NT*4+12+3*(BOT_NT*2+8)+BOT_NT*2+2+6*9+4;
 function botCounts(ids){const c=new Float32Array(BOT_NT);for(const id of ids){const k=BOT_TYPES.indexOf(S.cards[id]);if(k>=0)c[k]++;}return c;}
 function botFeatures(me){
   const f=new Float32Array(BOT_NF);let i=0;const put=(v)=>{f[i++]=v;},putArr=(a,sc)=>{for(const x of a)f[i++]=x*sc;};
-  const P=S.players[me],myTurn=S.cur===me&&!S.over,bd=botDist(),n=S.players.length;
+  const P=S.players[me],endView=S._endView===me,myTurn=S.cur===me&&!S.over&&!endView,bd=botDist(),n=S.players.length;
   const stepsOf=k=>k==='done'?0:(bd.steps.get(k)??48);
   // 1. the map, binned by steps to El Dorado: width, terrain mix, difficulty, crowding, blockades
   const bins=Array.from({length:BOT_BINS},()=>new Float32Array(9));
@@ -85,9 +86,10 @@ function botFeatures(me){
   const myCost=pieceCost(P);put(myCost/40);put(pieceSteps(P)/40);put(Math.min(...P.pieces.map(stepsOf))/40);put(playerDone(P)?1:0);put(P.blocks.length/3);
   const mix={j:0,w:0,v:0,r:0,c:0};for(const k of P.pieces){if(k==='done')continue;const m=bd.mix.get(k);if(m)for(const s in mix)mix[s]+=m[s];}
   for(const s of'jwvrc')put(mix[s]/P.pieces.length/20);
-  put(me===S.cur?1:0);put(((me-S.start+n)%n)/3);put(S.turn&&S.cur===me&&S.turn.bought?1:0);put(n===2?1:0);
+  put(myTurn?1:0);put(((me-S.start+n)%n)/3);put(S.turn&&S.cur===me&&S.turn.bought?1:0);put(n===2?1:0);
   // 3. my cards: hand (only meaningful on my turn), draw pile, discard, in play
-  putArr(myTurn?botCounts(P.hand):new Float32Array(BOT_NT),1/3);putArr(botCounts(P.deck),1/4);putArr(botCounts(P.discard),1/4);putArr(botCounts(P.play),1/3);
+  // hand: my cards on my turn; in the end-of-turn view, the cards I kept
+  putArr(myTurn||endView?botCounts(P.hand):new Float32Array(BOT_NT),1/3);putArr(botCounts(P.deck),1/4);putArr(botCounts(P.discard),1/4);putArr(botCounts(P.play),1/3);
   // 4. this turn: leftover strength, pending removal, what the hand could still do
   if(myTurn){const a=S.turn.active;put(a?a.left/4:0);for(const s of'jwv')put(a&&a.sym===s?1:0);put(S.turn.pending?S.turn.pending.max/2:0);
     let coins=0;for(const id of P.hand)coins+=coinVal(id);put(coins/6);put(P.hand.length/6);put(P.hand.filter(id=>def(id).c==='p').length/2);
@@ -119,7 +121,7 @@ function botHeuristic(me){ // hand-tuned: be close to the goal, own a strong dec
   for(const id of own){const d=CT[S.cards[id]];if(d.c!=='p')pw+=d.p*(d.c==='x'?1.2:1);else pw+=1.2;}
   let v=-P.pieces.reduce((a,k)=>a+botCost(k),0)/P.pieces.length;
   v+=pw/tot*9-Math.max(0,tot-12)*.35+P.blocks.length*1.5;
-  if(S.cur===me&&!S.over){let sumRed=0;
+  if(S.cur===me&&!S.over&&S._endView!==me){let sumRed=0;
     for(const id of P.hand){const d=def(id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(pk);for(const[k]of reach(me,pi,d.s==='*'?['j','w','v']:[d.s],d.p))if(k[0]!=='B')r=Math.max(r,base-botCost(k));});sumRed+=r;}
     const a=S.turn.active;if(a&&P.pieces[a.pi]!=='done'){const base=botCost(P.pieces[a.pi]);let r=0;for(const[k]of reach(me,a.pi,[a.sym],a.left))if(k[0]!=='B')r=Math.max(r,base-botCost(k));sumRed+=r;}
     v+=sumRed*.95;}
@@ -163,23 +165,33 @@ function botClone(st){
     turn:{...t,active:t.active&&{...t.active},pending:t.pending&&{...t.pending}},
     winners:st.winners&&st.winners.slice(),places:st.places&&st.places.slice()};
 }
-/* Pick an action. Greedy by default. Training exploration:
-   eps    – chance of a uniformly random legal action (tries even options it rates badly)
-   temp   – softmax over the looked-ahead values: near-best options get tried often, clearly bad ones rarely
-   buyEps – chance (once per turn, see opts.turnState) of buying a random affordable card */
+/* "My turn is over, next hand not drawn yet": played and unkept cards go to the discard pile.
+   Scoring "end turn" here (instead of after the real draw) values it as an expectation over the draw, without peeking. */
+function botEndView(me,keep){const P=S.players[me];keep=(keep||[]).filter(id=>P.hand.includes(id));
+  P.discard.push(...P.play,...P.hand.filter(id=>!keep.includes(id)));P.play=[];P.hand=keep.slice();
+  S.turn={bought:false,active:null,pending:null};S._endView=me;}
+function botEndFeatures(me,keep){const root=S;S=botClone(root);botEndView(me,keep);const f=botNetFeatures(me);S=root;return f;}
+const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
+/* Pick an action. Each option is scored by the value network's estimate of my chance of finishing ahead
+   from the position right after it (TD-Gammon / AlphaZero style; mid-turn positions include the cards still in hand).
+   Chance is handled as an expectation: "end turn" is scored before the next hand is drawn (botEndView), and a card that
+   draws is scored as the average over opts.draws imagined draws from my (unordered) draw pile.
+   Training exploration: eps = uniformly random action; temp = softmax over scores; turnState.forceBuy = a random purchase this turn. */
 function botChoose(opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
   const me=S.cur,acts=botActions(),root=S;if(mode==='net'&&!botNetReady())mode='heur';
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)]};
   const ts=opts.turnState;
   if(ts&&ts.forceBuy&&!S.turn.bought){const buys=acts.filter(a=>a.t==='buy');if(buys.length){ts.forceBuy=false;return{a:buys[Math.floor(rnd()*buys.length)]};}}
-  const vals=[];let best=null,bv=-Infinity;
+  const vals=[];let best=null,bv=-Infinity;const K=opts.draws||4;
+  const one=a=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
+    if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}
+    else{const r=applyAction(me,a);v=r.ok?botValue(me,mode):-Infinity;}
+    S=root;return v;};
   for(const a of acts){
-    S=botClone(root);shuffle(S.players[me].deck,rnd); // don't peek at the real draw order
-    const r=applyAction(me,a);
-    const v=r.ok?botValue(me,mode)+(opts.noise?(rnd()-.5)*opts.noise:0):-Infinity;vals.push(v);
-    if(v>bv){bv=v;best=a;}
-    S=root;
+    let v=a.t==='action'&&BOT_DRAW[typeOf(a.card)]?[...Array(K)].reduce(x=>x+one(a),0)/K:one(a);
+    if(opts.noise&&v>-Infinity)v+=(rnd()-.5)*opts.noise;
+    vals.push(v);if(v>bv){bv=v;best=a;}
   }
   if(opts.temp&&acts.length>1){const w=vals.map(v=>v===-Infinity?0:Math.exp((v-bv)/opts.temp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
     for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i]};}}
