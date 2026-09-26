@@ -255,7 +255,9 @@ let viewRaf=0;
 function applyView(){if(!viewRaf)viewRaf=requestAnimationFrame(()=>{viewRaf=0;stage().style.transform=`translate3d(${view.x}px,${view.y}px,0) scale(${view.s})`;});
   stage().classList.add('moving');clearTimeout(movingTimer);movingTimer=setTimeout(()=>stage().classList.remove('moving'),200);}
 function safeRect(){const v=vp();const W=v.clientWidth,H=v.clientHeight;const cw=cardW();
-  const right=UI.sideOpen&&W>900?W-16-318-12:W-16;return{l:W<600?8:62,t:W<600?108:112,r:right,b:H-cw*1.4*.62,W,H};}
+  // top: just under the prompt, which sits under the floating market strip
+  let t=W<600?108:112;const pr=$('#prompt'),vr=v.getBoundingClientRect();if(pr&&pr.offsetHeight)t=Math.max(t,pr.getBoundingClientRect().bottom-vr.top+10);
+  return{l:W<600?8:62,t,r:W-16,b:H-cw*1.4*.62,W,H};}
 function fit(anim){
   if(!MAP)return;const r=safeRect();if(!r.W)return;
   const aw=r.r-r.l,ah=r.b-r.t;
@@ -441,7 +443,7 @@ function flyToDiscard(t,from){
   layer.appendChild(el);placeAt(el,from,0);void el.offsetWidth;el.classList.add('anim');el.style.transitionDuration='.5s';
   requestAnimationFrame(()=>{const A=appRect(),cw=cardW();const t0=el.__t;setT(el,t0.x,t0.y-30,0,t0.sc*1.15);setTimeout(()=>{placeAt(el,pileRect('disc'),6);},180);setTimeout(()=>el.remove(),720);});
 }
-function marketRect(src,idx){const e=document.querySelector(src==='m'?`#market [data-i="${idx}"] .mcard`:`#reserve [data-i="${idx}"]`);if(!e)return null;const r=e.getBoundingClientRect();
+function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpen?`#market [data-i="${idx}"] .mcard`:'#mktBtn'):(UI.allOpen?`#reserve [data-i="${idx}"] .mcard`:(UI.mktOpen?'#allTile':'#mktBtn')));if(!e)return null;const r=e.getBoundingClientRect();
   if(src==='r'){const cw=86;return{left:r.left+r.width/2-cw/2,top:r.top-cw*.7+r.height/2,width:cw,height:cw*1.4};}return r;}
 
 /* =========================================================
@@ -565,21 +567,26 @@ window.addEventListener('pointerdown',e=>{aim.touch=e.pointerType!=='mouse';},{p
 /* =========================================================
    SIDE / HUD / PROMPT
    ========================================================= */
-function setSide(open){UI.sideOpen=open;$('#side').classList.toggle('closed',!open);$('#sideToggle').classList.toggle('on',open);try{localStorage.setItem('eldorado-side',open?'1':'0');}catch(e){}
-  if(!userZoomed)setTimeout(()=>fit(true),10);}
-function renderSide(){
-  const m=$('#market');const canBuy=!S.turn.bought&&!S.over&&!UI.cover;const tr=UI.mode==='transmit';
-  const openSlot=S.market.some(s=>s.n===0);const aff=new Set(tr?[]:affordable().map(a=>a.src+a.idx));
-  $('#sideToggle').classList.toggle('canbuy',aff.size>0);
-  m.innerHTML=S.market.map((s,i)=>{
-    if(s.n<=0)return`<div class="mslot empty" data-i="${i}">Empty slot<br>reserve open</div>`;
-    const active=(tr||canBuy);const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src==='m'&&UI.buy.idx===i;
-    return`<div class="mslot${active?'':' no'}${aff.has('m'+i)?' can':''}${chosen?' chosen':''}" data-i="${i}" data-src="m" title="${esc(cardTitle(s.t))}"><div class="mcard">${cardHTML(s.t)}</div><span class="cnt">${s.n}</span></div>`;
-  }).join('');
-  const r=$('#reserve');
-  r.innerHTML=S.reserve.map((s,i)=>{const d=CT[s.t];const ok=tr||(canBuy&&openSlot);const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src==='r'&&UI.buy.idx===i;
-    const col={g:'#4a9d63',b:'#4a95cf',y:'#e9b24a',x:'#ece5d3',p:'#8c68c4'}[d.c];
-    return`<div class="rrow${ok&&s.n>0?'':' no'}${aff.has('r'+i)?' can':''}${chosen?' chosen':''}" data-i="${i}" data-src="r" title="${esc(cardTitle(s.t))}"><span class="sw" style="background:${col}"></span><span class="rn">${esc(d.n)}</span><span class="rq">×${s.n}</span><span class="rc">${d.cost}</span></div>`;}).join('');
+/* ---------- market: floating strip (six market cards + "All cards" tile) and the all-cards spread ---------- */
+function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
+  updateMktH();if(!userZoomed)setTimeout(()=>fit(true),10);}
+function updateMktH(){document.documentElement.style.setProperty('--mktH',UI.mktOpen&&S?($('#mkt').offsetHeight+8)+'px':'0px');}
+function openAll(open){UI.allOpen=open;$('#allc').hidden=!open;if(open){$('#allc').scrollTop=0;renderMarket();}}
+const ALL_ICON='<svg viewBox="-10 -10 20 20"><rect x="-8.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".45" transform="rotate(-14)"/><rect x="-4.5" y="-7.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".7"/><rect x="-.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" transform="rotate(12)"/></svg>';
+function renderMarket(){
+  const canBuy=!S.turn.bought&&!S.over&&!UI.cover,tr=UI.mode==='transmit';
+  const openSlot=S.market.some(s=>s.n===0),aff=new Set(tr?[]:affordable().map(a=>a.src+a.idx));
+  const slot=(src,s,i,ok)=>{
+    if(s.n<=0)return`<div class="mslot empty" data-i="${i}">Sold out${src==='m'?'<br>reserve open':''}</div>`;
+    const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src===src&&UI.buy.idx===i;
+    return`<div class="mslot${ok?'':' no'}${aff.has(src+i)?' can':''}${chosen?' chosen':''}" data-i="${i}" data-src="${src}" title="${esc(cardTitle(s.t))}"><div class="mcard">${cardHTML(s.t)}</div><span class="cnt">${s.n}</span></div>`;};
+  const mOk=tr||canBuy,rOk=tr||(canBuy&&openSlot),resAff=[...aff].some(k=>k[0]==='r');
+  $('#market').innerHTML=S.market.map((s,i)=>slot('m',s,i,mOk)).join('')+`<button class="alltile${openSlot||tr?' open':''}${resAff?' can':''}" id="allTile" title="See every card, including the reserve">${ALL_ICON}<span>All cards</span><small>${tr?'Pick any card':openSlot?'Reserve open':'Reserve locked'}</small></button>`;
+  $('#mktBtn').classList.toggle('canbuy',aff.size>0&&!UI.mktOpen);
+  updateMktH();
+  if(!UI.allOpen)return;
+  $('#allMarket').innerHTML=S.market.map((s,i)=>slot('m',s,i,mOk)).join('');
+  $('#reserve').innerHTML=S.reserve.map((s,i)=>slot('r',s,i,rOk)).join('');
   $('#resNote').textContent=tr?'Transmitter: take any card for free.':openSlot?'A market slot is empty, so you may buy from the reserve.':'Opens once a market slot sells out.';
   $('#buyState').textContent=S.turn.bought?'bought this turn':'1 purchase per turn';
   $('#resState').textContent=openSlot?'open':'locked';
@@ -630,7 +637,7 @@ function renderPrompt(){
       btns=[{t:'Cancel',id:'bCan',fn:cancelMode}];break;}
     case 'buyWarn':{const names=[...new Set(affordable().map(a=>CT[a.t].n))];
       txt=who+`You can still afford <b>${names.slice(0,3).map(esc).join(', ')}</b>${names.length>3?` and ${names.length-3} more`:''}. <span class="m">Buy one before ending your turn?</span>`;
-      btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:'Open market',id:'bMkt',fn:()=>{setSide(true);cancelMode();}},{t:'End turn anyway',id:'bEndA',pri:1,big:1,fn:startEndTurn}];break;}
+      btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:'See cards',id:'bMkt',fn:()=>{cancelMode();openAll(true);}},{t:'End turn anyway',id:'bEndA',pri:1,big:1,fn:startEndTurn}];break;}
     case 'endTurn':{const k=UI.picks.length;txt=who+(k?`Keeping <b>${k}</b> card${k>1?'s':''}; the rest are discarded.`:'Your leftover cards will be discarded.')+' <span class="m">Tap a card to keep it for next turn. Then you draw up to 4.</span>';
       btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:k===pl.hand.length?'Keep none':'Keep all',id:'bAll',fn:()=>{UI.picks=UI.picks.length===pl.hand.length?[]:pl.hand.slice();render();}},{t:k?'End turn':'Discard & end turn',id:'bEnd2',pri:1,big:1,fn:finishTurn}];break;}
   }
@@ -646,7 +653,7 @@ function btnWire(B,btns){
 function render(){
   if(!S)return;
   computeTargets();
-  renderHeader();renderSide();renderPrompt();renderCards();
+  renderHeader();renderMarket();renderPrompt();renderCards();
   renderBlockades();renderTargets();renderPieces();
   aim.hot=null;if(aimWanted())startAim();else stopAim();
   save();updateTitle();renderTimer();$('#menuBtn').textContent=online()&&!S.over?'Leave game':'New game';
@@ -702,7 +709,7 @@ function showSetup(){
       m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];
         for(const[,el]of cardEls)el.remove();cardEls.clear();
         newGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>({name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex}))});
-        buildBoard();UI.mode='idle';UI.piece=0;UI.cover=S.privacy;lastPlayer=-1;closeModal();fit();render();
+        buildBoard();UI.mode='idle';UI.piece=0;UI.cover=S.privacy;lastPlayer=-1;closeModal();render();fit();
         if(!UI.cover)banner(cur().name,'Round 1');
         setup.seed=(Math.random()*1e9)|0;};
     };

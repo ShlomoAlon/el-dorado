@@ -17,7 +17,6 @@ html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);overflow:hidden;-webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 button{font:inherit;color:inherit}
 #app{position:relative;height:100%;width:100%;overflow:hidden;overflow:clip;touch-action:none}
-#side .scroll{touch-action:pan-y}
 html,body{overflow:clip;overscroll-behavior:none}
 
 /* ---------- board */
@@ -65,7 +64,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 #fsBtn.full .fs-out{display:inline}
 .tbtn:focus-visible,.btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 
-#prompt{position:absolute;left:50%;top:64px;transform:translateX(-50%);max-width:min(720px,calc(100% - 32px));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
+#prompt{position:absolute;left:50%;top:calc(64px + var(--mktH,0px));transform:translateX(-50%);max-width:min(720px,calc(100% - 32px));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
 #prompt b{color:var(--gold2)}
 #prompt .who{display:inline-flex;align-items:center;gap:7px;font-weight:800;margin-right:8px;color:var(--text)}
 #prompt .who i{width:11px;height:11px;border-radius:50%}
@@ -73,42 +72,46 @@ html,body{overflow:clip;overscroll-behavior:none}
 .timer{display:inline-block;font-variant-numeric:tabular-nums;font-weight:800;padding:1px 9px;border-radius:8px;background:rgba(255,255,255,.08);margin-right:10px;color:var(--gold2);transition:background .2s,color .2s}
 .timer.low{background:rgba(232,99,79,.28);color:#ffb3a5;animation:pulse 1s ease-in-out infinite}
 
-/* ---------- market drawer */
-#side{position:absolute;right:16px;top:64px;width:318px;border-radius:16px;z-index:18;display:flex;flex-direction:column;overflow:hidden;transition:transform .35s var(--ease),opacity .25s;max-height:calc(100% - 64px - 280px)}
-#side.closed{transform:translateX(calc(100% + 24px));opacity:0;pointer-events:none}
-#side .scroll{overflow-y:auto;min-height:0;scrollbar-width:thin}
-.sect{padding:14px 16px 10px}
-.sect h3{margin:0 0 10px;font-family:var(--display);font-weight:400;font-size:17px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.sect h3 span{font-family:var(--ui);font-size:10.5px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
-.sclose{position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:rgba(0,0,0,.2);cursor:pointer;display:grid;place-items:center;font-size:15px;color:var(--muted)}
-.sclose:hover{color:var(--text)}
-#market{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 8px;justify-items:center}
-.mslot{position:relative;cursor:pointer;transition:transform .18s var(--ease)}
-.mslot:hover{transform:translateY(-3px)}
+/* ---------- market: six cards floating over the top of the board, plus an "all cards" spread */
+#mkt{position:absolute;left:50%;top:62px;transform:translateX(-50%);z-index:16;display:flex;align-items:flex-start;gap:10px;transition:transform .35s var(--ease),opacity .25s;--mw:84px}
+#mkt.hid{transform:translate(-50%,-26px);opacity:0;pointer-events:none}
+#market{display:flex;gap:10px;align-items:flex-start}
+#mkt .mslot{filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
+#mkt .mslot:not(.no):hover{transform:translateY(2px) scale(1.6);z-index:6}
+.mslot{position:relative;cursor:pointer;transition:transform .2s var(--ease);transform-origin:50% 0}
+.mslot .mcard{--cw:var(--mw)}
 .mslot.no{cursor:default;opacity:.42}
-.mslot.no:hover{transform:none}
-.mslot.can .cface{box-shadow:0 0 0 2px #8fe3a8,0 0 18px rgba(120,220,150,.45)}
-.mslot.can::after{content:'Can buy';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);background:#8fe3a8;color:#0d2a18;font-size:9.5px;font-weight:800;letter-spacing:.04em;padding:1px 7px;border-radius:9px;white-space:nowrap;z-index:4;pointer-events:none}
-.rrow.can{border-color:rgba(143,227,168,.6);background:rgba(143,227,168,.09)}
-.rrow.can .rc{color:#9ef0b8}
-#sideToggle.canbuy{box-shadow:0 0 0 1.5px #8fe3a8,0 0 14px rgba(120,220,150,.35)}
 .mslot.chosen .cface{box-shadow:0 0 0 2px var(--gold2),0 0 20px rgba(233,178,74,.5)}
-.mslot.empty{width:84px;height:118px;border:1.5px dashed var(--line2);border-radius:9px;display:grid;place-items:center;color:var(--faint);font-size:11px;text-align:center;cursor:default;line-height:1.3}
-.mslot.empty:hover{transform:none}
+.mslot.empty{width:var(--mw);height:calc(var(--mw)*1.4);border:1.5px dashed var(--line2);border-radius:9px;display:grid;place-items:center;color:var(--faint);font-size:10.5px;text-align:center;cursor:default;line-height:1.3;background:rgba(8,14,12,.45)}
+/* affordable: the same breathing gold ring as reachable spaces on the board (opacity only) */
+.mslot.can::before{content:"";position:absolute;inset:-4px;border-radius:calc(var(--mw)*.1);box-shadow:0 0 0 2px var(--gold2),0 0 18px 3px rgba(248,220,151,.55);animation:canPulse 1.6s ease-in-out infinite;pointer-events:none;z-index:3}
+.mslot.can:hover::before{animation:none}
+@keyframes canPulse{0%,100%{opacity:1}50%{opacity:.2}}
+.alltile{width:var(--mw);height:calc(var(--mw)*1.4);border-radius:9px;border:1.5px solid var(--line2);background:rgba(10,18,15,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--text);font:800 12px var(--ui);cursor:pointer;text-align:center;line-height:1.2;padding:4px;position:relative;transition:border-color .15s,background .15s}
+.alltile:hover{border-color:var(--gold);background:rgba(20,32,27,.78)}
+.alltile svg{width:26px;height:26px;color:var(--gold2)}
+.alltile small{font-weight:600;color:var(--muted);font-size:10px}
+.alltile.open small{color:var(--gold2)}
+.alltile.can::before{content:"";position:absolute;inset:-4px;border-radius:11px;box-shadow:0 0 0 2px var(--gold2),0 0 16px 2px rgba(248,220,151,.5);animation:canPulse 1.6s ease-in-out infinite;pointer-events:none}
+#mktBtn.canbuy{box-shadow:0 0 0 1.5px var(--gold2),0 0 14px rgba(248,220,151,.35)}
 .mcard{--cw:86px;position:relative;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1)}
-.cnt{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;border-radius:11px;background:#0a1210;border:1px solid var(--line2);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;font-variant-numeric:tabular-nums;z-index:2}
-#reserve{display:grid;grid-template-columns:1fr 1fr;gap:5px}
-.rrow{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.035);border:1px solid var(--line);font-size:12px;cursor:pointer;transition:background .15s,border-color .15s;min-width:0}
-.rrow:hover{background:rgba(255,255,255,.08);border-color:var(--line2)}
-.rrow.no{cursor:default;opacity:.45}
-.rrow.no:hover{background:rgba(255,255,255,.035);border-color:var(--line)}
-.rrow.chosen{border-color:var(--gold)}
-.rrow .sw{width:7px;height:22px;border-radius:3px;flex:none}
-.rrow .rn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
-.rrow .rc{color:var(--gold2);font-weight:800;font-variant-numeric:tabular-nums}
-.rrow .rq{color:var(--muted);font-variant-numeric:tabular-nums;font-size:11px}
+.cnt{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;border-radius:11px;background:#0a1210;border:1px solid var(--line2);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;font-variant-numeric:tabular-nums;z-index:4}
+#allc{position:absolute;inset:0;z-index:40;background:rgba(4,9,7,.76);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);overflow-y:auto;overscroll-behavior:contain;animation:fade .2s}
+#allc[hidden]{display:none}
+.allc-in{max-width:1080px;margin:0 auto;padding:64px 20px 40px}
+.allc-sect{margin-top:18px}
+.allc-sect h3,.allc-head h2{font-family:var(--display);font-weight:400;display:flex;align-items:baseline;gap:12px;margin:0 0 14px;color:var(--gold2)}
+.allc-head h2{font-size:26px}
+.allc-sect h3{font-size:18px;color:var(--text)}
+.allc-sect h3 span,.allc-head span{font-family:var(--ui);font-size:10.5px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.agrid{display:flex;flex-wrap:wrap;gap:22px 16px;--mw:112px}
+.agrid .mslot{filter:drop-shadow(0 8px 14px rgba(0,0,0,.5));animation:rise .3s var(--ease) backwards}
+.agrid .mslot:not(.no):hover{transform:translateY(-4px)}
+#allClose{position:fixed;top:14px;right:16px;z-index:41;width:36px;height:36px;font-size:17px}
+.sclose{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:rgba(0,0,0,.35);cursor:pointer;display:grid;place-items:center;font-size:15px;color:var(--muted)}
+.sclose:hover{color:var(--text)}
 .note{font-size:11.5px;color:var(--muted);margin:8px 0 0;line-height:1.4}
-#log{padding:0 16px 14px;font-size:12.5px;line-height:1.45;color:#c7d3cc;max-height:190px;overflow-y:auto}
+#log{padding:0 4px 14px;font-size:12.5px;line-height:1.45;color:#c7d3cc;max-height:190px;overflow-y:auto}
 #log div{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
 #log i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
 details.jr summary{list-style:none;cursor:pointer}
@@ -235,7 +238,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
   .brandbox .brand{font-size:16px}
   .pchip .st{display:none}
   #players{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
-  #prompt{top:62px;font-size:13px}
+  #prompt{top:calc(62px + var(--mktH,0px));font-size:13px}
 }
 @media (max-width:600px){
   :root{--cw:86px}
@@ -243,7 +246,16 @@ details.jr:not([open]) summary h3::after{content:"▸"}
   .brandbox{display:none}
   .tbtn{padding:7px 10px;font-size:12.5px}
   #rulesBtn{display:none}
-  #side{right:8px;left:8px;width:auto}
+  #mkt{top:54px;gap:5px;--mw:46px}
+  #market{gap:5px}
+  #mkt .mslot:not(.no):hover{transform:none}
+  .alltile{font-size:9px;gap:2px;padding:2px}
+  .alltile svg{width:16px;height:16px}
+  .alltile small{font-size:8px}
+  #mkt .cnt{min-width:15px;height:15px;font-size:8.5px;top:-5px;right:-4px;padding:0 3px}
+  #mkt .mslot.can::before{inset:-2px;box-shadow:0 0 0 1.5px var(--gold2),0 0 10px 1px rgba(248,220,151,.5)}
+  .agrid{--mw:98px;gap:18px 12px;justify-content:center}
+  .allc-in{padding:58px 12px 30px}
   .pstack{width:54px;height:76px}
   #actBtns{bottom:calc(16px + 76px + 34px)}
   .zoomctl{display:none}
@@ -274,20 +286,22 @@ details.jr:not([open]) summary h3::after{content:"▸"}
     <div id="players"></div>
     <div class="hbtns">
       <button class="tbtn glass ico" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button>
-      <button class="tbtn glass" id="sideToggle">Market</button>
+      <button class="tbtn glass" id="mktBtn">Market</button>
       <button class="tbtn glass" id="rulesBtn">Rules</button>
       <button class="tbtn glass" id="menuBtn">New game</button>
     </div>
   </div>
   <div id="prompt" class="glass"></div>
-  <aside id="side" class="glass">
-    <button class="sclose" id="sideClose" aria-label="Close market">✕</button>
-    <div class="scroll">
-      <div class="sect"><h3>Market <span id="buyState"></span></h3><div id="market"></div></div>
-      <div class="sect" style="padding-top:4px"><h3>Reserve <span id="resState"></span></h3><div id="reserve"></div><p class="note" id="resNote"></p></div>
-      <details class="jr" id="journal"><summary><div class="sect" style="padding-bottom:6px"><h3>Journal</h3></div></summary><div id="log"></div></details>
+  <div id="mkt"><div id="market"></div></div>
+  <div id="allc" hidden>
+    <button class="sclose" id="allClose" aria-label="Close">✕</button>
+    <div class="allc-in">
+      <div class="allc-head"><h2>All cards <span id="buyState"></span></h2></div>
+      <div class="allc-sect"><h3>Market</h3><div id="allMarket" class="agrid"></div></div>
+      <div class="allc-sect"><h3>Reserve <span id="resState"></span></h3><p class="note" id="resNote" style="margin:-6px 0 14px"></p><div id="reserve" class="agrid"></div></div>
+      <details class="jr allc-sect" id="journal"><summary><h3 style="display:inline-flex;margin:0">Journal</h3></summary><div id="log"></div></details>
     </div>
-  </aside>
+  </div>
   <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button></div>
   <div class="pile" id="deckPile" title="Draw pile — click to view"><div class="pstack" id="deckStack"></div><div class="lbl glass">Deck <b id="deckN">0</b></div></div>
   <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
@@ -749,7 +763,7 @@ function redact(state,seat){
    which runs the same engine and sends back the new state.
    ========================================================= */
 let undoStack=[];
-const UI={mode:'idle',card:null,piece:0,picks:[],targets:new Map(),cover:false,hover:null,sideOpen:true};
+const UI={mode:'idle',card:null,piece:0,picks:[],targets:new Map(),cover:false,hover:null,mktOpen:true,allOpen:false};
 const cur=()=>S.players[S.cur];
 const NET={available:false,cfg:null,user:null,token:null,ws:null,lobbyWs:null,room:null,seat:-1,connected:false,deadline:null,skew:0,canUndo:false,busy:false,status:'',rooms:[]};
 const myId=()=>NET.user?NET.user.id:null;
@@ -839,14 +853,14 @@ function confirmDiscardFor(){const P=UI.pending;if(!P||UI.picks.length!==P.need)
 function playAction(id){
   const t=typeOf(id);
   if(t==='native'){UI.mode='card';UI.card=id;render();return;}
-  if(t==='transmitter'){UI.mode='transmit';UI.card=id;setSide(true);render();return;}
+  if(t==='transmitter'){UI.mode='transmit';UI.card=id;render();openAll(true);return;}
   act({t:'action',card:id});
 }
 function confirmTrash(){act({t:'trash',cards:UI.picks.slice()});}
 function pickFromMarket(src,idx){
   if(!canAct()){toast('Wait for your turn to buy.');return;}
   const stack=src==='m'?S.market[idx]:S.reserve[idx];if(!stack||stack.n<=0)return;
-  if(UI.mode==='transmit'){act({t:'transmit',card:UI.card,src,idx});return;}
+  if(UI.mode==='transmit'){openAll(false);act({t:'transmit',card:UI.card,src,idx});return;}
   if(S.turn.bought){toast('You can buy only one card per turn.');return;}
   if(src==='r'&&!S.market.some(s=>s.n===0)){toast('The reserve opens once a market slot is empty.');return;}
   if(UI.mode==='pay'&&UI.buy.src===src&&UI.buy.idx===idx){cancelMode();return;}
@@ -1252,7 +1266,9 @@ let viewRaf=0;
 function applyView(){if(!viewRaf)viewRaf=requestAnimationFrame(()=>{viewRaf=0;stage().style.transform=`translate3d(${view.x}px,${view.y}px,0) scale(${view.s})`;});
   stage().classList.add('moving');clearTimeout(movingTimer);movingTimer=setTimeout(()=>stage().classList.remove('moving'),200);}
 function safeRect(){const v=vp();const W=v.clientWidth,H=v.clientHeight;const cw=cardW();
-  const right=UI.sideOpen&&W>900?W-16-318-12:W-16;return{l:W<600?8:62,t:W<600?108:112,r:right,b:H-cw*1.4*.62,W,H};}
+  // top: just under the prompt, which sits under the floating market strip
+  let t=W<600?108:112;const pr=$('#prompt'),vr=v.getBoundingClientRect();if(pr&&pr.offsetHeight)t=Math.max(t,pr.getBoundingClientRect().bottom-vr.top+10);
+  return{l:W<600?8:62,t,r:W-16,b:H-cw*1.4*.62,W,H};}
 function fit(anim){
   if(!MAP)return;const r=safeRect();if(!r.W)return;
   const aw=r.r-r.l,ah=r.b-r.t;
@@ -1438,7 +1454,7 @@ function flyToDiscard(t,from){
   layer.appendChild(el);placeAt(el,from,0);void el.offsetWidth;el.classList.add('anim');el.style.transitionDuration='.5s';
   requestAnimationFrame(()=>{const A=appRect(),cw=cardW();const t0=el.__t;setT(el,t0.x,t0.y-30,0,t0.sc*1.15);setTimeout(()=>{placeAt(el,pileRect('disc'),6);},180);setTimeout(()=>el.remove(),720);});
 }
-function marketRect(src,idx){const e=document.querySelector(src==='m'?`#market [data-i="${idx}"] .mcard`:`#reserve [data-i="${idx}"]`);if(!e)return null;const r=e.getBoundingClientRect();
+function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpen?`#market [data-i="${idx}"] .mcard`:'#mktBtn'):(UI.allOpen?`#reserve [data-i="${idx}"] .mcard`:(UI.mktOpen?'#allTile':'#mktBtn')));if(!e)return null;const r=e.getBoundingClientRect();
   if(src==='r'){const cw=86;return{left:r.left+r.width/2-cw/2,top:r.top-cw*.7+r.height/2,width:cw,height:cw*1.4};}return r;}
 
 /* =========================================================
@@ -1562,21 +1578,26 @@ window.addEventListener('pointerdown',e=>{aim.touch=e.pointerType!=='mouse';},{p
 /* =========================================================
    SIDE / HUD / PROMPT
    ========================================================= */
-function setSide(open){UI.sideOpen=open;$('#side').classList.toggle('closed',!open);$('#sideToggle').classList.toggle('on',open);try{localStorage.setItem('eldorado-side',open?'1':'0');}catch(e){}
-  if(!userZoomed)setTimeout(()=>fit(true),10);}
-function renderSide(){
-  const m=$('#market');const canBuy=!S.turn.bought&&!S.over&&!UI.cover;const tr=UI.mode==='transmit';
-  const openSlot=S.market.some(s=>s.n===0);const aff=new Set(tr?[]:affordable().map(a=>a.src+a.idx));
-  $('#sideToggle').classList.toggle('canbuy',aff.size>0);
-  m.innerHTML=S.market.map((s,i)=>{
-    if(s.n<=0)return`<div class="mslot empty" data-i="${i}">Empty slot<br>reserve open</div>`;
-    const active=(tr||canBuy);const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src==='m'&&UI.buy.idx===i;
-    return`<div class="mslot${active?'':' no'}${aff.has('m'+i)?' can':''}${chosen?' chosen':''}" data-i="${i}" data-src="m" title="${esc(cardTitle(s.t))}"><div class="mcard">${cardHTML(s.t)}</div><span class="cnt">${s.n}</span></div>`;
-  }).join('');
-  const r=$('#reserve');
-  r.innerHTML=S.reserve.map((s,i)=>{const d=CT[s.t];const ok=tr||(canBuy&&openSlot);const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src==='r'&&UI.buy.idx===i;
-    const col={g:'#4a9d63',b:'#4a95cf',y:'#e9b24a',x:'#ece5d3',p:'#8c68c4'}[d.c];
-    return`<div class="rrow${ok&&s.n>0?'':' no'}${aff.has('r'+i)?' can':''}${chosen?' chosen':''}" data-i="${i}" data-src="r" title="${esc(cardTitle(s.t))}"><span class="sw" style="background:${col}"></span><span class="rn">${esc(d.n)}</span><span class="rq">×${s.n}</span><span class="rc">${d.cost}</span></div>`;}).join('');
+/* ---------- market: floating strip (six market cards + "All cards" tile) and the all-cards spread ---------- */
+function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
+  updateMktH();if(!userZoomed)setTimeout(()=>fit(true),10);}
+function updateMktH(){document.documentElement.style.setProperty('--mktH',UI.mktOpen&&S?($('#mkt').offsetHeight+8)+'px':'0px');}
+function openAll(open){UI.allOpen=open;$('#allc').hidden=!open;if(open){$('#allc').scrollTop=0;renderMarket();}}
+const ALL_ICON='<svg viewBox="-10 -10 20 20"><rect x="-8.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".45" transform="rotate(-14)"/><rect x="-4.5" y="-7.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".7"/><rect x="-.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" transform="rotate(12)"/></svg>';
+function renderMarket(){
+  const canBuy=!S.turn.bought&&!S.over&&!UI.cover,tr=UI.mode==='transmit';
+  const openSlot=S.market.some(s=>s.n===0),aff=new Set(tr?[]:affordable().map(a=>a.src+a.idx));
+  const slot=(src,s,i,ok)=>{
+    if(s.n<=0)return`<div class="mslot empty" data-i="${i}">Sold out${src==='m'?'<br>reserve open':''}</div>`;
+    const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src===src&&UI.buy.idx===i;
+    return`<div class="mslot${ok?'':' no'}${aff.has(src+i)?' can':''}${chosen?' chosen':''}" data-i="${i}" data-src="${src}" title="${esc(cardTitle(s.t))}"><div class="mcard">${cardHTML(s.t)}</div><span class="cnt">${s.n}</span></div>`;};
+  const mOk=tr||canBuy,rOk=tr||(canBuy&&openSlot),resAff=[...aff].some(k=>k[0]==='r');
+  $('#market').innerHTML=S.market.map((s,i)=>slot('m',s,i,mOk)).join('')+`<button class="alltile${openSlot||tr?' open':''}${resAff?' can':''}" id="allTile" title="See every card, including the reserve">${ALL_ICON}<span>All cards</span><small>${tr?'Pick any card':openSlot?'Reserve open':'Reserve locked'}</small></button>`;
+  $('#mktBtn').classList.toggle('canbuy',aff.size>0&&!UI.mktOpen);
+  updateMktH();
+  if(!UI.allOpen)return;
+  $('#allMarket').innerHTML=S.market.map((s,i)=>slot('m',s,i,mOk)).join('');
+  $('#reserve').innerHTML=S.reserve.map((s,i)=>slot('r',s,i,rOk)).join('');
   $('#resNote').textContent=tr?'Transmitter: take any card for free.':openSlot?'A market slot is empty, so you may buy from the reserve.':'Opens once a market slot sells out.';
   $('#buyState').textContent=S.turn.bought?'bought this turn':'1 purchase per turn';
   $('#resState').textContent=openSlot?'open':'locked';
@@ -1627,7 +1648,7 @@ function renderPrompt(){
       btns=[{t:'Cancel',id:'bCan',fn:cancelMode}];break;}
     case 'buyWarn':{const names=[...new Set(affordable().map(a=>CT[a.t].n))];
       txt=who+`You can still afford <b>${names.slice(0,3).map(esc).join(', ')}</b>${names.length>3?` and ${names.length-3} more`:''}. <span class="m">Buy one before ending your turn?</span>`;
-      btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:'Open market',id:'bMkt',fn:()=>{setSide(true);cancelMode();}},{t:'End turn anyway',id:'bEndA',pri:1,big:1,fn:startEndTurn}];break;}
+      btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:'See cards',id:'bMkt',fn:()=>{cancelMode();openAll(true);}},{t:'End turn anyway',id:'bEndA',pri:1,big:1,fn:startEndTurn}];break;}
     case 'endTurn':{const k=UI.picks.length;txt=who+(k?`Keeping <b>${k}</b> card${k>1?'s':''}; the rest are discarded.`:'Your leftover cards will be discarded.')+' <span class="m">Tap a card to keep it for next turn. Then you draw up to 4.</span>';
       btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:k===pl.hand.length?'Keep none':'Keep all',id:'bAll',fn:()=>{UI.picks=UI.picks.length===pl.hand.length?[]:pl.hand.slice();render();}},{t:k?'End turn':'Discard & end turn',id:'bEnd2',pri:1,big:1,fn:finishTurn}];break;}
   }
@@ -1643,7 +1664,7 @@ function btnWire(B,btns){
 function render(){
   if(!S)return;
   computeTargets();
-  renderHeader();renderSide();renderPrompt();renderCards();
+  renderHeader();renderMarket();renderPrompt();renderCards();
   renderBlockades();renderTargets();renderPieces();
   aim.hot=null;if(aimWanted())startAim();else stopAim();
   save();updateTitle();renderTimer();$('#menuBtn').textContent=online()&&!S.over?'Leave game':'New game';
@@ -1699,7 +1720,7 @@ function showSetup(){
       m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];
         for(const[,el]of cardEls)el.remove();cardEls.clear();
         newGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>({name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex}))});
-        buildBoard();UI.mode='idle';UI.piece=0;UI.cover=S.privacy;lastPlayer=-1;closeModal();fit();render();
+        buildBoard();UI.mode='idle';UI.piece=0;UI.cover=S.privacy;lastPlayer=-1;closeModal();render();fit();
         if(!UI.cover)banner(cur().name,'Round 1');
         setup.seed=(Math.random()*1e9)|0;};
     };
@@ -1935,8 +1956,10 @@ function updateTitle(){try{document.title=(online()&&canAct()&&!S.over?'● Your
    ========================================================= */
 function boot(){
   setupPanZoom();
-  $('#market').addEventListener('click',e=>{const s=e.target.closest('[data-src]');if(!s||!S||UI.cover||S.over)return;pickFromMarket('m',+s.dataset.i);});
-  $('#reserve').addEventListener('click',e=>{const s=e.target.closest('[data-src]');if(!s||!S||UI.cover||S.over)return;pickFromMarket('r',+s.dataset.i);});
+  const pick=e=>{if(!S||UI.cover||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;
+    const inAll=!!e.target.closest('#allc');pickFromMarket(s.dataset.src,+s.dataset.i);if(inAll&&UI.mode==='pay')openAll(false);};
+  $('#market').addEventListener('click',pick);$('#allMarket').addEventListener('click',pick);$('#reserve').addEventListener('click',pick);
+  $('#allClose').onclick=()=>openAll(false);$('#allc').addEventListener('click',e=>{if(e.target.id==='allc'||e.target.classList.contains('allc-in'))openAll(false);});
   $('#deckPile').onclick=()=>showPile('deck');$('#discPile').onclick=()=>showPile('discard');
   $('#rulesBtn').onclick=showRules;
   // full screen (hidden where the browser can't do it, e.g. iPhone Safari — there, Add to Home Screen gives a full-screen app)
@@ -1946,11 +1969,11 @@ function boot(){
     const sync=()=>{const on=!!fsOn();fb.classList.toggle('full',on);fb.title=fb.ariaLabel=on?'Exit full screen':'Full screen';};
     document.addEventListener('fullscreenchange',sync);document.addEventListener('webkitfullscreenchange',sync);}
   $('#menuBtn').onclick=()=>{if(online()&&!S.over)resignOnline();else if(online()){exitOnline();showHub();}else showSetup();};
-  $('#sideToggle').onclick=()=>setSide(!UI.sideOpen);$('#sideClose').onclick=()=>setSide(false);
-  let so=null;try{so=localStorage.getItem('eldorado-side');}catch(e){}
-  UI.sideOpen=so===null?innerWidth>1100:so==='1';
-  $('#side').classList.toggle('closed',!UI.sideOpen);$('#sideToggle').classList.toggle('on',UI.sideOpen);
+  $('#mktBtn').onclick=()=>setMkt(!UI.mktOpen);
+  let so=null;try{so=localStorage.getItem('eldorado-mkt');}catch(e){}
+  UI.mktOpen=so!=='0';$('#mkt').classList.toggle('hid',!UI.mktOpen);$('#mktBtn').classList.toggle('on',UI.mktOpen);
   window.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;
+    if(e.key==='Escape'&&UI.allOpen){openAll(false);return;}
     if(e.key==='Escape'){const mo=document.querySelector('#overlay .modal');if(mo&&S&&!S.over&&!mo.classList.contains('roomlobby')&&!mo.classList.contains('hub')){closeModal();return;}if(S&&!mo)cancelMode();}
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo();}});
   netInit().then(()=>{

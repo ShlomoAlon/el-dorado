@@ -4,7 +4,7 @@
    which runs the same engine and sends back the new state.
    ========================================================= */
 let undoStack=[];
-const UI={mode:'idle',card:null,piece:0,picks:[],targets:new Map(),cover:false,hover:null,sideOpen:true};
+const UI={mode:'idle',card:null,piece:0,picks:[],targets:new Map(),cover:false,hover:null,mktOpen:true,allOpen:false};
 const cur=()=>S.players[S.cur];
 const NET={available:false,cfg:null,user:null,token:null,ws:null,lobbyWs:null,room:null,seat:-1,connected:false,deadline:null,skew:0,canUndo:false,busy:false,status:'',rooms:[]};
 const myId=()=>NET.user?NET.user.id:null;
@@ -94,14 +94,14 @@ function confirmDiscardFor(){const P=UI.pending;if(!P||UI.picks.length!==P.need)
 function playAction(id){
   const t=typeOf(id);
   if(t==='native'){UI.mode='card';UI.card=id;render();return;}
-  if(t==='transmitter'){UI.mode='transmit';UI.card=id;setSide(true);render();return;}
+  if(t==='transmitter'){UI.mode='transmit';UI.card=id;render();openAll(true);return;}
   act({t:'action',card:id});
 }
 function confirmTrash(){act({t:'trash',cards:UI.picks.slice()});}
 function pickFromMarket(src,idx){
   if(!canAct()){toast('Wait for your turn to buy.');return;}
   const stack=src==='m'?S.market[idx]:S.reserve[idx];if(!stack||stack.n<=0)return;
-  if(UI.mode==='transmit'){act({t:'transmit',card:UI.card,src,idx});return;}
+  if(UI.mode==='transmit'){openAll(false);act({t:'transmit',card:UI.card,src,idx});return;}
   if(S.turn.bought){toast('You can buy only one card per turn.');return;}
   if(src==='r'&&!S.market.some(s=>s.n===0)){toast('The reserve opens once a market slot is empty.');return;}
   if(UI.mode==='pay'&&UI.buy.src===src&&UI.buy.idx===idx){cancelMode();return;}
