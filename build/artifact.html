@@ -939,9 +939,13 @@ function botHeuristic2(me){
       end position with the least route left (ties: more coin value left for buying);
    3. buy the most useful affordable card for the terrain still ahead; stop buying when close to the end. */
 const BOT_STARTER={explorer:1,traveler:1,sailor:1};
+/* planner knobs; 'plan' is the committed benchmark, other entries are candidates tried head-to-head (tools/ai/h2h.mjs) */
+const BOT_PLANS={plan:{}};let BOT_PLAN_CUR=null;
+const BOT_PLAN_DEF={buyStop:7,buyMin:2,costW:.08,keepEnd:0,safeTrash:0,minDeck:0,blockW:0,transStop:7};BOT_PLAN_CUR=BOT_PLAN_DEF;
 function botPlanMoves(me){
   const root=S,P0=root.players[me],memo=new Map();let best=null,nodes=0;
-  const score=st=>{const P=st.players[me];const c=P.pieces.reduce((a,k)=>a+(k==='done'?-5:botCost(k)),0);const coin=P.hand.reduce((a,id)=>a+coinVal(id),0);return -c*10+coin;};
+  const O=BOT_PLAN_CUR;
+  const score=st=>{const P=st.players[me];const c=P.pieces.reduce((a,k)=>a+(k==='done'?-5:botCost(k)),0);const coin=P.hand.reduce((a,id)=>a+coinVal(id),0);return -c*10+coin+P.blocks.length*O.blockW;};
   const dfs=(st,path,depth)=>{
     if(++nodes>4000)return;
     const sc=score(st);if(!best||sc>best.sc)best={sc,path:path.slice()};
@@ -965,22 +969,31 @@ function botCardWorth(t,me){ // how useful a new card is for the rest of the rou
   if(d.c==='p')return {cartographer:2.6,native:2.2,compass:2.3,scientist:2.2,travellog:2.2,transmitter:1.5}[t]||1;
   const fit=d.s==='*'?1:(m[d.s]||0)/mt;return d.p*(0.35+fit)+(d.c==='y'?0.6:0);
 }
-function botPlanChoose(me){
+const BOT_PADDLE=t=>{const d=CT[t];return d.c!=='p'&&(d.s==='w'||d.s==='*');};
+function botPlanChoose(me,O){
+  O=BOT_PLAN_CUR={...BOT_PLAN_DEF,...(O||{})};
   const P=S.players[me],T=S.turn;
-  if(T.pending){const weak=P.hand.filter(id=>BOT_STARTER[typeOf(id)]).slice(0,T.pending.max);return{t:'trash',cards:weak}; }
+  if(T.pending){let weak=P.hand.filter(id=>BOT_STARTER[typeOf(id)]).slice(0,T.pending.max);
+    if(O.safeTrash){// never trash the last cards that can paddle into El Dorado
+      const all=[...P.deck,...P.hand,...P.discard,...P.play];let pad=all.filter(id=>BOT_PADDLE(typeOf(id))).length;
+      weak=weak.filter(id=>{if(BOT_PADDLE(typeOf(id))){if(pad<=O.safeTrash)return false;pad--;}return true;});}
+    if(O.minDeck){const all=P.deck.length+P.hand.length+P.discard.length+P.play.length;weak=weak.slice(0,Math.max(0,all-O.minDeck));}
+    return{t:'trash',cards:weak}; }
   const draw=P.hand.find(id=>BOT_DRAW[typeOf(id)]);if(draw)return{t:'action',card:draw};
   const moves=botPlanMoves(me);if(moves.length)return moves[0];
   // buy with what's left
   const left=botRemaining(me);
-  if(!T.bought&&left>7){
+  if(!T.bought&&left>O.buyStop){
     const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),open=S.market.some(s=>s.n===0);let pick=null;
-    const consider=(src,s,i)=>{if(s.n<=0||CT[s.t].cost>cash)return;const w=botCardWorth(s.t,me)*(1+CT[s.t].cost*.08);if(!pick||w>pick.w)pick={w,src,idx:i};};
+    const consider=(src,s,i)=>{if(s.n<=0||CT[s.t].cost>cash)return;const w=botCardWorth(s.t,me)*(1+CT[s.t].cost*O.costW);if(!pick||w>pick.w)pick={w,src,idx:i};};
     S.market.forEach((s,i)=>consider('m',s,i));if(open)S.reserve.forEach((s,i)=>consider('r',s,i));
-    if(pick&&pick.w>2){const buys=botActions().filter(a=>a.t==='buy'&&a.src===pick.src&&a.idx===pick.idx);
+    if(pick&&pick.w>O.buyMin){const buys=botActions().filter(a=>a.t==='buy'&&a.src===pick.src&&a.idx===pick.idx);
       if(buys.length){buys.sort((a,b)=>a.cards.length-b.cards.length);return buys[0];}}
   }
   const tr=P.hand.find(id=>typeOf(id)==='transmitter');
-  if(tr&&left>7){let pick=null;const c=(src,s,i)=>{if(s.n<=0)return;const w=botCardWorth(s.t,me)+CT[s.t].cost*.3;if(!pick||w>pick.w)pick={w,src,idx:i};};S.market.forEach((s,i)=>c('m',s,i));S.reserve.forEach((s,i)=>c('r',s,i));if(pick)return{t:'transmit',card:tr,src:pick.src,idx:pick.idx};}
+  if(tr&&left>O.transStop){let pick=null;const c=(src,s,i)=>{if(s.n<=0)return;const w=botCardWorth(s.t,me)+CT[s.t].cost*.3;if(!pick||w>pick.w)pick={w,src,idx:i};};S.market.forEach((s,i)=>c('m',s,i));S.reserve.forEach((s,i)=>c('r',s,i));if(pick)return{t:'transmit',card:tr,src:pick.src,idx:pick.idx};}
+  if(O.keepEnd){// keep unplayed strong cards (not starters) for next turn
+    const keep=P.hand.filter(id=>!BOT_STARTER[typeOf(id)]&&CT[typeOf(id)].c!=='p'&&(CT[typeOf(id)].p||0)>=O.keepEnd).slice(0,3);return{t:'end',keep};}
   return{t:'end',keep:[]};
 }
 /* ---- per-map network input: the summary above + every space on this course + every tile connection ----
@@ -1008,6 +1021,10 @@ function botNetValue(f){const N=BOT_NET,H1=N.b1.length,H2=N.b2.length;const h1=F
 const botNetReady=()=>!!(BOT_NET&&MAP&&BOT_NET.course===MAP.course&&BOT_NET.nf===botNetNF());
 function botValue(me,mode){
   if(S.over){const pl=S.places[me],n=S.players.length;return mode==='net'?(n-pl)/(n-1):1e3-pl*100;}
+  const P=S.players[me];
+  if(playerDone(P)){// arrived: my place is already locked in (only players who arrived earlier can be ahead of me)
+    const n=S.players.length,pl=1+S.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&q.blocks.length>P.blocks.length)).length;
+    return mode==='net'?(n-pl)/(n-1):1e3-pl*100;}
   return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me)):mode==='heur2'?botHeuristic2(me):botHeuristic(me);
 }
 /* ---- choose and play ---- */
@@ -1035,7 +1052,7 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
    Training exploration: eps = uniformly random action; temp = softmax over scores; turnState.forceBuy = a random purchase this turn. */
 function botChoose(opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
-  if(mode==='plan')return{a:botPlanChoose(S.cur)};
+  if(mode.startsWith('plan'))return{a:botPlanChoose(S.cur,BOT_PLANS[mode])};
   const me=S.cur,root=S;let acts=botActions();if(mode==='net'&&!botNetReady())mode='heur';
   if(opts.turnState&&opts.turnState.noBuy){const f=acts.filter(a=>a.t!=='buy'&&a.t!=='transmit');if(f.length)acts=f;} // exploration: a turn without gaining a card
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],why:'random'};
