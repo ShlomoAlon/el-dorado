@@ -183,11 +183,8 @@ function renderPieces(){
     if(!g){g=sv('g',{class:'piece'},L.pieces);
       const inner=sv('g',{class:'pin'},g);
       sv('circle',{class:'selring',r:R*.8,fill:'none',stroke:'#f8dc97','stroke-width':3,'stroke-dasharray':'5 4',opacity:0},inner);
-      sv('ellipse',{cx:0,cy:12,rx:13,ry:5,fill:'rgba(0,0,0,.5)'},inner);
-      sv('path',{d:'M-11 12 Q-11 1 -4.8 -2.6 A7.6 7.6 0 1 1 4.8 -2.6 Q11 1 11 12 Z',fill:p.color,stroke:'#0d110f','stroke-width':2,'stroke-linejoin':'round'},inner);
-      sv('path',{d:'M-8.6 10 Q-8.4 2.4 -3.6 -0.4',fill:'none',stroke:'rgba(255,255,255,.35)','stroke-width':2,'stroke-linecap':'round'},inner);
-      sv('path',{d:'M-4 -11.6 A4.4 4.4 0 0 1 1.2 -13.4',fill:'none',stroke:'rgba(255,255,255,.7)','stroke-width':2.2,'stroke-linecap':'round'},inner);
-      if(p.pieces.length>1){const t=sv('text',{x:0,y:9,'text-anchor':'middle','font-size':9.5,'font-weight':800,fill:'rgba(0,0,0,.55)','font-family':'Figtree, sans-serif'},inner);t.textContent=i+1;}
+      sv('ellipse',{cx:0,cy:13.5,rx:14,ry:5,fill:'rgba(0,0,0,.5)'},inner);
+      inner.insertAdjacentHTML('beforeend',meepleSVG(p.color,pl%4,p.pieces.length>1?i+1:0));
       pieceEls[id]=g;
       g.addEventListener('click',e=>{e.stopPropagation();if(dragMoved)return;onPiece(pl,i);});
     }

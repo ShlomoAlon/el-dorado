@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 const r = f => readFileSync(new URL(f, import.meta.url), 'utf8');
 const engine = r('./src/engine_data.js') + '\n' + r('./src/engine_rules.js');
-const ui = ['ui_state.js', 'ui_art.js', 'ui_view.js', 'ui_online.js', 'ui_boot.js'].map(f => r('./src/client/' + f)).join('\n');
+const ui = ['ui_state.js', 'ui_art.js', 'ui_meeple.js', 'ui_view.js', 'ui_online.js', 'ui_boot.js'].map(f => r('./src/client/' + f)).join('\n');
 const shell = r('./src/client/shell.html');
 const script = `<script>\n(()=>{\n'use strict';\nconst $=s=>document.querySelector(s);\n${engine}\n${ui}\n})();\n</script>\n`;
 const body = shell + '\n' + script;
