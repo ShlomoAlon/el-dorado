@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Self-play training for one course with a horizon curriculum.   tools/ai/loop.sh <course-id> <iterations>
+# Reusable for any course: everything below depends only on the course id.
 # Starts from an untrained network (TD-Gammon style). Games stop after HORIZON rounds and unfinished players
 # are ranked by how close they got; the horizon grows 3 → 5 → 8 → 12 → 16 → full once the bot stops improving.
 # Each iteration: 600 self-play games (3- and 4-player) → train on this horizon's last 3 batches → test vs heuristic bots (160 games, half 3-player, half 4-player).
@@ -7,6 +8,8 @@ set -uo pipefail
 cd "$(dirname "$0")/../.."
 C=${1:-first}; N=${2:-60}; D=tools/ai/data; NET=$D/$C.net.json; LOG=$D/$C.log; mkdir -p $D
 HS=(3 5 8 12 16 60)
+# exploration level per curriculum stage (1 = most exploration); scales every exploration rate in gen.mjs
+EX=(1.0 0.85 0.7 0.5 0.35 0.2)
 log(){ echo "[$(date +%H:%M:%S)] $*" | tee -a $LOG; }
 num(){ python3 -c "import json,sys;print(json.load(sys.stdin)['$1'])"; }
 hi=0; [ -f $D/$C.hi ] && hi=$(cat $D/$C.hi)
@@ -18,8 +21,9 @@ fi
 bestH=-1; stall=0; beat=0
 for i in $(seq 1 $N); do
   H=${HS[$hi]}; it=$(( $( (ls $D/$C.it*.json 2>/dev/null || true) | wc -l) + 1 ))
-  log "STAGE iter $it · horizon $H rounds · 600 self-play games"
-  out=$(HORIZON=$H EPS=0.03 TEMP=0.02 BUYEPS=0.1 node tools/ai/gen.mjs self 600 $D/$C.it$it $NET $C) || { log "ERROR gen failed"; exit 1; }
+  X=${EX[$hi]}
+  log "STAGE iter $it · horizon $H rounds · exploration level $X · 600 self-play games"
+  out=$(HORIZON=$H EXPLORE=$X node tools/ai/gen.mjs self 600 $D/$C.it$it $NET $C) || { log "ERROR gen failed"; exit 1; }
   log "GEN $out"
   prev=$( (grep -l "\"horizon\":$H," $D/$C.it*.json 2>/dev/null || true) | xargs -r ls -t | head -3 | sed 's/\.json$//' | tr '\n' ' ')
   log "TRAIN $(python3 tools/ai/train.py $NET $C 3 $prev 2>/dev/null)"

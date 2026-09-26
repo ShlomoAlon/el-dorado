@@ -13,7 +13,7 @@ import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 
 if (!isMainThread) {
-  const { mode, games, seed0, net, course, H, eps, temp, buyEps } = workerData;
+  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps } = workerData;
   const C = E.COURSES.find(c => c.id === course) || E.COURSES[0];
   if (net) E.setNet(net);
   let s = seed0 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -29,7 +29,7 @@ if (!isMainThread) {
       const S = E.S; S.log.length = 0;
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
-      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; turnState = { forceBuy: mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < 0.25 }; }
+      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; turnState = { forceBuy: mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
       const c = mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : 'heur', rnd })
         : isNet ? E.botChoose({ mode: 'net', eps, temp, turnState, rnd })
         : E.botChoose({ mode: 'heur', eps: .03, noise: .3, rnd });
@@ -60,7 +60,13 @@ if (isMainThread) {
   const [, , mode = 'self', G = '100', out = '-', netPath = '', course = 'first'] = process.argv;
   const net = netPath ? JSON.parse(readFileSync(netPath, 'utf8')) : null;
   const W = cpus().length, t0 = Date.now(), env = process.env;
-  const wd = { mode, net, course, H: +(env.HORIZON || 60), eps: +(env.EPS || 0.03), temp: +(env.TEMP || 0.02), buyEps: +(env.BUYEPS || 0.1) };
+  // Exploration: one level EXPLORE in [0,1] (loop.sh lowers it as the bot improves) scales every rate, same for every course.
+  const X = +(env.EXPLORE ?? 1);
+  const wd = { mode, net, course, H: +(env.HORIZON || 60), explore: X,
+    eps: 0.03 * X,                 // a uniformly random legal action
+    temp: Math.max(0.004, 0.02 * X), // softmax over action scores (near-best options tried often)
+    buyEps: 0.10 * X,              // turns with one random purchase
+    transEps: 0.10 * X };          // Transmitter turns with a forced pick (weighted toward expensive cards)
   const rs = await Promise.all(Array.from({ length: W }, () => new Promise((res, rej) => {
     const w = new Worker(new URL(import.meta.url), { workerData: { ...wd, games: Math.ceil(+G / W), seed0: (Math.random() * 2 ** 31) | 0 } });
     w.on('message', res); w.on('error', rej);
@@ -71,7 +77,7 @@ if (isMainThread) {
   const r3 = st.seat3 ? st.win3 / st.seat3 : null, r4 = st.seat4 ? st.win4 / st.seat4 : null;
   // win rate relative to a fair share (1/3 in 3-player, 1/4 in 4-player); 1.0 = as good as the heuristic
   const rel = (st.seat3 || st.seat4) ? +((st.win3 + st.win4) / (st.seat3 / 3 + st.seat4 / 4)).toFixed(3) : null;
-  const summary = { mode, horizon: wd.H, games: +G, secs: (Date.now() - t0) / 1000, capped: st.capped, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
+  const summary = { mode, horizon: wd.H, explore: X, games: +G, secs: (Date.now() - t0) / 1000, capped: st.capped, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
     win3p: r3 == null ? null : +r3.toFixed(3), win4p: r4 == null ? null : +r4.toFixed(3), vsFair: rel,
     netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur, transNet: st.transNet, transHeur: st.transHeur };
   if (out !== '-' && mode === 'self') {

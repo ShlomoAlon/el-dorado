@@ -183,7 +183,8 @@ function botChoose(opts){
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)]};
   const ts=opts.turnState;
   if(ts&&ts.forceBuy&&!S.turn.bought){const buys=acts.filter(a=>a.t==='buy');if(buys.length){ts.forceBuy=false;return{a:buys[Math.floor(rnd()*buys.length)]};}}
-  if(ts&&ts.forceTransmit){const tr=acts.filter(a=>a.t==='transmit');if(tr.length){ts.forceTransmit=false;return{a:tr[Math.floor(rnd()*tr.length)]};}} // take a random card, reserve included
+  if(ts&&ts.forceTransmit){const tr=acts.filter(a=>a.t==='transmit');if(tr.length){ts.forceTransmit=false; // a random card, reserve included, weighted toward expensive ones (cost²)
+    const w=tr.map(a=>{const s=a.src==='m'?S.market[a.idx]:S.reserve[a.idx];return CT[s.t].cost**2;});let r=rnd()*w.reduce((x,y)=>x+y,0);for(let i=0;i<tr.length;i++){r-=w[i];if(r<=0)return{a:tr[i]};}return{a:tr[tr.length-1]};}}
   const vals=[];let best=null,bv=-Infinity;const K=opts.draws||4;
   const one=a=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
     if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}

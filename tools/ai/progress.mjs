@@ -23,13 +23,13 @@ for (const r of rows) md += `| ${r.it} | ${r.horizon} | ${r.games.toLocaleString
 if (!rows.length) md += `| – | – | – | – | – | – | – | – | – |\n`;
 if (lastGen && (lastGen.buysNet || lastGen.buysHeur)) {
   const b = lastGen.mode === 'self' ? lastGen.buysNet : lastGen.buysHeur, tot = Object.values(b || {}).reduce((a, x) => a + x, 0) || 1;
-  md += `\n### What it buys (latest ${lastGen.mode === 'self' ? 'self-play' : 'heuristic'} batch, ${lastGen.games} games${lastGen.mode === 'self' ? `, horizon ${lastGen.horizon} rounds; includes exploration: softmax choices, a few random moves, a random purchase on 10% of turns` : ''})\n\n| Card | Bought | Share |\n|---|---|---|\n`;
+  md += `\n### What it buys (latest ${lastGen.mode === 'self' ? 'self-play' : 'heuristic'} batch, ${lastGen.games} games${lastGen.mode === 'self' ? `, horizon ${lastGen.horizon} rounds; exploration level ${lastGen.explore ?? 1}: softmax choices, a few random moves, a random purchase on ${Math.round(10 * (lastGen.explore ?? 1))}% of turns` : ''})\n\n| Card | Bought | Share |\n|---|---|---|\n`;
   for (const [t, c] of Object.entries(b || {}).sort((a, b) => b[1] - a[1])) md += `| ${NAMES[t] || t} | ${c} | ${(c / tot * 100).toFixed(1)}% |\n`;
   const never = Object.keys(NAMES).filter(t => !['explorer', 'traveler', 'sailor'].includes(t) && !(b || {})[t]); if (never.length) md += `\nNever bought in this batch: ${never.map(t => NAMES[t]).join(', ')}\n`;
 }
 if (lastGen && lastGen.transNet) {
   const T = lastGen.transNet, tot = Object.values(T).reduce((a, x) => a + x, 0);
-  md += `\n### What it takes with the Transmitter (latest self-play batch; 25% of its Transmitter turns are a forced random pick, reserve included)\n\n`;
+  md += `\n### What it takes with the Transmitter (latest self-play batch; at exploration level ${lastGen.explore ?? 1}, ${Math.round(10 * (lastGen.explore ?? 1))}% of its Transmitter turns are a forced random pick weighted toward expensive cards, reserve included)\n\n`;
   if (!tot) md += `No Transmitter used in this batch.\n`;
   else { md += `| Card | Taken | Share |\n|---|---|---|\n`; for (const [t, c] of Object.entries(T).sort((a, b) => b[1] - a[1])) md += `| ${NAMES[t] || t} | ${c} | ${(c / tot * 100).toFixed(1)}% |\n`; }
 }
