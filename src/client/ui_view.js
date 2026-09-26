@@ -653,13 +653,13 @@ function closeModal(){const o=$('#overlay');const sc=o.firstChild;if(!sc)return;
 
 /* course list: official routes first; 'random' picks one of them */
 function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:(courseById(id)||COURSES[0]);}
-function courseName(id){return id==='random'?'Random course':(courseById(id)||COURSES[0]).name;}
+function courseName(id){return id==='random'&&COURSES.length>1?'Random course':(courseById(id)||COURSES[0]).name;}
 function coursePicker(gid,sel){
   const opts=COURSES.map(c=>[c.id,c.name,`${c.diff?c.diff+' · ':''}${c.p.map(x=>x[0]).join(' · ')}`]);
   if(COURSES.length>1)opts.push(['random','Random course','Any course from this list']);
   return `<div class="clist" id="${gid}">${opts.map(([id,n,d])=>`<button data-c="${id}" class="${sel===id?'on':''}"><b>${esc(n)}</b><span>${esc(d)}</span></button>`).join('')}</div>`;
 }
-let setup={mode:'local',full:true,oMax:4,oTurn:90,oCourse:'first',n:3,names:['Ana','Ben','Cleo','Dev'],colors:['crimson','ivory','violet','orange'],course:'first',privacy:false,seed:(Math.random()*1e9)|0};
+let setup={mode:'local',full:true,oMax:3,oPub:true,oTurn:90,oCourse:'first',n:3,names:['Ana','Ben','Cleo','Dev'],colors:['crimson','ivory','violet','orange'],course:'first',privacy:false,seed:(Math.random()*1e9)|0};
 function showSetup(){
   let saved=null;try{saved=JSON.parse(localStorage.getItem('eldorado-save-v4')||'null');}catch(e){}
   const canResume=saved&&!saved.over&&saved.v===4&&(!S||S.over);

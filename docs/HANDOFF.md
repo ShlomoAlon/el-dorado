@@ -159,7 +159,8 @@ Local save key `eldorado-save-v4`; v3 saves are ignored; v3 rooms on the server 
 
 ### 6.5 Server (`src/worker.js`)
 HTTP: `GET /api/config` → `{google, dev}` · `POST /api/auth/google {credential}` · `POST /api/auth/dev {name}` (only with
-`DEV_AUTH=1`) · `GET /api/leaderboard` · `GET/PATCH /api/me` · `POST /api/rooms {max,course,turn}` (course id or `'random'`) → `{code}` ·
+`DEV_AUTH=1`) · `GET /api/leaderboard` · `GET/PATCH /api/me` · `POST /api/rooms {max 2–4 (default 3),course,turn,pub}` (course id or `'random'`; `pub:false` = private, not listed) ·
+`POST /api/match` (quick match: Lobby DO puts you in the fullest waiting public match room or opens one) → `{code}` ·
 `GET /api/rooms/:CODE/ws?t=token` (WebSocket) · `GET /api/lobby/ws?t=token` (WebSocket). Everything else = static assets.
 Auth token: `uid.exp.hmac` (60 days), secret generated once and stored in D1 `settings`. Google ID tokens verified
 against Google JWKS (RS256, aud = `GOOGLE_CLIENT_ID`).
@@ -167,7 +168,10 @@ D1 tables (auto-created): `users(id, google_sub, name UNIQUE NOCASE, rating, gam
 `matches(id, room, finished, data JSON)`, `settings(k, v)`.
 Room DO (one per 5-char code, hibernatable WebSockets tagged by uid): storage keys `d` (meta: code, host, seats,
 status lobby|playing|over|closed, opts{max,len,turn}, deadline, timeouts, rated, results), `S`, `undo` (≤6 snapshots).
-Client→room: `join`, `leave`, `color`, `start` (host), `act{a}`, `undo`, `resign`, `"ping"`.
+Client→room: `join`, `leave`, `color`, `start` (host, normal rooms), `now` (match rooms: toggle "start now"), `act{a}`, `undo`, `resign`, `"ping"`.
+Quick-match rooms (`opts.auto`): 3 seats, start by themselves when full, or with 2+ when every seated player sent `now`
+(owner: 2-player games only when explicitly requested). Players who disconnect before a match starts lose their seat;
+the host leaving doesn't close a match room. The Lobby lists only public rooms.
 Room→client: `{t:'room', room}` (pre-game), `{t:'state', S(redacted), ev, seat, undo, deadline, now, room}`, `{t:'error', msg}`.
 Turn timer = DO alarm at `d.deadline`. Lobby DO keeps `{code → summary}` and pushes `{t:'rooms'}` to hub sockets.
 Free-tier notes: DO CPU limit 30 s/message (engine actions take <5 ms); Worker requests 100k/day (static assets free);
@@ -181,6 +185,7 @@ node build.mjs && node test/engine.test.mjs
 printf 'DEV_AUTH=1\n' > .dev.vars
 npx wrangler dev --ip 127.0.0.1 --port 8787 &     # local Worker + DOs + D1 (state in .wrangler/)
 NODE_PATH=$(npm root -g) node test/e2e.cjs        # Playwright is preinstalled globally; Chromium at /opt/pw-browsers
+NODE_PATH=$(npm root -g) node test/match.cjs      # quick match + private rooms (use a fresh --persist-to dir)
 ```
 Performance checks used before: count rAF frames for 1.5 s while panning / sweeping the hand / moving the arrow;
 target ~90 frames and worst frame ≤ 17 ms. Screenshot at 1440×900 and 390×844 (mobile, `hasTouch`) and actually look.

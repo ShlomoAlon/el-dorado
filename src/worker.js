@@ -100,6 +100,18 @@ async function upsertUser(env, sub, displayName) {
   return { user: u, isNew: true };
 }
 
+async function createRoom(env, uid, opts) {
+  for (let i = 0; i < 8; i++) {
+    const code = genCode();
+    const room = env.ROOMS.get(env.ROOMS.idFromName(code));
+    const r = await (await room.fetch('https://room/init', { method: 'POST', body: JSON.stringify({ code, uid, opts }) })).json();
+    if (r.ok) return code;
+  }
+  return null;
+}
+const MATCH_SIZE = 3; // quick-match rooms start by themselves once this many have joined,
+                      // or earlier (with 2+) when everyone in the room asks to start now
+
 /* ---------------- worker entry ---------------- */
 export default {
   async fetch(req, env) {
@@ -140,14 +152,13 @@ export default {
       }
       if (p === '/api/rooms' && req.method === 'POST') {
         const b = await req.json().catch(() => ({}));
-        const opts = { max: Math.min(4, Math.max(2, +b.max || 4)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn: TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90 };
-        for (let i = 0; i < 8; i++) {
-          const code = genCode();
-          const room = env.ROOMS.get(env.ROOMS.idFromName(code));
-          const r = await (await room.fetch('https://room/init', { method: 'POST', body: JSON.stringify({ code, uid: user.id, opts }) })).json();
-          if (r.ok) return json({ code });
-        }
-        return bad('Could not create a room, try again.', 500);
+        const opts = { max: Math.min(4, Math.max(2, +b.max || 3)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn: TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90, pub: b.pub !== false, auto: false };
+        const code = await createRoom(env, user.id, opts);
+        return code ? json({ code }) : bad('Could not create a room, try again.', 500);
+      }
+      if (p === '/api/match' && req.method === 'POST') { // quick match: join the fullest waiting public match room, or open one
+        const r = await (await lobby.fetch('https://lobby/match', { method: 'POST', body: JSON.stringify({ uid: user.id, dev: env.DEV_AUTH === '1' }) })).json();
+        return r.code ? json({ code: r.code }) : bad('Could not find or open a match, try again.', 500);
       }
       let m;
       if ((m = p.match(/^\/api\/rooms\/([A-Z0-9]{4,6})\/ws$/))) {
@@ -171,7 +182,7 @@ export default {
 export class Lobby extends DurableObject {
   constructor(ctx, env) { super(ctx, env); this.rooms = null; ctx.blockConcurrencyWhile(async () => { this.rooms = (await ctx.storage.get('rooms')) || {}; }); }
   prune() { const now = Date.now(); for (const c in this.rooms) { const r = this.rooms[c]; if (now - r.updated > (r.status === 'playing' ? 12 : 2) * 3600e3) delete this.rooms[c]; } }
-  list() { return Object.values(this.rooms).filter(r => r.status === 'lobby' || r.status === 'playing').map(r => ({ code: r.code, host: r.host, names: r.names, count: r.names.length, max: r.max, status: r.status, course: r.course, turn: r.turn })); }
+  list() { return Object.values(this.rooms).filter(r => r.pub !== false && (r.status === 'lobby' || r.status === 'playing')).map(r => ({ code: r.code, host: r.host, names: r.names, count: r.names.length, max: r.max, status: r.status, course: r.course, turn: r.turn, auto: !!r.auto })); }
   broadcast() { const msg = JSON.stringify({ t: 'rooms', rooms: this.list() }); for (const ws of this.ctx.getWebSockets()) { try { ws.send(msg); } catch (e) { } } }
   async fetch(req) {
     const url = new URL(req.url);
@@ -180,6 +191,18 @@ export class Lobby extends DurableObject {
       const r = await req.json();
       if (r.status === 'closed' || r.status === 'over') delete this.rooms[r.code]; else this.rooms[r.code] = { ...r, updated: Date.now() };
       this.prune(); await this.ctx.storage.put('rooms', this.rooms); this.broadcast(); return json({ ok: true });
+    }
+    if (url.pathname === '/match') {
+      const { uid, dev } = await req.json(); const now = Date.now();
+      const mine = Object.values(this.rooms).find(x => (x.uids || []).includes(uid) && (x.status === 'lobby' || x.status === 'playing'));
+      if (mine) return json({ code: mine.code });
+      const open = Object.values(this.rooms).filter(x => x.auto && x.status === 'lobby' && x.names.length < x.max && now - x.updated < 15 * 60e3).sort((a, b) => b.names.length - a.names.length);
+      if (open.length) return json({ code: open[0].code });
+      const opts = { max: MATCH_SIZE, course: 'random', turn: dev ? 20 : 90, pub: true, auto: true };
+      const code = await createRoom(this.env, uid, opts); if (!code) return json({ code: null });
+      // listed right away so a second quick-matcher lands in the same room
+      this.rooms[code] = { code, host: '', names: [], uids: [], max: MATCH_SIZE, status: 'lobby', course: 'random', turn: opts.turn, pub: true, auto: true, updated: now };
+      await this.ctx.storage.put('rooms', this.rooms); this.broadcast(); return json({ code });
     }
     if (url.pathname === '/find') { const uid = url.searchParams.get('uid'); const r = Object.values(this.rooms).find(x => (x.uids || []).includes(uid)); return json({ code: r ? r.code : null }); }
     return bad('Not found', 404);
@@ -204,10 +227,10 @@ export class Room extends DurableObject {
     await this.ctx.storage.put(w);
   }
   engine() { E.S = this.S; E.MAP = mapFor(this.S); return E; }
-  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn }; }
+  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn, pub: d.opts.pub !== false, auto: !!d.opts.auto }; }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.summary()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
-  roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, online: this.online(s.uid) })), results: d.results || null }; }
+  roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, online: this.online(s.uid) })), results: d.results || null }; }
   send(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (e) { } }
   stateFor(uid, ev) {
     const seat = this.S.owners.indexOf(uid);
@@ -235,6 +258,8 @@ export class Room extends DurableObject {
       if (this.d.status === 'lobby' && !this.d.seats.find(s => s.uid === uid) && this.d.seats.length < this.d.opts.max) {
         const used = this.d.seats.map(s => s.color);
         this.d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) });
+        if (!this.d.seats.find(s => s.uid === this.d.host)) this.d.host = uid;
+        if (await this.seatsChanged()) return new Response(null, { status: 101, webSocket: pair[0] });
         await this.persist('d'); this.tellLobby();
       }
       this.sendAll();
@@ -252,17 +277,21 @@ export class Room extends DurableObject {
       const seat = d.seats.find(s => s.uid === uid);
       if (m.t === 'color' && seat && PCOLORS.includes(m.color) && !d.seats.some(s => s !== seat && s.color === m.color)) { seat.color = m.color; await this.persist('d'); this.sendAll(); }
       else if (m.t === 'leave') {
+        if (d.opts.auto) { // match rooms never close on the host; the next player hosts
+          d.seats = d.seats.filter(s => s.uid !== uid); if (d.host === uid && d.seats.length) d.host = d.seats[0].uid;
+          if (!d.seats.length) d.status = 'closed';
+          await this.seatsChanged(); await this.persist('d'); this.tellLobby(); this.sendAll(); try { ws.close(1000, 'Left'); } catch (e) { } return;
+        }
         if (uid === d.host) { d.status = 'closed'; await this.persist('d'); this.tellLobby(); this.sendAll(); for (const w of this.ctx.getWebSockets()) try { w.close(1000, 'Room closed'); } catch (e) { } return; }
         d.seats = d.seats.filter(s => s.uid !== uid); await this.persist('d'); this.tellLobby(); this.sendAll(); try { ws.close(1000, 'Left'); } catch (e) { }
       }
-      else if (m.t === 'join' && !seat) { if (d.seats.length >= d.opts.max) return err('This room is full.'); const used = d.seats.map(s => s.color); const { name } = ws.deserializeAttachment(); d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) }); await this.persist('d'); this.tellLobby(); this.sendAll(); }
+      else if (m.t === 'join' && !seat) { if (d.seats.length >= d.opts.max) return err('This room is full.'); const used = d.seats.map(s => s.color); const { name } = ws.deserializeAttachment(); d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) }); if (await this.seatsChanged()) return; await this.persist('d'); this.tellLobby(); this.sendAll(); }
+      else if (m.t === 'now' && seat && d.opts.auto) { seat.now = !seat.now; if (await this.seatsChanged()) return; await this.persist('d'); this.sendAll(); }
       else if (m.t === 'start') {
+        if (d.opts.auto) return;
         if (uid !== d.host) return err('Only the host can start.');
         if (d.seats.length < 2) return err('You need at least 2 players.');
-        E.newGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color })), fullRace: true });
-        this.S = E.S; this.S.owners = d.seats.map(s => s.uid); this.S.room = d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
-        d.status = 'playing'; d.timeouts = {}; this.undo = [];
-        await this.startTurnTimer(); await this.persist(); this.tellLobby(); this.sendAll([{ e: 'start' }]);
+        await this.startGame();
       }
       return;
     }
@@ -283,6 +312,19 @@ export class Room extends DurableObject {
       if (this.S.cur !== prevCur && !this.S.over) await this.startTurnTimer();
       await this.afterChange(r.ev); return;
     }
+  }
+  // quick-match rooms start themselves when full, or when all of 2+ players asked to start now. Returns true if it started.
+  async seatsChanged() {
+    const d = this.d; if (!d.opts.auto || d.status !== 'lobby') return false;
+    if (d.seats.length >= d.opts.max || (d.seats.length >= 2 && d.seats.every(s => s.now))) { await this.startGame(); return true; }
+    return false;
+  }
+  async startGame() {
+    const d = this.d;
+    E.newGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color })), fullRace: true });
+    this.S = E.S; this.S.owners = d.seats.map(s => s.uid); this.S.room = d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
+    d.status = 'playing'; d.timeouts = {}; this.undo = [];
+    await this.startTurnTimer(); await this.persist(); this.tellLobby(); this.sendAll([{ e: 'start' }]);
   }
   async afterChange(ev) {
     if (this.S.log.length > 120) this.S.log = this.S.log.slice(-120);
@@ -330,6 +372,14 @@ export class Room extends DurableObject {
   }
   async webSocketClose(ws, code) {
     try { ws.close(code); } catch (e) { }
-    if (this.d && this.d.status !== 'closed') this.sendAll();
+    const d = this.d; if (!d || d.status === 'closed') return;
+    const { uid } = ws.deserializeAttachment() || {};
+    // someone who closes the page before a quick match starts gives up their seat, so matches never start with absent players
+    if (d.opts.auto && d.status === 'lobby' && uid && !this.ctx.getWebSockets(uid).some(w => w !== ws && w.readyState === 1)) {
+      d.seats = d.seats.filter(s => s.uid !== uid); if (d.host === uid && d.seats.length) d.host = d.seats[0].uid;
+      if (!d.seats.length) d.status = 'closed';
+      await this.persist('d'); this.tellLobby();
+    }
+    this.sendAll();
   }
 }

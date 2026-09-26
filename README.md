@@ -52,6 +52,7 @@ npm test           # rules engine: 60 random games + invariants
 - Games use fixed courses (currently the rulebook's first-game route); blockades are dealt at random.
 - Online games (and local games by default) continue until all but one player reaches El Dorado; players arriving in the same round are split by blockades. Local games can use the official "first arrival" ending instead.
 - Ratings: pairwise multiplayer Elo from the finishing order, start 1200, K = 32 split across opponents (48 for a player's first 10 games).
+- Rooms are public (listed) or private (code/link only). Quick match fills 3-player public games; two players can start early if both press Start now.
 - Turn timer: 60 s to 3 min per turn (host's choice). A timeout ends the turn and discards leftovers; 3 timeouts in a row forfeit.
 - Leaving a game places you below everyone still racing.
 - Terrain boards use the base game's letters and published terrain counts; space-by-space layouts are reconstructed.
