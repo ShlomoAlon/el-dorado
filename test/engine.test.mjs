@@ -1,0 +1,54 @@
+// Plays many random games with the shared rules engine and checks invariants:
+// every game ends, no cards are created or lost, placements and Elo are sane,
+// and redaction never leaks another player's hand or deck order.
+import { E } from '../src/engine.gen.js';
+const assert = (c, m) => { if (!c) { console.error('FAIL:', m); process.exit(1); } };
+const t0 = performance.now(); for (let i = 0; i < 200; i++) E.genMap(3 + (i % 4), (Math.random() * 1e9) | 0);
+const mapMs = (performance.now() - t0) / 200;
+let games = 0, maxAct = 0;
+for (let g = 0; g < 60; g++) {
+  const np = 2 + (g % 3);
+  E.newGame({ nMid: 3 + (g % 4), seed: (Math.random() * 1e9) | 0, fullRace: g % 5 !== 0, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
+  const M = E.MAP, goals = M.goals.map(k => M.hexes.get(k));
+  const dg = k => { if (k === 'done') return -1; const h = M.hexes.get(k); return Math.min(...goals.map(q => Math.hypot(q.x - h.x, q.y - h.y))); };
+  let turns = 0;
+  while (!E.S.over && turns < 3000) {
+    turns++; const S = E.S, seat = S.cur, P = S.players[seat];
+    if (turns > 300) { E.resign(seat); continue; }
+    for (let guard = 0; guard < 20; guard++) {
+      let did = false;
+      for (const pi of P.pieces.keys()) {
+        if (P.pieces[pi] === 'done') continue;
+        for (const id of P.hand.slice()) {
+          const d = E.CT[S.cards[id]]; if (!d || d.c === 'p') continue;
+          const T = E.reach(seat, pi, d.s === '*' ? ['j', 'w', 'v'] : [d.s], d.p); let best = null, bd = dg(P.pieces[pi]) - 1;
+          for (const [k] of T) { if (k[0] === 'B') { best = best || k; continue; } const dd = dg(k); if (dd < bd) { bd = dd; best = k; } }
+          if (best) { const t1 = performance.now(); const r = E.applyAction(seat, { t: 'move', card: id, pi, to: best }); maxAct = Math.max(maxAct, performance.now() - t1); assert(r.ok, r.err); did = true; break; }
+        }
+        if (did) break;
+        for (const [k, t] of E.payTargets(seat, pi)) { if (k[0] !== 'B' && dg(k) >= dg(P.pieces[pi])) continue; const r = E.applyAction(seat, { t: 'pay', pi, to: k, cards: P.hand.slice(0, t.need) }); if (r.ok) { did = true; break; } }
+        if (did) break;
+      }
+      if (!did || E.S.over || E.S.cur !== seat) break;
+    }
+    if (E.S.over) break;
+    const S2 = E.S;
+    // illegal actions must be rejected
+    assert(!E.applyAction((seat + 1) % np, { t: 'end', keep: [] }).ok, 'out-of-turn action accepted');
+    assert(!E.applyAction(seat, { t: 'buy', src: 'm', idx: 0, cards: ['nope'] }).ok, 'fake card accepted');
+    const tot = P.hand.reduce((a, id) => a + (['y', 'x'].includes(E.CT[S2.cards[id]].c) ? E.CT[S2.cards[id]].p : .5), 0);
+    const opts = S2.market.map((s, i) => [i, s]).filter(([i, s]) => s.n > 0 && E.CT[s.t].cost <= tot && E.CT[s.t].c !== 'p');
+    if (opts.length && !S2.turn.bought) { const [i] = opts[Math.floor(Math.random() * opts.length)]; assert(E.applyAction(seat, { t: 'buy', src: 'm', idx: i, cards: P.hand.slice() }).ok, 'buy failed'); }
+    if (Math.random() < .01 && S2.players.filter(p => !p.resigned).length > 2) { E.resign(seat); continue; }
+    const r = E.applyAction(seat, { t: 'end', keep: [] }); assert(r.ok, r.err);
+  }
+  const S = E.S; games++;
+  assert(S.over, 'game did not end');
+  const cards = S.players.reduce((a, p) => a + p.deck.length + p.hand.length + p.discard.length + p.play.length, 0) + S.trash.length;
+  assert(cards === S.nid - 1, 'cards created or lost');
+  assert(S.places && S.places.length === np && S.places.includes(1), 'bad placements');
+  const d = E.eloDeltas(S.players.map(() => 1200), S.places, S.players.map(() => 0));
+  assert(Math.abs(d.reduce((a, b) => a + b, 0)) < 0.5, 'elo not zero-sum');
+  for (let s = 0; s < np; s++) { const R = E.redact(S, s); R.players.forEach((p, i) => { if (i !== s) { assert(p.hand.every(id => !R.cards[id]), 'hand leak'); assert(p.deck.every(id => !R.cards[id]), 'deck leak'); } }); }
+}
+console.log(`ok: ${games} games, map ${mapMs.toFixed(2)} ms, slowest action ${maxAct.toFixed(2)} ms`);

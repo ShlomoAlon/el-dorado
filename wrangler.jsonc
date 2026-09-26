@@ -1,0 +1,22 @@
+{
+  // El Dorado Expedition — Cloudflare Worker config.
+  // Deploys automatically from GitHub (Workers Builds) on every push to main.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "el-dorado",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  // D1 database: created automatically on the first deploy (no id needed).
+  "d1_databases": [{ "binding": "DB", "database_name": "el-dorado" }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "Room" },
+      { "name": "LOBBY", "class_name": "Lobby" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "Lobby"] }],
+  // GOOGLE_CLIENT_ID is set once in the Cloudflare dashboard (Settings → Variables);
+  // keep_vars stops deploys from wiping it.
+  "keep_vars": true,
+  "observability": { "enabled": true }
+}
