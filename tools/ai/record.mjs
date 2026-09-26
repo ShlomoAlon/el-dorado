@@ -3,11 +3,13 @@
 //   policies: comma list per seat, e.g. net,plan,plan  (net = tools/ai/data/first.net.json)
 //   FILTER=capped   keep only games where someone had not arrived by round 25
 //   FILTER=netlost  keep only games a net seat did not win
+//   FILTER=netclose keep only games a net seat won with the runner-up arriving within one round
+//   SHUFFLE=1       put the net in a random seat each game
 // Each net decision stores the network's top alternatives with their estimated win chance (shown in the replay).
 import { E } from '../../src/engine.gen.js';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 const args = process.argv.slice(2), flags = args.filter(a => a.startsWith('--')), pos = args.filter(a => !a.startsWith('--'));
-const pols = (pos[0] || 'net,plan,plan').split(','), G = +(pos[1] || 1), seed0 = pos[2] ? +pos[2] : (Math.random() * 1e9) | 0;
+let pols = (pos[0] || 'net,plan,plan').split(','), G = +(pos[1] || 1), seed0 = pos[2] ? +pos[2] : (Math.random() * 1e9) | 0;
 const up = flags.find(f => f.startsWith('--upload')), base = up ? (up.split('=')[1] || 'https://el-dorado.shlomoalon9.workers.dev') : null;
 const course = E.courseById(process.env.COURSE || 'first'), FILTER = process.env.FILTER || '';
 if (pols.includes('net')) { const p = `tools/ai/data/${course.id}.net.json`; if (!existsSync(p)) throw new Error('no net at ' + p); E.setNet(JSON.parse(readFileSync(p, 'utf8'))); }
@@ -16,6 +18,7 @@ mkdirSync('tools/ai/data/replays', { recursive: true });
 const slim = a => { const o = { ...a }; for (const k of Object.keys(o)) if (o[k] === undefined) delete o[k]; return o; };
 let kept = 0;
 for (let g = 0; g < G; g++) {
+  if (process.env.SHUFFLE) { const k = Math.floor(Math.random() * pols.length), j = pols.indexOf('net'); if (j >= 0) [pols[j], pols[k]] = [pols[k], pols[j]]; }
   const seed = seed0 + g, log = { kind: 'eldorado-replay', v: 1, course: course.id, seed, rng: (seed * 2654435761) >>> 0, fullRace: true,
     players: pols.map((p, i) => ({ name: `${NAME[p] || p} ${i + 1}`, bot: p })), actions: [], notes: [] };
   const gen = E.replayStart(log);
@@ -36,6 +39,9 @@ for (let g = 0; g < G; g++) {
   const S = E.S, fin = S.players.map(p => p.fin), netLost = pols.some((p, i) => p === 'net') && !pols.some((p, i) => p === 'net' && S.places && S.places[i] === 1);
   if (FILTER === 'capped' && !capped) continue;
   if (FILTER === 'netlost' && !netLost) continue;
+  if (FILTER === 'netclose') { // net won, and the runner-up arrived within one round of it
+    const w = pols.findIndex((p, i) => p === 'net' && S.places && S.places[i] === 1), r2 = S.places ? S.places.indexOf(2) : -1;
+    if (capped || w < 0 || r2 < 0 || !fin[r2] || fin[r2] - fin[w] > 1) continue; }
   log.title = `${pols.join(' vs ')} · seed ${seed}${capped ? ' · hit the 25-round cap' : ''}`;
   log.result = { capped, arrived: fin };
   const file = `tools/ai/data/replays/${course.id}-${seed}.json`;
