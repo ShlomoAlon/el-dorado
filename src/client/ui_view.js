@@ -81,16 +81,18 @@ function buildBoard(){
   for(const h of MAP.hexes.values()){
     const g=sv('g',null,L.terrain);
     const pts=hexPts(h.x,h.y,R-1.4);
-    sv('polygon',{points:pts,fill:'url(#gr-'+h.type+(TSHADE[h.type]?Math.min(4,Math.max(1,h.val)):'')+')'},g);
-    if(h.type!=='m'&&h.type!=='s'&&h.type!=='g')sv('polygon',{points:pts,fill:'url(#p-'+h.type+')'},g);
+    const vt=h.type==='g'?h.sym:h.type; // El Dorado's finishing spaces look like the terrain they need (water or jungle)
+    sv('polygon',{points:pts,fill:'url(#gr-'+vt+(TSHADE[vt]?Math.min(4,Math.max(1,h.val||1)):'')+')'},g);
+    if(vt!=='m'&&vt!=='s'&&vt!=='g')sv('polygon',{points:pts,fill:'url(#p-'+vt+')'},g);
     sv('polygon',{points:pts,fill:'url(#hexShine)',stroke:'rgba(255,255,255,.16)','stroke-width':1},g);
     if(h.type==='m'){drawMountain(g,h);continue;}
     if(h.type==='s'){sv('circle',{cx:h.x,cy:h.y,r:13,fill:'none',stroke:'rgba(75,68,54,.35)','stroke-width':1.5,'stroke-dasharray':'3 3'},g);
       const t=sv('text',{x:h.x,y:h.y+6,'text-anchor':'middle','font-size':17,'font-family':'Young Serif, Georgia, serif',fill:ICOL.s},g);t.textContent=h.num;continue;}
     if(h.type==='g'){
-      sv('polygon',{points:hexPts(h.x,h.y,R-6),fill:'none',stroke:'rgba(120,70,0,.35)','stroke-width':1.2},g);
-      const u=sv('use',{href:'#i-'+h.sym,x:h.x-9,y:h.y-2,width:18,height:18},g);u.style.color=h.sym==='j'?'#2b6b41':'#1f5a94';
-      const t=sv('text',{x:h.x,y:h.y-8,'text-anchor':'middle','font-size':8,'font-weight':800,'letter-spacing':1.2,fill:'#6b4706','font-family':'Figtree, sans-serif'},g);t.textContent='FINISH';continue;}
+      // a gold ring and gold lettering mark the finish; the space itself is its terrain's colour
+      sv('polygon',{points:hexPts(h.x,h.y,R-5),fill:'none',stroke:'#f8dc97','stroke-width':2.2},g);
+      const u=sv('use',{href:'#i-'+h.sym,x:h.x-9,y:h.y-2,width:18,height:18},g);u.style.color=ICOL[h.sym];
+      const t=sv('text',{x:h.x,y:h.y-8,'text-anchor':'middle','font-size':8,'font-weight':800,'letter-spacing':1.2,fill:'#f8dc97','font-family':'Figtree, sans-serif'},g);t.textContent='FINISH';continue;}
     const sym=h.type,n=h.val;
     // icons spaced out so the count reads at a glance: 1 · 2 side by side · 3 in a triangle · 4 in a square
     const at=ICON_AT[Math.min(4,n)]||ICON_AT[1],is=n===1?18:n===2?15:13.5;
