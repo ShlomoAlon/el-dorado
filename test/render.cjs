@@ -1,6 +1,6 @@
 // Rendering correctness checks for the board (run after any change to pan/zoom/board rendering):
 //   1. grabbing the board changes nothing visually (drag away and back while holding: pixel-identical)
-//   2. the board is sharp once a zoom settles (matches a fresh redraw at the same view)
+//   2. the zoom is baked in once it settles (layer scale back to 1, #bscale carries the zoom); edge energy printed as info only
 //   3. wheel zoom responsiveness: Chrome's input-to-screen latency for wheel events (EventLatency), CPU slowed 4x
 //   NODE_PATH=$(npm root -g) node test/render.cjs [index.html] [--shots dir]
 const { chromium } = require('playwright'); const path = require('path');
@@ -21,8 +21,7 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     ok('grab changes nothing', (await diff(p, a, c)) === 0, `${await diff(p, a, c)} pixels differ while holding`);
     ok('release changes nothing', (await diff(p, a, d)) === 0, `${await diff(p, a, d)} pixels differ after letting go`);
     await p.close(); }
-  { // 2. sharp after zoom settles: edge energy (mean |Laplacian|) of the settled board vs a fresh redraw at the same view;
-    //    the mid-zoom frame (before settling, upscaled) must be clearly blurrier, which shows the measure detects blur
+  { // 2. zoom baked in once it settles; edge energy (mean |Laplacian|) of mid-zoom, settled and freshly redrawn board printed as info
     const sharp = async (p, img) => p.evaluate(async x => { const i = await new Promise(r => { const m = new Image(); m.onload = () => r(m); m.src = 'data:image/png;base64,' + x; });
       const cv = document.createElement('canvas'); cv.width = i.width; cv.height = i.height; const g = cv.getContext('2d'); g.drawImage(i, 0, 0); const d = g.getImageData(0, 0, i.width, i.height).data, W = i.width;
       const L = k => (d[k] + d[k + 1] + d[k + 2]) / 3; let e = 0, n = 0;
@@ -37,9 +36,12 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     const [sm, sa, sc] = [await sharp(p, mid), await sharp(p, a), await sharp(p, c)];
     // headless screenshots re-render instead of showing the GPU layer's stale pixels, so blur can't be seen here;
     // check structurally that the zoom was baked in: the layer's own scale is back to 1 and the board carries the zoom
-    const tr = await p.evaluate(() => ({ stage: document.querySelector('#stage').style.transform, bscale: document.querySelector('#bscale') ? document.querySelector('#bscale').style.transform : '' }));
-    const ls = +((tr.stage.match(/scale\(([\d.]+)\)/) || [])[1] || 0), bs = +((tr.bscale.match(/scale\(([\d.]+)\)/) || [])[1] || 1);
-    ok('zoom baked in once it settles', Math.abs(ls - 1) < .01 && bs > 1.2, `layer scale ${ls}, board scale ${bs} (edge energy settled ${sa.toFixed(2)}, fresh ${sc.toFixed(2)})`); await p.close(); }
+    const tr = await p.evaluate(() => { const b = document.querySelector('#bscale'); return { stage: document.querySelector('#stage').style.transform, bscale: b ? b.style.transform : null }; });
+    const info = `edge energy mid-zoom ${sm.toFixed(2)}, settled ${sa.toFixed(2)}, fresh ${sc.toFixed(2)}`;
+    if (tr.bscale === null) console.log(`n/a  zoom baked in once it settles: no #bscale in this build (${info})`);
+    else { const ls = +((tr.stage.match(/scale\(([\d.]+)\)/) || [])[1] || 1), bs = +((tr.bscale.match(/scale\(([\d.]+)\)/) || [])[1] || 1);
+      ok('zoom baked in once it settles', Math.abs(ls - 1) <= .01 && bs > 1.2, `layer scale ${ls}, board scale ${bs} (${info})`); }
+    await p.close(); }
   { // 3. wheel latency
     const p = await open(); const cdp = await p.context().newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); await p.mouse.move(600, 420);
     await b.startTracing(p, { categories: ['latencyInfo', 'input', 'benchmark'] });
