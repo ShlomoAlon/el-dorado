@@ -13,7 +13,9 @@ import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 const MAXBACK = process.env.MAXBACK === '1';
 const TREESTRAP = +(process.env.TREESTRAP || 0);
-const DISTILL = process.env.DISTILL === '1'; // max-backup targets from the whole-turn planner (needs MAXBACK=1) // untaken options learned per decision (see the self-play loop) // within-turn max backup (see the self-play loop)
+const DISTILL = process.env.DISTILL === '1';
+// ANNEAL=T0,factor,floor: log-odds exploration whose temperature starts at T0 in round 1 and is multiplied by factor each round down to floor
+const ANNEAL = process.env.ANNEAL ? process.env.ANNEAL.split(',').map(Number) : null; // max-backup targets from the whole-turn planner (needs MAXBACK=1) // untaken options learned per decision (see the self-play loop) // within-turn max backup (see the self-play loop)
 
 if (!isMainThread) {
   const { mode, games, seed0, net, course, H, eps, temp, lotemp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam, oldNet, wi = 0 } = workerData;
@@ -39,7 +41,7 @@ if (!isMainThread) {
     const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: (rnd() * 2 ** 31) | 0, rng: (rnd() * 2 ** 32) >>> 0, fullRace: true,
       players: pols.map((p, i) => ({ name: `${{ net: search ? 'Net + search' : 'Bot (net)', netP: 'Net (no search)', old: 'Old net', oldS: 'Old net + search' }[p] || 'Planner'} ${i + 1}`, bot: p === 'heur' ? bench : p })), actions: [] };
     // exploration: now and then every player starts with the same extra card, favouring cards the bot rarely buys
-    if (mode === 'self' && !lotemp && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
+    if (mode === 'self' && !lotemp && !ANNEAL && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
       st.explore.gift = (st.explore.gift || 0) + 1; inc('Gift card given to every player (exploration)', glog.gift); }
     // MIX_PLAIN=1 (search runs): one net seat per self-play game plays plain (no planner), the others through the planner.
     // Off by default: the mixed run (2026-09-27) saw search's lead over the old net stall while the plain net caught up.
@@ -53,18 +55,19 @@ if (!isMainThread) {
       const S = E.S; S.log.length = 0;
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
-      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && !lotemp && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: false && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
+      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && !lotemp && !ANNEAL && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: false && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
       const c = mode === 'eval' && pols[me] === 'netP' ? E.botChoose({ mode: 'net', rnd })
         : mode === 'eval' && pols[me] === 'old' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd })))
         : mode === 'eval' && pols[me] === 'oldS' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd, search })))
         : mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined })
-        : isNet ? E.botChoose(lotemp ? { mode: 'net', eps, lotemp, rnd } : { mode: 'net', eps, temp, typeEps, turnState, rnd, search: plainSeat[me] ? undefined : search })
+        : isNet ? E.botChoose(lotemp || ANNEAL ? { mode: 'net', eps, lotemp: ANNEAL ? Math.max(ANNEAL[2], ANNEAL[0] * ANNEAL[1] ** (S.round - 1)) : lotemp, rnd } : { mode: 'net', eps, temp, typeEps, turnState, rnd, search: plainSeat[me] ? undefined : search })
         : E.botChoose({ mode: bench, eps: .03, noise: .3, rnd });
       // MAXBACK=1 (Q-learning style max backup within a turn): my turn has no luck between my own actions, so the position after
       // my previous action is worth the BEST option available now, not whatever I happen to do next (exploration, habits).
       // Only within the same turn and never across "end turn"; other steps keep the TD(λ) update.
       if (MAXBACK && mode === 'self' && isNet) { const lp = lastPush[me];
-        if (lp && lp.round === S.round && !lp.ended && traj[me].length === lp.idx + 1) {
+        const explored = c.why === 'explore' || c.why === 'random';
+        if (lp && traj[me].length === lp.idx + 1 && trajB[me][lp.idx] == null && ((lp.round === S.round && !lp.ended) || (explored && (lotemp || ANNEAL)))) {
           // DISTILL=1: the target is the whole-turn planner's best completion from here (search distilled into the network)
           const b = DISTILL ? E.botChoose({ mode: 'net', rnd, search: { kind: 'plan', beam: 3 } }).v
             : c.best != null && !(turnState && turnState.noBuy) ? c.best : E.botChoose({ mode: 'net', rnd }).best;
