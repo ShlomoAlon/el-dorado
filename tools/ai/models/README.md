@@ -1,0 +1,31 @@
+# Frozen models
+
+## first-td (frozen 2026-09-27 02:13 UTC)
+
+The network trained by plain self-play (TD(λ = 0.7), one action at a time, no search) on First Expedition, after 87 iterations
+(about 50,000 self-play games). Frozen before switching training to self-play with the whole-turn planner.
+
+| File | What it is |
+|---|---|
+| `first-td-evaluated.json` | network after iteration 86: the last one tested (1.89× its fair share vs the planner heuristic) |
+| `first-td-latest.json` | network after iteration 87's training step (not yet tested) |
+| `first-td.log` | the full training log (every iteration's self-play, training and test results) |
+
+Training code at freeze time: commit `aedbec6` on branch `claude/sweet-ptolemy-fisqdw` (this freeze: commit `d15c303`; also on `main`). Place values 1st 1 · 2nd ¼ · 3rd ⅛ · last 0,
+gift-card exploration, 25-round cap.
+
+Last tests (160 games each vs the planner heuristic, 3- and 4-player, seats rotated):
+
+| Time (UTC) | vs fair share | wins 3p / 4p | arrival round, net vs heuristic |
+|---|---|---|---|
+| 01:06:31 | 2.229 | 74% / 56% | 14.7 vs 15.93 |
+| 01:09:24 | 2.1 | 64% / 59% | 14.57 vs 15.76 |
+| 01:13:54 | 2.186 | 70% / 57% | 14.61 vs 15.92 |
+| 01:16:54 | 1.993 | 68% / 49% | 15.07 vs 15.89 |
+| 01:21:09 | 2.164 | 68% / 59% | 14.75 vs 15.95 |
+| 01:25:43 | 2.1 | 66% / 56% | 14.68 vs 15.89 |
+| 01:44:07 | 2.4 | 76% / 64% | 14.52 vs 15.92 |
+| 02:05:44 | 1.886 | 61% / 49% | 14.93 vs 15.88 |
+
+**To go back to this model:** `cp tools/ai/models/first-td-evaluated.json tools/ai/data/first.net.json`, then
+`tools/ai/loop.sh first <iterations>` continues plain self-play training from it (`echo 5 > tools/ai/data/first.hi` keeps the full-game horizon).
