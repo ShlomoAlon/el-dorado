@@ -835,4 +835,4 @@ function botRandomCourse(seed,nMid){
   return null;
 }
 
-export const E={get MAPX(){return MAP},botPlaceValue,setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
+export const E={get MAPX(){return MAP},botScoreActions,botPlaceValue,setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
