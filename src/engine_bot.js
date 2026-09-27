@@ -237,7 +237,8 @@ function botNetFeatures(me){
 /* network: {course, nf, w1T (input-major, nf×h1), b1, w2 (h2×h1), b2, w3 (h2), b3}; leaky-ReLU, sigmoid out.
    The first layer only touches non-zero inputs (most board slots are empty), so it stays fast in the browser. */
 let BOT_NET=null;
-function botNetValue(f){const N=BOT_NET,H1=N.b1.length,H2=N.b2.length;const h1=Float32Array.from(N.b1);
+let BOT_EVALS=0;
+function botNetValue(f){BOT_EVALS++;const N=BOT_NET,H1=N.b1.length,H2=N.b2.length;const h1=Float32Array.from(N.b1);
   for(let k=0;k<f.length;k++){const x=f[k];if(x===0)continue;const r=k*H1,w=N.w1T;for(let j=0;j<H1;j++)h1[j]+=w[r+j]*x;}
   for(let j=0;j<H1;j++)if(h1[j]<0)h1[j]*=.01;
   let s=N.b3[0];for(let j=0;j<H2;j++){let a=N.b2[j];const r=j*H1;for(let k=0;k<H1;k++)a+=N.w2[r+k]*h1[k];s+=N.w3[j]*(a>0?a:.01*a);}
@@ -281,7 +282,7 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
 function botChoose(opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
   if(mode.startsWith('plan'))return{a:botPlanChoose(S.cur,BOT_PLANS[mode])};
-  if(opts.search&&mode==='net'&&botNetReady())return opts.search.kind==='rollout'?botRolloutChoose(opts):botTurnSearch(opts);
+  if(opts.search&&mode==='net'&&botNetReady())return opts.search.kind==='plan'?botPlanTurnChoose(opts):opts.search.kind==='rollout'?botRolloutChoose(opts):botTurnSearch(opts);
   const me=S.cur,root=S;let acts=botActions();if(mode==='net'&&!botNetReady())mode='heur';
   if(opts.turnState&&opts.turnState.noBuy){const f=acts.filter(a=>a.t!=='buy'&&a.t!=='transmit');if(f.length)acts=f;} // exploration: a turn without gaining a card
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],why:'random'};
@@ -319,6 +320,53 @@ function botScoreActions(me,rnd,K){
     const v=r.ok?botValue(me,'net'):-Infinity,st=r.ok&&!S.over&&S.cur===me?S:null;S=root;out.push({a,v,st});
   }
   return out.sort((x,y)=>y.v-x.v);
+}
+/* 0. whole-turn planner (beam search over my own turn). My turn has almost no luck (only cards drawn by draw cards), so plan
+   it: keep the `beam` most promising partial turns (ranked by the network's value), extend each by every legal action, and
+   let every line also end the turn at each step (every choice of cards to keep). Lines are compared by the network's value
+   of the end-of-turn position (before the next draw: what it is trained on); a draw card is scored as the average over
+   `draws` imagined draws and ends that line (the real draw reveals new cards, so the plan is redone after it). The same
+   position reached in a different order is expanded once. The plan is made once per turn and followed; it is redone after
+   a draw card, or if the next step is no longer legal. Cost ≈ beam × the plain bot's (measured with BOT_EVALS). */
+function botTurnKey(me){const P=S.players[me],T=S.turn,ty=ids=>ids.map(typeOf).sort().join(',');
+  return[P.pieces.join('|'),ty(P.hand),ty(P.play),P.discard.length,ty(P.discard),T.bought?1:0,T.active?typeOf(T.active.id)+T.active.pi+T.active.sym+T.active.left:'',T.pending?T.pending.max:'',
+    S.market.map(x=>x.n).join(''),S.reserve.map(x=>x.n).join(''),S.blockades.map(b=>b.owner??'-').join(''),S.trash.length].join('#');}
+function botPlanTurn(me,B,rnd,K){
+  const root=S,seen=new Set(),start=botClone(root);S=start;shuffle(S.players[me].deck,rnd);S=root; // my deck order stays hidden
+  let beam=[{st:start,line:[]}],best={v:-Infinity,line:null};
+  for(let depth=0;depth<14&&beam.length;depth++){
+    const next=[];
+    for(const node of beam){
+      S=node.st;const acts=botActions();S=root;
+      for(const a of acts){
+        const line=[...node.line,a];
+        if(a.t==='end'){S=botClone(node.st);botEndView(me,a.keep);const v=botValue(me,'net');S=root;if(v>best.v)best={v,line};continue;}
+        if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(node.st);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);v+=r.ok?botValue(me,'net'):-1;S=root;}v/=K;if(v>best.v)best={v,line,draw:true};continue;}
+        S=botClone(node.st);const r=applyAction(me,a);
+        if(!r.ok){S=root;continue;}
+        const v=botValue(me,'net');
+        if(S.over||S.cur!==me){S=root;if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
+        const key=botTurnKey(me);if(seen.has(key)){S=root;continue;}seen.add(key);
+        next.push({st:S,line,v});S=root;
+      }
+    }
+    next.sort((x,y)=>y.v-x.v);beam=next.slice(0,B);
+  }
+  S=root;return best;
+}
+let BOT_PLAN_CACHE=null;
+function botPlanTurnChoose(opts){
+  const me=S.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
+  // follow the current plan while it still applies (same player, same round, same position the plan expects)
+  if(C&&C.me===me&&C.round===S.round&&C.i<C.line.length&&C.key===botTurnKey(me)){
+    const a=C.line[C.i];const root=S;S=botClone(root);const ok=applyAction(me,a).ok;const nk=ok&&!S.over&&S.cur===me?botTurnKey(me):null;S=root;
+    if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(a.card)])BOT_PLAN_CACHE=null;return{a,v:C.v,why:'plan'};}
+  }
+  const best=botPlanTurn(me,o.beam||3,rnd,opts.draws||4);
+  if(!best.line||!best.line.length){BOT_PLAN_CACHE=null;return{a:{t:'end',keep:[]},why:'plan'};}
+  const a=best.line[0];const root=S;S=botClone(root);applyAction(me,a);const nk=!S.over&&S.cur===me?botTurnKey(me):null;S=root;
+  BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(a.card)])?{me,round:S.round,line:best.line,i:1,key:nk,v:best.v}:null;
+  return{a,v:best.v,why:'plan'};
 }
 /* 1. turn search: look through whole sequences of my remaining actions this turn (top `width` actions at each step,
    up to `depth` steps), score each line by the network where it stops, play the first action of the best line */
