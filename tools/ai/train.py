@@ -18,9 +18,10 @@ def dense(rows):
     out = torch.zeros(len(rows), nf); out[torch.from_numpy(rr), IDX[src]] = VAL[src]; return out
 H1, H2 = 128, 64
 net = nn.Sequential(nn.Linear(nf, H1), nn.LeakyReLU(0.01), nn.Linear(H1, H2), nn.LeakyReLU(0.01), nn.Linear(H2, 1))
+keep = {}  # multi-course networks carry their course list (and history) through training
 if os.path.exists(out):
-    J = json.load(open(out))
-    if J.get('nf') == nf and J.get('course') == course:
+    J = json.load(open(out)); keep = {k: J[k] for k in ('courses', 'from') if k in J}
+    if J.get('nf') == nf and (J.get('course') == course or 'courses' in J):
         with torch.no_grad():
             net[0].weight.copy_(torch.tensor(J['w1T']).view(nf, H1).T); net[0].bias.copy_(torch.tensor(J['b1']))
             net[2].weight.copy_(torch.tensor(J['w2']).view(H2, H1)); net[2].bias.copy_(torch.tensor(J['b2']))
@@ -36,7 +37,7 @@ net.eval()
 with torch.no_grad():
     pv = torch.sigmoid(net(dense(vi))); rmse = float(((pv - Y[vi]) ** 2).mean().sqrt()); base = float(((Y[vi] - Y[ti].mean()) ** 2).mean().sqrt())
 r = lambda t: [round(float(x), 6) for x in t.detach().flatten()]
-J = {'course': course, 'nf': nf, 'w1T': r(net[0].weight.T.contiguous()), 'b1': r(net[0].bias), 'w2': r(net[2].weight), 'b2': r(net[2].bias), 'w3': r(net[4].weight), 'b3': r(net[4].bias)}
+J = {**keep, 'course': 'multi' if 'courses' in keep else course, 'nf': nf, 'w1T': r(net[0].weight.T.contiguous()), 'b1': r(net[0].bias), 'w2': r(net[2].weight), 'b2': r(net[2].bias), 'w3': r(net[4].weight), 'b3': r(net[4].bias)}
 if unsettled: J['unsettled'] = True  # trained on arrived-but-not-settled positions: play may ask the network about them (botValue)
 json.dump(J, open(out, 'w'))
 print(json.dumps({'samples': len(Y), 'val_rmse': round(rmse, 4), 'predict_mean_rmse': round(base, 4), 'secs': round(time.time() - t0, 1)}))

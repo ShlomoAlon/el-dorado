@@ -26,7 +26,12 @@ if (!isMainThread) {
   // new+search vs old+search is the measure of training progress (search alone makes either net much stronger)
   const table = mode === 'eval' && beam && oldNet;
   const search = beam ? { kind: 'plan', beam } : undefined; // SEARCH_BEAM: nets play through the whole-turn planner
-  const C = E.COURSES.find(c => c.id === course) || E.COURSES[0];
+  // MAPS=id,id,…: each game (self-play and tests) is on a course picked at random from the list (multi-course networks); weights
+  // MAPS_W=w,w,… (default equal). Otherwise every game is on `course`.
+  const C0 = E.COURSES.find(c => c.id === course) || E.COURSES[0], MAPS = process.env.MAPS ? process.env.MAPS.split(',').map(id => E.courseById(id)).filter(Boolean) : null;
+  const MW = MAPS && process.env.MAPS_W ? process.env.MAPS_W.split(',').map(Number) : null;
+  const pickCourse = () => { if (!MAPS) return C0; let r = rnd() * (MW ? MW.reduce((a, x) => a + x, 0) : MAPS.length); for (let i = 0; i < MAPS.length; i++) { r -= MW ? MW[i] : 1; if (r <= 0) return MAPS[i]; } return MAPS[MAPS.length - 1]; };
+  let C = C0;
   if (net) E.setNet(net);
   let s = seed0 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
   const X = [], Y = [], st = { win3: 0, seat3: 0, win4: 0, seat4: 0, netWins: 0, netSeats: 0, netRem: [], heurRem: [], netArr: [], heurArr: [], capped: 0, buysNet: {}, buysHeur: {}, transNet: {}, transHeur: {}, dec: {}, explore: {}, stuck: 0 };
@@ -40,6 +45,7 @@ if (!isMainThread) {
       pols = a.map((_, i) => a[(i + (k >> 2)) % np]); }
     else { const np = g % 2 ? 4 : 3, a = ['net', ...Array(np - 1).fill('heur')]; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); } // half 3-player, half 4-player, seats rotated
     // every game is recorded as a replayable log (seeded shuffles); games that hit the final cap are saved for viewing
+    C = pickCourse(); st.byCourse = st.byCourse || {}; st.byCourse[C.id] = (st.byCourse[C.id] || 0) + 1;
     const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: (rnd() * 2 ** 31) | 0, rng: (rnd() * 2 ** 32) >>> 0, fullRace: true,
       players: pols.map((p, i) => ({ name: `${{ net: search ? 'Net + search' : 'Bot (net)', netP: 'Net (no search)', old: 'Old net', oldS: 'Old net + search' }[p] || 'Planner'} ${i + 1}`, bot: p === 'heur' ? bench : p })), actions: [] };
     // exploration: now and then every player starts with the same extra card, favouring cards the bot rarely buys
