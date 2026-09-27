@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Self-play training for one course with a horizon curriculum.   tools/ai/loop.sh <course-id> <iterations>
 # RUN=<name> keeps a separate run's files (tools/ai/data/<course>-<name>.*); SEARCH_BEAM=<n> makes the nets play through the
-# whole-turn planner in self-play and tests (training with search in the loop).
+# whole-turn planner in self-play and tests (training with search in the loop); MIX_PLAIN=1 also has one net seat per game play plain.
 # Reusable for any course: everything below depends only on the course id.
 # Starts from an untrained network (TD-Gammon style). Games stop after HORIZON rounds and unfinished players
 # are ranked by how close they got; the horizon grows 3 → 5 → 8 → 12 → 16 → full once the bot stops improving.

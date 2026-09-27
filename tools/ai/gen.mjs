@@ -36,10 +36,10 @@ if (!isMainThread) {
     // exploration: now and then every player starts with the same extra card, favouring cards the bot rarely buys
     if (mode === 'self' && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
       st.explore.gift = (st.explore.gift || 0) + 1; inc('Gift card given to every player (exploration)', glog.gift); }
-    // search runs: one net seat per self-play game plays plain (no planner), the others through the planner — the data covers
-    // both kinds of play, so the network stays accurate for plain play while it learns the planner's positions
+    // MIX_PLAIN=1 (search runs): one net seat per self-play game plays plain (no planner), the others through the planner.
+    // Off by default: the mixed run (2026-09-27) saw search's lead over the old net stall while the plain net caught up.
     const plainSeat = pols.map(() => false);
-    if (mode === 'self' && search) { const ns = pols.map((p, i) => p === 'net' ? i : -1).filter(i => i >= 0);
+    if (mode === 'self' && search && process.env.MIX_PLAIN === '1') { const ns = pols.map((p, i) => p === 'net' ? i : -1).filter(i => i >= 0);
       if (ns.length > 1 || rnd() < .5) plainSeat[ns[Math.floor(rnd() * ns.length)]] = true; }
     glog.players.forEach((p, i) => { if (pols[i] === 'net' && search) p.name = `${plainSeat[i] ? 'Net (no search)' : 'Net + search'} ${i + 1}`; });
     const shuf = E.replayStart(glog); E.setRng(null);
