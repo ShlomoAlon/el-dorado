@@ -42,6 +42,8 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
 - `GOOGLE_CLIENT_ID` (public OAuth client ID) is in `wrangler.jsonc` `vars`; its authorized JavaScript origin is
   `https://el-dorado.shlomoalon9.workers.dev` (add any new domain in Google Cloud Console → Clients). The client secret is not used.
 - Only animate `transform`/`opacity`; keep pan/zoom, card fan and arrow at 60 fps (measure with a rAF counter).
+  Measure with `NODE_PATH=$(npm root -g) node test/perf.cjs --trace` (frame times + where the time goes). No `backdrop-filter`
+  on anything over the board (re-blurred every frame it moves); no infinite animations on SVG board elements (repaint the board).
 - Respect `prefers-reduced-motion`. Keep it working at 390 px wide (phone) and 1440 px.
 - Layout: page = CSS grid (`#shell`): the game cell (`#gamecell` > `#app`) plus replay dock/side cells. Never float new UI over
   other controls; give it its own cell or its own clearance variable (`--mktFoot`, `--zoomFoot`). Game-area breakpoints are

@@ -243,7 +243,7 @@ function targetLabel(k,tg){
   return'';
 }
 function showHover(k,tg){
-  L.path.innerHTML='';
+  hoverShown=true;L.path.innerHTML='';
   const pl=cur();const pi=tg.pi??UI.piece;const from=pl.pieces[pi];
   const keys=[from,...(tg.path||[])];
   if(keys.length>1){const d=keys.map((kk,i)=>{const h=hexAt(kk);return(i?'L':'M')+h.x.toFixed(1)+' '+h.y.toFixed(1);}).join(' ');
@@ -255,7 +255,8 @@ function showHover(k,tg){
   const sx=(x-MAP.minX)*view.s+view.x,sy=(y-MAP.minY)*view.s+view.y;
   tip.style.left=sx+'px';tip.style.top=sy+'px';tip.style.opacity=1;
 }
-function hideHover(){if(L.path)L.path.innerHTML='';const t=$('#tip');if(t)t.style.opacity=0;}
+let hoverShown=false; // clearing an already-empty SVG group still re-lays out the whole board, so only clear when needed
+function hideHover(){if(!hoverShown)return;hoverShown=false;if(L.path)L.path.innerHTML='';const t=$('#tip');if(t)t.style.opacity=0;}
 
 /* =========================================================
    PAN / ZOOM
@@ -309,7 +310,7 @@ function setupPanZoom(){
       const m=local((p[0][0]+p[1][0])/2,(p[0][1]+p[1][1])/2);
       const ns=Math.max(.25,Math.min(3.2,pinch.s*d/pinch.d));
       view.s=ns;view.x=m[0]-pinch.bx*ns;view.y=m[1]-pinch.by*ns;applyView();userZoomed=true;return;}
-    if(start){const dx=e.clientX-start.x,dy=e.clientY-start.y;if(!dragMoved&&Math.hypot(dx,dy)>5){dragMoved=true;v.classList.add('drag');hideHover();}
+    if(start){const dx=e.clientX-start.x,dy=e.clientY-start.y;if(!dragMoved&&Math.hypot(dx,dy)>5){dragMoved=true;v.classList.add('drag');hideHover();try{v.setPointerCapture(e.pointerId);}catch(_){}}
       if(dragMoved){view.x=start.vx+dx;view.y=start.vy+dy;applyView();userZoomed=true;}}});
   const up=e=>{if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);
     if(ptrs.size===1){pinch=null;beginPan();} // one finger left: continue panning from here, no jump
