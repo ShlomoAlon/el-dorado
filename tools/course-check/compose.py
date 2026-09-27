@@ -11,7 +11,8 @@ SHOTS, PDF = sys.argv[1], sys.argv[2]
 OUT = os.path.dirname(os.path.abspath(__file__))
 NUM = {'A': 1, 'B': 1, 'C': 4, 'D': 4, 'E': 5, 'F': 5, 'G': 6, 'H': 6, 'I': 7, 'J': 7, 'K': 8, 'L': 8, 'M': 9, 'N': 9}
 # route id -> (crop box on the 500 dpi page, rotation that turns the sheet into the game's view, title)
-COURSES = {'winding': ((450, 2380, 3150, 3600), -30, 'Winding Paths (Verschlungene Wege) - Medium'),
+COURSES = {'hills': ((450, 800, 2700, 2480), 0, 'Hills of Gold (Die goldenen Huegel) - Easy'),
+           'winding': ((450, 2380, 3150, 3600), -30, 'Winding Paths (Verschlungene Wege) - Medium'),
            'witch': ((2150, 3200, 4150, 4750), 30, "Witch's Cauldron (Der Hexenkessel) - Hard")}
 try: F = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 30)
 except Exception: F = ImageFont.load_default()
@@ -37,4 +38,4 @@ for cid, (box, ang, title) in COURSES.items():
     g = os.path.join(SHOTS, f'course-{cid}.png')
     if not os.path.exists(g): continue
     sheet = Image.open(page).convert('RGB').crop(box).rotate(ang, expand=True, fillcolor=(24, 28, 26))
-    stack(sheet, Image.open(g).convert('RGB'), 1500, title + ': setup sheet, turned 30 deg (top) / game (bottom)').save(os.path.join(OUT, f'course-{cid}.jpg'), quality=86)
+    stack(sheet, Image.open(g).convert('RGB'), 1500, title + (f': setup sheet turned {abs(ang)} deg' if ang else ': setup sheet') + ' (top) / game (bottom)').save(os.path.join(OUT, f'course-{cid}.jpg'), quality=86)
