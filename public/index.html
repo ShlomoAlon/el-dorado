@@ -1983,7 +1983,7 @@ function buildBoard(){
   pat('p-v',16,16,p=>{sv('circle',{cx:4,cy:4,r:1.1,fill:'rgba(120,70,0,.2)'},p);sv('circle',{cx:12,cy:11,r:.9,fill:'rgba(120,70,0,.16)'},p);sv('circle',{cx:13,cy:3,r:.6,fill:'rgba(255,255,255,.25)'},p);});
   pat('p-r',20,20,p=>{for(const[x,y,s]of[[5,5,3],[14,8,2.4],[8,15,2.6],[17,17,1.8]])sv('path',{d:`M${x-s} ${y+s*.6} Q${x-s} ${y-s*.7} ${x} ${y-s*.8} Q${x+s} ${y-s*.6} ${x+s} ${y+s*.6}Z`,fill:'rgba(40,42,40,.2)',stroke:'rgba(255,255,255,.12)','stroke-width':.5},p);});
   pat('p-c',12,12,p=>{sv('path',{d:'M0 12 L12 0',stroke:'rgba(0,0,0,.12)','stroke-width':3},p);});
-  L.plates=sv('g',null,svg);L.terrain=sv('g',null,svg);L.city=sv('g',null,svg);L.hl=sv('g',null,svg2);L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);L.pieces=sv('g',null,svg2);L.aim=sv('g',{'pointer-events':'none'},svg2);
+  L.plates=sv('g',null,svg);L.terrain=sv('g',null,svg);L.city=sv('g',null,svg);L.hl=sv('g',null,svg2);L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);L.pieces=sv('g',null,svg2);L.aim=sv('g',{'pointer-events':'none'},svg2);L.pips=sv('g',{'pointer-events':'none'},svg2); // rubble / base camp progress dots (redrawn every render)
   // board plates (the physical boards): drop shadow + rim
   const byTile=new Map();for(const h of MAP.hexes.values()){if(!byTile.has(h.tile))byTile.set(h.tile,[]);byTile.get(h.tile).push(h);}
   for(const[,hs]of byTile){const g=sv('g',null,L.plates);for(const h of hs)sv('polygon',{points:hexPts(h.x+2,h.y+6,R+2),fill:'rgba(0,0,0,.45)'},g);}
@@ -2087,12 +2087,12 @@ function svgTextToHTML(root,layer){
     layer.appendChild(e);t.remove();}
 }
 function discardAnchor(tk){if(tk[0]==='B'){const p=blPos[+tk.slice(1)];return p?[p[0],p[1]-40]:null;}const h=hexAt(tk);return[h.x,h.y-R*.95];}
-function pulseDiscard(){const g=L.hl&&L.hl.querySelector('.dpips');if(g&&!reduceMotion)g.animate([{transform:g.getAttribute('data-t')+' scale(1.35)'},{transform:g.getAttribute('data-t')+' scale(1)'}],{duration:320,easing:'cubic-bezier(.2,.9,.3,1.3)'});}
+function pulseDiscard(){const g=L.pips&&L.pips.querySelector('.dpips');if(g&&!reduceMotion)g.animate([{transform:g.getAttribute('data-t')+' scale(1.35)'},{transform:g.getAttribute('data-t')+' scale(1)'}],{duration:320,easing:'cubic-bezier(.2,.9,.3,1.3)'});}
 function renderTargets(){
-  L.hl.innerHTML='';hideHover();tgtEls={};
+  L.hl.innerHTML='';L.pips.innerHTML='';hideHover();tgtEls={};
   if(UI.mode==='discardFor'&&UI.pending){const P=UI.pending,a=discardAnchor(P.tk);
     if(a){const n=P.need,w=n*19+14,t=`translate(${a[0]} ${a[1]-4})`;
-      const g=sv('g',{class:'dpips',transform:t,'data-t':t,'pointer-events':'none'},L.aim);
+      const g=sv('g',{class:'dpips',transform:t,'data-t':t,'pointer-events':'none'},L.pips);
       sv('rect',{x:-w/2,y:-14,width:w,height:28,rx:14,fill:'#0b120f',stroke:P.kind==='camp'?'#e08a74':'#d8dcd6','stroke-width':1.5},g);
       for(let i=0;i<n;i++)sv('circle',{cx:-(n-1)*9.5+i*19,cy:0,r:6.4,fill:i<UI.picks.length?(P.kind==='camp'?'#e08a74':'#eef2ec'):'none',stroke:P.kind==='camp'?'#e08a74':'#d8dcd6','stroke-width':2},g);}}
   for(const[k,t]of UI.targets){
