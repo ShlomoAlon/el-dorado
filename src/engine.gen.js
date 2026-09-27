@@ -38,7 +38,7 @@ const BLOCKADES=[{n:1,k:'j',v:1},{n:2,k:'v',v:1},{n:3,k:'r',v:1},{n:4,k:'w',v:1}
    TERRAIN BOARDS — base game letters. Terrain counts per board match the published
    tile catalogue (A/B start boards, C–N double-sided terrain boards).
    Transcribed space by space from the BoardGameHelpers catalogue images (Q4eD.<n>.<L>.gif, image orientation = rotation 0):
-   A B C D F G I K L M N. Still reconstructed (counts right, layout guessed): E H J.
+   A B C D F G I J K L M N. Still reconstructed (counts right, layout guessed): E H.
    rows top→bottom (4,5,6,7,6,5,4): jN jungle · wN water · vN village · rN rubble · cN base camp · mm mountain · ss start
    ========================================================= */
 const BOARDS={
@@ -51,7 +51,7 @@ const BOARDS={
  G:['j1 j1 j1 j1','j1 j2 v1 mm j1','v1 v2 v2 r1 v1 j1','mm mm v4 v3 v2 j2 c1','v1 v2 v2 r1 v1 j1','j1 j2 v1 mm j1','j1 j1 j1 j1'],
  H:['v1 v1 w1 j1','v2 v1 w1 w1 j1','v1 v3 v1 w2 j1 j1','j1 v1 v2 mm w1 w1 j2','j1 v1 v1 v4 w1 j1','j1 j2 v1 w2 w1','j1 v1 j1 w1'],
  I:['j1 j1 j1 j1','v1 j1 mm j1 j1','v1 v2 j1 mm j2 j1','v1 v2 j1 j2 c2 mm mm','v2 r3 mm mm j2 j1','w2 w1 w1 j1 j1','w2 w2 w1 j1'],
- J:['r1 r1 v1 v1','w1 r2 r1 v2 v1','w1 w1 mm r1 v1 j1','w2 w1 r3 c1 r1 v1 j1','w1 w1 r1 mm v3 j1','w1 w1 r1 v1 j2','j1 j1 v1 v1'],
+ J:['w1 w1 w1 w1','w1 mm w2 w1 r2','w1 w2 j1 j2 r2 r1','v1 v1 j2 c1 j1 r2 r1','v1 v2 j1 j1 r2 r1','v1 v2 v2 mm r1','v1 v1 v1 r2'],
  K:['c1 j2 j2 j1','j1 j1 w3 j1 j2','j1 j2 j1 j3 j1 j2','j2 j1 j3 j1 j3 j1 j2','j2 j1 j3 j1 j2 j1','j2 j1 v4 j1 j1','j1 j2 j2 c1'],
  L:['w1 c1 c1 j3','j1 w1 w1 j3 j1','j2 j1 j1 j3 j1 j2','j2 j1 mm j1 mm j1 j2','j1 j2 j2 j1 j2 j1','v2 c2 v2 j1 j1','j2 j2 j1 mm'],
  M:['j1 j1 j1 c1','j1 v4 mm mm w4','j1 v2 j1 j1 w1 mm','mm j1 j1 r2 j1 j1 mm','mm mm mm mm r2 j1','j1 j1 j1 r2 j1','w1 w1 j1 j1'],
@@ -101,6 +101,8 @@ const COURSES=[
   // The other official routes come from page 2 of the same sheet (German "Andere Wege nach El Dorado"). There the hexes are
   // flat-topped; every board was matched space by space against its catalogue tile (tools/course-check/), so positions and
   // rotations are exact. Shown here turned 30° (our lattice is pointy-topped).
+  {id:'hills',name:'Hills of Gold',src:'Rulebook route (German: Die goldenen Hügel)',diff:'Easy', // drawn pointy-topped on the sheet: not turned
+   p:[['B',0,0,1],['C',3,-7,0],['G',7,-14,4],['K',11,-11,1],['J',14,-7,1],['N',21,-10,4]],e:[25,-10],s:'j'},
   {id:'winding',name:'Winding Paths',src:'Rulebook route (German: Verschlungene Wege)',diff:'Medium',
    p:[['B',0,0,2],['I',7,-3,4],['F',11,0,4],['G',8,7,2],['C',15,4,1],['N',19,7,5]],e:[23,7],s:'w'},
   {id:'witch',name:"Witch's Cauldron",src:'Rulebook route (German: Der Hexenkessel)',diff:'Hard',
@@ -972,7 +974,7 @@ function botRandomCourse(seed,nMid){
 /* =========================================================
    NAMED AI PLAYERS — thin layer over the bot (engine_bot.js), shared by local games (browser)
    and online rooms (the Room Durable Object runs them server-side).
-   Doesn't change how the bot decides; it only picks the bot's settings per AI and keeps the
+   Apart from one safety net (aiFinishGuard) it doesn't change how the bot decides; it picks the bot's settings per AI and keeps the
    whole-turn planner's cache per game (the cache is module-global and a server isolate runs many rooms).
    ========================================================= */
 /* rating: the calibrated starting rating (tools/ai/calibrate_ais.mjs: AI-vs-AI games, Raleigh anchored at 1200 = a new player);
@@ -1005,7 +1007,23 @@ function aiChoose(id,mem){
   if(++mem.n>60)return S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
   const r0=RNG;setRng(null);BOT_PLAN_CACHE=mem.plan||null;
   let a=null;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;RNG=r0;}
-  return a||(S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]});
+  return aiFinishGuard(a||(S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}));
+}
+/* El Dorado can only be entered with a card of its symbol (paddle on the water side, machete on the jungle side) or a joker.
+   The bot sometimes trashes its last such card (or nearly its whole deck) and, near the end, stops buying, so it could wait forever next to the finish
+   (seen on the newer courses). Keep one such card when trashing, and buy one before ending a turn without any. */
+const aiFinishCard=t=>{const d=CT[t];return!!d&&d.c!=='p'&&(d.s===MAP.endSym||d.s==='*');};
+function aiFinishGuard(a){
+  const P=S.players[S.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>aiFinishCard(S.cards[id])).length;
+  if(a.t==='trash'&&a.cards){let c=a.cards;
+    if(n){const out=c.filter(id=>aiFinishCard(S.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
+    c=c.slice(0,Math.max(0,all.length-6)); // and never thin the deck below 6 cards (a 2-card deck can't even buy a card)
+    if(c.length!==a.cards.length)return{...a,cards:c};}
+  if(a.t==='end'&&!n&&!S.turn.bought&&!S.turn.pending){
+    const buys=botActions().filter(b=>b.t==='buy'&&aiFinishCard((b.src==='m'?S.market:S.reserve)[b.idx].t));
+    if(buys.length){buys.sort((x,y)=>x.cards.length-y.cards.length);return buys[0];}
+  }
+  return a;
 }
 /* apply the AI's decision; if it is somehow illegal, end the turn instead. Returns applyAction's result. */
 function aiStep(id,mem){

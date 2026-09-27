@@ -81,7 +81,7 @@ for (let g = 0; g < 60; g++) {
     E.newGame({ course, seed: (Math.random() * 1e9) | 0, fullRace: true, players: ais.map((a, i) => ({ name: 'P' + i, color: '#fff', ai: a })) });
     const mem = ais.map(() => ({})); let steps = 0;
     while (!E.S.over && steps++ < 20000) { if (check) check(); const me = E.S.cur; assert(E.S.players[me].ai === ais[me], 'ai seat kept'); const r = E.aiStep(ais[me], mem[me]); assert(r.ok, 'ai action rejected'); publicEvents(r.ev); }
-    assert(E.S.over && E.S.places.includes(1), 'AI game did not finish');
+    assert(E.S.over && E.S.places.includes(1), 'AI game did not finish: ' + course.id + ' ' + ais + ' round ' + E.S.round + ' ' + E.S.players.map(p => p.fin ? 'fin' : p.pieces.join('/')).join(' | '));
   };
   E.aiSetNet(half);
   let diff = 0, n = 0, e0 = E.BOT_EVALS;

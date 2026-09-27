@@ -83,17 +83,17 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
 
 ## 5. Boards — what is real and what is reconstructed (important, owner asked about this)
 
-- **Real, verified space by space** (terrain + strength): **A, B, C, D, F, G, I, K, L, M, N** — transcribed from the BoardGameHelpers tile
+- **Real, verified space by space** (terrain + strength): **A, B, C, D, F, G, I, J, K, L, M, N** — transcribed from the BoardGameHelpers tile
   catalogue images (https://www.boardgamehelpers.com/QuestforElDorado/TileCatalogue.aspx, `Images/Q4eD.<n>.<L>.gif`;
   reachable from the sandbox with curl). Image orientation = rotation 0 in `BOARDS` (rows 4·5·6·7·6·5·4, pointy-top).
   Strength = number of icons (machetes, paddles, coins; cards on camps/rubble). Start spaces `s1`–`s4` carry the
   printed numbers. K was confirmed by the owner; F, G onwards have side-by-side images in `tools/course-check/tile-<L>.jpg`.
 - **Independent check:** the catalogue page lists per tile the terrain counts and a "Traverse Rating", which turns out to be
-  exactly Σ strength + 6 per mountain (start spaces 0). Every transcription must match both. A, B, C, D, F, G, K, L, M match
+  exactly Σ strength + 6 per mountain (start spaces 0). Every transcription must match both. A, B, C, D, F, G, J, K, L, M match
   — but **I and N are each 1 short**, and the images show why: **I's base camp (row 4, 5th space) is 3 cards (c3, we
   have c2)**, **N's row 4, 5th space is a 3-coin village (v3, we have v2)**. Not fixed yet because First Expedition uses
   both and the AI network is trained on it (coordinate with the training side; it's a one-token change each in `BOARDS`).
-- Still reconstructed: **E, H, J** (terrain counts right, layouts guessed) and strips **O–R** (not in).
+- Still reconstructed: **E, H** (terrain counts right, layouts guessed) and strips **O–R** (not in).
   Transcribe them from the same images the same way before adding courses that use them.
 - First Expedition layout and rotations come from Ravensburger's German setup sheet
   (brettspiele-report.de …/Wettlauf nach El Dorado_Spielaufbau.pdf, page 1; page 2 has the 6 other official routes,
@@ -106,7 +106,10 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
   game), made with `tools/course-check/shots.cjs` + `compose.py`.
   Official difficulty (rulebook p. 10 / sheet): easy = First Expedition, Hills of Gold, Home Stretch (needs strip Q);
   medium = Winding Paths, Serpentine; hard = Witch's Cauldron, Swamplands (needs strips O, R).
-  In the game: `first` (Easy), `winding` (Medium), `witch` (Hard).
+  In the game: `first` + `hills` (Easy), `winding` (Medium), `witch` (Hard). Hills of Gold is drawn pointy-topped on the sheet (not turned).
+- **AI safety net** (`aiFinishGuard`, engine_ai.js): on the new courses the planner sometimes trashed its last paddle/machete card
+  (or its deck down to 2 cards) and then waited next to El Dorado forever. The named AIs now keep one card that can enter
+  El Dorado, never trash below 6 cards, and buy such a card before ending a turn without one. engine_bot.js untouched.
 - Blockade costs 1,1,1,1,2,2 are still a guess (BoardGameHelpers has blockade images too).
 - Board rendering: harder spaces are darker (`TSHADE` in ui_view.js), icons laid out 1 / 2 side by side / 3 triangle /
   4 square — owner's request, mirrors the printed tiles.
