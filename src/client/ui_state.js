@@ -10,11 +10,16 @@ const cur=()=>S.players[S.cur];
 const NET={available:false,cfg:null,user:null,token:null,ws:null,lobbyWs:null,room:null,seat:-1,connected:false,deadline:null,skew:0,canUndo:false,busy:false,status:'',rooms:[]};
 const myId=()=>NET.user?NET.user.id:null;
 const online=()=>!!(S&&S.owners);
-const canAct=()=>!REPLAY&&(!S||!online()||(S.owners[S.cur]===myId()&&NET.connected&&!S.over));
-const viewIdx=()=>{if(!online())return S.cur;const i=S.owners.indexOf(myId());return i<0?S.cur:i;};
+const isAI=i=>!!(S&&S.players[i]&&S.players[i].ai);
+const canAct=()=>!REPLAY&&(!S||(online()?S.owners[S.cur]===myId()&&NET.connected&&!S.over:!isAI(S.cur)));
+// local games with AI seats: while an AI moves, the table shows the hand of the human who played last
+const viewIdx=()=>{if(!online()){if(!isAI(S.cur)||REPLAY)return S.cur;const h=isAI(UI.viewer)||UI.viewer==null||UI.viewer>=S.players.length?S.players.findIndex(p=>!p.ai):UI.viewer;return h<0?S.cur:h;}const i=S.owners.indexOf(myId());return i<0?S.cur:i;};
 const hp=()=>S.players[viewIdx()];
 function snapshot(){undoStack.push(JSON.stringify(S));if(undoStack.length>60)undoStack.shift();}
-function save(){if(online()||REPLAY)return;try{localStorage.setItem('eldorado-save-v4',JSON.stringify(S));}catch(e){}}
+/* local save: v5 (players may have .ai); v4 saves have the same shape without AI seats */
+function loadSave(){let s=null;try{s=JSON.parse(localStorage.getItem('eldorado-save-v5')||localStorage.getItem('eldorado-save-v4')||'null');}catch(e){}
+  if(!s||(s.v!==4&&s.v!==5)||s.owners)return null;s.v=5;return s;}
+function save(){if(online()||REPLAY)return;try{localStorage.setItem('eldorado-save-v5',JSON.stringify(S));}catch(e){}}
 
 function computeTargets(){
   const T=new Map();UI.targets=T;if(!S||S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
@@ -81,9 +86,10 @@ function afterLocalChange(turnChanged){
   if(!turnChanged){syncMode(false);render();}
   else{
     syncMode(true);
-    if(S.privacy&&!S.over)UI.cover=true;
+    // hide the hand between human players only (pass-and-play); AI turns never need it
+    if(S.privacy&&!S.over&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
     render();
-    if(!UI.cover&&!S.over){banner(cur().name,'Round '+S.round);ensureVisible();}
+    if(!UI.cover&&!S.over){banner(cur().name,isAI(S.cur)?'AI · Round '+S.round:'Round '+S.round);ensureVisible();}
   }
   if(S.over)setTimeout(()=>showGameOver(),600);
 }
@@ -158,3 +164,41 @@ function undo(){
   syncMode(false);render();
 }
 const canUndo=()=>online()?NET.canUndo:undoStack.length>0;
+
+/* =========================================================
+   LOCAL AI SEATS (engine_ai.js). The AI decides with the shared engine in this page and plays through the
+   same applyAction as everyone else, one action at a time with a short pause so the table can follow.
+   ========================================================= */
+const AIX={timer:0,mem:{},net:null,loading:null,failed:false,gen:0};
+function aiNetLoad(){ // the neural network (~340 KB) is only fetched once a network AI is about to play
+  if(AIX.net)return Promise.resolve(AIX.net);
+  if(!AIX.loading)AIX.loading=(async()=>{
+    let bin;
+    if(AI_NET.b64){const s=atob(AI_NET.b64);bin=new Uint8Array(s.length);for(let i=0;i<s.length;i++)bin[i]=s.charCodeAt(i);}
+    else{const r=await fetch(AI_NET.url);if(!r.ok)throw new Error('HTTP '+r.status);bin=new Uint8Array(await r.arrayBuffer());}
+    AIX.net=aiNetDecode(bin);return AIX.net;
+  })().catch(e=>{AIX.failed=true;AIX.loading=null;console.warn('AI network unavailable:',e);toast('The AI network could not load; the AIs play with the route planner.',3200);return null;});
+  return AIX.loading;
+}
+function aiReset(){clearTimeout(AIX.timer);AIX.timer=0;AIX.mem={};AIX.gen++;} // a new game (or a loaded one) starts
+/* called after every render: if an AI is to move in a local game, schedule its next action */
+function aiKick(){
+  if(AIX.timer||!S||S.over||online()||REPLAY||!isAI(S.cur))return;
+  const seat=S.cur,round=S.round,gen=AIX.gen,first=!S.turn.active&&!S.players[seat].play.length&&!S.turn.bought;
+  const go=async()=>{
+    if(gen!==AIX.gen)return;
+    if(UI.anim){AIX.timer=setTimeout(go,120);return;} // let a moving explorer finish first (thinking can take a frame or two)
+    const id=S&&S.players[seat]&&S.players[seat].ai;
+    if(!id||S.over||online()||REPLAY||S.cur!==seat||S.round!==round){AIX.timer=0;aiKick();return;}
+    if(aiUsesNet(id)&&!AIX.net&&!AIX.failed)await aiNetLoad();
+    if(gen!==AIX.gen)return;
+    if(!S||S.over||online()||REPLAY||S.cur!==seat){AIX.timer=0;return;}
+    aiSetNet(AIX.net);
+    const prevCur=S.cur,prevRound=S.round,mem=AIX.mem[seat]||(AIX.mem[seat]={});
+    const r=aiStep(id,mem);
+    undoStack=[];AIX.timer=0;
+    playEvents(r.ev,viewIdx()); // the AI's purchases don't fly into the human's discard pile
+    afterLocalChange(S.cur!==prevCur||S.round!==prevRound);
+  };
+  AIX.timer=setTimeout(go,reduceMotion?250:first?900:650);
+}

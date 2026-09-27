@@ -713,7 +713,7 @@ function renderHeader(){
     const fin=p.pieces.filter(k=>k==='done').length;
     const bk=p.blocks.map(b=>`<i style="background:${SYMCOL[S.blockades[b].k]}" title="Blockade #${S.blockades[b].n}"></i>`).join('');
     const you=online()&&S.owners[i]===myId();const seat=online()&&NET.room&&NET.room.seats?NET.room.seats.find(x=>x.uid===S.owners[i]):null;const off=!!(seat&&!seat.online);
-    return`<div class="pchip glass${i===S.cur&&!S.over?' on':''}" style="--pc:${p.color}${off?';opacity:.55':''}" title="${off?'offline':''}"><span class="dot"></span><span class="nm">${esc(p.name)}${you?' <span style="color:var(--muted);font-weight:600">(you)</span>':''}</span><span class="st">${p.deck.length+p.hand.length+p.discard.length+p.play.length} cards</span>${bk?`<span class="bk">${bk}</span>`:''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}</div>`;
+    return`<div class="pchip glass${i===S.cur&&!S.over?' on':''}" style="--pc:${p.color}${off?';opacity:.55':''}" title="${off?'offline':''}"><span class="dot"></span><span class="nm">${esc(p.name)}${you?' <span style="color:var(--muted);font-weight:600">(you)</span>':''}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}<span class="st">${p.deck.length+p.hand.length+p.discard.length+p.play.length} cards</span>${bk?`<span class="bk">${bk}</span>`:''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}</div>`;
   }).join('');
 }
 function renderPrompt(){
@@ -723,7 +723,7 @@ function renderPrompt(){
   if(REPLAY){P.innerHTML=replayPromptHTML();btnWire(B,[]);return;}
   const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};const tm=online()&&!S.over?'<span id="turnTimer" class="timer" hidden></span>':'';
   if(S.over){P.innerHTML='The expedition is over.';btnWire(B,[{t:'Results',id:'bRes',fn:()=>showGameOver(S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i])))},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
-  if(!canAct()){P.innerHTML=tm+who+(online()&&S.owners[S.cur]===myId()?'<span class="m">Reconnecting…</span>':'is taking their turn…')+(NET.status?` <span class="m">${esc(NET.status)}</span>`:'');btnWire(B,[]);renderTimer();return;}
+  if(!canAct()){P.innerHTML=tm+who+(online()&&S.owners[S.cur]===myId()?'<span class="m">Reconnecting…</span>':(isAI(S.cur)?'is playing…':'is taking their turn…'))+(NET.status?` <span class="m">${esc(NET.status)}</span>`:'');btnWire(B,[]);renderTimer();return;}
   if(UI.cover){P.innerHTML=who+'is up next. Pass the device, then reveal the hand.';btnWire(B,[{t:'Reveal hand',id:'bRev',pri:1,big:1,fn:()=>{UI.cover=false;render();banner(cur().name,'Round '+S.round);}}]);return;}
   switch(UI.mode){
     case 'idle':{
@@ -768,12 +768,14 @@ function btnWire(B,btns){
 }
 function render(){
   if(!S)return;
+  if(!online()&&!REPLAY&&!isAI(S.cur))UI.viewer=S.cur;
   computeTargets();if(REPLAY)replayDecorate();
   renderHeader();renderMarket();renderPrompt();updateMktH();renderBuySlot();renderCards(); // re-size the market once the buttons exist
   renderBlockades();renderTargets();renderPieces();
   aim.hot=null;if(aimWanted())startAim();else stopAim();
   save();updateTitle();renderTimer();$('#menuBtn').textContent=REPLAY?'Exit replay':online()&&!S.over?'Leave game':'New game';
   if(REPLAY){replayAfterRender();replayBar();}
+  aiKick();
 }
 
 /* =========================================================
@@ -796,19 +798,21 @@ function coursePicker(gid,sel){
   if(COURSES.length>1)opts.push(['random','Random course','Any course from this list']);
   return `<div class="clist" id="${gid}">${opts.map(([id,n,d])=>`<button data-c="${id}" class="${sel===id?'on':''}"><b>${esc(n)}</b><span>${esc(d)}</span></button>`).join('')}</div>`;
 }
-let setup={mode:'local',full:true,oMax:3,oPub:true,oTurn:90,oCourse:'first',n:3,names:['Ana','Ben','Cleo','Dev'],colors:['crimson','ivory','violet','orange'],course:'first',privacy:false,seed:(Math.random()*1e9)|0};
+let setup={mode:'local',full:true,oMax:3,oPub:true,oRated:true,oTurn:90,oCourse:'first',n:3,names:['Ana','Ben','Cleo','Dev'],ai:['','','',''],colors:['crimson','ivory','violet','orange'],course:'first',privacy:false,seed:(Math.random()*1e9)|0};
 function showSetup(){
-  let saved=null;try{saved=JSON.parse(localStorage.getItem('eldorado-save-v4')||'null');}catch(e){}
-  const canResume=saved&&!saved.over&&saved.v===4&&(!S||S.over);
+  try{const a=JSON.parse(localStorage.getItem('eldorado-seats')||'null');if(Array.isArray(a)&&!setup.aiLoaded)a.slice(0,4).forEach((x,i)=>setup.ai[i]=aiById(x)?x:'');}catch(e){}setup.aiLoaded=true;
+  const saved=loadSave();
+  const canResume=saved&&!saved.over&&(saved.v===4||saved.v===5)&&(!S||S.over);
   const routeTxt=()=>MAP&&(!S||S.over)?`<div class="routeInfo">Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random</div>`:'';
   const html=()=>`<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
     <div class="field"><label>How are you playing?</label><div class="seg" id="sMode"><button data-m="local" class="on">On this device</button><button data-m="online">Online</button></div></div>
     <div class="field"><label>Players</label><div class="seg" id="sN">${[2,3,4].map(n=>`<button data-n="${n}" class="${setup.n===n?'on':''}">${n}</button>`).join('')}</div>${setup.n===2?'<p class="note">Two players each lead two explorers. Both must reach El Dorado.</p>':''}</div>
-    <div class="field"><label>Expedition leaders</label>${[...Array(setup.n)].map((_,i)=>`<div class="prow"><input id="pn${i}" maxlength="14" value="${esc(setup.names[i])}" aria-label="Player ${i+1} name"><div class="sws">${COLORS.map(c=>`<button data-p="${i}" data-c="${c.id}" style="--c:${c.hex}" class="${setup.colors[i]===c.id?'on':''}" ${setup.colors.slice(0,setup.n).some((x,j)=>j!==i&&x===c.id)?'disabled':''} aria-label="${c.name}"></button>`).join('')}</div></div>`).join('')}</div>
+    <div class="field"><label>Expedition leaders</label>${[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return`<div class="prow seat"><select class="who" id="pt${i}" aria-label="Player ${i+1}: human or AI"><option value="">Human</option><optgroup label="AI players">${AIS.map(a=>`<option value="${a.id}" ${setup.ai[i]===a.id?'selected':''} ${setup.ai.slice(0,setup.n).some((x,j)=>j!==i&&x===a.id)?'disabled':''}>${a.name} · ${a.tier}</option>`).join('')}</optgroup></select>${A?`<div class="ainm" title="${esc(A.desc)}"><span>${esc(A.desc)}</span></div>`:`<input id="pn${i}" maxlength="14" value="${esc(setup.names[i])}" aria-label="Player ${i+1} name">`}<div class="sws">${COLORS.map(c=>`<button data-p="${i}" data-c="${c.id}" style="--c:${c.hex}" class="${setup.colors[i]===c.id?'on':''}" ${setup.colors.slice(0,setup.n).some((x,j)=>j!==i&&x===c.id)?'disabled':''} aria-label="${c.name}"></button>`).join('')}</div></div>`;}).join('')}${allAI()?'<p class="note" style="color:#f3c98b">Seat at least one human player.</p>':''}</div>
     <div class="field"><label>Course</label>${coursePicker('sC',setup.course)}<div id="rInfo">${routeTxt()}</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><button data-f="1" class="${setup.full?'on':''}">When all but one arrive</button><button data-f="0" class="${setup.full?'':'on'}">At the first arrival (official)</button></div></div>
     <div class="field"><label class="chk"><input type="checkbox" id="sPriv" ${setup.privacy?'checked':''}> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
     <div class="mrow"><button class="btn" id="sReplays">Replays</button>${canResume?'<button class="btn" id="sResume">Resume saved game</button>':''}${S&&!S.over?'<button class="btn" id="sClose">Back to game</button>':''}<button class="btn pri big" id="sGo">Start expedition</button></div>`;
+  const allAI=()=>setup.ai.slice(0,setup.n).every(x=>x);
   const preview=()=>{if(S&&!S.over)return;try{setup.cur=pickCourse(setup.course);MAP=buildCourse(setup.cur,setup.seed);buildBoard();fit();L.pieces.innerHTML='';const ri=document.getElementById('rInfo');if(ri)ri.innerHTML=routeTxt();}catch(e){console.error(e);}};
   const mount=sc=>{
     const m=sc.querySelector('.modal');
@@ -819,16 +823,20 @@ function showSetup(){
       m.querySelectorAll('#sN button').forEach(b=>b.onclick=()=>{setup.n=+b.dataset.n;rerender();});
       m.querySelectorAll('#sC button').forEach(b=>b.onclick=()=>{setup.course=b.dataset.c;preview();rerender();});
       m.querySelectorAll('.sws button').forEach(b=>b.onclick=()=>{setup.colors[+b.dataset.p]=b.dataset.c;rerender();});
+      m.querySelectorAll('select.who').forEach(e=>e.onchange=()=>{sync();setup.ai[+e.id.slice(2)]=e.value;try{localStorage.setItem('eldorado-seats',JSON.stringify(setup.ai));}catch(_){}m.innerHTML=html();wire();});
+      m.querySelector('#sGo').disabled=allAI();
       m.querySelector('#sPriv').onchange=e=>setup.privacy=e.target.checked;
       m.querySelectorAll('#sFull button').forEach(b=>b.onclick=()=>{setup.full=b.dataset.f==='1';rerender();});
-      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{S=saved;MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
+      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{aiReset();UI.viewer=null;S=saved;MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
       const cl=m.querySelector('#sClose');if(cl)cl.onclick=closeModal;
       m.querySelector('#sReplays').onclick=()=>{closeModal();setTimeout(showReplays,170);};
       m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];
         for(const[,el]of cardEls)el.remove();cardEls.clear();
-        newGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>({name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex}))});
-        buildBoard();UI.mode='idle';UI.piece=0;UI.cover=S.privacy;lastPlayer=-1;closeModal();render();fit();
-        if(!UI.cover)banner(cur().name,'Round 1');
+        if(allAI())return;aiReset();
+        newGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return{name:A?A.name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex,ai:A?A.id:undefined};})});
+        if(S.players.some(p=>p.ai&&aiUsesNet(p.ai)))aiNetLoad();
+        buildBoard();UI.mode='idle';UI.piece=0;UI.viewer=null;UI.cover=S.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;lastPlayer=-1;closeModal();render();fit();
+        if(!UI.cover)banner(cur().name,isAI(S.cur)?'AI · Round 1':'Round 1');
         setup.seed=(Math.random()*1e9)|0;};
     };
     m.innerHTML=html();wire();
