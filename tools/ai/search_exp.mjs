@@ -31,7 +31,7 @@ function playout(root, me, cand, seed, budget, DEPTH) { // returns [value, simul
 function searchChoose(me, budget, rnd, DEPTH) {
   const root = E.S, sc = E.botScoreActions(me, rnd, 4); E.S = root;
   const ok = sc.filter(x => x.v > -Infinity);
-  if (ok.length <= 1) return { a: (ok[0] || sc[0]).a, why: 'forced', sims: 0 };
+  if (ok.length <= 1) return { a: (ok[0] || sc[0]).a, why: 'forced', sims: 0, used: 0 };
   // estimate how long a playout is from here, then compare only as many candidates as the budget can treat equally
   const [v0, L] = playout(root, me, ok[0].a, (rnd() * 2 ** 31) | 0, budget, DEPTH); E.S = root;
   const C = Math.max(2, Math.min(6, Math.floor(budget / L / 2)));
@@ -45,7 +45,7 @@ function searchChoose(me, budget, rnd, DEPTH) {
     if (used >= budget) break;
   }
   E.S = root; const best = cands[0];
-  return { a: best.a, why: best.a === ok[0].a ? 'agrees' : 'changed', sims, est: best.n ? best.sum / best.n : null };
+  return { a: best.a, why: best.a === ok[0].a ? 'agrees' : 'changed', sims, used, est: best.n ? best.sum / best.n : null };
 }
 
 // TABLE mode: 4-player games, seats = plain net + searchers at 2, 5 and 10 turns ahead, rotated every game
@@ -59,13 +59,14 @@ for (let g = 0; g < +G; g++) {
     title: TABLE ? `search table: plain net vs 2 / 5 / 10 turns ahead (${BUDGET} simulated actions per move) · seed ${seed}` : `search (${DEPTH} turns ahead, ${BUDGET} simulated actions per move) vs 2 plain nets · seed ${seed}`,
     players: pols.map((p, i) => ({ name: `${name(p)} ${i + 1}`, bot: p === 'net' ? 'net' : 'search' + p })), actions: [] };
   const gen = E.replayStart(log); let rs = (seed * 7919) >>> 0; const rnd = () => ((rs = (rs * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const cpu = pols.map(() => 0); let acts = 0, capped = false;
+  const cpu = pols.map(() => 0), per = pols.map(() => ({ moves: 0, searched: 0, overruled: 0, playouts: 0, simActions: 0 })); let acts = 0, capped = false;
   while (!E.S.over) {
     if (E.S.round > 25) { capped = true; E.setRng(null); E.endGame(); break; }
     const me = E.S.cur, pol = pols[me]; E.setRng(null); const t0 = process.cpuUsage();
     const c = pol === 'net' ? E.botChoose({ mode: 'net', rnd }) : searchChoose(me, +BUDGET, rnd, pol);
     const u = process.cpuUsage(t0); cpu[me] += (u.user + u.system) / 1e6;
-    if (pol !== 'net' && c.why !== 'forced') { stat(pol).decisions++; if (c.why === 'changed') stat(pol).changed++; }
+    per[me].moves++;
+    if (pol !== 'net' && c.why !== 'forced') { stat(pol).decisions++; if (c.why === 'changed') stat(pol).changed++; per[me].searched++; if (c.why === 'changed') per[me].overruled++; per[me].playouts += c.sims || 0; per[me].simActions += c.used || 0; }
     E.setRng(gen); const r = E.applyAction(me, c.a); log.actions.push([me, r.ok ? c.a : { t: 'end', keep: [] }]); if (!r.ok) E.applyAction(me, { t: 'end', keep: [] });
     if (++acts > 4000) { capped = true; break; }
   }
@@ -76,6 +77,11 @@ for (let g = 0; g < +G; g++) {
     res.push(`${p === 'net' ? 'plain' : p + '-turn'}: ${place}${P.fin ? ' (r' + P.fin + ')' : ' (-)'}`); });
   log.result = { capped, arrived: S.players.map(p => p.fin) };
   writeFileSync(`tools/ai/data/replays/search-${DEPTH}-${seed}.json`, JSON.stringify(log));
+  let replay = null; // upload the game so it can be watched
+  try { const r = await fetch('https://el-dorado.shlomoalon9.workers.dev/api/replays', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(log) }); const j = await r.json(); if (r.ok) replay = j.id; } catch (e) { }
+  appendFileSync(`tools/ai/data/search-${DEPTH}.jsonl`, JSON.stringify({ time: new Date().toISOString(), seed, replay, capped, rounds: S.round,
+    players: pols.map((p, i) => ({ variant: p === 'net' ? 'plain' : p + ' turns', seat: i + 1, place: S.places ? S.places[i] : n, arrived: S.players[i].fin || null,
+      thinkSec: +cpu[i].toFixed(1), ...per[i] })) }) + '\n');
   say(`[${new Date().toISOString().slice(11, 19)}] game ${g + 1}/${G} seed ${seed}: ${res.join(' · ')}`);
 }
 const avg = a => (a.reduce((x, y) => x + y, 0) / (a.length || 1)).toFixed(2);

@@ -4,3 +4,4 @@ node_modules
 .claude/worktrees/
 tools/ai/data/
 training-progress.md
+search-progress.md
