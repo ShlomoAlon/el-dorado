@@ -67,3 +67,7 @@ The search-distillation run after 35 iterations. Ladder vs first-distill-22: +19
 ## first-anneal-8 (frozen 2026-09-27 14:20 UTC) — worse, not used
 
 first-distill-35 plus 8 iterations with the aggressive fading temperature (ANNEAL=2,0.6,0.03, EXPLORE_EPS=0.01, MAXBACK+DISTILL on). Ladder vs its parent: -62±15 Elo with search, -30±15 plain — stopped (owner: "if it is getting worse, do not run it").
+
+## first-distill-41 (frozen 2026-09-27 15:09 UTC)
+
+The search-distillation run after 41 iterations. Ladder vs first-distill-22: +11±12 with search, +6±12 plain — the run has plateaued since ~it 22. Next: the same run with a larger replay window (REPLAY=6).
