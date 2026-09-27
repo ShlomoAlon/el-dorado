@@ -17,6 +17,8 @@ def dense(rows):
     rr = np.repeat(np.arange(len(rows)), ln); off = np.arange(tot) - np.repeat(np.cumsum(ln) - ln, ln); src = torch.from_numpy(np.repeat(st, ln) + off)
     out = torch.zeros(len(rows), nf); out[torch.from_numpy(rr), IDX[src]] = VAL[src]; return out
 H1, H2 = 128, 64
+if os.path.exists(out):  # keep the size of an existing network (networks can be widened: tools/ai/widen.mjs)
+    _J = json.load(open(out)); H1, H2 = len(_J['b1']), len(_J['b2']); del _J
 net = nn.Sequential(nn.Linear(nf, H1), nn.LeakyReLU(0.01), nn.Linear(H1, H2), nn.LeakyReLU(0.01), nn.Linear(H2, 1))
 keep = {}  # multi-course networks carry their course list (and history) through training
 if os.path.exists(out):
