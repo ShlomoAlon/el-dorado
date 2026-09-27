@@ -36,6 +36,12 @@ if (!isMainThread) {
     // exploration: now and then every player starts with the same extra card, favouring cards the bot rarely buys
     if (mode === 'self' && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
       st.explore.gift = (st.explore.gift || 0) + 1; inc('Gift card given to every player (exploration)', glog.gift); }
+    // search runs: one net seat per self-play game plays plain (no planner), the others through the planner — the data covers
+    // both kinds of play, so the network stays accurate for plain play while it learns the planner's positions
+    const plainSeat = pols.map(() => false);
+    if (mode === 'self' && search) { const ns = pols.map((p, i) => p === 'net' ? i : -1).filter(i => i >= 0);
+      if (ns.length > 1 || rnd() < .5) plainSeat[ns[Math.floor(rnd() * ns.length)]] = true; }
+    glog.players.forEach((p, i) => { if (pols[i] === 'net' && search) p.name = `${plainSeat[i] ? 'Net (no search)' : 'Net + search'} ${i + 1}`; });
     const shuf = E.replayStart(glog); E.setRng(null);
     const traj = pols.map(() => []); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
     while (!E.S.over) {
@@ -46,7 +52,7 @@ if (!isMainThread) {
       const c = mode === 'eval' && pols[me] === 'netP' ? E.botChoose({ mode: 'net', rnd })
         : mode === 'eval' && pols[me] === 'old' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd })))
         : mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined })
-        : isNet ? E.botChoose({ mode: 'net', eps, temp, typeEps, turnState, rnd, search })
+        : isNet ? E.botChoose({ mode: 'net', eps, temp, typeEps, turnState, rnd, search: plainSeat[me] ? undefined : search })
         : E.botChoose({ mode: bench, eps: .03, noise: .3, rnd });
       // track every kind of decision the network makes (and which of them were exploration)
       if (isNet) {
