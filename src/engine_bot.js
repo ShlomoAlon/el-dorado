@@ -235,13 +235,14 @@ const BOT_FLAGS=4,BOT_BLOCK={};
 function botBlockSize(id){if(BOT_BLOCK[id]!=null)return BOT_BLOCK[id];const C=courseById(id);if(!C)return BOT_BLOCK[id]=0;
   const m=MAP&&MAP.course===id?MAP:buildCourse(C,1),keys=[...m.hexes.keys()].filter(k=>m.hexes.get(k).type!=='m');return BOT_BLOCK[id]=keys.length*4+m.conns.length*8;}
 const botMulti=()=>!!(BOT_NET&&BOT_NET.courses);
-function botNetNF(){if(botMulti())return BOT_NF+BOT_FLAGS+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(id),0);return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8;}
+// net.onehot: one input per course (1 = the current course) right after the rule switches, so the network can shift its whole evaluation per map
+function botNetNF(){if(botMulti())return BOT_NF+BOT_FLAGS+(BOT_NET.onehot?BOT_NET.courses.length:0)+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(id),0);return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8;}
 let BOT_FBUF=null;
 function botNetFeatures(me,scratch){ // scratch: reuse one buffer (only for values used at once, never for stored training samples)
   const{keys,idx}=botMapOrder(),n=S.players.length,nf=botNetNF();let f;
   if(scratch){if(!BOT_FBUF||BOT_FBUF.length!==nf)BOT_FBUF=new Float32Array(nf);else BOT_FBUF.fill(0);f=BOT_FBUF;}else f=new Float32Array(nf);
   botFeatures(me,f);let o=BOT_NF;
-  if(botMulti()){f[o]=S.rules&&S.rules.campOnce?1:0;o+=BOT_FLAGS;for(const id of BOT_NET.courses){if(id===MAP.course)break;o+=botBlockSize(id);}}
+  if(botMulti()){f[o]=S.rules&&S.rules.campOnce?1:0;o+=BOT_FLAGS;if(BOT_NET.onehot){f[o+BOT_NET.courses.indexOf(MAP.course)]=1;o+=BOT_NET.courses.length;}for(const id of BOT_NET.courses){if(id===MAP.course)break;o+=botBlockSize(id);}}
   S.players.forEach((p,j)=>{const rel=(j-me+n)%n;if(rel>3)return;for(const k of p.pieces){if(k==='done')continue;const x=idx.get(k);if(x!=null)f[o+x*4+rel]=1;}});
   o+=keys.length*4;
   S.blockades.forEach(B=>{const c=o+B.conn*8;const t='jwvr'.indexOf(B.k);if(t>=0)f[c+t]=1;f[c+4]=B.v/2;f[c+5]=B.owner===null?1:0;f[c+6]=B.owner===me?1:0;f[c+7]=B.owner!==null&&B.owner!==me?1:0;});
