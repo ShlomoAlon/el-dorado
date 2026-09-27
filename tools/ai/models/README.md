@@ -63,3 +63,7 @@ first-td2 plus 22 iterations of search distillation (DISTILL=1, MAXBACK=1: withi
 ## first-distill-35 (frozen 2026-09-27 13:08 UTC)
 
 The search-distillation run after 35 iterations. Ladder vs first-distill-22: +19±13 with search, +16±13 plain (it29: +17±15 / -20±15) — slow gains, not promoted. Parent of the fading-temperature run.
+
+## first-anneal-8 (frozen 2026-09-27 14:20 UTC) — worse, not used
+
+first-distill-35 plus 8 iterations with the aggressive fading temperature (ANNEAL=2,0.6,0.03, EXPLORE_EPS=0.01, MAXBACK+DISTILL on). Ladder vs its parent: -62±15 Elo with search, -30±15 plain — stopped (owner: "if it is getting worse, do not run it").
