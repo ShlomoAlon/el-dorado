@@ -51,3 +51,7 @@ first-qmax plus 5 iterations with log-odds exploration (EXPLORE_T=0.03, EXPLORE_
 ## first-tstrap1 (frozen 2026-09-27 08:52 UTC)
 
 first-qmax plus 4 iterations with TreeStrap (1 untaken option per decision, max backup on). Move-first test position: 39% vs 61% (first-qmax: 17% vs 55%). Frozen before raising TreeStrap to 3 options per decision.
+
+## first-tstrap3 (frozen 2026-09-27 09:27 UTC)
+
+first-tstrap1 plus TreeStrap with 3 untaken options (6 iterations total in the run). Ladder: TreeStrap networks are ~50 Elo WORSE than first-qmax with search (1508±10 vs 1556±6) — stopped.
