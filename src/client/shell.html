@@ -294,6 +294,17 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 .prow{display:flex;gap:10px;align-items:center;margin-bottom:8px}
 .prow input{flex:1;min-width:0;background:#0c1512;border:1px solid var(--line2);border-radius:9px;padding:9px 12px;font:inherit;font-size:14px;color:var(--text);outline:none;user-select:text;-webkit-user-select:text}
 .prow input:focus{border-color:var(--gold)}
+select.who{flex:0 0 auto;appearance:none;-webkit-appearance:none;background:#0c1512 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2398aa9f' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--line2);border-radius:9px;padding:9px 28px 9px 11px;font:inherit;font-size:13.5px;font-weight:700;color:var(--text);cursor:pointer;outline:none;max-width:48%}
+select.who:focus-visible{border-color:var(--gold)}
+select.who option,select.who optgroup{background:#121d19;color:var(--text)}
+.prow .ainm{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:0 4px;font-size:12.5px;color:var(--muted);line-height:1.25;min-height:38px}
+.prow .ainm span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+@media (max-width:520px){ /* phones: kind + colour on one line, the name (or what the AI is) under it */
+  .prow.seat{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"who sws" "nm nm";gap:6px 10px;margin-bottom:12px}
+  .prow.seat select.who{grid-area:who;max-width:none}.prow.seat .sws{grid-area:sws}
+  .prow.seat input,.prow.seat .ainm{grid-area:nm}.prow.seat .ainm{min-height:0;padding:0 2px}
+}
+.aitag{font-size:9.5px;font-weight:800;letter-spacing:.08em;color:var(--gold2);border:1px solid rgba(233,178,74,.55);border-radius:5px;padding:0 4px;line-height:14px}
 .sws{display:flex;gap:5px}
 .sws button{width:24px;height:24px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:var(--c);padding:0;transition:transform .12s}
 .sws button.on{border-color:#fff;transform:scale(1.1)}

@@ -38,12 +38,14 @@ function newGame(o){
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
     const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
-    return{name:p.name,color:p.color,pieces:[],deck:shuffle(deck),hand:[],discard:[],play:[],blocks:[],fin:0,resigned:0};
+    const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck),hand:[],discard:[],play:[],blocks:[],fin:0,resigned:0};
+    if(p.ai&&aiById(p.ai))pl.ai=p.ai; // a named AI plays this seat (engine_ai.js)
+    return pl;
   });
   const st=MAP.starts;
   if(players.length===2){players[0].pieces=[st[0],st[2]];players[1].pieces=[st[1],st[3]];}
   else players.forEach((p,i)=>p.pieces=[st[i]]);
-  S={v:4,seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
+  S={v:5,seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
      blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,start:0,round:1,endTriggered:false,over:false,winners:null,places:null,
      fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[],privacy:!!o.privacy,resigns:0};
   players.forEach(p=>drawCards(p,4));

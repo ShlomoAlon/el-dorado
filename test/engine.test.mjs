@@ -64,4 +64,29 @@ for (let g = 0; g < 60; g++) {
   assert(Math.abs(d.reduce((a, b) => a + b, 0)) < 0.5, 'elo not zero-sum');
   for (let s = 0; s < np; s++) { const R = E.redact(S, s); R.players.forEach((p, i) => { if (i !== s) { assert(p.hand.every(id => !R.cards[id]), 'hand leak'); assert(p.deck.every(id => !R.cards[id]), 'deck leak'); } }); }
 }
+// named AI seats (engine_ai.js): the shipped half-float network matches the trained one, AI games finish,
+// the network plays on its own course (First Expedition) and the AIs fall back to the route planner elsewhere
+{
+  const { readFileSync } = await import('node:fs');
+  const full = JSON.parse(readFileSync(new URL('../tools/ai/models/first-qmax.json', import.meta.url), 'utf8'));
+  const half = E.aiNetDecode(readFileSync(new URL('../src/ai/first.bin', import.meta.url)));
+  assert(half.course === full.course && half.nf === full.nf && half.w1T.length === full.w1T.length, 'packed network header');
+  const aiGame = (course, ais, check) => {
+    E.newGame({ course, seed: (Math.random() * 1e9) | 0, fullRace: true, players: ais.map((a, i) => ({ name: 'P' + i, color: '#fff', ai: a })) });
+    const mem = ais.map(() => ({})); let steps = 0;
+    while (!E.S.over && steps++ < 20000) { if (check) check(); const me = E.S.cur; assert(E.S.players[me].ai === ais[me], 'ai seat kept'); assert(E.aiStep(ais[me], mem[me]).ok, 'ai action rejected'); }
+    assert(E.S.over && E.S.places.includes(1), 'AI game did not finish');
+  };
+  E.aiSetNet(half);
+  let diff = 0, n = 0, e0 = E.BOT_EVALS;
+  aiGame(E.courseById('first'), ['humboldt', 'orellana', 'raleigh'], () => {
+    if (n++ % 9) return; const f = E.botNetFeatures(E.S.cur); E.aiSetNet(full); const a = E.botNetValue(f); E.aiSetNet(half); diff = Math.max(diff, Math.abs(a - E.botNetValue(f))); });
+  assert(E.BOT_EVALS - e0 > 1000, 'network not used on First Expedition');
+  assert(diff < 2e-3, 'packed network differs: ' + diff);
+  const rc = E.botRandomCourse(7, 3); E.buildCourse(rc, 1);
+  e0 = E.BOT_EVALS; aiGame(rc, ['humboldt', 'orellana'], () => assert(!E.aiNetFits(), 'network used on a course it was not trained for'));
+  assert(E.BOT_EVALS === e0, 'network evaluated on another course');
+  E.aiSetNet(null);
+  console.log(`ok: AI games finish (network on First Expedition, planner elsewhere), packed network within ${diff.toExponential(1)}`);
+}
 console.log(`ok: ${games} games, map ${mapMs.toFixed(2)} ms, slowest action ${maxAct.toFixed(2)} ms`);

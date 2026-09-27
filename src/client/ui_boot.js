@@ -30,9 +30,9 @@ function boot(){
     let room=null;try{room=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'')||null;}catch(e){}
     if(room&&NET.available){if(NET.user){joinRoom(room);return;}NET.pendingRoom=room;showHub();return;}
     if(NET.user&&NET.active){showHub();return;}
-    let saved=null;try{saved=JSON.parse(localStorage.getItem('eldorado-save-v4')||'null');}catch(e){}
-    if(saved&&!saved.over&&saved.v===4&&!saved.owners){
-      try{S=saved;MAP=mapFor(S);buildBoard();UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();requestAnimationFrame(()=>fit());
+    const saved=loadSave();
+    if(saved&&!saved.over){
+      try{aiReset();S=saved;MAP=mapFor(S);buildBoard();UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();requestAnimationFrame(()=>fit());
         if(!UI.cover)banner(cur().name,'Round '+S.round);return;}catch(e){console.error(e);S=null;}
     }
     showSetup();

@@ -306,6 +306,17 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 .prow{display:flex;gap:10px;align-items:center;margin-bottom:8px}
 .prow input{flex:1;min-width:0;background:#0c1512;border:1px solid var(--line2);border-radius:9px;padding:9px 12px;font:inherit;font-size:14px;color:var(--text);outline:none;user-select:text;-webkit-user-select:text}
 .prow input:focus{border-color:var(--gold)}
+select.who{flex:0 0 auto;appearance:none;-webkit-appearance:none;background:#0c1512 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2398aa9f' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--line2);border-radius:9px;padding:9px 28px 9px 11px;font:inherit;font-size:13.5px;font-weight:700;color:var(--text);cursor:pointer;outline:none;max-width:48%}
+select.who:focus-visible{border-color:var(--gold)}
+select.who option,select.who optgroup{background:#121d19;color:var(--text)}
+.prow .ainm{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:0 4px;font-size:12.5px;color:var(--muted);line-height:1.25;min-height:38px}
+.prow .ainm span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+@media (max-width:520px){ /* phones: kind + colour on one line, the name (or what the AI is) under it */
+  .prow.seat{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"who sws" "nm nm";gap:6px 10px;margin-bottom:12px}
+  .prow.seat select.who{grid-area:who;max-width:none}.prow.seat .sws{grid-area:sws}
+  .prow.seat input,.prow.seat .ainm{grid-area:nm}.prow.seat .ainm{min-height:0;padding:0 2px}
+}
+.aitag{font-size:9.5px;font-weight:800;letter-spacing:.08em;color:var(--gold2);border:1px solid rgba(233,178,74,.55);border-radius:5px;padding:0 4px;line-height:14px}
 .sws{display:flex;gap:5px}
 .sws button{width:24px;height:24px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:var(--c);padding:0;transition:transform .12s}
 .sws button.on{border-color:#fff;transform:scale(1.1)}
@@ -425,6 +436,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 (()=>{
 'use strict';
 const $=s=>document.querySelector(s);
+const AI_NET={url:'/ai/first.bin'};
 /* =========================================================
    CARD DATA (base game)
    ========================================================= */
@@ -616,12 +628,14 @@ function newGame(o){
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
     const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
-    return{name:p.name,color:p.color,pieces:[],deck:shuffle(deck),hand:[],discard:[],play:[],blocks:[],fin:0,resigned:0};
+    const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck),hand:[],discard:[],play:[],blocks:[],fin:0,resigned:0};
+    if(p.ai&&aiById(p.ai))pl.ai=p.ai; // a named AI plays this seat (engine_ai.js)
+    return pl;
   });
   const st=MAP.starts;
   if(players.length===2){players[0].pieces=[st[0],st[2]];players[1].pieces=[st[1],st[3]];}
   else players.forEach((p,i)=>p.pieces=[st[i]]);
-  S={v:4,seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
+  S={v:5,seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
      blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,start:0,round:1,endTriggered:false,over:false,winners:null,places:null,
      fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[],privacy:!!o.privacy,resigns:0};
   players.forEach(p=>drawCards(p,4));
@@ -1366,6 +1380,49 @@ function botRandomCourse(seed,nMid){
 }
 
 /* =========================================================
+   NAMED AI PLAYERS — thin layer over the bot (engine_bot.js), shared by local games (browser)
+   and online rooms (the Room Durable Object runs them server-side).
+   Doesn't change how the bot decides; it only picks the bot's settings per AI and keeps the
+   whole-turn planner's cache per game (the cache is module-global and a server isolate runs many rooms).
+   ========================================================= */
+const AIS=[
+  {id:'humboldt',name:'Humboldt',tier:'Master',desc:'Neural network that plans each whole turn',opts:{mode:'net',search:{kind:'plan',beam:3}}},
+  {id:'orellana',name:'Orellana',tier:'Strong',desc:'Neural network, one move at a time',opts:{mode:'net'}},
+  {id:'raleigh',name:'Raleigh',tier:'Steady',desc:'Hand-written route planner',opts:{mode:'plan'}},
+];
+const aiById=id=>AIS.find(a=>a.id===id)||null;
+const aiUsesNet=id=>{const a=aiById(id);return!!(a&&a.opts.mode==='net');};
+/* the shipped network: see tools/ai/pack.mjs for the format (half floats) */
+function aiNetDecode(bin){
+  const u8=bin instanceof Uint8Array?bin:new Uint8Array(bin),dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
+  const hl=dv.getUint32(0,true),H=JSON.parse(new TextDecoder().decode(u8.subarray(4,4+hl)));
+  let o=4+hl+((4+hl)&1);const N={course:H.course,nf:H.nf,unsettled:H.unsettled,name:H.name};
+  const half=h=>{const s=h&0x8000?-1:1,e=(h>>10)&31,m=h&1023;return e===0?s*m*2**-24:e===31?(m?NaN:s*Infinity):s*(1+m/1024)*2**(e-15);};
+  const tab=new Float32Array(65536);for(let i=0;i<65536;i++)tab[i]=half(i);
+  for(const[k,n]of H.parts){const a=new Float32Array(n);for(let i=0;i<n;i++,o+=2)a[i]=tab[dv.getUint16(o,true)];N[k]=a;}
+  return N;
+}
+function aiSetNet(n){BOT_NET=n;}
+const aiNetFits=()=>botNetReady();
+/* one decision for the AI in seat S.cur. mem: per-game object ({}) that keeps the turn planner's cache between calls.
+   Returns a legal action (falls back to ending the turn). */
+function aiChoose(id,mem){
+  const A=aiById(id)||AIS[AIS.length-1];mem=mem||{};
+  let opts=A.opts;if(opts.mode==='net'&&!botNetReady())opts={mode:'plan'}; // network missing or trained for another course
+  const me=S.cur,tk=me+':'+S.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
+  if(++mem.n>60)return S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
+  const r0=RNG;setRng(null);BOT_PLAN_CACHE=mem.plan||null;
+  let a=null;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;RNG=r0;}
+  return a||(S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]});
+}
+/* apply the AI's decision; if it is somehow illegal, end the turn instead. Returns applyAction's result. */
+function aiStep(id,mem){
+  const me=S.cur,a=aiChoose(id,mem);let r=applyAction(me,a);
+  if(!r.ok){if(S.turn.pending)applyAction(me,{t:'trash',cards:[]});S.turn.active=null;r=applyAction(me,{t:'end',keep:[]});}
+  return r;
+}
+
+/* =========================================================
    UI STATE + ACTIONS. Every rules change goes through act():
    locally it runs the shared engine; online it is sent to the server,
    which runs the same engine and sends back the new state.
@@ -1377,11 +1434,16 @@ const cur=()=>S.players[S.cur];
 const NET={available:false,cfg:null,user:null,token:null,ws:null,lobbyWs:null,room:null,seat:-1,connected:false,deadline:null,skew:0,canUndo:false,busy:false,status:'',rooms:[]};
 const myId=()=>NET.user?NET.user.id:null;
 const online=()=>!!(S&&S.owners);
-const canAct=()=>!REPLAY&&(!S||!online()||(S.owners[S.cur]===myId()&&NET.connected&&!S.over));
-const viewIdx=()=>{if(!online())return S.cur;const i=S.owners.indexOf(myId());return i<0?S.cur:i;};
+const isAI=i=>!!(S&&S.players[i]&&S.players[i].ai);
+const canAct=()=>!REPLAY&&(!S||(online()?S.owners[S.cur]===myId()&&NET.connected&&!S.over:!isAI(S.cur)));
+// local games with AI seats: while an AI moves, the table shows the hand of the human who played last
+const viewIdx=()=>{if(!online()){if(!isAI(S.cur)||REPLAY)return S.cur;const h=isAI(UI.viewer)||UI.viewer==null||UI.viewer>=S.players.length?S.players.findIndex(p=>!p.ai):UI.viewer;return h<0?S.cur:h;}const i=S.owners.indexOf(myId());return i<0?S.cur:i;};
 const hp=()=>S.players[viewIdx()];
 function snapshot(){undoStack.push(JSON.stringify(S));if(undoStack.length>60)undoStack.shift();}
-function save(){if(online()||REPLAY)return;try{localStorage.setItem('eldorado-save-v4',JSON.stringify(S));}catch(e){}}
+/* local save: v5 (players may have .ai); v4 saves have the same shape without AI seats */
+function loadSave(){let s=null;try{s=JSON.parse(localStorage.getItem('eldorado-save-v5')||localStorage.getItem('eldorado-save-v4')||'null');}catch(e){}
+  if(!s||(s.v!==4&&s.v!==5)||s.owners)return null;s.v=5;return s;}
+function save(){if(online()||REPLAY)return;try{localStorage.setItem('eldorado-save-v5',JSON.stringify(S));}catch(e){}}
 
 function computeTargets(){
   const T=new Map();UI.targets=T;if(!S||S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
@@ -1448,9 +1510,10 @@ function afterLocalChange(turnChanged){
   if(!turnChanged){syncMode(false);render();}
   else{
     syncMode(true);
-    if(S.privacy&&!S.over)UI.cover=true;
+    // hide the hand between human players only (pass-and-play); AI turns never need it
+    if(S.privacy&&!S.over&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
     render();
-    if(!UI.cover&&!S.over){banner(cur().name,'Round '+S.round);ensureVisible();}
+    if(!UI.cover&&!S.over){banner(cur().name,isAI(S.cur)?'AI · Round '+S.round:'Round '+S.round);ensureVisible();}
   }
   if(S.over)setTimeout(()=>showGameOver(),600);
 }
@@ -1525,6 +1588,44 @@ function undo(){
   syncMode(false);render();
 }
 const canUndo=()=>online()?NET.canUndo:undoStack.length>0;
+
+/* =========================================================
+   LOCAL AI SEATS (engine_ai.js). The AI decides with the shared engine in this page and plays through the
+   same applyAction as everyone else, one action at a time with a short pause so the table can follow.
+   ========================================================= */
+const AIX={timer:0,mem:{},net:null,loading:null,failed:false,gen:0};
+function aiNetLoad(){ // the neural network (~340 KB) is only fetched once a network AI is about to play
+  if(AIX.net)return Promise.resolve(AIX.net);
+  if(!AIX.loading)AIX.loading=(async()=>{
+    let bin;
+    if(AI_NET.b64){const s=atob(AI_NET.b64);bin=new Uint8Array(s.length);for(let i=0;i<s.length;i++)bin[i]=s.charCodeAt(i);}
+    else{const r=await fetch(AI_NET.url);if(!r.ok)throw new Error('HTTP '+r.status);bin=new Uint8Array(await r.arrayBuffer());}
+    AIX.net=aiNetDecode(bin);return AIX.net;
+  })().catch(e=>{AIX.failed=true;AIX.loading=null;console.warn('AI network unavailable:',e);toast('The AI network could not load; the AIs play with the route planner.',3200);return null;});
+  return AIX.loading;
+}
+function aiReset(){clearTimeout(AIX.timer);AIX.timer=0;AIX.mem={};AIX.gen++;} // a new game (or a loaded one) starts
+/* called after every render: if an AI is to move in a local game, schedule its next action */
+function aiKick(){
+  if(AIX.timer||!S||S.over||online()||REPLAY||!isAI(S.cur))return;
+  const seat=S.cur,round=S.round,gen=AIX.gen,first=!S.turn.active&&!S.players[seat].play.length&&!S.turn.bought;
+  const go=async()=>{
+    if(gen!==AIX.gen)return;
+    if(UI.anim){AIX.timer=setTimeout(go,120);return;} // let a moving explorer finish first (thinking can take a frame or two)
+    const id=S&&S.players[seat]&&S.players[seat].ai;
+    if(!id||S.over||online()||REPLAY||S.cur!==seat||S.round!==round){AIX.timer=0;aiKick();return;}
+    if(aiUsesNet(id)&&!AIX.net&&!AIX.failed)await aiNetLoad();
+    if(gen!==AIX.gen)return;
+    if(!S||S.over||online()||REPLAY||S.cur!==seat){AIX.timer=0;return;}
+    aiSetNet(AIX.net);
+    const prevCur=S.cur,prevRound=S.round,mem=AIX.mem[seat]||(AIX.mem[seat]={});
+    const r=aiStep(id,mem);
+    undoStack=[];AIX.timer=0;
+    playEvents(r.ev,viewIdx()); // the AI's purchases don't fly into the human's discard pile
+    afterLocalChange(S.cur!==prevCur||S.round!==prevRound);
+  };
+  AIX.timer=setTimeout(go,reduceMotion?250:first?900:650);
+}
 
 /* =========================================================
    SOUND: tiny synthesized UI effects (Web Audio, no files).
@@ -2676,7 +2777,7 @@ function renderHeader(){
     const fin=p.pieces.filter(k=>k==='done').length;
     const bk=p.blocks.map(b=>`<i style="background:${SYMCOL[S.blockades[b].k]}" title="Blockade #${S.blockades[b].n}"></i>`).join('');
     const you=online()&&S.owners[i]===myId();const seat=online()&&NET.room&&NET.room.seats?NET.room.seats.find(x=>x.uid===S.owners[i]):null;const off=!!(seat&&!seat.online);
-    return`<div class="pchip glass${i===S.cur&&!S.over?' on':''}" style="--pc:${p.color}${off?';opacity:.55':''}" title="${off?'offline':''}"><span class="dot"></span><span class="nm">${esc(p.name)}${you?' <span style="color:var(--muted);font-weight:600">(you)</span>':''}</span><span class="st">${p.deck.length+p.hand.length+p.discard.length+p.play.length} cards</span>${bk?`<span class="bk">${bk}</span>`:''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}</div>`;
+    return`<div class="pchip glass${i===S.cur&&!S.over?' on':''}" style="--pc:${p.color}${off?';opacity:.55':''}" title="${off?'offline':''}"><span class="dot"></span><span class="nm">${esc(p.name)}${you?' <span style="color:var(--muted);font-weight:600">(you)</span>':''}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}<span class="st">${p.deck.length+p.hand.length+p.discard.length+p.play.length} cards</span>${bk?`<span class="bk">${bk}</span>`:''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}</div>`;
   }).join('');
 }
 function renderPrompt(){
@@ -2686,7 +2787,7 @@ function renderPrompt(){
   if(REPLAY){P.innerHTML=replayPromptHTML();btnWire(B,[]);return;}
   const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};const tm=online()&&!S.over?'<span id="turnTimer" class="timer" hidden></span>':'';
   if(S.over){P.innerHTML='The expedition is over.';btnWire(B,[{t:'Results',id:'bRes',fn:()=>showGameOver(S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i])))},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
-  if(!canAct()){P.innerHTML=tm+who+(online()&&S.owners[S.cur]===myId()?'<span class="m">Reconnecting…</span>':'is taking their turn…')+(NET.status?` <span class="m">${esc(NET.status)}</span>`:'');btnWire(B,[]);renderTimer();return;}
+  if(!canAct()){P.innerHTML=tm+who+(online()&&S.owners[S.cur]===myId()?'<span class="m">Reconnecting…</span>':(isAI(S.cur)?'is playing…':'is taking their turn…'))+(NET.status?` <span class="m">${esc(NET.status)}</span>`:'');btnWire(B,[]);renderTimer();return;}
   if(UI.cover){P.innerHTML=who+'is up next. Pass the device, then reveal the hand.';btnWire(B,[{t:'Reveal hand',id:'bRev',pri:1,big:1,fn:()=>{UI.cover=false;render();banner(cur().name,'Round '+S.round);}}]);return;}
   switch(UI.mode){
     case 'idle':{
@@ -2731,12 +2832,14 @@ function btnWire(B,btns){
 }
 function render(){
   if(!S)return;
+  if(!online()&&!REPLAY&&!isAI(S.cur))UI.viewer=S.cur;
   computeTargets();if(REPLAY)replayDecorate();
   renderHeader();renderMarket();renderPrompt();updateMktH();renderBuySlot();renderCards(); // re-size the market once the buttons exist
   renderBlockades();renderTargets();renderPieces();
   aim.hot=null;if(aimWanted())startAim();else stopAim();
   save();updateTitle();renderTimer();$('#menuBtn').textContent=REPLAY?'Exit replay':online()&&!S.over?'Leave game':'New game';
   if(REPLAY){replayAfterRender();replayBar();}
+  aiKick();
 }
 
 /* =========================================================
@@ -2759,19 +2862,21 @@ function coursePicker(gid,sel){
   if(COURSES.length>1)opts.push(['random','Random course','Any course from this list']);
   return `<div class="clist" id="${gid}">${opts.map(([id,n,d])=>`<button data-c="${id}" class="${sel===id?'on':''}"><b>${esc(n)}</b><span>${esc(d)}</span></button>`).join('')}</div>`;
 }
-let setup={mode:'local',full:true,oMax:3,oPub:true,oTurn:90,oCourse:'first',n:3,names:['Ana','Ben','Cleo','Dev'],colors:['crimson','ivory','violet','orange'],course:'first',privacy:false,seed:(Math.random()*1e9)|0};
+let setup={mode:'local',full:true,oMax:3,oPub:true,oRated:true,oTurn:90,oCourse:'first',n:3,names:['Ana','Ben','Cleo','Dev'],ai:['','','',''],colors:['crimson','ivory','violet','orange'],course:'first',privacy:false,seed:(Math.random()*1e9)|0};
 function showSetup(){
-  let saved=null;try{saved=JSON.parse(localStorage.getItem('eldorado-save-v4')||'null');}catch(e){}
-  const canResume=saved&&!saved.over&&saved.v===4&&(!S||S.over);
+  try{const a=JSON.parse(localStorage.getItem('eldorado-seats')||'null');if(Array.isArray(a)&&!setup.aiLoaded)a.slice(0,4).forEach((x,i)=>setup.ai[i]=aiById(x)?x:'');}catch(e){}setup.aiLoaded=true;
+  const saved=loadSave();
+  const canResume=saved&&!saved.over&&(saved.v===4||saved.v===5)&&(!S||S.over);
   const routeTxt=()=>MAP&&(!S||S.over)?`<div class="routeInfo">Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random</div>`:'';
   const html=()=>`<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
     <div class="field"><label>How are you playing?</label><div class="seg" id="sMode"><button data-m="local" class="on">On this device</button><button data-m="online">Online</button></div></div>
     <div class="field"><label>Players</label><div class="seg" id="sN">${[2,3,4].map(n=>`<button data-n="${n}" class="${setup.n===n?'on':''}">${n}</button>`).join('')}</div>${setup.n===2?'<p class="note">Two players each lead two explorers. Both must reach El Dorado.</p>':''}</div>
-    <div class="field"><label>Expedition leaders</label>${[...Array(setup.n)].map((_,i)=>`<div class="prow"><input id="pn${i}" maxlength="14" value="${esc(setup.names[i])}" aria-label="Player ${i+1} name"><div class="sws">${COLORS.map(c=>`<button data-p="${i}" data-c="${c.id}" style="--c:${c.hex}" class="${setup.colors[i]===c.id?'on':''}" ${setup.colors.slice(0,setup.n).some((x,j)=>j!==i&&x===c.id)?'disabled':''} aria-label="${c.name}"></button>`).join('')}</div></div>`).join('')}</div>
+    <div class="field"><label>Expedition leaders</label>${[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return`<div class="prow seat"><select class="who" id="pt${i}" aria-label="Player ${i+1}: human or AI"><option value="">Human</option><optgroup label="AI players">${AIS.map(a=>`<option value="${a.id}" ${setup.ai[i]===a.id?'selected':''} ${setup.ai.slice(0,setup.n).some((x,j)=>j!==i&&x===a.id)?'disabled':''}>${a.name} · ${a.tier}</option>`).join('')}</optgroup></select>${A?`<div class="ainm" title="${esc(A.desc)}"><span>${esc(A.desc)}</span></div>`:`<input id="pn${i}" maxlength="14" value="${esc(setup.names[i])}" aria-label="Player ${i+1} name">`}<div class="sws">${COLORS.map(c=>`<button data-p="${i}" data-c="${c.id}" style="--c:${c.hex}" class="${setup.colors[i]===c.id?'on':''}" ${setup.colors.slice(0,setup.n).some((x,j)=>j!==i&&x===c.id)?'disabled':''} aria-label="${c.name}"></button>`).join('')}</div></div>`;}).join('')}${allAI()?'<p class="note" style="color:#f3c98b">Seat at least one human player.</p>':''}</div>
     <div class="field"><label>Course</label>${coursePicker('sC',setup.course)}<div id="rInfo">${routeTxt()}</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><button data-f="1" class="${setup.full?'on':''}">When all but one arrive</button><button data-f="0" class="${setup.full?'':'on'}">At the first arrival (official)</button></div></div>
     <div class="field"><label class="chk"><input type="checkbox" id="sPriv" ${setup.privacy?'checked':''}> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
     <div class="mrow"><button class="btn" id="sReplays">Replays</button>${canResume?'<button class="btn" id="sResume">Resume saved game</button>':''}${S&&!S.over?'<button class="btn" id="sClose">Back to game</button>':''}<button class="btn pri big" id="sGo">Start expedition</button></div>`;
+  const allAI=()=>setup.ai.slice(0,setup.n).every(x=>x);
   const preview=()=>{if(S&&!S.over)return;try{setup.cur=pickCourse(setup.course);MAP=buildCourse(setup.cur,setup.seed);buildBoard();fit();L.pieces.innerHTML='';const ri=document.getElementById('rInfo');if(ri)ri.innerHTML=routeTxt();}catch(e){console.error(e);}};
   const mount=sc=>{
     const m=sc.querySelector('.modal');
@@ -2782,16 +2887,20 @@ function showSetup(){
       m.querySelectorAll('#sN button').forEach(b=>b.onclick=()=>{setup.n=+b.dataset.n;rerender();});
       m.querySelectorAll('#sC button').forEach(b=>b.onclick=()=>{setup.course=b.dataset.c;preview();rerender();});
       m.querySelectorAll('.sws button').forEach(b=>b.onclick=()=>{setup.colors[+b.dataset.p]=b.dataset.c;rerender();});
+      m.querySelectorAll('select.who').forEach(e=>e.onchange=()=>{sync();setup.ai[+e.id.slice(2)]=e.value;try{localStorage.setItem('eldorado-seats',JSON.stringify(setup.ai));}catch(_){}m.innerHTML=html();wire();});
+      m.querySelector('#sGo').disabled=allAI();
       m.querySelector('#sPriv').onchange=e=>setup.privacy=e.target.checked;
       m.querySelectorAll('#sFull button').forEach(b=>b.onclick=()=>{setup.full=b.dataset.f==='1';rerender();});
-      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{S=saved;MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
+      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{aiReset();UI.viewer=null;S=saved;MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
       const cl=m.querySelector('#sClose');if(cl)cl.onclick=closeModal;
       m.querySelector('#sReplays').onclick=()=>{closeModal();setTimeout(showReplays,170);};
       m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];
         for(const[,el]of cardEls)el.remove();cardEls.clear();
-        newGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>({name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex}))});
-        buildBoard();UI.mode='idle';UI.piece=0;UI.cover=S.privacy;lastPlayer=-1;closeModal();render();fit();
-        if(!UI.cover)banner(cur().name,'Round 1');
+        if(allAI())return;aiReset();
+        newGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return{name:A?A.name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex,ai:A?A.id:undefined};})});
+        if(S.players.some(p=>p.ai&&aiUsesNet(p.ai)))aiNetLoad();
+        buildBoard();UI.mode='idle';UI.piece=0;UI.viewer=null;UI.cover=S.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;lastPlayer=-1;closeModal();render();fit();
+        if(!UI.cover)banner(cur().name,isAI(S.cur)?'AI · Round 1':'Round 1');
         setup.seed=(Math.random()*1e9)|0;};
     };
     m.innerHTML=html();wire();
@@ -3225,9 +3334,9 @@ function boot(){
     let room=null;try{room=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'')||null;}catch(e){}
     if(room&&NET.available){if(NET.user){joinRoom(room);return;}NET.pendingRoom=room;showHub();return;}
     if(NET.user&&NET.active){showHub();return;}
-    let saved=null;try{saved=JSON.parse(localStorage.getItem('eldorado-save-v4')||'null');}catch(e){}
-    if(saved&&!saved.over&&saved.v===4&&!saved.owners){
-      try{S=saved;MAP=mapFor(S);buildBoard();UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();requestAnimationFrame(()=>fit());
+    const saved=loadSave();
+    if(saved&&!saved.over){
+      try{aiReset();S=saved;MAP=mapFor(S);buildBoard();UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();requestAnimationFrame(()=>fit());
         if(!UI.cover)banner(cur().name,'Round '+S.round);return;}catch(e){console.error(e);S=null;}
     }
     showSetup();
