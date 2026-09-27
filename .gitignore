@@ -5,3 +5,4 @@ node_modules
 tools/ai/data/
 training-progress.md
 search-progress.md
+deep-progress.md
