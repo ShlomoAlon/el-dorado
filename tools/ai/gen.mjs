@@ -11,7 +11,8 @@ import { writeFileSync, readFileSync, appendFileSync, mkdirSync, readdirSync, st
 import { cpus } from 'node:os';
 import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
-const MAXBACK = process.env.MAXBACK === '1'; // within-turn max backup (see the self-play loop)
+const MAXBACK = process.env.MAXBACK === '1';
+const TREESTRAP = +(process.env.TREESTRAP || 0); // untaken options learned per decision (see the self-play loop) // within-turn max backup (see the self-play loop)
 
 if (!isMainThread) {
   const { mode, games, seed0, net, course, H, eps, temp, lotemp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam, oldNet, wi = 0 } = workerData;
@@ -65,6 +66,14 @@ if (!isMainThread) {
         if (lp && lp.round === S.round && !lp.ended && traj[me].length === lp.idx + 1) {
           const b = c.best != null && !(turnState && turnState.noBuy) ? c.best : E.botChoose({ mode: 'net', rnd }).best;
           trajB[me][lp.idx] = b; st.maxback = (st.maxback || 0) + 1; } }
+      // TREESTRAP=n (TreeStrap-style): also learn from n options I did NOT take. Each is scored one step further ahead (the best
+      // option available after it, within my turn), so positions my habits never reach (e.g. move before buying) get trained too.
+      if (TREESTRAP && mode === 'self' && isNet) { const root = E.S, sib = E.botActions().filter(a => a.t !== 'end' && JSON.stringify(a) !== JSON.stringify(c.a));
+        for (let k = 0; k < TREESTRAP && sib.length; k++) { const a = sib.splice(Math.floor(rnd() * sib.length), 1)[0];
+          E.S = E.botClone(root); const r = E.applyAction(me, a);
+          if (r.ok && !E.S.over && E.S.cur === me && !E.playerDone(E.S.players[me])) { const f = E.botNetFeatures(me), b = E.botChoose({ mode: 'net', rnd }).best;
+            if (b != null && b > -Infinity) { X.push(f); Y.push(b); st.treestrap = (st.treestrap || 0) + 1; } }
+          E.S = root; } }
       // track every kind of decision the network makes (and which of them were exploration)
       if (isNet) {
         const a = c.a, P = S.players[me];
@@ -166,7 +175,7 @@ if (isMainThread) {
     for (const [f] of old) unlinkSync(D + f); } catch (e) { } // keep the newest 60 capped-game replays
   // per table size: every player's share of the wins (sums to 100% minus games nobody finished), place value, arrival round
   const tab = st.tab ? Object.fromEntries(Object.entries(st.tab).map(([n, tn]) => [n, { games: tn.games, ...Object.fromEntries(Object.entries(tn).filter(([k]) => k !== 'games').map(([k, t]) => [k, { games: t.seats, wins: t.wins, winRate: +(t.wins / t.seats).toFixed(3), placeValue: +(t.pv / t.seats).toFixed(3), arrival: t.arrN ? +(t.arrSum / t.arrN).toFixed(2) : null }])) }])) : undefined;
-  const summary = { mode, horizon: wd.H, explore: X, games: GN, table: tab, secs: (Date.now() - t0) / 1000, capped: st.capped, maxback: st.maxback || 0, netDecisions: st.netDec || 0, explored: (st.explore && st.explore.explore) || 0, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
+  const summary = { mode, horizon: wd.H, explore: X, games: GN, table: tab, secs: (Date.now() - t0) / 1000, capped: st.capped, maxback: st.maxback || 0, treestrap: st.treestrap || 0, netDecisions: st.netDec || 0, explored: (st.explore && st.explore.explore) || 0, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
     win3p: r3 == null ? null : +r3.toFixed(3), win4p: r4 == null ? null : +r4.toFixed(3), vsFair: rel,
     netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur, transNet: st.transNet, transHeur: st.transHeur, decisions: st.dec, exploration: st.explore, stuck: st.stuck, bench: wd.bench };
   if (out !== '-' && mode === 'self') {

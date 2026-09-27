@@ -42,3 +42,8 @@ To go back: `cp tools/ai/models/first-td2.json tools/ai/data/first.net.json`.
 first-td2 plus 10 iterations of plain self-play with the within-turn max backup (MAXBACK=1). Tests vs the planner heuristic
 averaged about 2.5× its fair share (first-td2: 2.24×); head-to-head vs first-td2 (512 games, after 7 iterations) about even:
 plain 110 vs 99 wins, with search 141 vs 164. Frozen before trying log-odds exploration (run `first-explore`).
+
+## first-explore (frozen 2026-09-27)
+
+first-qmax plus 5 iterations with log-odds exploration (EXPLORE_T=0.03, EXPLORE_EPS=0.01, max backup on). Head-to-head vs first-qmax
+(512 games): with search 154 vs 141 wins, plain 103 vs 119 — no clear gain; not used as a base. Next run (TreeStrap) starts from first-qmax.
