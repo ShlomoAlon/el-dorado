@@ -1,6 +1,6 @@
 // Four-way test between networks with / without the whole-turn planner, seats rotated, fixed seeds.
 //   node tools/ai/versus.mjs [games per table size=96] [workers=4]
-//   seats: old+search / old / new+search / new (old = tools/ai/models/first-td-evaluated.json, new = NEW or tools/ai/data/first-plan.net.json)
+//   seats: old+search / old / new+search / new (old = OLD or tools/ai/models/first-td-evaluated.json, new = NEW or tools/ai/data/first-plan.net.json)
 //   4-player games: all four; 3-player games: each set of three in turn. Games stop at round 25 (not arrived = no win).
 import { E } from '../../src/engine.gen.js';
 import { readFileSync } from 'node:fs';
@@ -23,7 +23,7 @@ if (!isMainThread) {
   parentPort.postMessage(r);
 } else {
   const G = 2 * +(process.argv[2] || 96), W = +(process.argv[3] || 4), t0 = Date.now();
-  const nets = { old: JSON.parse(readFileSync('tools/ai/models/first-td-evaluated.json', 'utf8')), new: JSON.parse(readFileSync(process.env.NEW || 'tools/ai/data/first-plan.net.json', 'utf8')) };
+  const nets = { old: JSON.parse(readFileSync(process.env.OLD || 'tools/ai/models/first-td-evaluated.json', 'utf8')), new: JSON.parse(readFileSync(process.env.NEW || 'tools/ai/data/first-plan.net.json', 'utf8')) };
   const per = Math.ceil(G / W);
   const parts = await Promise.all([...Array(W)].map((_, w) => new Promise((ok, bad) => { const wk = new Worker(new URL(import.meta.url), { workerData: { from: w * per, to: Math.min(G, (w + 1) * per), nets } }); wk.on('message', ok); wk.on('error', bad); })));
   const T = {}; for (const p of parts) for (const s in p) for (const k in p[s]) { const a = (T[s] = T[s] || {})[k] = T[s][k] || { seats: 0, wins: 0, arr: 0, arrN: 0 }; for (const f in a) a[f] += p[s][k][f]; }
