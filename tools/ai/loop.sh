@@ -30,6 +30,8 @@ for i in $(seq 1 $N); do
   log "GEN $out"
   prev=$( (grep -l "\"horizon\":$H," $D/$P.it*.json 2>/dev/null || true) | xargs -r ls -t | head -${REPLAY:-3} | sed 's/\.json$//' | tr '\n' ' ')
   log "TRAIN $(python3 tools/ai/train.py $NET $C 3 $prev 2>/dev/null)"
+  # keep the disk bounded: only the newest ${KEEP_BATCHES:-8} self-play batches keep their sample files (summaries stay)
+  ( ls -t $D/$P.it*.json 2>/dev/null | tail -n +$(( ${KEEP_BATCHES:-8} + 1 )) | sed 's/\.json$//' | while read b; do rm -f $b.*.bin; done ) || true
   ev=$(HORIZON=$H node tools/ai/gen.mjs eval 160 - $NET $C); log "EVAL $ev"
   wr=$(echo "$ev" | num vsFair)   # 1.0 = wins its fair share (as good as the heuristic)
   cp $NET $D/$P.h$H.json

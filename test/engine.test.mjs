@@ -68,7 +68,7 @@ for (let g = 0; g < 60; g++) {
 // the network plays on its own course (First Expedition) and the AIs fall back to the route planner elsewhere
 {
   const { readFileSync } = await import('node:fs');
-  const full = JSON.parse(readFileSync(new URL('../tools/ai/models/first-distill-22.json', import.meta.url), 'utf8'));
+  const full = JSON.parse(readFileSync(new URL('../tools/ai/models/first-distill-35.json', import.meta.url), 'utf8'));
   const half = E.aiNetDecode(readFileSync(new URL('../src/ai/first.bin', import.meta.url)));
   assert(half.course === full.course && half.nf === full.nf && half.w1T.length === full.w1T.length, 'packed network header');
   // 'play' events (shown to every player online) name only cards that just became public: in play or removed from the game

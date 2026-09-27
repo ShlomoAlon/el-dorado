@@ -35,6 +35,10 @@ if (!isMainThread) {
   console.log(`${A.name} vs ${B.name}: ${N} games in ${((Date.now() - t0) / 1000).toFixed(0)} s · wins: ` + Object.entries(tally).map(([k, t]) => `${k} ${t.wins}/${t.seats}`).join(' · '));
 } else if (process.argv[2] === 'report') {
   const games = existsSync(LOG) ? readFileSync(LOG, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : [];
+  // the same weights under two names (a snapshot later frozen as a model) count as one player: tools/ai/data/ladder-alias.json
+  const AL = existsSync('tools/ai/data/ladder-alias.json') ? JSON.parse(readFileSync('tools/ai/data/ladder-alias.json', 'utf8')) : {};
+  const alias = id => { const s = id.endsWith('+s'), b = s ? id.slice(0, -2) : id; return (AL[b] || b) + (s ? '+s' : ''); };
+  for (const g of games) for (const x of g.seats) x.id = alias(x.id);
   const ids = [...new Set(games.flatMap(g => g.seats.map(s => s.id)))], ix = Object.fromEntries(ids.map((id, i) => [id, i]));
   const pairs = []; // [winner index, loser index, weight]
   for (const g of games) for (let i = 0; i < g.seats.length; i++) for (let j = i + 1; j < g.seats.length; j++) {

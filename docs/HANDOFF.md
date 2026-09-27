@@ -107,7 +107,7 @@ wrangler.jsonc            Worker config: assets ./public, D1 "DB", DOs ROOMS(Roo
 src/engine_data.js        CT (cards), MARKET0/RESERVE0, BLOCKADES, BOARDS, hex geometry, genMap/buildMap (seeded)
 src/engine_ai.js          named AI players (AIS: Humboldt / Orellana / Raleigh) over engine_bot.js: aiChoose/aiStep, per-game
                           plan cache, aiNetDecode (half-float network). engine_bot.js itself is the training code's: don't change it
-src/ai/first.bin          the shipped network (tools/ai/pack.mjs from tools/ai/models/first-distill-22.json; build copies it to public/ai/)
+src/ai/first.bin          the shipped network (tools/ai/pack.mjs from tools/ai/models/first-distill-35.json; build copies it to public/ai/)
 src/engine_rules.js       S/MAP globals, newGame, reach/nativeTargets/payTargets, applyAction, advance, resign,
                           endGame (placements), eloDeltas, redact
 src/client/shell.html     <title>, fonts, all CSS (design tokens in :root), SVG symbol defs, DOM skeleton
@@ -202,7 +202,7 @@ incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning
 - Three named AIs (`AIS` in `src/engine_ai.js`), all the same bot code with different settings:
   **Humboldt** (Master) = value network + whole-turn planner (`{mode:'net',search:{kind:'plan',beam:3}}`, the strongest),
   **Orellana** (Strong) = value network one action at a time, **Raleigh** (Steady) = heuristic route planner (`mode:'plan'`).
-  The network (`first-distill-22`, promoted on the ladder; was `first-qmax`) only fits First Expedition (`botNetReady`); elsewhere the network AIs play as the planner.
+  The network (`first-distill-35`, promoted on the ladder; earlier `first-distill-22`, `first-qmax`) only fits First Expedition (`botNetReady`); elsewhere the network AIs play as the planner.
 - Network shipping: half floats, 339 KB (288 KB gzip), outputs within 2e-4 of the JSON (checked in engine.test). The site
   fetches `/ai/first.bin` only when a network AI is about to move; the artifact has it inline (`AI_NET.b64`); the worker imports
   the .bin (wrangler's default Data rule → ArrayBuffer). To ship a new network: `node tools/ai/pack.mjs <model.json>` then build.
