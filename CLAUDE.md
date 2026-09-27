@@ -31,9 +31,9 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
 6. Tell him in 1–3 sentences what changed and that it's deploying.
 
 ## Libraries (owner's rule)
-- Use a library only when it's large, widely used for exactly that job, and removes a lot of hard complexity
-  (e.g. robust pan/zoom across wheel, trackpad and touch). Never add one for simple things. Vendor it into the build
-  (the client is one self-contained page).
+- Use a library when it solves a genuinely difficult problem (e.g. robust pan/zoom across wheel, trackpad and touch)
+  and has a strong reputation / wide use for exactly that job. Its size doesn't matter (smaller is better).
+  Never add one for simple things. Vendor it into the build (the client is one self-contained page).
 
 ## Hard invariants
 - **All rules live in the engine.** The client builds an action and calls `act(a)`; locally that runs `applyAction`,
