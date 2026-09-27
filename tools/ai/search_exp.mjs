@@ -1,12 +1,11 @@
 // How much does decision-time search improve the trained network? (experiment; not used by training or play)
-//   node tools/ai/search_exp.mjs <depth: turn|round|game> [games=15] [budget=1000] [seed0=70000]
-//   (turn depth ignores the budget: it tries every legal action with two deals each)
+//   node tools/ai/search_exp.mjs <depth: number of my turns to look ahead, e.g. 2 | 5 | 10> [games=15] [budget=1000] [seed0=70000]
 // 3-player games: one searching net vs two plain nets, seats rotated; the same seeds for every depth (paired comparison).
 // At each decision with more than one option the searcher spends `budget` simulated actions (~5 s of one core):
 //   candidates = the plain net's top 6; successive halving (drop the worse half each round) with playouts where
 //   hidden information is re-dealt at random (my deck order, opponents' hands and decks) and everyone plays the plain net;
-//   a playout stops at the end of my turn (turn), the start of my next turn (round) or the end of the game (game) and is
-//   scored by the net's value there (exact place value once the game is over). Every candidate gets the same random deals.
+//   a playout stops when my turn comes round DEPTH more times (or the game ends) and is scored by the net's value there
+//   (exact place value once the game is over). Every candidate gets the same random deals.
 // Writes a line per game and a summary; saves each game as a replay log (tools/ai/data/replays/search-<depth>-<seed>.json).
 import { E } from '../../src/engine.gen.js';
 import { readFileSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
@@ -19,11 +18,9 @@ const shuf = (a, g) => { for (let i = a.length - 1; i > 0; i--) { const j = Math
 function playout(root, me, cand, seed, budget) { // returns [value, simulated actions]
   const g = E.mulberry32(seed); E.S = E.botClone(root); E.setRng(g);
   E.S.players.forEach((p, j) => { if (j === me) { shuf(p.deck, g); return; } const pool = shuf([...p.hand, ...p.deck], g); p.hand = pool.slice(0, p.hand.length); p.deck = pool.slice(p.hand.length); });
-  let r = E.applyAction(me, cand), n = 1, passed = false;
+  let r = E.applyAction(me, cand), n = 1, away = false, turns = 0;
   while (r.ok && !E.S.over && n < budget) {
-    if (E.S.cur !== me) passed = true;
-    if (DEPTH === 'turn' && passed) break;
-    if (DEPTH === 'round' && passed && E.S.cur === me) break;
+    if (E.S.cur !== me) away = true; else if (away) { away = false; if (++turns >= +DEPTH) break; } // my turn came round again
     if (E.S.round > 25) { E.endGame(); break; } // the 25-round cap: not arriving counts as a loss
     E.setRng(null); const c = E.botChoose({ mode: 'net', rnd: g }); E.setRng(g);
     r = E.applyAction(E.S.cur, c.a); n++; if (!r.ok) r = E.applyAction(E.S.cur, { t: 'end', keep: [] });
@@ -34,11 +31,6 @@ function searchChoose(me, budget, rnd) {
   const root = E.S, sc = E.botScoreActions(me, rnd, 4); E.S = root;
   const ok = sc.filter(x => x.v > -Infinity);
   if (ok.length <= 1) return { a: (ok[0] || sc[0]).a, why: 'forced', sims: 0 };
-  // turn depth: my own turn is nearly certain (only draw cards add luck), so try every legal action, finish the turn with the
-  // plain net, two deals each; no fixed budget (it takes what it needs, typically well under the others' 5 s)
-  if (DEPTH === 'turn') { const seeds = [0, 1].map(() => (rnd() * 2 ** 31) | 0); let best = null, sims = 0;
-    for (const x of ok) { let t = 0; for (const sd of seeds) { t += playout(root, me, x.a, sd, 100000)[0]; sims++; } const v = t / seeds.length; if (!best || v > best.v) best = { a: x.a, v }; }
-    E.S = root; return { a: best.a, why: best.a === ok[0].a ? 'agrees' : 'changed', sims, est: best.v }; }
   // estimate how long a playout is from here, then compare only as many candidates as the budget can treat equally
   const [v0, L] = playout(root, me, ok[0].a, (rnd() * 2 ** 31) | 0, budget); E.S = root;
   const C = Math.max(2, Math.min(6, Math.floor(budget / L / 2)));
