@@ -13,7 +13,7 @@ import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 
 if (!isMainThread) {
-  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam, oldNet } = workerData;
+  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam, oldNet, wi = 0 } = workerData;
   // four-way test (search runs): the new net with search ('net'), the same net without search ('netP'), the frozen old net ('old'),
   // and in 4-player games the heuristic benchmark too; seats rotated
   const table = mode === 'eval' && beam && oldNet;
@@ -28,7 +28,7 @@ if (!isMainThread) {
     let pols;
     // 3- and 4-player games only (2-player games use different rules)
     if (mode === 'self') { const np = rnd() < .5 ? 3 : 4; pols = Array.from({ length: np }, () => rnd() < .25 ? 'heur' : 'net'); if (!pols.includes('net')) pols[0] = 'net'; }
-    else if (table) { const np = g % 2 ? 4 : 3, a = np === 4 ? ['net', 'heur', 'netP', 'old'] : ['net', 'netP', 'old']; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); }
+    else if (table) { const gi = wi * games + g, np = gi % 2 ? 4 : 3, a = np === 4 ? ['net', 'heur', 'netP', 'old'] : ['net', 'netP', 'old']; pols = a.map((_, i) => a[(i + (gi >> 1)) % np]); }
     else { const np = g % 2 ? 4 : 3, a = ['net', ...Array(np - 1).fill('heur')]; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); } // half 3-player, half 4-player, seats rotated
     // every game is recorded as a replayable log (seeded shuffles); games that hit the final cap are saved for viewing
     const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: (rnd() * 2 ** 31) | 0, rng: (rnd() * 2 ** 32) >>> 0, fullRace: true,
@@ -136,8 +136,8 @@ if (isMainThread) {
     oldNet: mode === 'eval' && +(env.SEARCH_BEAM || 0) ? JSON.parse(readFileSync(env.EVAL_OLD || 'tools/ai/models/first-td-evaluated.json', 'utf8')) : null,
     transEps: 0 };                 // (forced random Transmitter picks removed: gift cards cover rare cards)
   const GN = wd.oldNet ? +(env.EVAL_GAMES || 72) : +G; // the four-way test uses fewer games
-  const rs = await Promise.all(Array.from({ length: W }, () => new Promise((res, rej) => {
-    const w = new Worker(new URL(import.meta.url), { workerData: { ...wd, games: Math.ceil(GN / W), seed0: (Math.random() * 2 ** 31) | 0 } });
+  const rs = await Promise.all(Array.from({ length: W }, (_, wi) => new Promise((res, rej) => {
+    const w = new Worker(new URL(import.meta.url), { workerData: { ...wd, wi, games: Math.ceil(GN / W), seed0: (Math.random() * 2 ** 31) | 0 } });
     w.on('message', res); w.on('error', rej);
   })));
   const st = {}; for (const r of rs) for (const k in r.st) { const v = r.st[k];

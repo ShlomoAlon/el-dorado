@@ -720,8 +720,9 @@ function botValue(me,mode){
 /* fast structural copy of the game state (everything applyAction can change gets its own copy) */
 function botClone(st){
   const t=st.turn;
-  // cards (id → type) is shared: look-ahead only ever adds new ids, which the real game later overwrites with its own
-  return{...st,log:[],trash:st.trash.slice(),
+  // cards (id → type) gets its own copy: buying or transmitting creates a card, and look-ahead copies that each bought
+  // something different must not overwrite each other's new card (they reuse the same next id)
+  return{...st,cards:{...st.cards},log:[],trash:st.trash.slice(),
     players:st.players.map(p=>({...p,pieces:p.pieces.slice(),deck:p.deck.slice(),hand:p.hand.slice(),discard:p.discard.slice(),play:p.play.slice(),blocks:p.blocks.slice()})),
     market:st.market.map(x=>({...x})),reserve:st.reserve.map(x=>({...x})),blockades:st.blockades.map(b=>({...b})),
     turn:{...t,active:t.active&&{...t.active},pending:t.pending&&{...t.pending}},
