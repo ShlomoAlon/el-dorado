@@ -35,24 +35,25 @@ const BLOCKADES=[{n:1,k:'j',v:1},{n:2,k:'v',v:1},{n:3,k:'r',v:1},{n:4,k:'w',v:1}
 
 /* =========================================================
    TERRAIN BOARDS — base game letters. Terrain counts per board match the published
-   tile catalogue (A/B start boards, C–N double-sided terrain boards). Space-by-space
-   placement is reconstructed; see Rules.
+   tile catalogue (A/B start boards, C–N double-sided terrain boards).
+   Transcribed space by space from the BoardGameHelpers catalogue images (Q4eD.<n>.<L>.gif, image orientation = rotation 0):
+   A B C D F G I K L M N. Still reconstructed (counts right, layout guessed): E H J.
    rows top→bottom (4,5,6,7,6,5,4): jN jungle · wN water · vN village · rN rubble · cN base camp · mm mountain · ss start
    ========================================================= */
 const BOARDS={
- A:['j1 j1 v1 j1','j1 w1 j1 j2 j1','j1 w1 mm j1 v1 j1','v1 j1 w1 j1 j1 c1 j1','j1 j1 j1 mm v1 j1','j1 j1 v1 j1 j1','ss ss ss ss'],
+ A:['j1 c1 j1 j1','w1 mm j1 j1 v1','j1 mm v1 j1 j1 j1','j1 v1 j1 w1 j1 v1 j1','j1 j1 v1 j1 w1 j1','j1 j1 j1 j1 j1','s1 s2 s3 s4'],
  B:['j1 w1 c1 w1','j1 j1 v1 mm j1','j1 v1 j1 j1 j1 j1','w1 j1 v1 j1 v1 j1 j1','j1 j1 w1 j1 j1 j1','j1 j1 j1 j1 j1','s4 s3 s2 s1'],
  C:['j1 j1 r1 r1','j1 v1 r1 w1 w1','w1 w1 v1 v1 r1 w1','w1 v1 r1 mm w1 r1 r1','v1 r1 w1 w1 v1 v1','v1 r1 j1 v1 w1','j1 j1 w1 w1'],
- D:['j1 j1 w1 j1','j2 j1 w1 j1 mm','j1 mm w2 w1 j1 j1','j1 j1 w1 w3 w1 j2 j1','v1 j1 w1 w1 mm j1','v2 j1 j1 w2 j1','mm w1 v1 j1'],
+ D:['j2 j1 mm w3','j1 j1 v3 v1 mm','j1 w1 j1 mm v3 j1','j2 w1 w2 mm j1 j1 j2','j1 w1 w1 w2 w1 j1','j1 w1 w1 w1 j1','j1 j1 j1 j2'],
  E:['j1 j1 r1 j1','j1 mm r2 mm j1','w1 j2 r1 j1 v1 j1','w1 mm r1 c1 r1 mm j1','w1 j1 r2 j1 v2 j1','w1 j2 r1 mm v1','j1 r1 j1 v1'],
- F:['w1 w1 j1 j1','w2 r1 r1 j1 j2','w1 r1 mm c1 j1 j1','w1 r2 mm v1 mm j1 w1','j1 r1 r1 v2 mm w1','j1 j2 r2 c2 w1','j1 v1 r1 j1'],
- G:['j1 v1 v1 j1','j1 v2 v1 v1 j1','j2 v1 mm mm v2 j1','j1 v1 v3 c1 v1 j1 j1','j1 r1 mm v1 v2 j1','j1 j2 mm r2 j1','j1 j1 v1 j1'],
+ F:['j1 mm mm w1','j2 j1 mm w1 w1','r1 j1 w2 w3 w1 r1','r1 v1 v2 mm j2 j1 r1','r1 v1 r2 j1 j1 r1','j1 j3 j1 w2 w2','c1 j2 r1 c2'],
+ G:['j1 j1 j1 j1','j1 j2 v1 mm j1','v1 v2 v2 r1 v1 j1','mm mm v4 v3 v2 j2 c1','v1 v2 v2 r1 v1 j1','j1 j2 v1 mm j1','j1 j1 j1 j1'],
  H:['v1 v1 w1 j1','v2 v1 w1 w1 j1','v1 v3 v1 w2 j1 j1','j1 v1 v2 mm w1 w1 j2','j1 v1 v1 v4 w1 j1','j1 j2 v1 w2 w1','j1 v1 j1 w1'],
  I:['j1 j1 j1 j1','v1 j1 mm j1 j1','v1 v2 j1 mm j2 j1','v1 v2 j1 j2 c2 mm mm','v2 r3 mm mm j2 j1','w2 w1 w1 j1 j1','w2 w2 w1 j1'],
  J:['r1 r1 v1 v1','w1 r2 r1 v2 v1','w1 w1 mm r1 v1 j1','w2 w1 r3 c1 r1 v1 j1','w1 w1 r1 mm v3 j1','w1 w1 r1 v1 j2','j1 j1 v1 v1'],
  K:['c1 j2 j2 j1','j1 j1 w3 j1 j2','j1 j2 j1 j3 j1 j2','j2 j1 j3 j1 j3 j1 j2','j2 j1 j3 j1 j2 j1','j2 j1 v4 j1 j1','j1 j2 j2 c1'],
- L:['j1 j1 j1 mm','j2 c1 j1 j1 j1','j1 j1 j2 mm j1 w1','c2 j1 j1 j1 j3 w1 j1','j1 mm j1 v1 j1 w1','j1 j2 j1 c1 j1','j1 v2 j1 j1'],
- M:['j1 mm mm j1','j1 j2 mm j1 j1','mm j1 r1 j2 mm j1','w1 j1 mm c1 j1 j1 mm','w1 mm j1 r2 j1 j1','w1 j1 v1 mm j2','w1 j1 r1 v1'],
+ L:['w1 c1 c1 j3','j1 w1 w1 j3 j1','j2 j1 j1 j3 j1 j2','j2 j1 mm j1 mm j1 j2','j1 j2 j2 j1 j2 j1','v2 c2 v2 j1 j1','j2 j2 j1 mm'],
+ M:['j1 j1 j1 c1','j1 v4 mm mm w4','j1 v2 j1 j1 w1 mm','mm j1 j1 r2 j1 j1 mm','mm mm mm mm r2 j1','j1 j1 j1 r2 j1','w1 w1 j1 j1'],
  N:['j1 j1 j1 j1','v1 j1 j2 j1 w1','v1 v2 j1 w1 w1 w1','w1 w1 v3 v4 v2 v2 v1','w1 w1 w1 j1 v2 v1','j1 j1 j2 j1 j1','j1 j1 j1 j1'],
 };
 function parseTok(t){
@@ -96,6 +97,13 @@ const COURSES=[
   // Positions and rotations taken from Ravensburger's setup sheet (first game); El Dorado water side on K's top-right corner.
   {id:'first',name:'First Expedition',src:'Rulebook route for your first game',diff:'Easy',
    p:[['B',0,0,2],['C',7,-3,5],['N',11,0,2],['I',14,4,2],['K',21,-1,0]],e:[25,-5],s:'w'},
+  // The other official routes come from page 2 of the same sheet (German "Andere Wege nach El Dorado"). There the hexes are
+  // flat-topped; every board was matched space by space against its catalogue tile (tools/course-check/), so positions and
+  // rotations are exact. Shown here turned 30° (our lattice is pointy-topped).
+  {id:'winding',name:'Winding Paths',src:'Rulebook route (German: Verschlungene Wege)',diff:'Medium',
+   p:[['B',0,0,2],['I',7,-3,4],['F',11,0,4],['G',8,7,2],['C',15,4,1],['N',19,7,5]],e:[23,7],s:'w'},
+  {id:'witch',name:"Witch's Cauldron",src:'Rulebook route (German: Der Hexenkessel)',diff:'Hard',
+   p:[['A',0,0,0],['L',7,-4,5],['G',14,-7,4],['D',18,-4,4],['M',14,3,0],['I',7,7,5]],e:[3,7],s:'w'},
 ];
 const courseById=id=>COURSES.find(c=>c.id===id)||null;
 function buildCourse(C,seed){

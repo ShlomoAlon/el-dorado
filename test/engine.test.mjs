@@ -93,6 +93,12 @@ for (let g = 0; g < 60; g++) {
   const rc = E.botRandomCourse(7, 3); E.buildCourse(rc, 1);
   e0 = E.BOT_EVALS; aiGame(rc, ['humboldt', 'orellana'], () => assert(!E.aiNetFits(), 'network used on a course it was not trained for'));
   assert(E.BOT_EVALS === e0, 'network evaluated on another course');
+  // every other official course: full 3- and 4-player AI games finish; the network AIs play there as the route planner
+  for (const C of E.COURSES.filter(c => c.id !== 'first')) for (const ais of [['raleigh', 'humboldt', 'orellana'], ['orellana', 'raleigh', 'raleigh', 'humboldt']]) {
+    e0 = E.BOT_EVALS; aiGame(C, ais, () => assert(!E.aiNetFits(), 'network used on ' + C.id));
+    assert(E.BOT_EVALS === e0, 'network evaluated on ' + C.id);
+    assert(E.S.players.filter(p => p.fin).length >= ais.length - 1, C.id + ': AIs did not reach El Dorado');
+  }
   E.aiSetNet(null);
   console.log(`ok: AI games finish (network on First Expedition, planner elsewhere), packed network within ${diff.toExponential(1)}`);
 }

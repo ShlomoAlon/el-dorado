@@ -38,5 +38,5 @@ function boot(){
     showSetup();
   });
 }
-window.__ED={NET,UI,act,playEvents,openReplay,applyAction,render,get S(){return S},get MAP(){return MAP},joinRoom,netSend,onHandCard,doMove,pickFromMarket,confirmBuy,startEndTurn,finishTurn,confirmDiscardFor,confirmTrash,cancelMode,reach,myId,canAct,view};
+window.__ED={NET,UI,act,playEvents,openReplay,applyAction,render,get S(){return S},get MAP(){return MAP},showCourse(C,seed){MAP=buildCourse(typeof C==="string"?courseById(C):C,seed||1);buildBoard();fit();return MAP;},joinRoom,netSend,onHandCard,doMove,pickFromMarket,confirmBuy,startEndTurn,finishTurn,confirmDiscardFor,confirmTrash,cancelMode,reach,myId,canAct,view};
 boot();
