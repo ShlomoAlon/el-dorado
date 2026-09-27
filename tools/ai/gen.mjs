@@ -14,6 +14,8 @@ const LAMBDA = 0.7;
 const MAXBACK = process.env.MAXBACK === '1';
 const TREESTRAP = +(process.env.TREESTRAP || 0);
 const DISTILL = process.env.DISTILL === '1';
+// LEAGUE=a.json,b.json: in self-play a share (LEAGUE_P, default 0.25) of seats is played by these past frozen networks (plain play), so the network doesn't only learn to beat its own habits
+const LEAGUE = process.env.LEAGUE ? process.env.LEAGUE.split(',').map(f => JSON.parse(readFileSync(f, 'utf8'))) : null, LEAGUE_P = +(process.env.LEAGUE_P || .25);
 // ANNEAL=T0,factor,floor: log-odds exploration whose temperature starts at T0 in round 1 and is multiplied by factor each round down to floor
 const ANNEAL = process.env.ANNEAL ? process.env.ANNEAL.split(',').map(Number) : null; // max-backup targets from the whole-turn planner (needs MAXBACK=1) // untaken options learned per decision (see the self-play loop) // within-turn max backup (see the self-play loop)
 
@@ -33,7 +35,7 @@ if (!isMainThread) {
   for (let g = 0; g < games; g++) {
     let pols;
     // 3- and 4-player games only (2-player games use different rules)
-    if (mode === 'self') { const np = rnd() < .5 ? 3 : 4; pols = Array.from({ length: np }, () => rnd() < .25 ? 'heur' : 'net'); if (!pols.includes('net')) pols[0] = 'net'; }
+    if (mode === 'self') { const np = rnd() < .5 ? 3 : 4; pols = Array.from({ length: np }, () => { const r = rnd(); return r < .25 ? 'heur' : LEAGUE && r < .25 + LEAGUE_P ? 'lg' + Math.floor(rnd() * LEAGUE.length) : 'net'; }); if (!pols.includes('net')) pols[0] = 'net'; }
     else if (table) { const gi = wi * games + g, np = gi % 2 ? 4 : 3, k = gi >> 1, all = ['net', 'netP', 'oldS', 'old'], a = np === 4 ? all : all.filter((_, i) => i !== k % 4);
       pols = a.map((_, i) => a[(i + (k >> 2)) % np]); }
     else { const np = g % 2 ? 4 : 3, a = ['net', ...Array(np - 1).fill('heur')]; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); } // half 3-player, half 4-player, seats rotated
@@ -61,6 +63,7 @@ if (!isMainThread) {
         : mode === 'eval' && pols[me] === 'oldS' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd, search })))
         : mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined })
         : isNet ? E.botChoose(lotemp || ANNEAL ? { mode: 'net', eps, lotemp: ANNEAL ? Math.max(ANNEAL[2], ANNEAL[0] * ANNEAL[1] ** (S.round - 1)) : lotemp, rnd } : { mode: 'net', eps, temp, typeEps, turnState, rnd, search: plainSeat[me] ? undefined : search })
+        : pols[me].startsWith('lg') ? (E.setNet(LEAGUE[+pols[me].slice(2)]), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd, temp: .004 })))
         : E.botChoose({ mode: bench, eps: .03, noise: .3, rnd });
       // MAXBACK=1 (Q-learning style max backup within a turn): my turn has no luck between my own actions, so the position after
       // my previous action is worth the BEST option available now, not whatever I happen to do next (exploration, habits).
