@@ -55,3 +55,7 @@ first-qmax plus 4 iterations with TreeStrap (1 untaken option per decision, max 
 ## first-tstrap3 (frozen 2026-09-27 09:27 UTC)
 
 first-tstrap1 plus TreeStrap with 3 untaken options (6 iterations total in the run). Ladder: TreeStrap networks are ~50 Elo WORSE than first-qmax with search (1508±10 vs 1556±6) — stopped.
+
+## first-distill-22 (frozen 2026-09-27 11:44 UTC) — PROMOTED, shipped as Humboldt/Orellana
+
+first-td2 plus 22 iterations of search distillation (DISTILL=1, MAXBACK=1: within a turn each position trained toward the whole-turn planner's best completion). Ladder vs first-td2 (512 games): +40±12 Elo with search, +41±11 plain.
