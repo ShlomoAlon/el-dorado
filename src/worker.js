@@ -41,6 +41,15 @@ async function createSchema(env) {
       if (r.meta && r.meta.changes) break;
     }
   }
+  // One-time calibration: the AIs start from the ratings measured in AI-vs-AI games (AIS[].rating, tools/ai/calibrate_ais.mjs)
+  // instead of the default 1200. It shifts (rating += calibrated - 1200), so an AI that already played rated games keeps what
+  // it won or lost. One transaction: the updates apply only while the marker row is missing, then the marker is written,
+  // so it runs exactly once per database, whichever isolate gets here first, and never touches ratings again.
+  const CAL = 'ai_calibration_v1';
+  await env.DB.batch([
+    ...E.AIS.filter(A => Number.isFinite(A.rating)).map(A => env.DB.prepare(`UPDATE users SET rating = rating + ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM settings WHERE k = ?)`).bind(A.rating - 1200, aiUid(A.id), CAL)),
+    env.DB.prepare(`INSERT OR IGNORE INTO settings(k,v) VALUES(?,?)`).bind(CAL, JSON.stringify({ at: Date.now(), ratings: Object.fromEntries(E.AIS.map(A => [A.id, A.rating])) })),
+  ]);
 }
 let NET = null;
 function useNet() { if (!NET) NET = E.aiNetDecode(NET_BIN); E.aiSetNet(NET); }

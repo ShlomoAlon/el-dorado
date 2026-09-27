@@ -1409,10 +1409,12 @@ function botRandomCourse(seed,nMid){
    Doesn't change how the bot decides; it only picks the bot's settings per AI and keeps the
    whole-turn planner's cache per game (the cache is module-global and a server isolate runs many rooms).
    ========================================================= */
+/* rating: the calibrated starting rating (tools/ai/calibrate_ais.mjs: AI-vs-AI games, Raleigh anchored at 1200 = a new player);
+   the server applies it once (worker.js ensureSchema). */
 const AIS=[
-  {id:'humboldt',name:'Humboldt',tier:'Master',desc:'Neural network that plans each whole turn',opts:{mode:'net',search:{kind:'plan',beam:3}}},
-  {id:'orellana',name:'Orellana',tier:'Strong',desc:'Neural network, one move at a time',opts:{mode:'net'}},
-  {id:'raleigh',name:'Raleigh',tier:'Steady',desc:'Hand-written route planner',opts:{mode:'plan'}},
+  {id:'humboldt',name:'Humboldt',tier:'Master',rating:1530,desc:'Neural network that plans each whole turn',opts:{mode:'net',search:{kind:'plan',beam:3}}},
+  {id:'orellana',name:'Orellana',tier:'Strong',rating:1483,desc:'Neural network, one move at a time',opts:{mode:'net'}},
+  {id:'raleigh',name:'Raleigh',tier:'Steady',rating:1200,desc:'Hand-written route planner',opts:{mode:'plan'}},
 ];
 const aiById=id=>AIS.find(a=>a.id===id)||null;
 const aiUsesNet=id=>{const a=aiById(id);return!!(a&&a.opts.mode==='net');};
@@ -3163,7 +3165,7 @@ function renderHub(){
   }
   m.querySelectorAll('#hTabs button').forEach(b=>b.onclick=()=>{hubTab=b.dataset.k;renderHub();});
   if(hubTab==='board'){api('/api/leaderboard').then(r=>{const l=q('#lbList');if(!l)return;
-    l.innerHTML=r.players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${r.players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span style="color:var(--muted)">${i+1}</span><span style="display:flex;align-items:center;gap:7px;min-width:0"><b style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</b>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note" style="margin:0">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note" style="margin-top:12px">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating.</p>`:'<p class="note">No rated games yet.</p>';}).catch(e=>{const l=q('#lbList');if(l)l.textContent=e.message;});return;}
+    l.innerHTML=r.players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${r.players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span style="color:var(--muted)">${i+1}</span><span style="display:flex;align-items:center;gap:7px;min-width:0"><b style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</b>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note" style="margin:0">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note" style="margin-top:12px">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';}).catch(e=>{const l=q('#lbList');if(l)l.textContent=e.message;});return;}
   if(hubTab==='me'){q('#meSave').onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};q('#hOut').onclick=signOut;return;}
   const seg=(id,key)=>m.querySelectorAll(id+' button').forEach(b=>b.onclick=()=>{setup[key]=+b.dataset.v;renderHub();});
   seg('#cMax','oMax');seg('#cTurn','oTurn');

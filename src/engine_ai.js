@@ -4,10 +4,12 @@
    Doesn't change how the bot decides; it only picks the bot's settings per AI and keeps the
    whole-turn planner's cache per game (the cache is module-global and a server isolate runs many rooms).
    ========================================================= */
+/* rating: the calibrated starting rating (tools/ai/calibrate_ais.mjs: AI-vs-AI games, Raleigh anchored at 1200 = a new player);
+   the server applies it once (worker.js ensureSchema). */
 const AIS=[
-  {id:'humboldt',name:'Humboldt',tier:'Master',desc:'Neural network that plans each whole turn',opts:{mode:'net',search:{kind:'plan',beam:3}}},
-  {id:'orellana',name:'Orellana',tier:'Strong',desc:'Neural network, one move at a time',opts:{mode:'net'}},
-  {id:'raleigh',name:'Raleigh',tier:'Steady',desc:'Hand-written route planner',opts:{mode:'plan'}},
+  {id:'humboldt',name:'Humboldt',tier:'Master',rating:1530,desc:'Neural network that plans each whole turn',opts:{mode:'net',search:{kind:'plan',beam:3}}},
+  {id:'orellana',name:'Orellana',tier:'Strong',rating:1483,desc:'Neural network, one move at a time',opts:{mode:'net'}},
+  {id:'raleigh',name:'Raleigh',tier:'Steady',rating:1200,desc:'Hand-written route planner',opts:{mode:'plan'}},
 ];
 const aiById=id=>AIS.find(a=>a.id===id)||null;
 const aiUsesNet=id=>{const a=aiById(id);return!!(a&&a.opts.mode==='net');};
