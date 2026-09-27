@@ -35,7 +35,11 @@ if (rows.length > 1) {
     xLabel: 'Training iteration', x: [W3[0].it, W3[W3.length - 1].it], y: [0, 100], yTicks: [0, 25, 50, 75, 100], fmtY: v => Math.round(v) + '%', marks,
     refs: [{ y: 100 / 3, label: 'fair 3p' }, { y: 25, label: 'fair 4p' }],
     series: [{ name: '3 players', pts: rolling(p3, 5) }, { name: '4 players', pts: rolling(p4, 5) }] }));
-  md += `![Test result per iteration](training-vsfair.svg)\n\n![Share of test games won](training-wins.svg)\n\n`;
+  const A = R.filter(r => r.horizon >= 25 && r.netArrival && r.heurArrival);
+  if (A.length > 1) writeFileSync('training-arrival.svg', lineChart({ title: 'Round the bot reaches El Dorado (lower is better)', sub: 'Full-length test games only; average of the last 5 tests.',
+    xLabel: 'Training iteration', x: [A[0].it, A[A.length - 1].it], y: [13, 19], yTicks: [13, 14, 15, 16, 17, 18, 19], fmtY: v => 'r' + (+v).toFixed(1), marks: marks.filter(m => m.x >= A[0].it),
+    series: [{ name: 'Bot', pts: rolling(A.map(r => [r.it, r.netArrival]), 5) }, { name: 'Heuristic', pts: rolling(A.map(r => [r.it, r.heurArrival]), 5) }] }));
+  md += `![Test result per iteration](training-vsfair.svg)\n\n![Round the bot reaches El Dorado](training-arrival.svg)\n\n![Share of test games won](training-wins.svg)\n\n`;
 }
 md += `### Test after each iteration: trained bot vs the benchmark bots, same horizon (half 3-player, half 4-player; no 2-player games anywhere)\n**vs fair share: 1.00 = as good as the benchmark.** From 23:10 the benchmark is the stronger *planner* heuristic (it beats the old heuristic 1.54× its fair share), so the numbers drop at that point; (a fair share is 33% of 3-player games, 25% of 4-player games). "Route left" = cost of the remaining route when the game stops (lower = got further).\n\n`;
 md += `| Iter | Horizon (rounds) | Games so far | vs fair share | Wins 3p / 4p | Bot route left | Heuristic route left | Bot arrives in round | Heuristic arrives in round |\n|---|---|---|---|---|---|---|---|---|\n`;
