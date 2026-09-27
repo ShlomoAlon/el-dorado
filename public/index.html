@@ -1200,8 +1200,8 @@ function botChoose(opts){
     vals.push(v);if(v>bv){bv=v;best=a;}
   }
   if(opts.temp&&acts.length>1){const w=vals.map(v=>v===-Infinity?0:Math.exp((v-bv)/opts.temp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
-    for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],why:acts[i]===best?undefined:'softmax'};}}
-  return{a:best||{t:'end',keep:[]},v:bv,alts:opts.explain?acts.map((x,i)=>({a:x,v:vals[i]})).sort((x,y)=>y.v-x.v).slice(0,5):undefined};
+    for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],best:bv,why:acts[i]===best?undefined:'softmax'};}}
+  return{a:best||{t:'end',keep:[]},v:bv,best:bv,alts:opts.explain?acts.map((x,i)=>({a:x,v:vals[i]})).sort((x,y)=>y.v-x.v).slice(0,5):undefined};
 }
 /* ---- search at decision time (experiments; training and normal play don't use it) ----
    Same value network, but look further ahead before choosing. */

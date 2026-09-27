@@ -29,3 +29,10 @@ Last tests (160 games each vs the planner heuristic, 3- and 4-player, seats rota
 
 **To go back to this model:** `cp tools/ai/models/first-td-evaluated.json tools/ai/data/first.net.json`, then
 `tools/ai/loop.sh first <iterations>` continues plain self-play training from it (`echo 5 > tools/ai/data/first.hi` keeps the full-game horizon).
+
+## first-td2 (frozen 2026-09-27 ~07:40 UTC)
+
+The plain self-play network after iteration 137 (resumed from first-td at iteration 88; includes the look-ahead card-table fix and
+the arrival-place fix). Tests vs the planner heuristic at iterations 116–137 averaged 2.24× its fair share (wins 69% 3p / 62% 4p),
+arriving in round 14.7 vs 16.1. Frozen before trying the within-turn max backup (MAXBACK=1, run `first-qmax`).
+To go back: `cp tools/ai/models/first-td2.json tools/ai/data/first.net.json`.
