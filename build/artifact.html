@@ -1332,8 +1332,9 @@ function botDeepChoose(opts){
   if(!best.line||!best.line.length){BOT_PLAN_CACHE=null;return{a:{t:'end',keep:[]},why:'plan'};}
   top.sort((x,y)=>y.v-x.v);const cands=[];for(const t of top){if(cands.length>=(o.cands||3))break;if(!cands.some(c=>Math.abs(c.v1-t.v)<1e-9))cands.push({line:t.line,v1:t.v,sum:0,n:0});}
   let pick=cands[0],info={cands:cands.length,playouts:0};
-  if(cands.length>1){let live=cands,per=1;
-    while(live.length>1&&BOT_EVALS-e0<o.budget){
+  if(cands.length>1){let live=cands,per=1,rounds=0;
+    // rounds cap: playouts that end the game at once cost no network evaluations, so the budget alone could never run out
+    while(live.length>1&&BOT_EVALS-e0<o.budget&&rounds++<8){
       const seeds=[...Array(per)].map(()=>(rnd()*2**31)|0);
       for(const c of live)for(const sd of seeds){c.sum+=botDeepPlayout(root,me,c.line,sd,o);c.n++;info.playouts++;}
       live.sort((x,y)=>y.sum/y.n-x.sum/x.n);
