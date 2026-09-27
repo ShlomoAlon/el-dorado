@@ -35,9 +35,12 @@ html,body{overflow:clip;overscroll-behavior:none}
 #vp{position:absolute;inset:0;overflow:hidden;background:radial-gradient(ellipse 80% 70% at 45% 42%,#18291f 0%,#0e1a15 55%,#080f0c 100%);touch-action:none;cursor:grab}
 #vp::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45) 100%)}
 #vp.drag{cursor:grabbing}
-#stage{position:absolute;left:0;top:0;transform-origin:0 0}
-#stage.moving{will-change:transform}
+/* the board layer: always composited (see applyView); #bscale carries the scale baked in once a zoom settles */
+#stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+#bscale{position:relative;transform-origin:0 0}
 #board{display:block;overflow:visible}
+#board2{position:absolute;left:0;top:0;overflow:visible}
+#blabels,#blabels2{position:absolute;left:0;top:0;pointer-events:none}.blabel{position:absolute;white-space:nowrap;line-height:1}
 .tgt{cursor:pointer}
 .tgt .ring{fill:rgba(255,228,150,.14);stroke:var(--gold2);stroke-width:3;transition:fill .12s}
 .tgt:hover .ring,.tgt.hot .ring{fill:rgba(255,228,150,.42)}
@@ -376,7 +379,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 <div id="shell"><div id="gamecell">
 <div id="app">
   <div id="vp">
-    <div id="stage"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <div id="stage"><div id="bscale"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels"></div><svg id="board2" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels2"></div></div></div>
     <div id="tip"></div>
   </div>
   <div id="hud">
@@ -1911,9 +1914,10 @@ const ICOL={j:'#f4fff6',w:'#f2f9ff',v:'#5a3d07',g:'#5a3c05',r:'#f5f5f2',c:'#fff4
 const CHIP={j:'rgba(10,40,22,.42)',w:'rgba(8,34,64,.42)',v:'rgba(255,248,225,.5)',r:'rgba(30,32,31,.45)',c:'rgba(70,16,8,.45)',g:'rgba(255,250,230,.55)'};
 let L={};
 function buildBoard(){
-  const svg=$('#board');svg.innerHTML='';
-  svg.setAttribute('width',MAP.w);svg.setAttribute('height',MAP.h);
-  svg.setAttribute('viewBox',`${MAP.minX} ${MAP.minY} ${MAP.w} ${MAP.h}`);
+  // two stacked SVGs (the static board, then the live layers: targets, blockades, pieces, aim) with the text in HTML label
+  // layers between/above them: Chrome re-lays out SVG text whenever an ancestor's scale changes; HTML text it doesn't
+  const svg=$('#board'),svg2=$('#board2');svg.innerHTML='';svg2.innerHTML='';$('#blabels').innerHTML='';$('#blabels2').innerHTML='';
+  for(const s of[svg,svg2]){s.setAttribute('width',MAP.w);s.setAttribute('height',MAP.h);s.setAttribute('viewBox',`${MAP.minX} ${MAP.minY} ${MAP.w} ${MAP.h}`);}
   const defs=sv('defs',null,svg);
   for(const t in TFILL){const g=sv('linearGradient',{id:'gr-'+t,x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':TFILL[t][0]},g);sv('stop',{offset:1,'stop-color':TFILL[t][1]},g);}
   for(const t in TSHADE)TSHADE[t].forEach(([a,b],i)=>{const g=sv('linearGradient',{id:'gr-'+t+(i+1),x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':a},g);sv('stop',{offset:1,'stop-color':b},g);});
@@ -1928,7 +1932,7 @@ function buildBoard(){
   pat('p-v',16,16,p=>{sv('circle',{cx:4,cy:4,r:1.1,fill:'rgba(120,70,0,.2)'},p);sv('circle',{cx:12,cy:11,r:.9,fill:'rgba(120,70,0,.16)'},p);sv('circle',{cx:13,cy:3,r:.6,fill:'rgba(255,255,255,.25)'},p);});
   pat('p-r',20,20,p=>{for(const[x,y,s]of[[5,5,3],[14,8,2.4],[8,15,2.6],[17,17,1.8]])sv('path',{d:`M${x-s} ${y+s*.6} Q${x-s} ${y-s*.7} ${x} ${y-s*.8} Q${x+s} ${y-s*.6} ${x+s} ${y+s*.6}Z`,fill:'rgba(40,42,40,.2)',stroke:'rgba(255,255,255,.12)','stroke-width':.5},p);});
   pat('p-c',12,12,p=>{sv('path',{d:'M0 12 L12 0',stroke:'rgba(0,0,0,.12)','stroke-width':3},p);});
-  L.plates=sv('g',null,svg);L.terrain=sv('g',null,svg);L.city=sv('g',null,svg);L.hl=sv('g',null,svg);L.path=sv('g',{'pointer-events':'none'},svg);L.bl=sv('g',null,svg);L.pieces=sv('g',null,svg);L.aim=sv('g',{'pointer-events':'none'},svg);
+  L.plates=sv('g',null,svg);L.terrain=sv('g',null,svg);L.city=sv('g',null,svg);L.hl=sv('g',null,svg2);L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);L.pieces=sv('g',null,svg2);L.aim=sv('g',{'pointer-events':'none'},svg2);
   // board plates (the physical boards): drop shadow + rim
   const byTile=new Map();for(const h of MAP.hexes.values()){if(!byTile.has(h.tile))byTile.set(h.tile,[]);byTile.get(h.tile).push(h);}
   for(const[,hs]of byTile){const g=sv('g',null,L.plates);for(const h of hs)sv('polygon',{points:hexPts(h.x+2,h.y+6,R+2),fill:'rgba(0,0,0,.45)'},g);}
@@ -1973,9 +1977,10 @@ function buildBoard(){
   sv('rect',{x:-6,y:y-11,width:12,height:11,fill:'#fbe08a',stroke:'#8a5c10','stroke-width':1},cg);
   sv('rect',{x:-2,y:y-7,width:4,height:7,fill:'#8a5c10'},cg);
   const ct=sv('text',{x:0,y:44,'text-anchor':'middle','font-family':'Young Serif, Georgia, serif','font-size':15,fill:'#f8dc97'},cg);ct.textContent='El Dorado';
-  svg.onclick=onBoardClick;
-  svg.onpointerover=onBoardHover;
-  svg.onpointerout=e=>{if(drag)return;if(!e.relatedTarget||!e.relatedTarget.closest||!e.relatedTarget.closest('[data-t]'))hideHover();};
+  svgTextToHTML(svg,$('#blabels'));
+  const st=$('#stage');st.onclick=onBoardClick;
+  st.onpointerover=onBoardHover;
+  st.onpointerout=e=>{if(drag)return;if(!e.relatedTarget||!e.relatedTarget.closest||!e.relatedTarget.closest('[data-t]'))hideHover();};
   pieceEls={};
 }
 function drawMountain(g,h){
@@ -2014,6 +2019,21 @@ function renderBlockades(){
     const nt=sv('text',{y:3.6,'text-anchor':'middle','font-size':10,'font-weight':800,fill:'#fff','font-family':'Figtree, sans-serif'},nb);nt.textContent=B.n;
     const tt=sv('title',null,bg);tt.textContent='Blockade #'+B.n+': '+blkLabel(B)+'. The first explorer to pay it keeps it (tiebreaker).';
   });
+  $('#blabels2').innerHTML='';svgTextToHTML(L.bl,$('#blabels2'));
+}
+/* SVG <text> → absolutely placed HTML text at the same spot (same font, size, colour, anchor and baseline) */
+const baseCache={};
+function baselineOf(font){if(baseCache[font]!=null)return baseCache[font];
+  const s=document.createElement('span');s.style.cssText=`position:absolute;visibility:hidden;font:${font};line-height:1;white-space:pre`;
+  s.innerHTML='Hg<i style="display:inline-block;width:0;height:0;vertical-align:baseline"></i>';document.body.appendChild(s);
+  const b=s.querySelector('i').offsetTop;s.remove();return baseCache[font]=b;}
+function svgTextToHTML(root,layer){
+  for(const t of[...root.querySelectorAll('text')]){const m=t.getCTM();if(!m)continue;
+    const k=Math.hypot(m.a,m.b),p=new DOMPoint(+(t.getAttribute('x')||0),+(t.getAttribute('y')||0)).matrixTransform(m);
+    const font=`${t.getAttribute('font-weight')||400} ${(+t.getAttribute('font-size')||16)*k}px ${t.getAttribute('font-family')||'sans-serif'}`;
+    const a=t.getAttribute('text-anchor'),e=document.createElement('span');e.className='blabel';e.textContent=t.textContent;
+    e.style.cssText=`left:${p.x}px;top:${p.y-baselineOf(font)}px;font:${font};color:${t.getAttribute('fill')||'#000'};letter-spacing:${(+t.getAttribute('letter-spacing')||0)*k}px;transform:translateX(${a==='middle'?'-50%':a==='end'?'-100%':'0'})`;
+    layer.appendChild(e);t.remove();}
 }
 function discardAnchor(tk){if(tk[0]==='B'){const p=blPos[+tk.slice(1)];return p?[p[0],p[1]-40]:null;}const h=hexAt(tk);return[h.x,h.y-R*.95];}
 function pulseDiscard(){const g=L.hl&&L.hl.querySelector('.dpips');if(g&&!reduceMotion)g.animate([{transform:g.getAttribute('data-t')+' scale(1.35)'},{transform:g.getAttribute('data-t')+' scale(1)'}],{duration:320,easing:'cubic-bezier(.2,.9,.3,1.3)'});}
@@ -2122,8 +2142,16 @@ function hideHover(){if(!hoverShown)return;hoverShown=false;if(L.path)L.path.inn
 const view={s:1,x:0,y:0};let userZoomed=false,dragMoved=false,movingTimer=0;
 const vp=()=>$('#vp'),stage=()=>$('#stage');
 let viewRaf=0;
-function applyView(){if(!viewRaf)viewRaf=requestAnimationFrame(()=>{viewRaf=0;stage().style.transform=`translate3d(${view.x}px,${view.y}px,0) scale(${view.s})`;});
-  stage().classList.add('moving');clearTimeout(movingTimer);movingTimer=setTimeout(()=>stage().classList.remove('moving'),200);}
+/* Pan/zoom the way Leaflet does it: #stage is permanently its own GPU layer (will-change: transform) and gestures only change
+   its transform, so they never repaint the board. The layer keeps the resolution it was drawn at, so once zooming has
+   stopped (no wheel events for 250 ms, no fingers down, no glide running) the scale is baked into #bscale and the layer's
+   own scale goes back to 1, in the same frame: one sharp redraw at a quiet moment. */
+let baked=1,settleT=0,gesturing=0,gliding=false;
+function applyView(){if(!viewRaf)viewRaf=requestAnimationFrame(()=>{viewRaf=0;stage().style.transform=`translate3d(${view.x}px,${view.y}px,0) scale(${view.s/baked})`;});
+  scheduleSettle();}
+function scheduleSettle(){clearTimeout(settleT);settleT=setTimeout(settle,250);}
+function settle(){if(gesturing||gliding){scheduleSettle();return;}if(Math.abs(view.s/baked-1)<.005)return;
+  requestAnimationFrame(()=>{baked=view.s;$('#bscale').style.transform=`scale(${baked})`;stage().style.transform=`translate3d(${view.x}px,${view.y}px,0) scale(${view.s/baked})`;});}
 function safeRect(){const v=vp();const W=v.clientWidth,H=v.clientHeight;const cw=cardW();
   // top: just under the prompt, which sits under the floating market strip
   let t=W<600?108:112;const pr=$('#prompt'),vr=v.getBoundingClientRect();if(pr&&pr.offsetHeight)t=Math.max(t,pr.getBoundingClientRect().bottom-vr.top+10);
@@ -2136,7 +2164,7 @@ function fit(anim){
   if(s*R<13&&S){s=Math.min(ah/MAP.h,13/R*1.6);view.s=s;const c=focusPoint();view.x=(r.l+r.r)/2-(c[0]-MAP.minX)*s;view.y=r.t+(ah-MAP.h*s)/2;clampView();}
   if(anim)glide();applyView();userZoomed=false;
 }
-function glide(){stage().style.transition='transform .45s cubic-bezier(.2,.8,.2,1)';clearTimeout(glide.t);glide.t=setTimeout(()=>stage().style.transition='',480);}
+function glide(){stage().style.transition='transform .45s cubic-bezier(.2,.8,.2,1)';gliding=true;clearTimeout(glide.t);glide.t=setTimeout(()=>{stage().style.transition='';gliding=false;scheduleSettle();},480);}
 function focusPoint(){const pl=cur();const k=pl.pieces[UI.piece]&&pl.pieces[UI.piece]!=='done'?pl.pieces[UI.piece]:pl.pieces.find(x=>x!=='done');if(!k)return[MAP.city.x,MAP.city.y];const h=hexAt(k);return[h.x,h.y];}
 function clampView(){const v=vp();const W=v.clientWidth,H=v.clientHeight;const bw=MAP.w*view.s,bh=MAP.h*view.s;
   if(bw<=W)view.x=Math.max(Math.min(view.x,W-bw),0);else view.x=Math.min(W*.4,Math.max(W*.6-bw,view.x));
@@ -2151,7 +2179,8 @@ function setupPanZoom(){
   const v=vp();
   v.addEventListener('wheel',e=>{e.preventDefault();const r=v.getBoundingClientRect();
     const mouseWheel=e.deltaMode!==0||(Math.abs(e.deltaX)<1&&Number.isInteger(e.deltaY)&&Math.abs(e.deltaY)>=40);
-    if(e.ctrlKey||mouseWheel)zoomAt(e.clientX-r.left,e.clientY-r.top,Math.exp(-e.deltaY*(e.ctrlKey?.01:.0016)));
+    // zoom factor as d3-zoom normalises wheel deltas (pixels / lines / pages; ctrl+wheel = trackpad pinch on Chrome, Edge, Firefox)
+    if(e.ctrlKey||mouseWheel)zoomAt(e.clientX-r.left,e.clientY-r.top,2**(-e.deltaY*(e.deltaMode===1?.05:e.deltaMode?1:.002)*(e.ctrlKey?10:1)));
     else{view.x-=e.deltaX;view.y-=e.deltaY;applyView();userZoomed=true;hideHover();}
   },{passive:false});
   const ptrs=new Map();let start=null,pinch=null;
@@ -2160,7 +2189,7 @@ function setupPanZoom(){
   const beginPinch=()=>{const p=[...ptrs.values()].slice(0,2);const m=local((p[0][0]+p[1][0])/2,(p[0][1]+p[1][1])/2);
     // remember which board point sits under the fingers' midpoint, so it stays under them
     pinch={d:Math.max(1,Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1])),s:view.s,bx:(m[0]-view.x)/view.s,by:(m[1]-view.y)/view.s};start=null;};
-  v.addEventListener('pointerdown',e=>{stage().style.transition='';ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  v.addEventListener('pointerdown',e=>{stage().style.transition='';gliding=false;ptrs.set(e.pointerId,[e.clientX,e.clientY]);gesturing=ptrs.size;
     if(ptrs.size===1){dragMoved=false;beginPan();}
     else if(ptrs.size===2){beginPinch();dragMoved=true;hideHover();}});
   window.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,[e.clientX,e.clientY]);
@@ -2174,7 +2203,7 @@ function setupPanZoom(){
   const up=e=>{if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);
     if(ptrs.size===1){pinch=null;beginPan();} // one finger left: continue panning from here, no jump
     else if(ptrs.size>=2)beginPinch();
-    if(!ptrs.size){start=null;pinch=null;v.classList.remove('drag');setTimeout(()=>dragMoved=false,0);}};
+    gesturing=ptrs.size;if(!ptrs.size){start=null;pinch=null;v.classList.remove('drag');setTimeout(()=>dragMoved=false,0);scheduleSettle();}};
   window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
   $('#zin').onclick=()=>{const v2=vp();zoomAt(v2.clientWidth/2,v2.clientHeight/2,1.25);};
   $('#zout').onclick=()=>{const v2=vp();zoomAt(v2.clientWidth/2,v2.clientHeight/2,.8);};
@@ -2183,6 +2212,9 @@ function setupPanZoom(){
   new ResizeObserver(()=>{updateMktH();const w=v.clientWidth;const widthChanged=Math.abs(w-lastW)>2;lastW=w;
     if(!userZoomed&&(widthChanged||!ptrs.size))fit();if(S)layoutCards();}).observe(v);
   ['gesturestart','gesturechange','gestureend'].forEach(t=>document.addEventListener(t,e=>e.preventDefault(),{passive:false}));
+  // Safari's trackpad pinch arrives as gesture events (not ctrl+wheel); touch pinches are already handled by the pointers above
+  let g0=1;v.addEventListener('gesturestart',e=>{g0=view.s;});
+  v.addEventListener('gesturechange',e=>{if(ptrs.size>=2||!e.scale)return;const[x,y]=local(e.clientX,e.clientY);zoomAt(x,y,g0*e.scale/view.s);});
   document.addEventListener('touchmove',e=>{if(e.touches.length>1)e.preventDefault();},{passive:false});
 }
 

@@ -23,9 +23,12 @@ html,body{overflow:clip;overscroll-behavior:none}
 #vp{position:absolute;inset:0;overflow:hidden;background:radial-gradient(ellipse 80% 70% at 45% 42%,#18291f 0%,#0e1a15 55%,#080f0c 100%);touch-action:none;cursor:grab}
 #vp::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45) 100%)}
 #vp.drag{cursor:grabbing}
-#stage{position:absolute;left:0;top:0;transform-origin:0 0}
-#stage.moving{will-change:transform}
+/* the board layer: always composited (see applyView); #bscale carries the scale baked in once a zoom settles */
+#stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+#bscale{position:relative;transform-origin:0 0}
 #board{display:block;overflow:visible}
+#board2{position:absolute;left:0;top:0;overflow:visible}
+#blabels,#blabels2{position:absolute;left:0;top:0;pointer-events:none}.blabel{position:absolute;white-space:nowrap;line-height:1}
 .tgt{cursor:pointer}
 .tgt .ring{fill:rgba(255,228,150,.14);stroke:var(--gold2);stroke-width:3;transition:fill .12s}
 .tgt:hover .ring,.tgt.hot .ring{fill:rgba(255,228,150,.42)}
@@ -364,7 +367,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 <div id="shell"><div id="gamecell">
 <div id="app">
   <div id="vp">
-    <div id="stage"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <div id="stage"><div id="bscale"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels"></div><svg id="board2" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels2"></div></div></div>
     <div id="tip"></div>
   </div>
   <div id="hud">
