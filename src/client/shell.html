@@ -22,13 +22,10 @@ html,body{overflow:clip;overscroll-behavior:none}
 /* ---------- board */
 #vp{position:absolute;inset:0;overflow:hidden;background:radial-gradient(ellipse 80% 70% at 45% 42%,#18291f 0%,#0e1a15 55%,#080f0c 100%);touch-action:none;cursor:grab}
 #vp::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45) 100%)}
-/* grabbing cursor via an overlay: changing an inherited property on #vp would restyle every board element */
-#vp::after{content:'';position:absolute;inset:0;cursor:grabbing;display:none}#vp.drag::after{display:block}
-/* always its own GPU layer: pans only move it. Toggling will-change re-rasterised the whole board on every grab. */
-#stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+#vp.drag{cursor:grabbing}
+#stage{position:absolute;left:0;top:0;transform-origin:0 0}
+#stage.moving{will-change:transform}
 #board{display:block;overflow:visible}
-#board2{position:absolute;left:0;top:0;overflow:visible}
-#blabels,#blabels2{position:absolute;left:0;top:0;pointer-events:none}.blabel{position:absolute;white-space:nowrap;line-height:1}
 .tgt{cursor:pointer}
 .tgt .ring{fill:rgba(255,228,150,.14);stroke:var(--gold2);stroke-width:3;transition:fill .12s}
 .tgt:hover .ring,.tgt.hot .ring{fill:rgba(255,228,150,.42)}
@@ -367,7 +364,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 <div id="shell"><div id="gamecell">
 <div id="app">
   <div id="vp">
-    <div id="stage"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels"></div><svg id="board2" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels2"></div></div>
+    <div id="stage"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg></div>
     <div id="tip"></div>
   </div>
   <div id="hud">
