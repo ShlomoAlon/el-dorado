@@ -290,7 +290,8 @@ function applyView(){if(!viewRaf)viewRaf=requestAnimationFrame(()=>{viewRaf=0;st
   scheduleSettle();}
 function scheduleSettle(){clearTimeout(settleT);settleT=setTimeout(settle,250);}
 function settle(){if(gesturing||gliding){scheduleSettle();return;}if(Math.abs(view.s/baked-1)<.005)return;
-  requestAnimationFrame(()=>{baked=view.s;$('#bscale').style.transform=`scale(${baked})`;stage().style.transform=`translate3d(${view.x}px,${view.y}px,0) scale(${view.s/baked})`;});}
+  requestAnimationFrame(()=>{if(gesturing||gliding){scheduleSettle();return;} // a glide or grab may have begun since the timer fired
+    baked=view.s;$('#bscale').style.transform=`scale(${baked})`;stage().style.transform=`translate3d(${view.x}px,${view.y}px,0) scale(${view.s/baked})`;});}
 function safeRect(){const v=vp();const W=v.clientWidth,H=v.clientHeight;const cw=cardW();
   // top: just under the prompt, which sits under the floating market strip
   let t=W<600?108:112;const pr=$('#prompt'),vr=v.getBoundingClientRect();if(pr&&pr.offsetHeight)t=Math.max(t,pr.getBoundingClientRect().bottom-vr.top+10);
