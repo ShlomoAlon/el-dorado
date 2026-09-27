@@ -8,7 +8,7 @@ const t0 = lines.length ? lines[0].slice(1, 9) : '';
 let stage = '', games = 0, rows = [], it = 0, H = null, lastGen = null, events = [];
 for (const l of lines) {
   if (l.includes('STAGE')) { stage = l.replace(/^\[.*?\] STAGE /, ''); const m = l.match(/iter (\d+)/); if (m) it = +m[1]; }
-  if (l.includes('HORIZON') || l.includes('START') || l.includes('] FIX ')) events.push(l.replace(/^\[(.*?)\] /, '$1 · '));
+  if (l.includes('HORIZON') || l.includes('START') || l.includes('] FIX ') || l.includes('] PAUSED ')) events.push(l.replace(/^\[(.*?)\] /, '$1 · '));
   if (l.includes('] GEN ')) { const j = J(l); if (j) { games += j.games; lastGen = j; H = j.horizon; } }
   if (l.includes('] EVAL ')) { const j = J(l); if (j) { rows.push({ it, ...j, games }); games += j.games; } }
 }
@@ -21,13 +21,11 @@ md += `### Test after each iteration: trained bot vs the benchmark bots, same ho
 md += `| Iter | Horizon (rounds) | Games so far | vs fair share | Wins 3p / 4p | Bot route left | Heuristic route left | Bot arrives in round | Heuristic arrives in round |\n|---|---|---|---|---|---|---|---|---|\n`;
 for (const r of rows) md += `| ${r.it} | ${r.horizon} | ${r.games.toLocaleString()} | **${r.vsFair == null ? '–' : r.vsFair.toFixed(2)}** | ${r.win3p == null ? pct(r.netWinRate) + ' (3p)' : pct(r.win3p) + ' / ' + pct(r.win4p)} | ${n(r.netRemaining)} | ${n(r.heurRemaining)} | ${n(r.netArrival)} | ${n(r.heurArrival)} |\n`;
 if (!rows.length) md += `| – | – | – | – | – | – | – | – | – |\n`;
-if (rows.some(r => r.table)) {
-  md += `\n### Four-way test (every iteration): new net with search · same net without search · the frozen old net · the heuristic\n\n3-player tables are the three nets; 4-player tables add the heuristic. Seats rotated. Each cell: **wins vs fair share** (1.00 = its fair share) · average place value (1st 1, 2nd ¼, 3rd ⅛, last 0).\n\n| Iter | Games | New net + search | New net, no search | Old net (frozen) | Heuristic |\n|---|---|---|---|---|---|\n`;
-  const cell = t => t ? `**${t.vsFair.toFixed(2)}** · ${t.placeValue.toFixed(3)}` : '–';
-  for (const r of rows.filter(r => r.table)) md += `| ${r.it} | ${r.table ? Object.values(r.table).reduce((a, t) => a + t.seats, 0) > 0 ? r.games : '–' : '–'} | ${cell(r.table.net)} | ${cell(r.table.netP)} | ${cell(r.table.old)} | ${cell(r.table.heur)} |\n`;
-  const sum = k => { const L = rows.filter(r => r.table && r.table[k]).map(r => r.table[k]); if (!L.length) return null; const S = L.reduce((a, t) => a + t.seats, 0);
-    return { vsFair: L.reduce((a, t) => a + t.vsFair * t.seats, 0) / S, placeValue: L.reduce((a, t) => a + t.placeValue * t.seats, 0) / S }; };
-  md += `| **all so far** | ${rows.filter(r => r.table).reduce((a, r) => a + r.games, 0)} | ${cell(sum('net'))} | ${cell(sum('netP'))} | ${cell(sum('old'))} | ${cell(sum('heur'))} |\n`;
+if (rows.some(r => r.table && r.table.p3)) {
+  const N = { net: 'New net + search', netP: 'New net, no search', old: 'Old net (frozen)', heur: 'Heuristic' };
+  md += `\n### Four-way test: each player's share of the wins (adds up to 100% per table size)\n\n3-player tables: the three nets. 4-player tables: the three nets and the heuristic. Seats rotated.\n\n| Iter | Table | Games | ${Object.values(N).join(' | ')} |\n|---|---|---|---|---|---|---|\n`;
+  for (const r of rows.filter(r => r.table && r.table.p3)) for (const k of ['p3', 'p4']) { const tn = r.table[k]; if (!tn) continue;
+    md += `| ${r.it} | ${k[1]}-player | ${tn.games} | ${Object.keys(N).map(p => tn[p] ? `**${Math.round(tn[p].wins / tn.games * 100)}%** (${tn[p].wins})` : '–').join(' | ')} |\n`; }
 }
 if (lastGen && (lastGen.buysNet || lastGen.buysHeur)) {
   const b = lastGen.mode === 'self' ? lastGen.buysNet : lastGen.buysHeur, tot = Object.values(b || {}).reduce((a, x) => a + x, 0) || 1;
