@@ -44,6 +44,8 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
 - Only animate `transform`/`opacity`; keep pan/zoom, card fan and arrow at 60 fps (measure with a rAF counter).
   Measure with `NODE_PATH=$(npm root -g) node test/perf.cjs --trace` (frame times + where the time goes). No `backdrop-filter`
   on anything over the board (re-blurred every frame it moves); no infinite animations on SVG board elements (repaint the board).
+  No SVG `<text>` on the board (Chrome re-lays it out on every zoom step): `svgTextToHTML` moves it into the HTML label layers
+  (`#blabels` between the static `#board` and the live `#board2`, `#blabels2` on top). `#stage` stays `will-change: transform`.
 - Respect `prefers-reduced-motion`. Keep it working at 390 px wide (phone) and 1440 px.
 - Layout: page = CSS grid (`#shell`): the game cell (`#gamecell` > `#app`) plus replay dock/side cells. Never float new UI over
   other controls; give it its own cell or its own clearance variable (`--mktFoot`, `--zoomFoot`). Game-area breakpoints are

@@ -23,6 +23,17 @@ const CPU = +(opt('--cpu') || 4), [W, H] = (opt('--size') || '1440x900').split('
     'drag the board': async () => { await p.mouse.move(board.x, board.y); await p.mouse.down();
       for (let i = 0; i < 90; i++) { await p.mouse.move(board.x + Math.sin(i / 9) * 220, board.y + Math.cos(i / 11) * 120); await p.waitForTimeout(16); }
       await p.mouse.up(); },
+    // the start of a grab: 12 short drags; for each, the worst frame in its first 150 ms and the first move's size
+    'grab starts': async () => { await p.evaluate(() => { window.__gs = []; });
+      for (let k = 0; k < 12; k++) { const x = board.x - 100 + k * 17, y = board.y + (k % 3) * 20;
+        await p.mouse.move(x, y); await p.waitForTimeout(250);
+        await p.evaluate(() => { const st = document.querySelector('#stage'); window.__g0 = { t: performance.now(), tr: st.style.transform, fr: window.__fr.length }; });
+        await p.mouse.down();
+        for (let i = 1; i <= 12; i++) { await p.mouse.move(x + i * 2, y + i); await p.waitForTimeout(16); }
+        await p.mouse.up();
+        await p.evaluate(() => { const g = window.__g0, fr = window.__fr.slice(g.fr); let t = 0, worst = 0; for (const f of fr) { if (t > 150) break; worst = Math.max(worst, f); t += f; } window.__gs.push(worst); });
+      }
+      const gs = await p.evaluate(() => window.__gs); console.log('  grab starts: worst frame in the first 150 ms of each grab (ms): ' + gs.map(x => x.toFixed(0)).join(' ')); },
     'wheel zoom': async () => { await p.mouse.move(board.x, board.y);
       for (let i = 0; i < 60; i++) { await p.mouse.wheel(0, i < 30 ? -60 : 60); await p.waitForTimeout(16); } },
     'drag a card': async () => { const c = await p.evaluate(() => { const e = document.querySelector('#cards .card'); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * .3 }; });
