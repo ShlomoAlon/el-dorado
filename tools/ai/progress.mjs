@@ -23,7 +23,7 @@ if (events.length) md += `**Milestones:** ${events.join(' → ')}\n\n`;
 // the owner's key number: in which round the network reaches El Dorado (network against itself), per course
 const AR = rows.filter(r => r.arrival);
 if (AR.length) {
-  const NAMES = { first: 'First Expedition', winding: 'Winding Paths', witch: "Witch's Cauldron" }, ids = [...new Set(AR.flatMap(r => Object.keys(r.arrival)))];
+  const NAMES = { first: 'First Expedition', hills: 'Hills of Gold', winding: 'Winding Paths', witch: "Witch's Cauldron" }, ids = [...new Set(AR.flatMap(r => Object.keys(r.arrival)))];
   const last = AR[AR.length - 1];
   md += `### Rounds to reach El Dorado (network against itself, all players who arrive) — lower is better\n\n| Course | First test | Latest test | Winner's round (latest) |\n|---|---|---|---|\n`;
   for (const id of ids) { const f = AR.find(r => r.arrival[id]); md += `| ${NAMES[id] || id} | ${f ? f.arrival[id].mean : '–'} | **${last.arrival[id] ? last.arrival[id].mean : '–'}** | ${last.arrival[id] ? last.arrival[id].winner : '–'} |\n`; }
