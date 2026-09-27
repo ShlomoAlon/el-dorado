@@ -1,6 +1,7 @@
 // Record bot games as replayable game logs (watch them at /?replay=<id> after uploading).
 //   node tools/ai/record.mjs <policies> [games=1] [seed0=random] [--upload[=https://el-dorado.shlomoalon9.workers.dev]]
 //   policies: comma list per seat, e.g. net,plan,plan  (net = tools/ai/data/first.net.json)
+//     new+search / new = tools/ai/data/first-plan.net.json with / without the whole-turn planner; old = the frozen model
 //   FILTER=capped   keep only games where someone had not arrived by round 25
 //   FILTER=netlost  keep only games a net seat did not win
 //   FILTER=netclose keep only games a net seat won with the runner-up arriving within one round
@@ -12,8 +13,13 @@ const args = process.argv.slice(2), flags = args.filter(a => a.startsWith('--'))
 let pols = (pos[0] || 'net,plan,plan').split(','), G = +(pos[1] || 1), seed0 = pos[2] ? +pos[2] : (Math.random() * 1e9) | 0;
 const up = flags.find(f => f.startsWith('--upload')), base = up ? (up.split('=')[1] || 'https://el-dorado.shlomoalon9.workers.dev') : null;
 const course = E.courseById(process.env.COURSE || 'first'), FILTER = process.env.FILTER || '';
+const NETS = {}, load = f => existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
+if (pols.some(p => p === 'new' || p === 'new+search')) NETS.new = load('tools/ai/data/first-plan.net.json');
+if (pols.includes('old')) NETS.old = load('tools/ai/models/first-td-evaluated.json');
 if (pols.includes('net')) { const p = `tools/ai/data/${course.id}.net.json`; if (!existsSync(p)) throw new Error('no net at ' + p); E.setNet(JSON.parse(readFileSync(p, 'utf8'))); }
-const NAME = { net: 'Bot (net)', plan: 'Planner', heur: 'Heuristic' };
+const NAME = { net: 'Bot (net)', plan: 'Heuristic planner', heur: 'Heuristic', 'new+search': 'New net + search', new: 'New net', old: 'Old net' };
+const optsOf = pol => { if (pol === 'new' || pol === 'new+search') E.setNet(NETS.new); else if (pol === 'old') E.setNet(NETS.old);
+  return pol === 'new+search' ? { mode: 'net', search: { kind: 'plan', beam: 3 } } : pol === 'new' || pol === 'old' ? { mode: 'net', explain: true } : null; };
 mkdirSync('tools/ai/data/replays', { recursive: true });
 const slim = a => { const o = { ...a }; for (const k of Object.keys(o)) if (o[k] === undefined) delete o[k]; return o; };
 let kept = 0;
@@ -28,7 +34,7 @@ for (let g = 0; g < G; g++) {
     if (S.round > 25 || acts++ > 20000) { capped = true; break; }
     const me = S.cur, pol = pols[me];
     E.setRng(null); // the bots' look-ahead must not use up the game's shuffle stream
-    const c = E.botChoose({ mode: pol, explain: true });
+    const c = E.botChoose(optsOf(pol) || { mode: pol, explain: true });
     E.setRng(gen);
     const r = E.applyAction(me, c.a), a = r.ok ? c.a : { t: 'end', keep: [] };
     if (!r.ok) E.applyAction(me, a);
