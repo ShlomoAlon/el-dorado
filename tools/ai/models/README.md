@@ -11,7 +11,7 @@ The network trained by plain self-play (TD(λ = 0.7), one action at a time, no s
 | `first-td-latest.json` | network after iteration 87's training step (not yet tested) |
 | `first-td.log` | the full training log (every iteration's self-play, training and test results) |
 
-Training code at freeze time: commit `aedbec6` (tag `model-first-td`). Place values 1st 1 · 2nd ¼ · 3rd ⅛ · last 0,
+Training code at freeze time: commit `aedbec6` on branch `claude/sweet-ptolemy-fisqdw` (this freeze: commit `d15c303`; also on `main`). Place values 1st 1 · 2nd ¼ · 3rd ⅛ · last 0,
 gift-card exploration, 25-round cap.
 
 Last tests (160 games each vs the planner heuristic, 3- and 4-player, seats rotated):
