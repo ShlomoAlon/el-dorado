@@ -1,7 +1,7 @@
 // Tiny static SVG line charts for the live progress pages (GitHub shows them as images; light + dark via prefers-color-scheme).
 // Palette: validated categorical slots 1-2 (blue, orange), recessive grid and axes, legend + direct end labels for 2+ series.
-const C = { light: { s: ['#2a78d6', '#eb6834'], surf: '#fcfcfb', ink: '#0b0b0b', ink2: '#52514e', mut: '#898781', grid: '#e1e0d9', base: '#c3c2b7' },
-  dark: { s: ['#3987e5', '#d95926'], surf: '#1a1a19', ink: '#ffffff', ink2: '#c3c2b7', mut: '#898781', grid: '#2c2c2a', base: '#383835' } };
+const C = { light: { s: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100'], surf: '#fcfcfb', ink: '#0b0b0b', ink2: '#52514e', mut: '#898781', grid: '#e1e0d9', base: '#c3c2b7' },
+  dark: { s: ['#3987e5', '#d95926', '#199e70', '#c98500'], surf: '#1a1a19', ink: '#ffffff', ink2: '#c3c2b7', mut: '#898781', grid: '#2c2c2a', base: '#383835' } };
 const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 // opts: {title, sub, xLabel, yLabel, x:[min,max], y:[min,max], yTicks:[..], fmtY, series:[{name, pts:[[x,y]], dots:[[x,y]]}], refs:[{y,label}], marks:[{x,label}]}
 export function lineChart(o) {

@@ -12,6 +12,7 @@ import { cpus } from 'node:os';
 import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 const MAXBACK = process.env.MAXBACK === '1';
+const EVAL_SELF = process.env.EVAL_SELF === '1'; // tests: the network plays itself (all seats); the tracked number is the arrival round per course
 const TREESTRAP = +(process.env.TREESTRAP || 0);
 const DISTILL = process.env.DISTILL === '1';
 // LEAGUE=a.json,b.json: in self-play a share (LEAGUE_P, default 0.25) of seats is played by these past frozen networks (plain play), so the network doesn't only learn to beat its own habits
@@ -43,6 +44,7 @@ if (!isMainThread) {
     if (mode === 'self') { const np = rnd() < .5 ? 3 : 4; pols = Array.from({ length: np }, () => { const r = rnd(); return r < .25 ? 'heur' : LEAGUE && r < .25 + LEAGUE_P ? 'lg' + Math.floor(rnd() * LEAGUE.length) : 'net'; }); if (!pols.includes('net')) pols[0] = 'net'; }
     else if (table) { const gi = wi * games + g, np = gi % 2 ? 4 : 3, k = gi >> 1, all = ['net', 'netP', 'oldS', 'old'], a = np === 4 ? all : all.filter((_, i) => i !== k % 4);
       pols = a.map((_, i) => a[(i + (k >> 2)) % np]); }
+    else if (EVAL_SELF) { const np = g % 2 ? 4 : 3; pols = Array(np).fill('net'); } // the network against itself (arrival-round test)
     else { const np = g % 2 ? 4 : 3, a = ['net', ...Array(np - 1).fill('heur')]; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); } // half 3-player, half 4-player, seats rotated
     // every game is recorded as a replayable log (seeded shuffles); games that hit the final cap are saved for viewing
     C = pickCourse(); st.byCourse = st.byCourse || {}; st.byCourse[C.id] = (st.byCourse[C.id] || 0) + 1;
@@ -139,6 +141,8 @@ if (!isMainThread) {
       if (mode === 'self') { const T = traj[i], U = trajU[i], Bv = trajB[i]; let G = z; for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); G = t > 0 && Bv[t - 1] != null ? Bv[t - 1] : (1 - LAMBDA) * (net && (net.unsettled || !U[t]) ? E.botNetValue(T[t]) : G) + LAMBDA * G; } }
       if (table) { const tn = (st.tab = st.tab || {})['p' + n] = st.tab['p' + n] || {}, t = tn[pols[i]] = tn[pols[i]] || { seats: 0, wins: 0, pv: 0, arrSum: 0, arrN: 0 };
         t.seats++; if (win) t.wins++; t.pv += fail ? 0 : pv; if (p.fin) { t.arrSum += p.fin; t.arrN++; } if (i === 0) tn.games = (tn.games || 0) + 1; }
+      if (mode === 'eval' && p.fin) { const A = (st.arrC = st.arrC || {})[C.id] = st.arrC[C.id] || { sum: 0, n: 0, win: 0, wn: 0, games: 0 }; A.sum += p.fin; A.n++; if (S.places[i] === 1) { A.win += p.fin; A.wn++; } }
+      if (mode === 'eval' && i === 0) { const A = (st.arrC = st.arrC || {})[C.id] = st.arrC[C.id] || { sum: 0, n: 0, win: 0, wn: 0, games: 0 }; A.games++; }
       if (pols[i] === 'net') { st.netSeats++; if (win) st.netWins++; st['seat' + n]++; if (win) st['win' + n]++; st.netRem.push(rem[i]); if (p.fin) st.netArr.push(p.fin); }
       else { st.heurRem.push(rem[i]); if (p.fin) st.heurArr.push(p.fin); }
     });
@@ -190,7 +194,8 @@ if (isMainThread) {
     for (const [f] of old) unlinkSync(D + f); } catch (e) { } // keep the newest 60 capped-game replays
   // per table size: every player's share of the wins (sums to 100% minus games nobody finished), place value, arrival round
   const tab = st.tab ? Object.fromEntries(Object.entries(st.tab).map(([n, tn]) => [n, { games: tn.games, ...Object.fromEntries(Object.entries(tn).filter(([k]) => k !== 'games').map(([k, t]) => [k, { games: t.seats, wins: t.wins, winRate: +(t.wins / t.seats).toFixed(3), placeValue: +(t.pv / t.seats).toFixed(3), arrival: t.arrN ? +(t.arrSum / t.arrN).toFixed(2) : null }])) }])) : undefined;
-  const summary = { mode, horizon: wd.H, explore: X, games: GN, table: tab, secs: (Date.now() - t0) / 1000, capped: st.capped, maxback: st.maxback || 0, treestrap: st.treestrap || 0, netDecisions: st.netDec || 0, explored: (st.explore && st.explore.explore) || 0, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
+  const arrival = st.arrC ? Object.fromEntries(Object.entries(st.arrC).map(([k, A]) => [k, { games: A.games, mean: A.n ? +(A.sum / A.n).toFixed(2) : null, winner: A.wn ? +(A.win / A.wn).toFixed(2) : null }])) : undefined;
+  const summary = { arrival, mode, horizon: wd.H, explore: X, games: GN, table: tab, secs: (Date.now() - t0) / 1000, capped: st.capped, maxback: st.maxback || 0, treestrap: st.treestrap || 0, netDecisions: st.netDec || 0, explored: (st.explore && st.explore.explore) || 0, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
     win3p: r3 == null ? null : +r3.toFixed(3), win4p: r4 == null ? null : +r4.toFixed(3), vsFair: rel,
     netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur, transNet: st.transNet, transHeur: st.transHeur, decisions: st.dec, exploration: st.explore, stuck: st.stuck, bench: wd.bench };
   if (out !== '-' && mode === 'self') {

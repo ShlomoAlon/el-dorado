@@ -9,15 +9,21 @@ import { E } from '../../src/engine.gen.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 const [, , from, target, out] = process.argv;
 const src = JSON.parse(readFileSync(from, 'utf8')), H1 = src.b1.length, K = E.BOT_NF, srcBlock = src.nf - K;
-if (src.courses) throw new Error('source is already a multi-course network');
 const multi = target.startsWith('multi:'), courses = multi ? target.slice(6).split(',') : [target];
 for (const id of courses) { const c = E.courseById(id); if (!c || c.id !== id) throw new Error('unknown course ' + id); }
 const blockOf = id => { E.newGame({ course: E.courseById(id), seed: 1, fullRace: true, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) }); E.setNet(null); return E.botNetNF() - K; };
-const sizes = courses.map(blockOf), FL = multi ? E.BOT_FLAGS : 0, nf = K + FL + sizes.reduce((a, x) => a + x, 0);
+// new multi-course networks always get the course one-hot inputs (net.onehot) after the rule switches
+const sizes = courses.map(blockOf), FL = multi ? E.BOT_FLAGS + courses.length : 0, nf = K + FL + sizes.reduce((a, x) => a + x, 0);
 const w1T = new Array(nf * H1).fill(0), copyRows = (dst, srcRow, n) => { for (let r = 0; r < n; r++) for (let j = 0; j < H1; j++) w1T[(dst + r) * H1 + j] = src.w1T[(srcRow + r) * H1 + j]; };
 copyRows(0, 0, K); let o = K + FL, copied = false;
-courses.forEach((id, i) => { if (id === src.course) { if (sizes[i] !== srcBlock) throw new Error('block size mismatch for ' + id); copyRows(o, K, sizes[i]); copied = true; } o += sizes[i]; });
+if (src.courses) { // extending a multi-course network: keep its rule switches and every board block it already has
+  if (!multi) throw new Error('a multi-course source can only be extended (multi:…)');
+  copyRows(K, K, E.BOT_FLAGS); let so = K + E.BOT_FLAGS; const srcOff = {};
+  if (src.onehot) { src.courses.forEach((id, i) => { const j = courses.indexOf(id); if (j >= 0) copyRows(K + E.BOT_FLAGS + j, so + i, 1); }); so += src.courses.length; }
+  src.courses.forEach(id => { srcOff[id] = so; so += blockOf(id); });
+  courses.forEach((id, i) => { if (srcOff[id] != null) { copyRows(o, srcOff[id], sizes[i]); copied = true; } o += sizes[i]; });
+} else courses.forEach((id, i) => { if (id === src.course) { if (sizes[i] !== srcBlock) throw new Error('block size mismatch for ' + id); copyRows(o, K, sizes[i]); copied = true; } o += sizes[i]; });
 const net = { ...src, nf, w1T, from: `${from.split('/').pop()} (${src.course})` };
-if (multi) { net.courses = courses; net.course = 'multi'; } else net.course = courses[0];
+if (multi) { net.courses = courses; net.course = 'multi'; net.onehot = true; } else net.course = courses[0];
 writeFileSync(out, JSON.stringify(net));
 console.log(`${from} (${src.course}, nf ${src.nf}) → ${out} (${multi ? 'courses ' + courses.join(', ') : courses[0]}, nf ${nf}): summary + hidden layers copied${copied ? `, ${src.course} board block copied` : ''}; ${nf - K - (copied ? srcBlock : 0)} inputs start at zero`);

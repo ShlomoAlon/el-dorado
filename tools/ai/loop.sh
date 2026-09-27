@@ -2,7 +2,7 @@
 # Self-play training for one course with a horizon curriculum.   tools/ai/loop.sh <course-id> <iterations>
 # RUN=<name> keeps a separate run's files (tools/ai/data/<course>-<name>.*); SEARCH_BEAM=<n> makes the nets play through the
 # whole-turn planner in self-play and tests (training with search in the loop); MIX_PLAIN=1 also has one net seat per game play plain.
-# REPLAY=<n>: train on the last n self-play batches of this horizon (default 3).
+# REPLAY=<n>: train on the last n self-play batches of this horizon (default 3). HCAP=<rounds>: fixed round cap. EXPLORE_LEVEL=<x>: exploration level.
 # Reusable for any course: everything below depends only on the course id.
 # Starts from an untrained network (TD-Gammon style). Games stop after HORIZON rounds and unfinished players
 # are ranked by how close they got; the horizon grows 3 → 5 → 8 → 12 → 16 → full once the bot stops improving.
@@ -23,8 +23,8 @@ if [ ! -f $NET ]; then  # untrained network with the right input size
 fi
 bestH=-1; stall=0; beat=0
 for i in $(seq 1 $N); do
-  H=${HS[$hi]}; it=$(( $( (ls $D/$P.it*.json 2>/dev/null || true) | wc -l) + 1 ))
-  X=${EX[$hi]}
+  H=${HCAP:-${HS[$hi]}}; it=$(( $( (ls $D/$P.it*.json 2>/dev/null || true) | wc -l) + 1 ))
+  X=${EXPLORE_LEVEL:-${EX[$hi]}}   # EXPLORE_LEVEL: override the curriculum's exploration level
   log "STAGE iter $it · horizon $H rounds · exploration level $X · 600 self-play games${SEARCH_BEAM:+ · nets play through the whole-turn planner (beam $SEARCH_BEAM)}"
   out=$(HORIZON=$H EXPLORE=$X node tools/ai/gen.mjs self 600 $D/$P.it$it $NET $C) || { log "ERROR gen failed"; exit 1; }
   log "GEN $out"

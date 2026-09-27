@@ -20,7 +20,7 @@ H1, H2 = 128, 64
 net = nn.Sequential(nn.Linear(nf, H1), nn.LeakyReLU(0.01), nn.Linear(H1, H2), nn.LeakyReLU(0.01), nn.Linear(H2, 1))
 keep = {}  # multi-course networks carry their course list (and history) through training
 if os.path.exists(out):
-    J = json.load(open(out)); keep = {k: J[k] for k in ('courses', 'from') if k in J}
+    J = json.load(open(out)); keep = {k: J[k] for k in ('courses', 'from', 'onehot') if k in J}
     if J.get('nf') == nf and (J.get('course') == course or 'courses' in J):
         with torch.no_grad():
             net[0].weight.copy_(torch.tensor(J['w1T']).view(nf, H1).T); net[0].bias.copy_(torch.tensor(J['b1']))

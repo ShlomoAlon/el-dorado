@@ -545,17 +545,21 @@ function botActions(){
 const BOT_BINS=16,BOT_BW=3,BOT_NT=BOT_TYPES.length;
 const BOT_NF=16*9+14+BOT_NT*4+12+3*(BOT_NT*2+8)+BOT_NT*2+2+6*9+4;
 function botCounts(ids){const c=new Float32Array(BOT_NT);for(const id of ids){const k=BOT_TYPES.indexOf(S.cards[id]);if(k>=0)c[k]++;}return c;}
-function botFeatures(me){
-  const f=new Float32Array(BOT_NF);let i=0;const put=(v)=>{f[i++]=v;},putArr=(a,sc)=>{for(const x of a)f[i++]=x*sc;};
+function botFeatures(me,into){ // into: write the summary at the start of this (zeroed) array instead of a new one
+  const f=into||new Float32Array(BOT_NF);let i=0;const put=(v)=>{f[i++]=v;},putArr=(a,sc)=>{for(const x of a)f[i++]=x*sc;};
   const P=S.players[me],endView=S._endView===me,myTurn=S.cur===me&&!S.over&&!endView,bd=botDist(),n=S.players.length;
   const stepsOf=k=>k==='done'?0:(bd.steps.get(k)??48);
   // 1. the map, binned by steps to El Dorado: width, terrain mix, difficulty, crowding, blockades
-  const bins=Array.from({length:BOT_BINS},()=>new Float32Array(9));
-  const occ=new Set();S.players.forEach(p=>p.pieces.forEach(k=>{if(k!=='done')occ.add(k);}));
-  for(const[k,st]of bd.steps){const h=hexAt(k);if(h.type==='g'||h.type==='s')continue;const b=bins[Math.min(BOT_BINS-1,Math.floor(st/BOT_BW))];
-    b[0]++;const t='jwvrc'.indexOf(h.type);if(t>=0)b[1+t]++;b[6]+=h.val;if(occ.has(k))b[7]++;}
-  S.blockades.forEach(B=>{if(B.owner!==null)return;const e=MAP.conns[B.conn].edges[0];const st=Math.min(stepsOf(e[0]),stepsOf(e[1]));bins[Math.min(BOT_BINS-1,Math.floor(st/BOT_BW))][8]+=B.v;});
-  for(const b of bins){const c=b[0]||1;put(b[0]/10);for(let t=1;t<=5;t++)put(b[t]/c);put(b[6]/c/3);put(b[7]/2);put(b[8]/2);}
+  // the terrain part never changes on a course: computed once per map (same order of additions, so the same values); per call
+  // only the occupied spaces and the open blockades are added
+  if(!MAP._fb){const st=new Float32Array(BOT_BINS*9),binOf=new Map();
+    for(const[k,sv]of bd.steps){const h=hexAt(k);if(h.type==='g'||h.type==='s')continue;const bi=Math.min(BOT_BINS-1,Math.floor(sv/BOT_BW)),o=bi*9;binOf.set(k,bi);
+      st[o]++;const t='jwvrc'.indexOf(h.type);if(t>=0)st[o+1+t]++;st[o+6]+=h.val;}
+    MAP._fb={st,binOf,b:new Float32Array(BOT_BINS*9)};}
+  const FB=MAP._fb,bins=FB.b;bins.set(FB.st);const seen=[];
+  for(const p of S.players)for(const k of p.pieces){if(k==='done'||seen.includes(k))continue;seen.push(k);const bi=FB.binOf.get(k);if(bi!=null)bins[bi*9+7]++;}
+  S.blockades.forEach(B=>{if(B.owner!==null)return;const e=MAP.conns[B.conn].edges[0];const st=Math.min(stepsOf(e[0]),stepsOf(e[1]));bins[Math.min(BOT_BINS-1,Math.floor(st/BOT_BW))*9+8]+=B.v;});
+  for(let o=0;o<BOT_BINS*9;o+=9){const c=bins[o]||1;put(bins[o]/10);for(let t=1;t<=5;t++)put(bins[o+t]/c);put(bins[o+6]/c/3);put(bins[o+7]/2);put(bins[o+8]/2);}
   // 2. me: where I am and what's ahead
   const pieceCost=p=>p.pieces.reduce((a,k)=>a+botCost(k),0)/p.pieces.length,pieceSteps=p=>p.pieces.reduce((a,k)=>a+stepsOf(k),0)/p.pieces.length;
   const myCost=pieceCost(P);put(myCost/40);put(pieceSteps(P)/40);put(Math.min(...P.pieces.map(stepsOf))/40);put(playerDone(P)?1:0);put(P.blocks.length/3);
@@ -705,11 +709,14 @@ const BOT_FLAGS=4,BOT_BLOCK={};
 function botBlockSize(id){if(BOT_BLOCK[id]!=null)return BOT_BLOCK[id];const C=courseById(id);if(!C)return BOT_BLOCK[id]=0;
   const m=MAP&&MAP.course===id?MAP:buildCourse(C,1),keys=[...m.hexes.keys()].filter(k=>m.hexes.get(k).type!=='m');return BOT_BLOCK[id]=keys.length*4+m.conns.length*8;}
 const botMulti=()=>!!(BOT_NET&&BOT_NET.courses);
-function botNetNF(){if(botMulti())return BOT_NF+BOT_FLAGS+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(id),0);return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8;}
-function botNetFeatures(me){
-  const{keys,idx}=botMapOrder(),n=S.players.length,f=new Float32Array(botNetNF());
-  f.set(botFeatures(me),0);let o=BOT_NF;
-  if(botMulti()){f[o]=S.rules&&S.rules.campOnce?1:0;o+=BOT_FLAGS;for(const id of BOT_NET.courses){if(id===MAP.course)break;o+=botBlockSize(id);}}
+// net.onehot: one input per course (1 = the current course) right after the rule switches, so the network can shift its whole evaluation per map
+function botNetNF(){if(botMulti())return BOT_NF+BOT_FLAGS+(BOT_NET.onehot?BOT_NET.courses.length:0)+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(id),0);return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8;}
+let BOT_FBUF=null;
+function botNetFeatures(me,scratch){ // scratch: reuse one buffer (only for values used at once, never for stored training samples)
+  const{keys,idx}=botMapOrder(),n=S.players.length,nf=botNetNF();let f;
+  if(scratch){if(!BOT_FBUF||BOT_FBUF.length!==nf)BOT_FBUF=new Float32Array(nf);else BOT_FBUF.fill(0);f=BOT_FBUF;}else f=new Float32Array(nf);
+  botFeatures(me,f);let o=BOT_NF;
+  if(botMulti()){f[o]=S.rules&&S.rules.campOnce?1:0;o+=BOT_FLAGS;if(BOT_NET.onehot){f[o+BOT_NET.courses.indexOf(MAP.course)]=1;o+=BOT_NET.courses.length;}for(const id of BOT_NET.courses){if(id===MAP.course)break;o+=botBlockSize(id);}}
   S.players.forEach((p,j)=>{const rel=(j-me+n)%n;if(rel>3)return;for(const k of p.pieces){if(k==='done')continue;const x=idx.get(k);if(x!=null)f[o+x*4+rel]=1;}});
   o+=keys.length*4;
   S.blockades.forEach(B=>{const c=o+B.conn*8;const t='jwvr'.indexOf(B.k);if(t>=0)f[c+t]=1;f[c+4]=B.v/2;f[c+5]=B.owner===null?1:0;f[c+6]=B.owner===me?1:0;f[c+7]=B.owner!==null&&B.owner!==me?1:0;});
@@ -719,10 +726,13 @@ function botNetFeatures(me){
    The first layer only touches non-zero inputs (most board slots are empty), so it stays fast in the browser. */
 let BOT_NET=null;
 let BOT_EVALS=0;
-function botNetValue(f){BOT_EVALS++;const N=BOT_NET,H1=N.b1.length,H2=N.b2.length;const h1=Float32Array.from(N.b1);
-  for(let k=0;k<f.length;k++){const x=f[k];if(x===0)continue;const r=k*H1,w=N.w1T;for(let j=0;j<H1;j++)h1[j]+=w[r+j]*x;}
+// weights as typed arrays, made once per network (same double precision as the JSON numbers, so results are bit-identical)
+function botNetPrep(N){if(N._p&&N._p.src===N.w1T)return N._p;const p={src:N.w1T,w1:Float64Array.from(N.w1T),b1:Float32Array.from(N.b1),w2:Float64Array.from(N.w2),b2:Float64Array.from(N.b2),w3:Float64Array.from(N.w3),h1:new Float32Array(N.b1.length)};
+  Object.defineProperty(N,'_p',{value:p,writable:true,enumerable:false,configurable:true});return p;}
+function botNetValue(f){BOT_EVALS++;const N=BOT_NET,P=botNetPrep(N),H1=P.b1.length,H2=P.b2.length,h1=P.h1,w=P.w1,w2=P.w2,b2=P.b2,w3=P.w3;h1.set(P.b1);
+  for(let k=0;k<f.length;k++){const x=f[k];if(x===0)continue;const r=k*H1;for(let j=0;j<H1;j++)h1[j]+=w[r+j]*x;}
   for(let j=0;j<H1;j++)if(h1[j]<0)h1[j]*=.01;
-  let s=N.b3[0];for(let j=0;j<H2;j++){let a=N.b2[j];const r=j*H1;for(let k=0;k<H1;k++)a+=N.w2[r+k]*h1[k];s+=N.w3[j]*(a>0?a:.01*a);}
+  let s=N.b3[0];for(let j=0;j<H2;j++){let a=b2[j];const r=j*H1;for(let k=0;k<H1;k++)a+=w2[r+k]*h1[k];s+=w3[j]*(a>0?a:.01*a);}
   return 1/(1+Math.exp(-s));}
 const botNetReady=()=>!!(BOT_NET&&MAP&&(botMulti()?BOT_NET.courses.includes(MAP.course):BOT_NET.course===MAP.course)&&BOT_NET.nf===botNetNF());
 /* what a finishing place is worth: 1st = 1, 2nd = 1/BOT_FIRST_RATIO, each further place half the one above, last = 0
@@ -738,12 +748,12 @@ function botValue(me,mode){
     // arrived, but players still to move this round can arrive in the same round and beat me on the tie-break
     // (more blockades, then the biggest blockade): until the round is over my place is a chance, which the network estimates
     // once it has been trained on such positions (net.unsettled); older networks get the place as if settled (optimistic)
-    if(mode==='net'&&botNetReady()&&BOT_NET.unsettled&&!botPlaceSettled(me))return botNetValue(botNetFeatures(me));
+    if(mode==='net'&&botNetReady()&&BOT_NET.unsettled&&!botPlaceSettled(me))return botNetValue(botNetFeatures(me,true));
     // settled: only players who arrived earlier, or in the same round with a better tie-break, are ahead of me (as endGame ranks)
     const n=S.players.length,mb=p=>Math.max(0,...p.blocks.map(b=>S.blockades[b].n));
     const pl=1+S.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&(q.blocks.length>P.blocks.length||q.blocks.length===P.blocks.length&&mb(q)>mb(P)))).length;
     return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
-  return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me)):mode==='heur2'?botHeuristic2(me):botHeuristic(me);
+  return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me,true)):mode==='heur2'?botHeuristic2(me):botHeuristic(me);
 }
 /* ---- choose and play ---- */
 /* fast structural copy of the game state (everything applyAction can change gets its own copy) */
