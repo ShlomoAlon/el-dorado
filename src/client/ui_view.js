@@ -72,7 +72,7 @@ function buildBoard(){
   pat('p-v',16,16,p=>{sv('circle',{cx:4,cy:4,r:1.1,fill:'rgba(120,70,0,.2)'},p);sv('circle',{cx:12,cy:11,r:.9,fill:'rgba(120,70,0,.16)'},p);sv('circle',{cx:13,cy:3,r:.6,fill:'rgba(255,255,255,.25)'},p);});
   pat('p-r',20,20,p=>{for(const[x,y,s]of[[5,5,3],[14,8,2.4],[8,15,2.6],[17,17,1.8]])sv('path',{d:`M${x-s} ${y+s*.6} Q${x-s} ${y-s*.7} ${x} ${y-s*.8} Q${x+s} ${y-s*.6} ${x+s} ${y+s*.6}Z`,fill:'rgba(40,42,40,.2)',stroke:'rgba(255,255,255,.12)','stroke-width':.5},p);});
   pat('p-c',12,12,p=>{sv('path',{d:'M0 12 L12 0',stroke:'rgba(0,0,0,.12)','stroke-width':3},p);});
-  L.plates=sv('g',null,svg);L.terrain=sv('g',null,svg);L.city=sv('g',null,svg);L.hl=sv('g',null,svg2);L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);L.pieces=sv('g',null,svg2);L.aim=sv('g',{'pointer-events':'none'},svg2);L.pips=sv('g',{'pointer-events':'none'},svg2); // rubble / base camp progress dots (redrawn every render)
+  L.plates=sv('g',null,svg);L.terrain=sv('g',null,svg);L.city=sv('g',null,svg);L.hl=sv('g',null,svg2);L.trail=sv('g',{'pointer-events':'none'},svg2);feedReset();L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);L.pieces=sv('g',null,svg2);L.aim=sv('g',{'pointer-events':'none'},svg2);L.pips=sv('g',{'pointer-events':'none'},svg2); // rubble / base camp progress dots (redrawn every render)
   // board plates (the physical boards): drop shadow + rim
   const byTile=new Map();for(const h of MAP.hexes.values()){if(!byTile.has(h.tile))byTile.set(h.tile,[]);byTile.get(h.tile).push(h);}
   for(const[,hs]of byTile){const g=sv('g',null,L.plates);for(const h of hs)sv('polygon',{points:hexPts(h.x+2,h.y+6,R+2),fill:'rgba(0,0,0,.45)'},g);}
@@ -509,6 +509,99 @@ function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpe
   if(src==='r'){const cw=86;return{left:r.left+r.width/2-cw/2,top:r.top-cw*.7+r.height/2,width:cw,height:cw*1.4};}return r;}
 
 /* =========================================================
+   OTHER PLAYERS' TURNS. What an AI or an online opponent plays, spends, buys and removes is shown in a row of small
+   cards under the prompt (the same card faces as your own hand), with a caption per step; played cards fly out of their
+   player chip, a bought card flies out of the market, and their moves leave a dotted trail on the board. After their
+   turn the row stays as a recap until you act. Public information only: the engine's 'play' events carry the types of
+   cards that became public (played, spent, removed, taken) and just counts for the cards kept at the end of a turn.
+   ========================================================= */
+const FEED={pl:-1,ended:false,groups:[],seq:0,fly:[],trail:[]};
+/* whose actions get shown: the AIs (local), everyone but me (online); never in replays, where the actor's own hand is shown */
+function feedWatch(pl){if(!S||REPLAY||pl==null||!S.players[pl])return false;return online()?S.owners[pl]!==myId():isAI(pl);}
+function feedReset(){FEED.pl=-1;FEED.ended=false;FEED.groups=[];FEED.fly=[];FEED.trail=[];}
+function feedClear(){if(FEED.pl<0&&!FEED.groups.length)return;feedReset();feedTrail();}
+function chipRect(pl){const c=document.querySelectorAll('#players .pchip')[pl];return c?c.getBoundingClientRect():null;}
+/* one engine event of a watched player (called from playEvents, before render) */
+function feedEvent(e){
+  if(e.e==='play'){
+    if(FEED.pl!==e.pl||FEED.ended){feedReset();FEED.pl=e.pl;}
+    const last=FEED.groups[FEED.groups.length-1];
+    if(e.k==='move'&&e.more&&last&&last.k==='move'){last.n+=e.n;last.v++;return;} // leftover strength: same card, more spaces
+    if(e.k==='trash'&&!e.ts.length)return;
+    if(e.k==='end')FEED.ended=true;
+    const g={...e,id:++FEED.seq,v:0};FEED.groups.push(g);
+    if(g.ts&&g.ts.length)FEED.fly.push({gid:g.id,kind:'hand',from:chipRect(e.pl)});
+    return;}
+  if(FEED.pl!==e.pl)return;
+  const last=FEED.groups[FEED.groups.length-1];if(!last)return;
+  if(e.e==='gain'&&(last.k==='buy'||last.k==='transmit'))FEED.fly.push({gid:last.id,kind:'got',from:marketRect(e.src,e.idx)});
+  else if(e.e==='block'){last.bl=e.n;last.v++;}
+  else if(e.e==='arrive'){last.arr=true;last.v++;}
+  else if(e.e==='move'){FEED.trail.push(e.path);feedTrail();}
+}
+function feedCap(g){
+  const one=g.ts&&g.ts.length===1?CT[g.ts[0]].n:'',bl=g.bl?` · blockade #${g.bl}`:'',arr=g.arr?' · <b>El Dorado</b>':'';
+  switch(g.k){
+    case 'move':return`${esc(one)} · <b>${g.n}</b> ${g.n===1?'space':'spaces'}`+bl+arr;
+    case 'native':return(g.n?'Native · <b>1</b> space':'Native')+bl+arr;
+    case 'rubble':return`Discarded <b>${g.ts.length}</b> · rubble`;
+    case 'camp':return`Removed <b>${g.ts.length}</b> · base camp`;
+    case 'blr':return`Discarded <b>${g.ts.length}</b>`+bl;
+    case 'action':return`${esc(one)} · drew <b>${g.n}</b>`;
+    case 'trash':return`Removed <b>${g.ts.length}</b> from the game`;
+    case 'transmit':return`Took <b>${esc(CT[g.got].n)}</b>`;
+    case 'buy':return`Bought <b>${esc(CT[g.got].n)}</b> for ${fmt(g.paid)}`;
+  }
+  return'';
+}
+function feedGroupHTML(g){
+  if(g.k==='end')return`<div class="fg fend" data-g="${g.id}"><div class="fpill">Ended turn</div><div class="fcap">${g.kept?`kept <b>${g.kept}</b>`:'kept none'}${g.disc?` · discarded ${g.disc}`:''}</div></div>`;
+  const mini=(t,got)=>`<div class="fc${got?' got':''}" data-t="${t}" title="${esc(cardTitle(t))}"><div class="mcard">${cardHTML(t)}</div></div>`;
+  return`<div class="fg f-${g.k}" data-g="${g.id}"><div class="frc"><div class="fcs">${g.ts.map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap">${feedCap(g)}</div></div>`;
+}
+function feedRender(){
+  const F=$('#feed');if(!F)return;
+  if(!S||REPLAY||UI.cover||!FEED.groups.length||!S.players[FEED.pl]){if(!F.hidden){F.hidden=true;F.innerHTML='';F.dataset.pl='';}return;}
+  if(F.dataset.pl!==String(FEED.pl)){F.innerHTML='<div class="fwho"></div><div class="frow"></div>';F.dataset.pl=FEED.pl;}
+  const p=S.players[FEED.pl],recap=S.cur!==FEED.pl||S.over; // their turn is over: say whose turn this was
+  const who=F.querySelector('.fwho'),wh=recap?`<i style="background:${p.color}"></i>${esc(p.name)}’s turn`:'';if(who.innerHTML!==wh)who.innerHTML=wh;who.hidden=!recap;
+  const row=F.querySelector('.frow'),ids=new Set(FEED.groups.map(g=>String(g.id)));
+  for(const el of[...row.children])if(!ids.has(el.dataset.g))el.remove();
+  for(const g of FEED.groups){let el=row.querySelector(`[data-g="${g.id}"]`);
+    if(!el){row.insertAdjacentHTML('beforeend',feedGroupHTML(g));el=row.lastElementChild;if(!reduceMotion)el.classList.add('new');el.dataset.v=g.v;}
+    else if(el.dataset.v!==String(g.v)){el.dataset.v=g.v;const c=el.querySelector('.fcap');if(c)c.innerHTML=feedCap(g);}}
+  F.hidden=false;
+  // the newest steps that fit; older ones step out whole (never half a card or half a caption)
+  const kids=[...row.children];kids.forEach(k=>k.classList.remove('gone'));
+  const W=row.clientWidth,gap=parseFloat(getComputedStyle(row).columnGap)||0;let tot=-gap,cut=false;
+  for(let i=kids.length-1;i>=0;i--){tot+=kids[i].offsetWidth+gap;if(cut||(tot>W+1&&i<kids.length-1)){cut=true;kids[i].classList.add('gone');}}
+  if(FEED.fly.length){const list=FEED.fly;FEED.fly=[];if(!reduceMotion)feedFly(list);}
+}
+/* cards fly into the row: out of the player's chip (from their hand) or out of the market (a card they bought or took) */
+function feedFly(list){
+  for(const f of list){
+    const gel=document.querySelector(`#feed [data-g="${f.gid}"]`);if(!gel||!f.from||!f.from.width)continue;
+    [...gel.querySelectorAll(f.kind==='got'?'.fc.got':'.fcs .fc')].forEach((tEl,i)=>{
+      const to=tEl.getBoundingClientRect();if(!to.width)return;
+      const el=document.createElement('div');el.className='card';el.innerHTML=cardHTML(tEl.dataset.t);el.style.pointerEvents='none';el.style.zIndex=200;$('#cards').appendChild(el);
+      const fr=f.kind==='hand'?{left:f.from.left+f.from.width/2-to.width*.4,top:f.from.top+f.from.height/2-to.height*.4,width:to.width*.8,height:to.height*.8}:f.from;
+      placeAt(el,fr,f.kind==='hand'?-8:0);if(f.kind==='hand')el.style.opacity=0;tEl.style.opacity=0;
+      void el.offsetWidth;el.classList.add('anim');el.style.transitionDuration=f.kind==='got'?'.55s':'.4s';el.style.transitionDelay=(i*70)+'ms';
+      placeAt(el,to,0);el.style.opacity=1;
+      setTimeout(()=>{tEl.style.opacity='';el.remove();},(f.kind==='got'?560:410)+i*70);
+    });
+  }
+}
+/* the watched player's moves this turn, as a dotted trail in their colour (static; redrawn only when it changes) */
+function feedTrail(){
+  if(!L.trail)return;L.trail.innerHTML='';const p=S&&S.players[FEED.pl];if(!p||!FEED.trail.length)return;
+  for(const keys of FEED.trail){if(keys.length<2)continue;const d=keys.map((k,i)=>{const h=hexAt(k);return(i?'L':'M')+h.x.toFixed(1)+' '+h.y.toFixed(1);}).join(' ');
+    sv('path',{d,fill:'none',stroke:'rgba(0,0,0,.45)','stroke-width':7,'stroke-linecap':'round','stroke-linejoin':'round'},L.trail);
+    sv('path',{d,fill:'none',stroke:p.color,'stroke-width':3.2,'stroke-linecap':'round','stroke-linejoin':'round','stroke-dasharray':'.5 8'},L.trail);
+    const h=hexAt(keys[0]);sv('circle',{cx:h.x,cy:h.y,r:5,fill:p.color,stroke:'rgba(0,0,0,.55)','stroke-width':2},L.trail);}
+}
+
+/* =========================================================
    DRAG TO PLAY (aim arrow for moves, free drag for actions)
    ========================================================= */
 let drag=null;
@@ -705,8 +798,22 @@ function renderMarket(){
   $('#resNote').textContent=tr?'Transmitter: take any card for free.':openSlot?'A market slot is empty, so you may buy from the reserve.':'Opens once a market slot sells out.';
   $('#buyState').textContent=S.turn.bought?'bought this turn':'1 purchase per turn';
   $('#resState').textContent=openSlot?'open':'locked';
-  $('#log').innerHTML=S.log.slice(-80).reverse().map(e=>{const p=e.p!=null?S.players[e.p]:null;return`<div>${p?`<i style="background:${p.color}"></i><b>${esc(p.name)}</b> `:''}${esc(e.t)}</div>`;}).join('');
 }
+/* ---------- journal: the game log, newest first, grouped by round; its own HUD button; stays live while open ---------- */
+function journalHTML(){
+  let r=null,out='';const L=S.log.map((e,i)=>{if(e.r!=null)r=e.r;return{...e,r};}); // server-added lines carry no round: they belong to the one before
+  for(let i=L.length-1;i>=0;i--){const e=L[i];
+    if(i===L.length-1||e.r!==L[i+1].r)out+=e.r!=null?`<div class="lr">Round ${e.r}</div>`:'';
+    const p=e.p!=null?S.players[e.p]:null;
+    out+=`<div class="le${p?'':' sys'}">${p?`<i style="background:${p.color}"></i><b>${esc(p.name)}</b> `:''}${esc(e.t)}</div>`;}
+  return out||'<p class="note">Nothing has happened yet.</p>';
+}
+function showJournal(){
+  if(!S)return;
+  modal(`<h2>Journal <span>newest first</span></h2><div id="log">${journalHTML()}</div><div class="mrow" style="margin-top:14px"><button class="btn pri" id="jClose">Close</button></div>`,
+    sc=>{sc.classList.add('plain');sc.querySelector('.modal').classList.add('jrn');sc.querySelector('#jClose').onclick=closeModal;},true);
+}
+function renderJournal(){const l=document.querySelector('#overlay .modal.jrn #log');if(!l||!S)return;const last=S.log[S.log.length-1],sig=S.log.length+'|'+(last?last.t:'');if(l.dataset.sig!==sig){l.dataset.sig=sig;l.innerHTML=journalHTML();}}
 function renderHeader(){
   $('#roundLbl').textContent='Round '+S.round+(S.endTriggered&&!S.over?' · final':'');
   $('#players').innerHTML=S.players.map((p,i)=>{
@@ -717,7 +824,7 @@ function renderHeader(){
   }).join('');
 }
 function renderPrompt(){
-  const pl=cur();const P=$('#prompt'),B=$('#actBtns');
+  const pl=cur();const P=$('#ptxt'),B=$('#actBtns');
   const who=`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>`;
   let txt='',btns=[];
   if(REPLAY){P.innerHTML=replayPromptHTML();btnWire(B,[]);return;}
@@ -763,17 +870,18 @@ function btnWire(B,btns){
   const main=btns.filter(b=>b.big),rest=btns.filter(b=>!b.big);
   const sig=btns.map(b=>b.id+(b.dis?'d':'')+b.t).join('|');
   const h=b=>`<button class="btn${b.pri?' pri':''}${b.big?' big':''}" id="${b.id}"${b.dis?' disabled':''}>${b.t}</button>`;
-  if(B.dataset.sig!==sig){B.innerHTML=main.map(h).join('')+(rest.length?`<div class="brow">${rest.map(h).join('')}</div>`:'');B.dataset.sig=sig;}
+  if(B.dataset.sig!==sig){B.innerHTML=main.map(h).join('')+(rest.length?`<div class="brow">${rest.map(h).join('')}</div>`:'');B.dataset.sig=sig;
+    $('#app').style.setProperty('--actFoot',(btns.length?B.offsetWidth+26:16)+'px');} // how far the turn buttons reach in from the right (short screens keep the prompt clear of them)
   btns.forEach(b=>{const e=document.getElementById(b.id);if(e)e.onclick=b.fn;});
 }
 function render(){
   if(!S)return;
   if(!online()&&!REPLAY&&!isAI(S.cur))UI.viewer=S.cur;
   computeTargets();if(REPLAY)replayDecorate();
-  renderHeader();renderMarket();renderPrompt();updateMktH();renderBuySlot();renderCards(); // re-size the market once the buttons exist
+  renderHeader();renderMarket();renderPrompt();feedRender();updateMktH();renderBuySlot();renderCards(); // re-size the market once the buttons exist
   renderBlockades();renderTargets();renderPieces();
   aim.hot=null;if(aimWanted())startAim();else stopAim();
-  save();updateTitle();renderTimer();$('#menuBtn').textContent=REPLAY?'Exit replay':online()&&!S.over?'Leave game':'New game';
+  renderJournal();save();updateTitle();renderTimer();$('#menuBtn').textContent=REPLAY?'Exit replay':online()&&!S.over?'Leave game':'New game';
   if(REPLAY){replayAfterRender();replayBar();}
   aiKick();
 }

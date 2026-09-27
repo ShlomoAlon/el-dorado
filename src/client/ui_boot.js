@@ -9,7 +9,7 @@ function boot(){
   $('#bsCancel').onclick=cancelMode;
   $('#allClose').onclick=()=>openAll(false);$('#allc').addEventListener('click',e=>{if(e.target.id==='allc'||e.target.classList.contains('allc-in'))openAll(false);});
   $('#deckPile').onclick=()=>showPile('deck');$('#discPile').onclick=()=>showPile('discard');
-  $('#rulesBtn').onclick=showRules;
+  $('#rulesBtn').onclick=showRules;$('#jrnBtn').onclick=showJournal;
   // full screen (hidden where the browser can't do it, e.g. iPhone Safari — there, Add to Home Screen gives a full-screen app)
   const fsEl=document.documentElement,fsOn=()=>document.fullscreenElement||document.webkitFullscreenElement;
   if(fsEl.requestFullscreen||fsEl.webkitRequestFullscreen){const fb=$('#fsBtn');fb.hidden=false;
@@ -38,5 +38,5 @@ function boot(){
     showSetup();
   });
 }
-window.__ED={NET,UI,act,openReplay,applyAction,render,get S(){return S},get MAP(){return MAP},joinRoom,netSend,onHandCard,doMove,pickFromMarket,confirmBuy,startEndTurn,finishTurn,confirmDiscardFor,confirmTrash,cancelMode,reach,myId,canAct,view};
+window.__ED={NET,UI,act,playEvents,openReplay,applyAction,render,get S(){return S},get MAP(){return MAP},joinRoom,netSend,onHandCard,doMove,pickFromMarket,confirmBuy,startEndTurn,finishTurn,confirmDiscardFor,confirmTrash,cancelMode,reach,myId,canAct,view};
 boot();

@@ -206,7 +206,7 @@ function newGame(o){
 }
 function newCard(t){const id='c'+(S.nid++);S.cards[id]=t;return id;}
 function drawCards(p,n){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(!p.discard.length)break;p.deck=shuffle(p.discard);p.discard=[];}const c=p.deck.pop();p.hand.push(c);got.push(c);}return got;}
-function log(pi,t){S.log.push({p:pi,t});if(S.log.length>200)S.log.shift();}
+function log(pi,t){S.log.push({p:pi,t,r:S.round});if(S.log.length>200)S.log.shift();}
 function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
 function blockAt(a,b){const c=MAP.edgeConn.get(a+'|'+b);if(c===undefined)return null;const bi=S.blockades.findIndex(x=>x.conn===c);if(bi<0||S.blockades[bi].owner!==null)return null;return bi;}
 function neighbors(k){const nb=MAP._nb||(MAP._nb=new Map());let r=nb.get(k);if(!r){const h=hexAt(k);r=DIRS.map(([dq,dr])=>key(h.q+dq,h.r+dr)).filter(n=>MAP.hexes.has(n));nb.set(k,r);}return r;} // cached per map
@@ -294,6 +294,7 @@ function applyAction(seat,a){
       const pi=act?act.pi:a.pi;if(!pieceOk(pi))return fail('Choose one of your explorers.');
       const syms=act?[act.sym]:(d.s==='*'?['j','w','v']:[d.s]);const budget=act?act.left:d.p;
       const tg=reach(seat,pi,syms,budget).get(a.to);if(!tg)return fail('That space is out of reach.');
+      ev.push({e:'play',pl:seat,k:'move',ts:[typeOf(a.card)],more:!!act,n:tg.path.length,sym:tg.sym});
       if(!act){T.active=null;rm(P.hand,a.card);P.play.push(a.card);}
       const from=P.pieces[pi];let pos=from;const path=[from];
       for(const st of tg.path){const b=blockAt(pos,st);if(b!==null)takeBlock(b);pos=st;path.push(st);}
@@ -307,7 +308,7 @@ function applyAction(seat,a){
       if(!inHand(a.card)||typeOf(a.card)!=='native')return fail('You need the Native.');
       if(!pieceOk(a.pi))return fail('Choose one of your explorers.');
       const tg=nativeTargets(seat,a.pi).get(a.to);if(!tg)return fail('The Native can only reach an adjacent free space.');
-      T.active=null;rm(P.hand,a.card);P.play.push(a.card);
+      T.active=null;rm(P.hand,a.card);P.play.push(a.card);ev.push({e:'play',pl:seat,k:'native',ts:['native'],n:tg.kind==='native'?1:0});
       if(tg.bl!=null)takeBlock(tg.bl);
       if(tg.kind==='native'){const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=hexAt(n).type==='g'?'done':n;
         log(seat,'plays the Native and moves to an adjacent space.');ev.push({e:'move',pl:seat,pi:a.pi,path:[from,n]});arrive(a.pi);}
@@ -318,7 +319,7 @@ function applyAction(seat,a){
       if(!pieceOk(a.pi))return fail('Choose one of your explorers.');
       const tg=payTargets(seat,a.pi).get(a.to);if(!tg)return fail('You cannot enter there.');
       if(!distinctHand(a.cards)||a.cards.length!==tg.need)return fail('Choose exactly '+plural(tg.need,'card')+'.');
-      T.active=null;const trash=tg.kind==='camp';
+      T.active=null;const trash=tg.kind==='camp';ev.push({e:'play',pl:seat,k:tg.kind,ts:a.cards.map(typeOf)});
       for(const id of a.cards){rm(P.hand,id);if(trash)S.trash.push(id);else P.play.push(id);}
       if(tg.kind==='blr'){takeBlock(tg.bl);log(seat,'discards '+plural(tg.need,'card')+' to clear the blockade.');}
       else{const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=n;
@@ -330,7 +331,7 @@ function applyAction(seat,a){
       const t=inHand(a.card)&&typeOf(a.card);
       const n={cartographer:2,compass:3,scientist:1,travellog:2}[t];if(!n)return fail('That card has no draw effect.');
       T.active=null;rm(P.hand,a.card);if(CT[t].once)S.trash.push(a.card);else P.play.push(a.card);
-      const got=drawCards(P,n);reveal=true;
+      const got=drawCards(P,n);reveal=true;ev.push({e:'play',pl:seat,k:'action',ts:[t],n:got.length});
       log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');ev.push({e:'draw',pl:seat,n:got.length});
       if(t==='scientist'||t==='travellog')T.pending={max:t==='scientist'?1:2};
       break;
@@ -338,6 +339,7 @@ function applyAction(seat,a){
     case 'trash':{
       if(!T.pending)return fail('Nothing to remove.');
       if(!distinctHand(a.cards)||a.cards.length>T.pending.max)return fail('Choose up to '+plural(T.pending.max,'card')+'.');
+      ev.push({e:'play',pl:seat,k:'trash',ts:a.cards.map(typeOf)});
       if(a.cards.length){for(const id of a.cards){rm(P.hand,id);S.trash.push(id);}log(seat,'removes '+a.cards.map(i=>def(i).n).join(', ')+' from the game.');}
       T.pending=null;break;
     }
@@ -345,7 +347,7 @@ function applyAction(seat,a){
       if(!inHand(a.card)||typeOf(a.card)!=='transmitter')return fail('You need the Transmitter.');
       const stack=a.src==='m'?S.market[a.idx]:a.src==='r'?S.reserve[a.idx]:null;if(!stack||stack.n<=0)return fail('That card is sold out.');
       T.active=null;rm(P.hand,a.card);S.trash.push(a.card);
-      stack.n--;P.discard.push(newCard(stack.t));
+      stack.n--;P.discard.push(newCard(stack.t));ev.push({e:'play',pl:seat,k:'transmit',ts:['transmitter'],got:stack.t});
       log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');ev.push({e:'gain',pl:seat,t:stack.t,src:a.src,idx:a.idx});
       break;
     }
@@ -358,7 +360,7 @@ function applyAction(seat,a){
       if(!distinctHand(a.cards))return fail('Pay with cards from your hand.');
       const total=a.cards.reduce((s,id)=>s+coinVal(id),0),cost=CT[stack.t].cost;
       if(total<cost)return fail('Not enough coins.');
-      T.active=null;
+      T.active=null;ev.push({e:'play',pl:seat,k:'buy',ts:a.cards.map(typeOf),got:stack.t,paid:total});
       for(const id of a.cards){rm(P.hand,id);const d=def(id);if(d.once&&(d.c==='y'||d.c==='x'))S.trash.push(id);else P.play.push(id);}
       const t=stack.t;
       if(a.src==='r'){const slot=S.market.findIndex(s=>s.n===0);S.market[slot]={t,n:stack.n};S.reserve.splice(a.idx,1);stack=S.market[slot];}
@@ -369,7 +371,7 @@ function applyAction(seat,a){
     case 'end':{
       const keep=Array.isArray(a.keep)?a.keep:[];
       if(!keep.every(inHand)||new Set(keep).size!==keep.length)return fail('Bad cards to keep.');
-      const toDisc=P.hand.filter(id=>!keep.includes(id));
+      const toDisc=P.hand.filter(id=>!keep.includes(id));ev.push({e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length}); // counts only: the hand is private
       for(const id of toDisc){rm(P.hand,id);P.discard.push(id);}
       P.discard.push(...P.play);P.play=[];
       drawCards(P,Math.max(0,4-P.hand.length));reveal=true;

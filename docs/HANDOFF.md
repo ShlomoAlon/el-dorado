@@ -143,6 +143,10 @@ Local save key `eldorado-save-v5` (v5 added `players[].ai`); v4 saves still load
 `transmit{card,src,idx}` · `buy{src,idx,cards}` · `end{keep}`; plus `resign(seat)`.
 `to` is a hex key `"q,r"` or `"B<blockadeIndex>"`. Events: `move{pl,pi,path}`, `block`, `arrive`, `draw`, `gain{t,src,idx}`,
 `turn`, `over`, (server adds) `timeout`, `resign`, `undo`, `start`. `reveal=true` (cards drawn) clears undo.
+Every action also emits `play{pl,k,ts,…}` (k = move/native/rubble/camp/blr/action/trash/transmit/buy/end; `ts` = card types spent,
+`got`/`paid` for buy/transmit, `n` spaces or cards drawn, `more` = leftover strength): the same `ev` goes to every seat online, so
+it may only name cards that just became public (in play or removed); `end` carries counts only (`kept`, `disc`). engine.test checks this.
+Log lines are `{p,t,r}` (r = round; lines the server adds have none).
 
 ### 6.4 Client UI essentials
 - `act(a)`: local → snapshot for undo, `applyAction`, `playEvents` (animations/toasts; call before render so market DOM
@@ -157,11 +161,20 @@ Local save key `eldorado-save-v5` (v5 added `players[].ai`); v4 saves still load
   ResizeObserver refits only on width changes. Page-zoom gestures are blocked.
 - Market: the 6 market cards float in a 2-column stack on the right edge (1 column on phones) (`#mkt`, toggled by the Market button, `setMkt`,
   remembered as `eldorado-mkt`) plus an "All cards" tile that opens a full-screen spread of market + reserve + journal
-  (`#allc`, `openAll`). Affordable cards are bright with a static "Can buy" tag, the rest are dimmed (owner: no pulsing — it's always on).
+  (`#allc`, `openAll`; the journal moved to its own button). Affordable cards are bright with a static "Can buy" tag, the rest are dimmed (owner: no pulsing — it's always on).
   The board fit leaves room under the prompt (safeRect measures it).
 - Cards: suit sets frame + scene palette; strength badge uses the suit colour and icon (only coin cards are gold);
   action cards show `face` (short) text, `txt` in tooltips. Full-screen button `#fsBtn` is hidden where unsupported
   (iPhone Safari); home-screen metas make the saved web app full screen there.
+- **Other players' turns** (`FEED`, ui_view.js): for AI seats (local) and every seat but mine (online), `playEvents` feeds the
+  `play` events into a row of small cards under the prompt text (`#feed` inside `#prompt`): one group per step with a caption
+  ("Explorer · 2 spaces · blockade #3", "Bought Scout for 2½", "Ended turn · kept 1"); played cards fly out of their player chip, a
+  bought/taken card flies out of the market, and their moves leave a dotted trail in their colour (`L.trail`). After their turn the
+  row stays as a recap ("Raleigh's turn") until I act. Oldest steps drop out whole when the row is full. Not in replays (the actor's
+  hand is shown there). In short game areas the prompt also keeps clear of the turn buttons (`--actFoot`, set in `btnWire`).
+  Local AIs act ~0.75 s apart (first action of a turn 1 s) so each card can be followed.
+- **Journal**: its own HUD button (`#jrnBtn`, a book icon alone on phones) opens the game log as a modal (`showJournal`), newest
+  first, grouped by round, live while open (no backdrop blur on it). It used to be a collapsed section of the All-cards spread.
 - Design: single dark theme by choice. Fonts Young Serif (display) + Figtree (UI). Tokens in `:root` of shell.html.
   Terrain colors in `TFILL`, card frames `.k-g/.k-b/.k-y/.k-x/.k-p`.
 
@@ -193,7 +206,7 @@ incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning
 - Network shipping: half floats, 339 KB (288 KB gzip), outputs within 2e-4 of the JSON (checked in engine.test). The site
   fetches `/ai/first.bin` only when a network AI is about to move; the artifact has it inline (`AI_NET.b64`); the worker imports
   the .bin (wrangler's default Data rule → ArrayBuffer). To ship a new network: `node tools/ai/pack.mjs <model.json>` then build.
-- Local: setup seat picker (Human / AI); `aiKick()` after every render schedules one AI action at a time (~0.65 s apart, waits for
+- Local: setup seat picker (Human / AI); `aiKick()` after every render schedules one AI action at a time (~0.75 s apart, waits for
   piece animations). `canAct()` is false on AI turns; `viewIdx()` keeps showing the last human's hand. No Elo locally.
   Thinking runs on the main thread: Humboldt's first action of a turn takes up to ~150 ms (rest of the turn follows the plan, ~0 ms).
 - Online: the host adds AI seats in the room lobby (`addAI {ai}`, `removeAI {uid}`, each AI once per room; not in quick matches).

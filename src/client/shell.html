@@ -65,6 +65,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 .tbtn.on{border-color:var(--gold);color:var(--gold2)}
 .tbtn.ico{padding:8px 10px;display:inline-grid;place-items:center}
 .tbtn.ico svg{display:block}
+#jrnBtn{display:inline-flex;align-items:center;gap:6px}#jrnBtn svg{flex:none;color:var(--gold2)}
 #fsBtn .fs-out,#fsBtn.full .fs-in{display:none}
 #fsBtn.full .fs-out{display:inline}
 #sndBtn .snd-off,#sndBtn.off .snd-on{display:none}
@@ -77,11 +78,34 @@ html,body{overflow:clip;overscroll-behavior:none}
 #app.replaying #prompt{display:none}
 #app:has(#mkt.hid),#app:has(#mkt.cramped){--mktFoot:16px}
 #mkt.cramped{display:none}
-#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;width:fit-content;top:64px;max-width:720px;padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
+#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;width:max-content;box-sizing:border-box;top:64px;max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
 #prompt b{color:var(--gold2)}
 #prompt .who{display:inline-flex;align-items:center;gap:7px;font-weight:800;margin-right:8px;color:var(--text)}
 #prompt .who i{width:11px;height:11px;border-radius:50%}
 #prompt .m{color:var(--muted)}
+/* another player's turn: their cards in a row under the prompt text (ui_view.js feedRender); newest on the right, the oldest clip */
+#feed{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px -6px 0;padding-top:8px;border-top:1px solid var(--line);--fw:52px}
+#feed[hidden]{display:none}
+#feed .fwho{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.04em;color:var(--text);white-space:nowrap;flex:none}
+#feed .fwho[hidden]{display:none}
+#feed .fwho i{width:9px;height:9px;border-radius:50%}
+#feed .frow{display:flex;align-items:flex-end;justify-content:flex-end;gap:18px;min-width:0;overflow:hidden;padding:2px 2px 0}
+#feed .fg.gone{display:none}
+.fg{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
+.fg.new{animation:fgIn .32s var(--ease) backwards}
+@keyframes fgIn{from{opacity:0;transform:translateY(-6px) scale(.94)}}
+.fg .frc{display:flex;align-items:center}
+.fg .fcs{display:flex}
+.fc{width:var(--fw);height:calc(var(--fw)*1.4);flex:none;filter:drop-shadow(0 3px 5px rgba(0,0,0,.45));transition:opacity .15s}
+.fc .mcard{--cw:var(--fw)}
+.fcs .fc+.fc{margin-left:calc(var(--fw)*-.42)}
+.fc.got .cface{box-shadow:0 0 0 2px var(--gold2),0 0 12px rgba(233,178,74,.45)}
+.fg .farr{font-size:20px;line-height:1;color:var(--gold2);margin:0 4px;font-weight:800}
+.f-camp .fc .cface,.f-trash .fc .cface{box-shadow:0 0 0 2px #e08a74}
+.fg .fcap{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;line-height:1.2}
+.fg .fcap b{color:var(--text)}
+.fend{align-self:center}
+.fend .fpill{font-size:11px;font-weight:800;color:var(--text);border:1px solid var(--line2);border-radius:9px;padding:3px 9px;background:rgba(255,255,255,.04)}
 .timer{display:inline-block;font-variant-numeric:tabular-nums;font-weight:800;padding:1px 9px;border-radius:8px;background:rgba(255,255,255,.08);margin-right:10px;color:var(--gold2);transition:background .2s,color .2s}
 .timer.low{background:rgba(232,99,79,.28);color:#ffb3a5;animation:pulse 1s ease-in-out infinite}
 
@@ -126,13 +150,16 @@ html,body{overflow:clip;overscroll-behavior:none}
 .sclose{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:rgba(0,0,0,.35);cursor:pointer;display:grid;place-items:center;font-size:15px;color:var(--muted)}
 .sclose:hover{color:var(--text)}
 .note{font-size:11.5px;color:var(--muted);margin:8px 0 0;line-height:1.4}
-#log{padding:0 4px 14px;font-size:12.5px;line-height:1.45;color:#c7d3cc;max-height:190px;overflow-y:auto}
-#log div{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
-#log i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
-details.jr summary{list-style:none;cursor:pointer}
-details.jr summary::-webkit-details-marker{display:none}
-details.jr summary h3::after{content:"▾";font-size:12px;color:var(--muted);margin-left:auto}
-details.jr:not([open]) summary h3::after{content:"▸"}
+/* journal (game log): its own HUD button opens it; it stays live while open. No backdrop blur: the board may move under it */
+.scrim.plain{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(4,8,7,.7)}
+.modal.jrn{display:flex;flex-direction:column;padding:22px 22px 18px;max-height:min(720px,calc(100% - 32px))}
+.modal.jrn h2{display:flex;align-items:baseline;gap:12px}
+.modal.jrn h2 span{font-family:var(--ui);font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+#log{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;font-size:13.5px;line-height:1.45;color:#c7d3cc;margin:6px -6px 0;padding:0 6px}
+#log .lr{position:sticky;top:0;background:#121d19;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--gold2);padding:10px 0 5px;border-bottom:1px solid var(--line2)}
+#log .le{padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+#log .le.sys{color:var(--muted);font-style:italic}
+#log i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:0}
 
 /* ---------- bottom controls */
 .pile{position:absolute;bottom:16px;z-index:12;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);cursor:pointer}
@@ -225,7 +252,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 /* ---------- overlays */
 .scrim{position:fixed;inset:0;background:rgba(4,8,7,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:grid;place-items:center;z-index:50;padding:16px;animation:fade .25s ease}
 @keyframes fade{from{opacity:0}}
-.modal{background:#121d19;border:1px solid var(--line2);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.6);width:min(580px,100%);max-height:calc(100% - 32px);overflow:auto;padding:26px;animation:rise .35s var(--ease)}
+.modal{background:#121d19;border:1px solid var(--line2);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.6);width:min(580px,calc(100% - 52px));max-height:calc(100% - 32px);overflow:auto;padding:26px;animation:rise .35s var(--ease)}
 @keyframes rise{from{transform:translateY(14px) scale(.98);opacity:0}}
 .modal h2{font-family:var(--display);font-weight:400;font-size:28px;margin:0 0 4px;color:var(--gold2);text-wrap:balance}
 .modal .sub{color:var(--muted);margin:0 0 20px;font-size:14px;line-height:1.45}
@@ -332,6 +359,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 
 @media (max-height:500px){#rside{width:250px;padding:10px 12px}}
 /* short game areas (landscape phones): the zoom column keeps fit / full screen / sound and sits clear of the piles */
+/* short game areas: the prompt (with another player's cards under it) also keeps clear of the turn buttons' column (--actFoot) */
+@container game (max-height:520px){#app{--mktFoot2:max(var(--mktFoot),var(--actFoot,16px))}#prompt{right:var(--mktFoot2);max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot2)))}#feed{--fw:34px;margin-top:5px;padding-top:5px}}
 @container game (max-height:520px){#app{--zoomFoot:140px}.zoomctl{top:62px;transform:none;flex-direction:row}.zoomctl button:not(#fsBtn):not(#sndBtn):not(#zfit){display:none}}
 @container game (max-width:900px){
   #app{--cw:104px}
@@ -347,7 +376,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   .brandbox{display:none}
   .tbtn{padding:7px 10px;font-size:12.5px}
   #rulesBtn{display:none}
+  #jrnBtn{padding:7px 9px}#jrnBtn span{display:none} /* phones: the book icon alone leaves the player chips room */
   #app{--mw:44px;--mktR:6px;--zoomFoot:12px}
+  #feed{--fw:34px;flex-direction:column;gap:5px}#feed .frow{gap:12px;max-width:100%}.fg .fcap{font-size:10px}#feed .fwho{font-size:10px}
   #mkt{top:58px}
   #market{gap:7px}
   #mkt .mslot:hover{transform:none}
@@ -390,11 +421,12 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
     <div id="players"></div>
     <div class="hbtns">
       <button class="tbtn glass" id="mktBtn">Market</button>
+      <button class="tbtn glass" id="jrnBtn" title="Journal: everything that happened, newest first" aria-label="Journal"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M10 5.2C8.4 3.9 5.9 3.5 3 3.8v11.4c2.9-.3 5.4.1 7 1.4 1.6-1.3 4.1-1.7 7-1.4V3.8c-2.9-.3-5.4.1-7 1.4z"/><path d="M10 5.2v11.4"/></svg><span>Journal</span></button>
       <button class="tbtn glass" id="rulesBtn">Rules</button>
       <button class="tbtn glass" id="menuBtn">New game</button>
     </div>
   </div>
-  <div id="prompt" class="glass"></div>
+  <div id="prompt" class="glass"><div id="ptxt"></div><div id="feed" hidden aria-live="polite"></div></div>
   <div id="mkt"><div id="market"></div></div>
   <div id="allc" hidden>
     <button class="sclose" id="allClose" aria-label="Close">✕</button>
@@ -402,7 +434,6 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
       <div class="allc-head"><h2>All cards <span id="buyState"></span></h2></div>
       <div class="allc-sect"><h3>Market</h3><div id="allMarket" class="agrid"></div></div>
       <div class="allc-sect"><h3>Reserve <span id="resState"></span></h3><p class="note" id="resNote" style="margin:-6px 0 14px"></p><div id="reserve" class="agrid"></div></div>
-      <details class="jr allc-sect" id="journal"><summary><h3 style="display:inline-flex;margin:0">Journal</h3></summary><div id="log"></div></details>
     </div>
   </div>
   <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button><button class="glass" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button></div>

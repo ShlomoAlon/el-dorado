@@ -71,10 +71,16 @@ for (let g = 0; g < 60; g++) {
   const full = JSON.parse(readFileSync(new URL('../tools/ai/models/first-qmax.json', import.meta.url), 'utf8'));
   const half = E.aiNetDecode(readFileSync(new URL('../src/ai/first.bin', import.meta.url)));
   assert(half.course === full.course && half.nf === full.nf && half.w1T.length === full.w1T.length, 'packed network header');
+  // 'play' events (shown to every player online) name only cards that just became public: in play or removed from the game
+  let plays = 0;
+  const publicEvents = ev => { for (const e of ev) { if (e.e !== 'play') continue; plays++;
+    if (e.k === 'end') { assert(!e.ts && Number.isInteger(e.kept) && Number.isInteger(e.disc), 'end event shows cards'); continue; }
+    const pub = {}; for (const id of [...E.S.players[e.pl].play, ...E.S.trash]) pub[E.S.cards[id]] = (pub[E.S.cards[id]] || 0) + 1;
+    for (const t of e.ts) assert(pub[t]-- > 0, 'play event names a card that is not public: ' + e.k + ' ' + t); } };
   const aiGame = (course, ais, check) => {
     E.newGame({ course, seed: (Math.random() * 1e9) | 0, fullRace: true, players: ais.map((a, i) => ({ name: 'P' + i, color: '#fff', ai: a })) });
     const mem = ais.map(() => ({})); let steps = 0;
-    while (!E.S.over && steps++ < 20000) { if (check) check(); const me = E.S.cur; assert(E.S.players[me].ai === ais[me], 'ai seat kept'); assert(E.aiStep(ais[me], mem[me]).ok, 'ai action rejected'); }
+    while (!E.S.over && steps++ < 20000) { if (check) check(); const me = E.S.cur; assert(E.S.players[me].ai === ais[me], 'ai seat kept'); const r = E.aiStep(ais[me], mem[me]); assert(r.ok, 'ai action rejected'); publicEvents(r.ev); }
     assert(E.S.over && E.S.places.includes(1), 'AI game did not finish');
   };
   E.aiSetNet(half);
@@ -82,6 +88,7 @@ for (let g = 0; g < 60; g++) {
   aiGame(E.courseById('first'), ['humboldt', 'orellana', 'raleigh'], () => {
     if (n++ % 9) return; const f = E.botNetFeatures(E.S.cur); E.aiSetNet(full); const a = E.botNetValue(f); E.aiSetNet(half); diff = Math.max(diff, Math.abs(a - E.botNetValue(f))); });
   assert(E.BOT_EVALS - e0 > 1000, 'network not used on First Expedition');
+  assert(plays > 50, 'no play events');
   assert(diff < 2e-3, 'packed network differs: ' + diff);
   const rc = E.botRandomCourse(7, 3); E.buildCourse(rc, 1);
   e0 = E.BOT_EVALS; aiGame(rc, ['humboldt', 'orellana'], () => assert(!E.aiNetFits(), 'network used on a course it was not trained for'));

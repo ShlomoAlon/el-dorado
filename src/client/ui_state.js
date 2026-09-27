@@ -62,8 +62,11 @@ function syncMode(turnChanged){
 function playEvents(ev,viewer){
   for(const e of ev||[]){
     sfxEvent(e,viewer);
+    const watched=feedWatch(e.pl); // another player's turn: shown in the row under the prompt (ui_view.js)
+    if(e.e==='play'&&!watched)feedClear(); // I (or a pass-and-play human here) act: the last recap goes
+    if(watched)feedEvent(e);
     if(e.e==='move')animatePiece(e.pl,e.pi,e.path);
-    else if(e.e==='block')toast(S.players[e.pl].name+' claims blockade #'+e.n);
+    else if(e.e==='block'){if(!watched)toast(S.players[e.pl].name+' claims blockade #'+e.n);}
     else if(e.e==='arrive')toast(S.players[e.pl].name+' reaches El Dorado!',2200);
     else if(e.e==='gain'&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.t,takeBuyFrom()||marketRect(e.src,e.idx));
     else if(e.e==='timeout')toast(S.players[e.pl].name+' ran out of time');
@@ -200,5 +203,5 @@ function aiKick(){
     playEvents(r.ev,viewIdx()); // the AI's purchases don't fly into the human's discard pile
     afterLocalChange(S.cur!==prevCur||S.round!==prevRound);
   };
-  AIX.timer=setTimeout(go,reduceMotion?250:first?900:650);
+  AIX.timer=setTimeout(go,reduceMotion?250:first?1000:750); // paced so the table can follow each card
 }

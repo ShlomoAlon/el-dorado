@@ -65,6 +65,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 .tbtn.on{border-color:var(--gold);color:var(--gold2)}
 .tbtn.ico{padding:8px 10px;display:inline-grid;place-items:center}
 .tbtn.ico svg{display:block}
+#jrnBtn{display:inline-flex;align-items:center;gap:6px}#jrnBtn svg{flex:none;color:var(--gold2)}
 #fsBtn .fs-out,#fsBtn.full .fs-in{display:none}
 #fsBtn.full .fs-out{display:inline}
 #sndBtn .snd-off,#sndBtn.off .snd-on{display:none}
@@ -77,11 +78,34 @@ html,body{overflow:clip;overscroll-behavior:none}
 #app.replaying #prompt{display:none}
 #app:has(#mkt.hid),#app:has(#mkt.cramped){--mktFoot:16px}
 #mkt.cramped{display:none}
-#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;width:fit-content;top:64px;max-width:720px;padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
+#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;width:max-content;box-sizing:border-box;top:64px;max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
 #prompt b{color:var(--gold2)}
 #prompt .who{display:inline-flex;align-items:center;gap:7px;font-weight:800;margin-right:8px;color:var(--text)}
 #prompt .who i{width:11px;height:11px;border-radius:50%}
 #prompt .m{color:var(--muted)}
+/* another player's turn: their cards in a row under the prompt text (ui_view.js feedRender); newest on the right, the oldest clip */
+#feed{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px -6px 0;padding-top:8px;border-top:1px solid var(--line);--fw:52px}
+#feed[hidden]{display:none}
+#feed .fwho{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.04em;color:var(--text);white-space:nowrap;flex:none}
+#feed .fwho[hidden]{display:none}
+#feed .fwho i{width:9px;height:9px;border-radius:50%}
+#feed .frow{display:flex;align-items:flex-end;justify-content:flex-end;gap:18px;min-width:0;overflow:hidden;padding:2px 2px 0}
+#feed .fg.gone{display:none}
+.fg{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
+.fg.new{animation:fgIn .32s var(--ease) backwards}
+@keyframes fgIn{from{opacity:0;transform:translateY(-6px) scale(.94)}}
+.fg .frc{display:flex;align-items:center}
+.fg .fcs{display:flex}
+.fc{width:var(--fw);height:calc(var(--fw)*1.4);flex:none;filter:drop-shadow(0 3px 5px rgba(0,0,0,.45));transition:opacity .15s}
+.fc .mcard{--cw:var(--fw)}
+.fcs .fc+.fc{margin-left:calc(var(--fw)*-.42)}
+.fc.got .cface{box-shadow:0 0 0 2px var(--gold2),0 0 12px rgba(233,178,74,.45)}
+.fg .farr{font-size:20px;line-height:1;color:var(--gold2);margin:0 4px;font-weight:800}
+.f-camp .fc .cface,.f-trash .fc .cface{box-shadow:0 0 0 2px #e08a74}
+.fg .fcap{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;line-height:1.2}
+.fg .fcap b{color:var(--text)}
+.fend{align-self:center}
+.fend .fpill{font-size:11px;font-weight:800;color:var(--text);border:1px solid var(--line2);border-radius:9px;padding:3px 9px;background:rgba(255,255,255,.04)}
 .timer{display:inline-block;font-variant-numeric:tabular-nums;font-weight:800;padding:1px 9px;border-radius:8px;background:rgba(255,255,255,.08);margin-right:10px;color:var(--gold2);transition:background .2s,color .2s}
 .timer.low{background:rgba(232,99,79,.28);color:#ffb3a5;animation:pulse 1s ease-in-out infinite}
 
@@ -126,13 +150,16 @@ html,body{overflow:clip;overscroll-behavior:none}
 .sclose{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:rgba(0,0,0,.35);cursor:pointer;display:grid;place-items:center;font-size:15px;color:var(--muted)}
 .sclose:hover{color:var(--text)}
 .note{font-size:11.5px;color:var(--muted);margin:8px 0 0;line-height:1.4}
-#log{padding:0 4px 14px;font-size:12.5px;line-height:1.45;color:#c7d3cc;max-height:190px;overflow-y:auto}
-#log div{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
-#log i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
-details.jr summary{list-style:none;cursor:pointer}
-details.jr summary::-webkit-details-marker{display:none}
-details.jr summary h3::after{content:"▾";font-size:12px;color:var(--muted);margin-left:auto}
-details.jr:not([open]) summary h3::after{content:"▸"}
+/* journal (game log): its own HUD button opens it; it stays live while open. No backdrop blur: the board may move under it */
+.scrim.plain{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(4,8,7,.7)}
+.modal.jrn{display:flex;flex-direction:column;padding:22px 22px 18px;max-height:min(720px,calc(100% - 32px))}
+.modal.jrn h2{display:flex;align-items:baseline;gap:12px}
+.modal.jrn h2 span{font-family:var(--ui);font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+#log{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;font-size:13.5px;line-height:1.45;color:#c7d3cc;margin:6px -6px 0;padding:0 6px}
+#log .lr{position:sticky;top:0;background:#121d19;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--gold2);padding:10px 0 5px;border-bottom:1px solid var(--line2)}
+#log .le{padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+#log .le.sys{color:var(--muted);font-style:italic}
+#log i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:0}
 
 /* ---------- bottom controls */
 .pile{position:absolute;bottom:16px;z-index:12;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);cursor:pointer}
@@ -225,7 +252,7 @@ details.jr:not([open]) summary h3::after{content:"▸"}
 /* ---------- overlays */
 .scrim{position:fixed;inset:0;background:rgba(4,8,7,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:grid;place-items:center;z-index:50;padding:16px;animation:fade .25s ease}
 @keyframes fade{from{opacity:0}}
-.modal{background:#121d19;border:1px solid var(--line2);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.6);width:min(580px,100%);max-height:calc(100% - 32px);overflow:auto;padding:26px;animation:rise .35s var(--ease)}
+.modal{background:#121d19;border:1px solid var(--line2);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.6);width:min(580px,calc(100% - 52px));max-height:calc(100% - 32px);overflow:auto;padding:26px;animation:rise .35s var(--ease)}
 @keyframes rise{from{transform:translateY(14px) scale(.98);opacity:0}}
 .modal h2{font-family:var(--display);font-weight:400;font-size:28px;margin:0 0 4px;color:var(--gold2);text-wrap:balance}
 .modal .sub{color:var(--muted);margin:0 0 20px;font-size:14px;line-height:1.45}
@@ -332,6 +359,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 
 @media (max-height:500px){#rside{width:250px;padding:10px 12px}}
 /* short game areas (landscape phones): the zoom column keeps fit / full screen / sound and sits clear of the piles */
+/* short game areas: the prompt (with another player's cards under it) also keeps clear of the turn buttons' column (--actFoot) */
+@container game (max-height:520px){#app{--mktFoot2:max(var(--mktFoot),var(--actFoot,16px))}#prompt{right:var(--mktFoot2);max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot2)))}#feed{--fw:34px;margin-top:5px;padding-top:5px}}
 @container game (max-height:520px){#app{--zoomFoot:140px}.zoomctl{top:62px;transform:none;flex-direction:row}.zoomctl button:not(#fsBtn):not(#sndBtn):not(#zfit){display:none}}
 @container game (max-width:900px){
   #app{--cw:104px}
@@ -347,7 +376,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   .brandbox{display:none}
   .tbtn{padding:7px 10px;font-size:12.5px}
   #rulesBtn{display:none}
+  #jrnBtn{padding:7px 9px}#jrnBtn span{display:none} /* phones: the book icon alone leaves the player chips room */
   #app{--mw:44px;--mktR:6px;--zoomFoot:12px}
+  #feed{--fw:34px;flex-direction:column;gap:5px}#feed .frow{gap:12px;max-width:100%}.fg .fcap{font-size:10px}#feed .fwho{font-size:10px}
   #mkt{top:58px}
   #market{gap:7px}
   #mkt .mslot:hover{transform:none}
@@ -390,11 +421,12 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
     <div id="players"></div>
     <div class="hbtns">
       <button class="tbtn glass" id="mktBtn">Market</button>
+      <button class="tbtn glass" id="jrnBtn" title="Journal: everything that happened, newest first" aria-label="Journal"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M10 5.2C8.4 3.9 5.9 3.5 3 3.8v11.4c2.9-.3 5.4.1 7 1.4 1.6-1.3 4.1-1.7 7-1.4V3.8c-2.9-.3-5.4.1-7 1.4z"/><path d="M10 5.2v11.4"/></svg><span>Journal</span></button>
       <button class="tbtn glass" id="rulesBtn">Rules</button>
       <button class="tbtn glass" id="menuBtn">New game</button>
     </div>
   </div>
-  <div id="prompt" class="glass"></div>
+  <div id="prompt" class="glass"><div id="ptxt"></div><div id="feed" hidden aria-live="polite"></div></div>
   <div id="mkt"><div id="market"></div></div>
   <div id="allc" hidden>
     <button class="sclose" id="allClose" aria-label="Close">✕</button>
@@ -402,7 +434,6 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
       <div class="allc-head"><h2>All cards <span id="buyState"></span></h2></div>
       <div class="allc-sect"><h3>Market</h3><div id="allMarket" class="agrid"></div></div>
       <div class="allc-sect"><h3>Reserve <span id="resState"></span></h3><p class="note" id="resNote" style="margin:-6px 0 14px"></p><div id="reserve" class="agrid"></div></div>
-      <details class="jr allc-sect" id="journal"><summary><h3 style="display:inline-flex;margin:0">Journal</h3></summary><div id="log"></div></details>
     </div>
   </div>
   <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button><button class="glass" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button></div>
@@ -635,7 +666,7 @@ function newGame(o){
 }
 function newCard(t){const id='c'+(S.nid++);S.cards[id]=t;return id;}
 function drawCards(p,n){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(!p.discard.length)break;p.deck=shuffle(p.discard);p.discard=[];}const c=p.deck.pop();p.hand.push(c);got.push(c);}return got;}
-function log(pi,t){S.log.push({p:pi,t});if(S.log.length>200)S.log.shift();}
+function log(pi,t){S.log.push({p:pi,t,r:S.round});if(S.log.length>200)S.log.shift();}
 function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
 function blockAt(a,b){const c=MAP.edgeConn.get(a+'|'+b);if(c===undefined)return null;const bi=S.blockades.findIndex(x=>x.conn===c);if(bi<0||S.blockades[bi].owner!==null)return null;return bi;}
 function neighbors(k){const nb=MAP._nb||(MAP._nb=new Map());let r=nb.get(k);if(!r){const h=hexAt(k);r=DIRS.map(([dq,dr])=>key(h.q+dq,h.r+dr)).filter(n=>MAP.hexes.has(n));nb.set(k,r);}return r;} // cached per map
@@ -723,6 +754,7 @@ function applyAction(seat,a){
       const pi=act?act.pi:a.pi;if(!pieceOk(pi))return fail('Choose one of your explorers.');
       const syms=act?[act.sym]:(d.s==='*'?['j','w','v']:[d.s]);const budget=act?act.left:d.p;
       const tg=reach(seat,pi,syms,budget).get(a.to);if(!tg)return fail('That space is out of reach.');
+      ev.push({e:'play',pl:seat,k:'move',ts:[typeOf(a.card)],more:!!act,n:tg.path.length,sym:tg.sym});
       if(!act){T.active=null;rm(P.hand,a.card);P.play.push(a.card);}
       const from=P.pieces[pi];let pos=from;const path=[from];
       for(const st of tg.path){const b=blockAt(pos,st);if(b!==null)takeBlock(b);pos=st;path.push(st);}
@@ -736,7 +768,7 @@ function applyAction(seat,a){
       if(!inHand(a.card)||typeOf(a.card)!=='native')return fail('You need the Native.');
       if(!pieceOk(a.pi))return fail('Choose one of your explorers.');
       const tg=nativeTargets(seat,a.pi).get(a.to);if(!tg)return fail('The Native can only reach an adjacent free space.');
-      T.active=null;rm(P.hand,a.card);P.play.push(a.card);
+      T.active=null;rm(P.hand,a.card);P.play.push(a.card);ev.push({e:'play',pl:seat,k:'native',ts:['native'],n:tg.kind==='native'?1:0});
       if(tg.bl!=null)takeBlock(tg.bl);
       if(tg.kind==='native'){const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=hexAt(n).type==='g'?'done':n;
         log(seat,'plays the Native and moves to an adjacent space.');ev.push({e:'move',pl:seat,pi:a.pi,path:[from,n]});arrive(a.pi);}
@@ -747,7 +779,7 @@ function applyAction(seat,a){
       if(!pieceOk(a.pi))return fail('Choose one of your explorers.');
       const tg=payTargets(seat,a.pi).get(a.to);if(!tg)return fail('You cannot enter there.');
       if(!distinctHand(a.cards)||a.cards.length!==tg.need)return fail('Choose exactly '+plural(tg.need,'card')+'.');
-      T.active=null;const trash=tg.kind==='camp';
+      T.active=null;const trash=tg.kind==='camp';ev.push({e:'play',pl:seat,k:tg.kind,ts:a.cards.map(typeOf)});
       for(const id of a.cards){rm(P.hand,id);if(trash)S.trash.push(id);else P.play.push(id);}
       if(tg.kind==='blr'){takeBlock(tg.bl);log(seat,'discards '+plural(tg.need,'card')+' to clear the blockade.');}
       else{const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=n;
@@ -759,7 +791,7 @@ function applyAction(seat,a){
       const t=inHand(a.card)&&typeOf(a.card);
       const n={cartographer:2,compass:3,scientist:1,travellog:2}[t];if(!n)return fail('That card has no draw effect.');
       T.active=null;rm(P.hand,a.card);if(CT[t].once)S.trash.push(a.card);else P.play.push(a.card);
-      const got=drawCards(P,n);reveal=true;
+      const got=drawCards(P,n);reveal=true;ev.push({e:'play',pl:seat,k:'action',ts:[t],n:got.length});
       log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');ev.push({e:'draw',pl:seat,n:got.length});
       if(t==='scientist'||t==='travellog')T.pending={max:t==='scientist'?1:2};
       break;
@@ -767,6 +799,7 @@ function applyAction(seat,a){
     case 'trash':{
       if(!T.pending)return fail('Nothing to remove.');
       if(!distinctHand(a.cards)||a.cards.length>T.pending.max)return fail('Choose up to '+plural(T.pending.max,'card')+'.');
+      ev.push({e:'play',pl:seat,k:'trash',ts:a.cards.map(typeOf)});
       if(a.cards.length){for(const id of a.cards){rm(P.hand,id);S.trash.push(id);}log(seat,'removes '+a.cards.map(i=>def(i).n).join(', ')+' from the game.');}
       T.pending=null;break;
     }
@@ -774,7 +807,7 @@ function applyAction(seat,a){
       if(!inHand(a.card)||typeOf(a.card)!=='transmitter')return fail('You need the Transmitter.');
       const stack=a.src==='m'?S.market[a.idx]:a.src==='r'?S.reserve[a.idx]:null;if(!stack||stack.n<=0)return fail('That card is sold out.');
       T.active=null;rm(P.hand,a.card);S.trash.push(a.card);
-      stack.n--;P.discard.push(newCard(stack.t));
+      stack.n--;P.discard.push(newCard(stack.t));ev.push({e:'play',pl:seat,k:'transmit',ts:['transmitter'],got:stack.t});
       log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');ev.push({e:'gain',pl:seat,t:stack.t,src:a.src,idx:a.idx});
       break;
     }
@@ -787,7 +820,7 @@ function applyAction(seat,a){
       if(!distinctHand(a.cards))return fail('Pay with cards from your hand.');
       const total=a.cards.reduce((s,id)=>s+coinVal(id),0),cost=CT[stack.t].cost;
       if(total<cost)return fail('Not enough coins.');
-      T.active=null;
+      T.active=null;ev.push({e:'play',pl:seat,k:'buy',ts:a.cards.map(typeOf),got:stack.t,paid:total});
       for(const id of a.cards){rm(P.hand,id);const d=def(id);if(d.once&&(d.c==='y'||d.c==='x'))S.trash.push(id);else P.play.push(id);}
       const t=stack.t;
       if(a.src==='r'){const slot=S.market.findIndex(s=>s.n===0);S.market[slot]={t,n:stack.n};S.reserve.splice(a.idx,1);stack=S.market[slot];}
@@ -798,7 +831,7 @@ function applyAction(seat,a){
     case 'end':{
       const keep=Array.isArray(a.keep)?a.keep:[];
       if(!keep.every(inHand)||new Set(keep).size!==keep.length)return fail('Bad cards to keep.');
-      const toDisc=P.hand.filter(id=>!keep.includes(id));
+      const toDisc=P.hand.filter(id=>!keep.includes(id));ev.push({e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length}); // counts only: the hand is private
       for(const id of toDisc){rm(P.hand,id);P.discard.push(id);}
       P.discard.push(...P.play);P.play=[];
       drawCards(P,Math.max(0,4-P.hand.length));reveal=true;
@@ -1477,8 +1510,11 @@ function syncMode(turnChanged){
 function playEvents(ev,viewer){
   for(const e of ev||[]){
     sfxEvent(e,viewer);
+    const watched=feedWatch(e.pl); // another player's turn: shown in the row under the prompt (ui_view.js)
+    if(e.e==='play'&&!watched)feedClear(); // I (or a pass-and-play human here) act: the last recap goes
+    if(watched)feedEvent(e);
     if(e.e==='move')animatePiece(e.pl,e.pi,e.path);
-    else if(e.e==='block')toast(S.players[e.pl].name+' claims blockade #'+e.n);
+    else if(e.e==='block'){if(!watched)toast(S.players[e.pl].name+' claims blockade #'+e.n);}
     else if(e.e==='arrive')toast(S.players[e.pl].name+' reaches El Dorado!',2200);
     else if(e.e==='gain'&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.t,takeBuyFrom()||marketRect(e.src,e.idx));
     else if(e.e==='timeout')toast(S.players[e.pl].name+' ran out of time');
@@ -1615,7 +1651,7 @@ function aiKick(){
     playEvents(r.ev,viewIdx()); // the AI's purchases don't fly into the human's discard pile
     afterLocalChange(S.cur!==prevCur||S.round!==prevRound);
   };
-  AIX.timer=setTimeout(go,reduceMotion?250:first?900:650);
+  AIX.timer=setTimeout(go,reduceMotion?250:first?1000:750); // paced so the table can follow each card
 }
 
 /* =========================================================
@@ -2127,7 +2163,7 @@ function buildBoard(){
   pat('p-v',16,16,p=>{sv('circle',{cx:4,cy:4,r:1.1,fill:'rgba(120,70,0,.2)'},p);sv('circle',{cx:12,cy:11,r:.9,fill:'rgba(120,70,0,.16)'},p);sv('circle',{cx:13,cy:3,r:.6,fill:'rgba(255,255,255,.25)'},p);});
   pat('p-r',20,20,p=>{for(const[x,y,s]of[[5,5,3],[14,8,2.4],[8,15,2.6],[17,17,1.8]])sv('path',{d:`M${x-s} ${y+s*.6} Q${x-s} ${y-s*.7} ${x} ${y-s*.8} Q${x+s} ${y-s*.6} ${x+s} ${y+s*.6}Z`,fill:'rgba(40,42,40,.2)',stroke:'rgba(255,255,255,.12)','stroke-width':.5},p);});
   pat('p-c',12,12,p=>{sv('path',{d:'M0 12 L12 0',stroke:'rgba(0,0,0,.12)','stroke-width':3},p);});
-  L.plates=sv('g',null,svg);L.terrain=sv('g',null,svg);L.city=sv('g',null,svg);L.hl=sv('g',null,svg2);L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);L.pieces=sv('g',null,svg2);L.aim=sv('g',{'pointer-events':'none'},svg2);L.pips=sv('g',{'pointer-events':'none'},svg2); // rubble / base camp progress dots (redrawn every render)
+  L.plates=sv('g',null,svg);L.terrain=sv('g',null,svg);L.city=sv('g',null,svg);L.hl=sv('g',null,svg2);L.trail=sv('g',{'pointer-events':'none'},svg2);feedReset();L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);L.pieces=sv('g',null,svg2);L.aim=sv('g',{'pointer-events':'none'},svg2);L.pips=sv('g',{'pointer-events':'none'},svg2); // rubble / base camp progress dots (redrawn every render)
   // board plates (the physical boards): drop shadow + rim
   const byTile=new Map();for(const h of MAP.hexes.values()){if(!byTile.has(h.tile))byTile.set(h.tile,[]);byTile.get(h.tile).push(h);}
   for(const[,hs]of byTile){const g=sv('g',null,L.plates);for(const h of hs)sv('polygon',{points:hexPts(h.x+2,h.y+6,R+2),fill:'rgba(0,0,0,.45)'},g);}
@@ -2564,6 +2600,99 @@ function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpe
   if(src==='r'){const cw=86;return{left:r.left+r.width/2-cw/2,top:r.top-cw*.7+r.height/2,width:cw,height:cw*1.4};}return r;}
 
 /* =========================================================
+   OTHER PLAYERS' TURNS. What an AI or an online opponent plays, spends, buys and removes is shown in a row of small
+   cards under the prompt (the same card faces as your own hand), with a caption per step; played cards fly out of their
+   player chip, a bought card flies out of the market, and their moves leave a dotted trail on the board. After their
+   turn the row stays as a recap until you act. Public information only: the engine's 'play' events carry the types of
+   cards that became public (played, spent, removed, taken) and just counts for the cards kept at the end of a turn.
+   ========================================================= */
+const FEED={pl:-1,ended:false,groups:[],seq:0,fly:[],trail:[]};
+/* whose actions get shown: the AIs (local), everyone but me (online); never in replays, where the actor's own hand is shown */
+function feedWatch(pl){if(!S||REPLAY||pl==null||!S.players[pl])return false;return online()?S.owners[pl]!==myId():isAI(pl);}
+function feedReset(){FEED.pl=-1;FEED.ended=false;FEED.groups=[];FEED.fly=[];FEED.trail=[];}
+function feedClear(){if(FEED.pl<0&&!FEED.groups.length)return;feedReset();feedTrail();}
+function chipRect(pl){const c=document.querySelectorAll('#players .pchip')[pl];return c?c.getBoundingClientRect():null;}
+/* one engine event of a watched player (called from playEvents, before render) */
+function feedEvent(e){
+  if(e.e==='play'){
+    if(FEED.pl!==e.pl||FEED.ended){feedReset();FEED.pl=e.pl;}
+    const last=FEED.groups[FEED.groups.length-1];
+    if(e.k==='move'&&e.more&&last&&last.k==='move'){last.n+=e.n;last.v++;return;} // leftover strength: same card, more spaces
+    if(e.k==='trash'&&!e.ts.length)return;
+    if(e.k==='end')FEED.ended=true;
+    const g={...e,id:++FEED.seq,v:0};FEED.groups.push(g);
+    if(g.ts&&g.ts.length)FEED.fly.push({gid:g.id,kind:'hand',from:chipRect(e.pl)});
+    return;}
+  if(FEED.pl!==e.pl)return;
+  const last=FEED.groups[FEED.groups.length-1];if(!last)return;
+  if(e.e==='gain'&&(last.k==='buy'||last.k==='transmit'))FEED.fly.push({gid:last.id,kind:'got',from:marketRect(e.src,e.idx)});
+  else if(e.e==='block'){last.bl=e.n;last.v++;}
+  else if(e.e==='arrive'){last.arr=true;last.v++;}
+  else if(e.e==='move'){FEED.trail.push(e.path);feedTrail();}
+}
+function feedCap(g){
+  const one=g.ts&&g.ts.length===1?CT[g.ts[0]].n:'',bl=g.bl?` · blockade #${g.bl}`:'',arr=g.arr?' · <b>El Dorado</b>':'';
+  switch(g.k){
+    case 'move':return`${esc(one)} · <b>${g.n}</b> ${g.n===1?'space':'spaces'}`+bl+arr;
+    case 'native':return(g.n?'Native · <b>1</b> space':'Native')+bl+arr;
+    case 'rubble':return`Discarded <b>${g.ts.length}</b> · rubble`;
+    case 'camp':return`Removed <b>${g.ts.length}</b> · base camp`;
+    case 'blr':return`Discarded <b>${g.ts.length}</b>`+bl;
+    case 'action':return`${esc(one)} · drew <b>${g.n}</b>`;
+    case 'trash':return`Removed <b>${g.ts.length}</b> from the game`;
+    case 'transmit':return`Took <b>${esc(CT[g.got].n)}</b>`;
+    case 'buy':return`Bought <b>${esc(CT[g.got].n)}</b> for ${fmt(g.paid)}`;
+  }
+  return'';
+}
+function feedGroupHTML(g){
+  if(g.k==='end')return`<div class="fg fend" data-g="${g.id}"><div class="fpill">Ended turn</div><div class="fcap">${g.kept?`kept <b>${g.kept}</b>`:'kept none'}${g.disc?` · discarded ${g.disc}`:''}</div></div>`;
+  const mini=(t,got)=>`<div class="fc${got?' got':''}" data-t="${t}" title="${esc(cardTitle(t))}"><div class="mcard">${cardHTML(t)}</div></div>`;
+  return`<div class="fg f-${g.k}" data-g="${g.id}"><div class="frc"><div class="fcs">${g.ts.map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap">${feedCap(g)}</div></div>`;
+}
+function feedRender(){
+  const F=$('#feed');if(!F)return;
+  if(!S||REPLAY||UI.cover||!FEED.groups.length||!S.players[FEED.pl]){if(!F.hidden){F.hidden=true;F.innerHTML='';F.dataset.pl='';}return;}
+  if(F.dataset.pl!==String(FEED.pl)){F.innerHTML='<div class="fwho"></div><div class="frow"></div>';F.dataset.pl=FEED.pl;}
+  const p=S.players[FEED.pl],recap=S.cur!==FEED.pl||S.over; // their turn is over: say whose turn this was
+  const who=F.querySelector('.fwho'),wh=recap?`<i style="background:${p.color}"></i>${esc(p.name)}’s turn`:'';if(who.innerHTML!==wh)who.innerHTML=wh;who.hidden=!recap;
+  const row=F.querySelector('.frow'),ids=new Set(FEED.groups.map(g=>String(g.id)));
+  for(const el of[...row.children])if(!ids.has(el.dataset.g))el.remove();
+  for(const g of FEED.groups){let el=row.querySelector(`[data-g="${g.id}"]`);
+    if(!el){row.insertAdjacentHTML('beforeend',feedGroupHTML(g));el=row.lastElementChild;if(!reduceMotion)el.classList.add('new');el.dataset.v=g.v;}
+    else if(el.dataset.v!==String(g.v)){el.dataset.v=g.v;const c=el.querySelector('.fcap');if(c)c.innerHTML=feedCap(g);}}
+  F.hidden=false;
+  // the newest steps that fit; older ones step out whole (never half a card or half a caption)
+  const kids=[...row.children];kids.forEach(k=>k.classList.remove('gone'));
+  const W=row.clientWidth,gap=parseFloat(getComputedStyle(row).columnGap)||0;let tot=-gap,cut=false;
+  for(let i=kids.length-1;i>=0;i--){tot+=kids[i].offsetWidth+gap;if(cut||(tot>W+1&&i<kids.length-1)){cut=true;kids[i].classList.add('gone');}}
+  if(FEED.fly.length){const list=FEED.fly;FEED.fly=[];if(!reduceMotion)feedFly(list);}
+}
+/* cards fly into the row: out of the player's chip (from their hand) or out of the market (a card they bought or took) */
+function feedFly(list){
+  for(const f of list){
+    const gel=document.querySelector(`#feed [data-g="${f.gid}"]`);if(!gel||!f.from||!f.from.width)continue;
+    [...gel.querySelectorAll(f.kind==='got'?'.fc.got':'.fcs .fc')].forEach((tEl,i)=>{
+      const to=tEl.getBoundingClientRect();if(!to.width)return;
+      const el=document.createElement('div');el.className='card';el.innerHTML=cardHTML(tEl.dataset.t);el.style.pointerEvents='none';el.style.zIndex=200;$('#cards').appendChild(el);
+      const fr=f.kind==='hand'?{left:f.from.left+f.from.width/2-to.width*.4,top:f.from.top+f.from.height/2-to.height*.4,width:to.width*.8,height:to.height*.8}:f.from;
+      placeAt(el,fr,f.kind==='hand'?-8:0);if(f.kind==='hand')el.style.opacity=0;tEl.style.opacity=0;
+      void el.offsetWidth;el.classList.add('anim');el.style.transitionDuration=f.kind==='got'?'.55s':'.4s';el.style.transitionDelay=(i*70)+'ms';
+      placeAt(el,to,0);el.style.opacity=1;
+      setTimeout(()=>{tEl.style.opacity='';el.remove();},(f.kind==='got'?560:410)+i*70);
+    });
+  }
+}
+/* the watched player's moves this turn, as a dotted trail in their colour (static; redrawn only when it changes) */
+function feedTrail(){
+  if(!L.trail)return;L.trail.innerHTML='';const p=S&&S.players[FEED.pl];if(!p||!FEED.trail.length)return;
+  for(const keys of FEED.trail){if(keys.length<2)continue;const d=keys.map((k,i)=>{const h=hexAt(k);return(i?'L':'M')+h.x.toFixed(1)+' '+h.y.toFixed(1);}).join(' ');
+    sv('path',{d,fill:'none',stroke:'rgba(0,0,0,.45)','stroke-width':7,'stroke-linecap':'round','stroke-linejoin':'round'},L.trail);
+    sv('path',{d,fill:'none',stroke:p.color,'stroke-width':3.2,'stroke-linecap':'round','stroke-linejoin':'round','stroke-dasharray':'.5 8'},L.trail);
+    const h=hexAt(keys[0]);sv('circle',{cx:h.x,cy:h.y,r:5,fill:p.color,stroke:'rgba(0,0,0,.55)','stroke-width':2},L.trail);}
+}
+
+/* =========================================================
    DRAG TO PLAY (aim arrow for moves, free drag for actions)
    ========================================================= */
 let drag=null;
@@ -2760,8 +2889,22 @@ function renderMarket(){
   $('#resNote').textContent=tr?'Transmitter: take any card for free.':openSlot?'A market slot is empty, so you may buy from the reserve.':'Opens once a market slot sells out.';
   $('#buyState').textContent=S.turn.bought?'bought this turn':'1 purchase per turn';
   $('#resState').textContent=openSlot?'open':'locked';
-  $('#log').innerHTML=S.log.slice(-80).reverse().map(e=>{const p=e.p!=null?S.players[e.p]:null;return`<div>${p?`<i style="background:${p.color}"></i><b>${esc(p.name)}</b> `:''}${esc(e.t)}</div>`;}).join('');
 }
+/* ---------- journal: the game log, newest first, grouped by round; its own HUD button; stays live while open ---------- */
+function journalHTML(){
+  let r=null,out='';const L=S.log.map((e,i)=>{if(e.r!=null)r=e.r;return{...e,r};}); // server-added lines carry no round: they belong to the one before
+  for(let i=L.length-1;i>=0;i--){const e=L[i];
+    if(i===L.length-1||e.r!==L[i+1].r)out+=e.r!=null?`<div class="lr">Round ${e.r}</div>`:'';
+    const p=e.p!=null?S.players[e.p]:null;
+    out+=`<div class="le${p?'':' sys'}">${p?`<i style="background:${p.color}"></i><b>${esc(p.name)}</b> `:''}${esc(e.t)}</div>`;}
+  return out||'<p class="note">Nothing has happened yet.</p>';
+}
+function showJournal(){
+  if(!S)return;
+  modal(`<h2>Journal <span>newest first</span></h2><div id="log">${journalHTML()}</div><div class="mrow" style="margin-top:14px"><button class="btn pri" id="jClose">Close</button></div>`,
+    sc=>{sc.classList.add('plain');sc.querySelector('.modal').classList.add('jrn');sc.querySelector('#jClose').onclick=closeModal;},true);
+}
+function renderJournal(){const l=document.querySelector('#overlay .modal.jrn #log');if(!l||!S)return;const last=S.log[S.log.length-1],sig=S.log.length+'|'+(last?last.t:'');if(l.dataset.sig!==sig){l.dataset.sig=sig;l.innerHTML=journalHTML();}}
 function renderHeader(){
   $('#roundLbl').textContent='Round '+S.round+(S.endTriggered&&!S.over?' · final':'');
   $('#players').innerHTML=S.players.map((p,i)=>{
@@ -2772,7 +2915,7 @@ function renderHeader(){
   }).join('');
 }
 function renderPrompt(){
-  const pl=cur();const P=$('#prompt'),B=$('#actBtns');
+  const pl=cur();const P=$('#ptxt'),B=$('#actBtns');
   const who=`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>`;
   let txt='',btns=[];
   if(REPLAY){P.innerHTML=replayPromptHTML();btnWire(B,[]);return;}
@@ -2818,17 +2961,18 @@ function btnWire(B,btns){
   const main=btns.filter(b=>b.big),rest=btns.filter(b=>!b.big);
   const sig=btns.map(b=>b.id+(b.dis?'d':'')+b.t).join('|');
   const h=b=>`<button class="btn${b.pri?' pri':''}${b.big?' big':''}" id="${b.id}"${b.dis?' disabled':''}>${b.t}</button>`;
-  if(B.dataset.sig!==sig){B.innerHTML=main.map(h).join('')+(rest.length?`<div class="brow">${rest.map(h).join('')}</div>`:'');B.dataset.sig=sig;}
+  if(B.dataset.sig!==sig){B.innerHTML=main.map(h).join('')+(rest.length?`<div class="brow">${rest.map(h).join('')}</div>`:'');B.dataset.sig=sig;
+    $('#app').style.setProperty('--actFoot',(btns.length?B.offsetWidth+26:16)+'px');} // how far the turn buttons reach in from the right (short screens keep the prompt clear of them)
   btns.forEach(b=>{const e=document.getElementById(b.id);if(e)e.onclick=b.fn;});
 }
 function render(){
   if(!S)return;
   if(!online()&&!REPLAY&&!isAI(S.cur))UI.viewer=S.cur;
   computeTargets();if(REPLAY)replayDecorate();
-  renderHeader();renderMarket();renderPrompt();updateMktH();renderBuySlot();renderCards(); // re-size the market once the buttons exist
+  renderHeader();renderMarket();renderPrompt();feedRender();updateMktH();renderBuySlot();renderCards(); // re-size the market once the buttons exist
   renderBlockades();renderTargets();renderPieces();
   aim.hot=null;if(aimWanted())startAim();else stopAim();
-  save();updateTitle();renderTimer();$('#menuBtn').textContent=REPLAY?'Exit replay':online()&&!S.over?'Leave game':'New game';
+  renderJournal();save();updateTitle();renderTimer();$('#menuBtn').textContent=REPLAY?'Exit replay':online()&&!S.over?'Leave game':'New game';
   if(REPLAY){replayAfterRender();replayBar();}
   aiKick();
 }
@@ -3313,7 +3457,7 @@ function boot(){
   $('#bsCancel').onclick=cancelMode;
   $('#allClose').onclick=()=>openAll(false);$('#allc').addEventListener('click',e=>{if(e.target.id==='allc'||e.target.classList.contains('allc-in'))openAll(false);});
   $('#deckPile').onclick=()=>showPile('deck');$('#discPile').onclick=()=>showPile('discard');
-  $('#rulesBtn').onclick=showRules;
+  $('#rulesBtn').onclick=showRules;$('#jrnBtn').onclick=showJournal;
   // full screen (hidden where the browser can't do it, e.g. iPhone Safari — there, Add to Home Screen gives a full-screen app)
   const fsEl=document.documentElement,fsOn=()=>document.fullscreenElement||document.webkitFullscreenElement;
   if(fsEl.requestFullscreen||fsEl.webkitRequestFullscreen){const fb=$('#fsBtn');fb.hidden=false;
@@ -3342,7 +3486,7 @@ function boot(){
     showSetup();
   });
 }
-window.__ED={NET,UI,act,openReplay,applyAction,render,get S(){return S},get MAP(){return MAP},joinRoom,netSend,onHandCard,doMove,pickFromMarket,confirmBuy,startEndTurn,finishTurn,confirmDiscardFor,confirmTrash,cancelMode,reach,myId,canAct,view};
+window.__ED={NET,UI,act,playEvents,openReplay,applyAction,render,get S(){return S},get MAP(){return MAP},joinRoom,netSend,onHandCard,doMove,pickFromMarket,confirmBuy,startEndTurn,finishTurn,confirmDiscardFor,confirmTrash,cancelMode,reach,myId,canAct,view};
 boot();
 
 })();

@@ -27,6 +27,12 @@ const CHECK = () => {
   add('#actBtns button', 'turn button', 'act');
   add('#rdock button, #rdock input, #rdock #rbPos', 'replay control', 'dock');
   add('#rside', 'bot view', 'side');
+  if (!vis(document.querySelector('#jrnBtn'))) bad.push('journal button not visible');
+  // an open journal: the whole panel on screen, with its list and close button
+  const jm = document.querySelector('#overlay .modal.jrn');
+  if (jm) { const r = jm.getBoundingClientRect(); if (r.left < 0 || r.top < 0 || r.right > W || r.bottom > H) bad.push('journal off screen');
+    const lg = vis(jm.querySelector('#log')), cb = vis(jm.querySelector('#jClose')); if (!lg || lg.height < 40) bad.push('journal list too small'); if (!cb) bad.push('journal close button hidden');
+    if (!jm.querySelector('#log .le')) bad.push('journal is empty'); }
   // 1. fully on screen (the player chips may scroll sideways inside their strip)
   for (const it of items) { const r = it.r; if (it.group === 'chips') continue;
     if (r.left < -0.5 || r.top < -0.5 || r.right > W + 0.5 || r.bottom > H + 0.5) bad.push(`${it.name} off screen (${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)})`); }
@@ -51,9 +57,16 @@ const CHECK = () => {
     await p.goto(url); await p.waitForTimeout(600);
     // normal play: start a local game from the setup screen
     await p.click('#sGo'); await p.waitForTimeout(1600);
-    const states = [['play', null], ['play, market closed', async () => { await p.click('#mktBtn', { timeout: 5000 }); }],
-      ['replay', async () => { await p.click('#mktBtn', { timeout: 5000 }); await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForTimeout(1200);
-        await p.evaluate(() => { const r = document.querySelector('#rbR'); r.value = Math.floor(r.max * .4); r.dispatchEvent(new Event('input')); }); }],
+    const states = [['play', null], ['journal', async () => { await p.click('#jrnBtn', { timeout: 5000 }); }], ['play, market closed', async () => { await p.click('#mktBtn', { timeout: 5000 }); }],
+      // another player's turn as a recap under the prompt (more steps than fit on a phone), market closed and open
+      ['recap of an AI turn', async () => { await p.evaluate(() => { const E = window.__ED, S = E.S; S.players[1].ai = 'raleigh';
+        E.playEvents([{ e: 'play', pl: 1, k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { e: 'play', pl: 1, k: 'action', ts: ['cartographer'], n: 2 },
+          { e: 'play', pl: 1, k: 'rubble', ts: ['traveler', 'sailor'] }, { e: 'play', pl: 1, k: 'buy', ts: ['traveler', 'traveler', 'explorer'], got: 'scout', paid: 2.5 },
+          { e: 'gain', pl: 1, t: 'scout', src: 'm', idx: 0 }, { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1 }], 0); E.render(); }); }],
+      ['recap, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await p.waitForTimeout(300); const n = await p.evaluate(() => document.querySelectorAll('#feed .fg:not(.gone)').length); if (!n) throw new Error('no recap shown'); }],
+      ['replay journal', async () => { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForTimeout(1200);
+        await p.evaluate(() => { const r = document.querySelector('#rbR'); r.value = Math.floor(r.max * .4); r.dispatchEvent(new Event('input')); }); await p.click('#jrnBtn', { timeout: 5000 }); }],
+      ['replay', null],
       ['replay, bot view hidden', async () => { await p.click('#rbA', { timeout: 5000 }); }],
       ['replay, market closed', async () => { await p.click('#rbA', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }]];
     for (const [name, setup] of states) {
