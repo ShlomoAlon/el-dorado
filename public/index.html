@@ -1160,6 +1160,7 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
 function botChoose(opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
   if(mode.startsWith('plan'))return{a:botPlanChoose(S.cur,BOT_PLANS[mode])};
+  if(opts.search&&mode==='net'&&botNetReady())return opts.search.kind==='rollout'?botRolloutChoose(opts):botTurnSearch(opts);
   const me=S.cur,root=S;let acts=botActions();if(mode==='net'&&!botNetReady())mode='heur';
   if(opts.turnState&&opts.turnState.noBuy){const f=acts.filter(a=>a.t!=='buy'&&a.t!=='transmit');if(f.length)acts=f;} // exploration: a turn without gaining a card
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],why:'random'};
@@ -1183,6 +1184,46 @@ function botChoose(opts){
   if(opts.temp&&acts.length>1){const w=vals.map(v=>v===-Infinity?0:Math.exp((v-bv)/opts.temp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
     for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],why:acts[i]===best?undefined:'softmax'};}}
   return{a:best||{t:'end',keep:[]},v:bv,alts:opts.explain?acts.map((x,i)=>({a:x,v:vals[i]})).sort((x,y)=>y.v-x.v).slice(0,5):undefined};
+}
+/* ---- search at decision time (experiments; training and normal play don't use it) ----
+   Same value network, but look further ahead before choosing. */
+// score every legal action by the value right after it (what the plain bot does); returns [{a,v,st}] best first,
+// st = the position after the action when my turn goes on (null when it ended, the game ended, or a card was drawn)
+function botScoreActions(me,rnd,K){
+  const root=S,acts=botActions(),out=[];
+  for(const a of acts){
+    if(a.t==='end'){S=botClone(root);shuffle(S.players[me].deck,rnd);botEndView(me,a.keep);out.push({a,v:botValue(me,'net'),st:null});S=root;continue;}
+    if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(root);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);v+=r.ok?botValue(me,'net'):-1;S=root;}out.push({a,v:v/K,st:null});continue;}
+    S=botClone(root);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);
+    const v=r.ok?botValue(me,'net'):-Infinity,st=r.ok&&!S.over&&S.cur===me?S:null;S=root;out.push({a,v,st});
+  }
+  return out.sort((x,y)=>y.v-x.v);
+}
+/* 1. turn search: look through whole sequences of my remaining actions this turn (top `width` actions at each step,
+   up to `depth` steps), score each line by the network where it stops, play the first action of the best line */
+function botTurnSearch(opts){
+  const me=S.cur,root=S,rnd=opts.rnd||Math.random,W=opts.search.width||3,D=opts.search.depth||4,K=opts.draws||4;let nodes=0;
+  const best=(st,d)=>{S=st;const sc=botScoreActions(me,rnd,K);S=root;nodes++;let bv=-Infinity,ba=null;
+    sc.forEach((x,i)=>{let v=x.v;if(x.st&&d>1&&i<W&&x.v>-Infinity)v=Math.max(v,best(x.st,d-1).v);if(v>bv){bv=v;ba=x.a;}});return{v:bv,a:ba};};
+  const r=best(root,D);S=root;return{a:r.a||{t:'end',keep:[]},v:r.v,why:'turnSearch',nodes};
+}
+/* 2. rollouts (Monte Carlo): for the top `cands` actions, `sims` times each: hide what I can't see (reshuffle opponents' hands+decks
+   and my deck), play on with the plain network for everyone until my next turn starts (or the game ends), score it.
+   The same random samples are used for every candidate. Only used when the plain bot's top choices are within `margin`. */
+function botRolloutChoose(opts){
+  const me=S.cur,root=S,rnd=opts.rnd||Math.random,o=opts.search,C=o.cands||3,M=o.sims||6,K=opts.draws||4;
+  const sc=botScoreActions(me,rnd,K);S=root;
+  if(sc.length<2||sc[0].v-sc[1].v>(o.margin??.03))return{a:sc[0].a,v:sc[0].v,why:'clear'};
+  const cand=sc.slice(0,C).filter(x=>x.v>-Infinity),seeds=[...Array(M)].map(()=>(rnd()*2**31)|0),prevRng=RNG;let best=null;
+  for(const c of cand){let tot=0;
+    for(const seed of seeds){const g=mulberry32(seed);S=botClone(root);RNG=g;
+      S.players.forEach((p,j)=>{if(j===me){shuffle(p.deck,g);return;}const pool=shuffle([...p.hand,...p.deck],g);p.hand=pool.slice(0,p.hand.length);p.deck=pool.slice(p.hand.length);});
+      let r=applyAction(me,c.a),left=400,passed=false;
+      while(r.ok&&!S.over&&left-->0){if(S.cur!==me)passed=true;else if(passed)break;
+        RNG=Math.random;const ch=botChoose({mode:'net',rnd:g});RNG=g;r=applyAction(S.cur,ch.a);if(!r.ok)r=applyAction(S.cur,{t:'end',keep:[]});}
+      tot+=S.over||S.cur!==me?botValue(me,'net'):botValue(me,'net');S=root;}
+    RNG=prevRng;const v=tot/M;if(!best||v>best.v)best={a:c.a,v};}
+  RNG=prevRng;S=root;return{a:best?best.a:sc[0].a,v:best?best.v:sc[0].v,why:'rollout'};
 }
 /* play one whole turn for the player to move (used by the UI and the simulator) */
 function botTurn(opts){const me=S.cur;const steps=[];for(let g=0;g<40&&!S.over&&S.cur===me;g++){const{a}=botChoose(opts);const r=applyAction(me,a);steps.push(a);if(!r.ok){applyAction(me,{t:'end',keep:[]});break;}}return steps;}

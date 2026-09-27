@@ -1,18 +1,23 @@
 // Head-to-head: policy A vs policy B, 3- and 4-player games (1 A vs rest B, and 2v2 in 4p), seats rotated, fixed seeds.
 //   node tools/ai/h2h.mjs <A> <B> [games=240] [workers=2]
-//   A/B: plan | heur | net (tools/ai/data/first.net.json) | any planner candidate named in PLANS
+//   A/B: plan | heur | net (tools/ai/data/first.net.json) | net+turn | net+roll | any planner candidate named in PLANS
+//   net+turn = net with turn search (SEARCH_W, SEARCH_D); net+roll = net with rollouts on close calls (ROLL_C, ROLL_M, ROLL_MARGIN)
 //   PLANS='{"planB":{"safeTrash":1}}' defines candidate planner settings (see BOT_PLAN_DEF in src/engine_bot.js).
 //   Games stop at round 25; anyone who hasn't arrived by then counts as a loss.
 import { E } from '../../src/engine.gen.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
+const env = process.env;
+const optsFor = pol => pol === 'net+turn' ? { mode: 'net', search: { kind: 'turn', width: +(env.SEARCH_W || 3), depth: +(env.SEARCH_D || 4) } }
+  : pol === 'net+roll' ? { mode: 'net', search: { kind: 'rollout', cands: +(env.ROLL_C || 3), sims: +(env.ROLL_M || 6), margin: +(env.ROLL_MARGIN || .03) } }
+  : { mode: pol };
 const setup = () => {
   for (const [k, o] of Object.entries(JSON.parse(process.env.PLANS || '{}'))) E.setPlan(k, o);
 };
 if (!isMainThread) {
   setup();
   const { A, B, from, to } = workerData;
-  if ([A, B].includes('net') && existsSync('tools/ai/data/first.net.json')) E.setNet(JSON.parse(readFileSync('tools/ai/data/first.net.json', 'utf8')));
+  if ([A, B].some(x => x.startsWith('net')) && existsSync('tools/ai/data/first.net.json')) E.setNet(JSON.parse(readFileSync('tools/ai/data/first.net.json', 'utf8')));
   const r = { wA: 0, expA: 0, seatsA: 0, arrA: [], arrB: [], capA: 0, capB: 0 };
   for (let g = from; g < to; g++) {
     const n = g % 2 ? 4 : 3, nA = n === 4 && g % 4 === 3 ? 2 : 1;
@@ -20,7 +25,7 @@ if (!isMainThread) {
     E.newGame({ course: E.COURSES[0], seed: 20000 + g, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
     let acts = 0, capped = false;
     while (!E.S.over) { E.S.log.length = 0; if (E.S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
-      const me = E.S.cur, res = E.applyAction(me, E.botChoose({ mode: pols[me] }).a); if (!res.ok) E.applyAction(me, { t: 'end', keep: [] }); }
+      const me = E.S.cur, res = E.applyAction(me, E.botChoose(optsFor(pols[me])).a); if (!res.ok) E.applyAction(me, { t: 'end', keep: [] }); }
     E.S.players.forEach((p, i) => { const isA = pols[i] === A;
       if (isA) { r.seatsA++; r.expA += 1 / n; if (E.S.places[i] === 1 && !(capped && !p.fin)) r.wA++; }
       if (p.fin) (isA ? r.arrA : r.arrB).push(p.fin); else if (capped) r[isA ? 'capA' : 'capB']++; });
