@@ -45,6 +45,7 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
   Measure with `NODE_PATH=$(npm root -g) node test/perf.cjs --trace` (frame times + where the time goes). No `backdrop-filter`
   on anything over the board (re-blurred every frame it moves); no infinite animations on SVG board elements (repaint the board).
   Prefer the standard, well-trodden way; if it's slow, find out why and fix the cause (or tell the owner) instead of adding workarounds.
+  Board rendering changes must also pass `NODE_PATH=$(npm root -g) node test/render.cjs` (grab changes nothing, sharp after zoom, wheel latency).
 - Respect `prefers-reduced-motion`. Keep it working at 390 px wide (phone) and 1440 px.
 - Layout: page = CSS grid (`#shell`): the game cell (`#gamecell` > `#app`) plus replay dock/side cells. Never float new UI over
   other controls; give it its own cell or its own clearance variable (`--mktFoot`, `--zoomFoot`). Game-area breakpoints are
