@@ -38,6 +38,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 .bl-badge.tgt .bl-halo{stroke:var(--gold2);stroke-width:3}
 .bl-badge.hot .bl-halo{stroke-width:5;animation:none}
 .piece{cursor:pointer}
+.piece .turnfx{opacity:0;transition:opacity .3s ease}.piece.turn .turnfx{opacity:1}
 #tip{position:absolute;pointer-events:none;background:rgba(8,14,12,.95);border:1px solid var(--line2);border-radius:9px;padding:6px 10px;font-size:12.5px;white-space:nowrap;opacity:0;transform:translate(-50%,-135%);transition:opacity .12s;z-index:3;box-shadow:0 8px 20px rgba(0,0,0,.4)}
 #tip b{color:var(--gold2)}
 
@@ -1969,6 +1970,7 @@ function buildBoard(){
   for(const t in TFILL){const g=sv('linearGradient',{id:'gr-'+t,x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':TFILL[t][0]},g);sv('stop',{offset:1,'stop-color':TFILL[t][1]},g);}
   for(const t in TSHADE)TSHADE[t].forEach(([a,b],i)=>{const g=sv('linearGradient',{id:'gr-'+t+(i+1),x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':a},g);sv('stop',{offset:1,'stop-color':b},g);});
   const rg=sv('radialGradient',{id:'cityGlow'},defs);sv('stop',{offset:0,'stop-color':'#ffd66b','stop-opacity':.6},rg);sv('stop',{offset:.6,'stop-color':'#ffc94a','stop-opacity':.15},rg);sv('stop',{offset:1,'stop-color':'#ffd66b','stop-opacity':0},rg);
+  const tg=sv('radialGradient',{id:'turnGlow'},defs);sv('stop',{offset:0,'stop-color':'#fff6d6','stop-opacity':.85},tg);sv('stop',{offset:.55,'stop-color':'#ffd66b','stop-opacity':.45},tg);sv('stop',{offset:1,'stop-color':'#ffd66b','stop-opacity':0},tg);
   const hl=sv('radialGradient',{id:'hexShine',cx:.35,cy:.25,r:.8},defs);sv('stop',{offset:0,'stop-color':'#fff','stop-opacity':.2},hl);sv('stop',{offset:.6,'stop-color':'#fff','stop-opacity':0},hl);
   // terrain textures
   const pat=(id,w,h,draw)=>{const p=sv('pattern',{id,patternUnits:'userSpaceOnUse',width:w,height:h},defs);draw(p);};
@@ -2117,6 +2119,13 @@ function renderPieces(){
     if(!g){g=sv('g',{class:'piece'},L.pieces);
       const inner=sv('g',{class:'pin'},g);
       sv('circle',{class:'selring',r:R*.8,fill:'none',stroke:'#f8dc97','stroke-width':3,'stroke-dasharray':'5 4',opacity:0},inner);
+      // whose turn it is: a pool of light and a bright ring on the ground under the miniature (static; fades in/out)
+      const fx=sv('g',{class:'turnfx'},inner);
+      sv('ellipse',{cx:0,cy:13.5,rx:28,ry:12,fill:'url(#turnGlow)'},fx);
+      sv('ellipse',{cx:0,cy:13.5,rx:19,ry:7.5,fill:'none',stroke:'rgba(40,24,0,.55)','stroke-width':5},fx);
+      sv('ellipse',{cx:0,cy:13.5,rx:19,ry:7.5,fill:'none',stroke:'#ffe08a','stroke-width':2.6},fx);
+      const mk=sv('g',{class:'turnfx turnmark'},inner); // small marker above the head
+      sv('path',{d:'M-7.5,-44 L7.5,-44 L0,-34 Z',fill:'#ffe08a',stroke:'rgba(40,24,0,.6)','stroke-width':1.5,'stroke-linejoin':'round'},mk);
       sv('ellipse',{cx:0,cy:13.5,rx:14,ry:5,fill:'rgba(0,0,0,.5)'},inner);
       inner.insertAdjacentHTML('beforeend',meepleSVG(p.color,p.pieces.length>1?i+1:0));
       pieceEls[id]=g;
@@ -2125,6 +2134,7 @@ function renderPieces(){
     if(!g.__anim){const[x,y]=piecePos(pl,i);g.setAttribute('transform',`translate(${x},${y})`);}
     const sel=pl===S.cur&&i===UI.piece&&k!=='done'&&!S.over&&S.players[pl].pieces.length>1;
     g.querySelector('.selring').setAttribute('opacity',sel?1:0);
+    g.classList.toggle('turn',pl===S.cur&&k!=='done'&&!S.over);
   }));
   S.players[S.cur].pieces.forEach((k,i)=>{const g=pieceEls[S.cur+'-'+i];if(g)L.pieces.appendChild(g);});
 }

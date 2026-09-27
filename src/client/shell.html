@@ -38,6 +38,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 .bl-badge.tgt .bl-halo{stroke:var(--gold2);stroke-width:3}
 .bl-badge.hot .bl-halo{stroke-width:5;animation:none}
 .piece{cursor:pointer}
+.piece .turnfx{opacity:0;transition:opacity .3s ease}.piece.turn .turnfx{opacity:1}
 #tip{position:absolute;pointer-events:none;background:rgba(8,14,12,.95);border:1px solid var(--line2);border-radius:9px;padding:6px 10px;font-size:12.5px;white-space:nowrap;opacity:0;transform:translate(-50%,-135%);transition:opacity .12s;z-index:3;box-shadow:0 8px 20px rgba(0,0,0,.4)}
 #tip b{color:var(--gold2)}
 
