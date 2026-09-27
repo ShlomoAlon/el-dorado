@@ -13,7 +13,8 @@ import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 
 if (!isMainThread) {
-  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW } = workerData;
+  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam } = workerData;
+  const search = beam ? { kind: 'plan', beam } : undefined; // SEARCH_BEAM: nets play through the whole-turn planner
   const C = E.COURSES.find(c => c.id === course) || E.COURSES[0];
   if (net) E.setNet(net);
   let s = seed0 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -38,8 +39,8 @@ if (!isMainThread) {
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
       if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: false && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
-      const c = mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd })
-        : isNet ? E.botChoose({ mode: 'net', eps, temp, typeEps, turnState, rnd })
+      const c = mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined })
+        : isNet ? E.botChoose({ mode: 'net', eps, temp, typeEps, turnState, rnd, search })
         : E.botChoose({ mode: bench, eps: .03, noise: .3, rnd });
       // track every kind of decision the network makes (and which of them were exploration)
       if (isNet) {
@@ -117,6 +118,7 @@ if (isMainThread) {
     buyEps: 0.10 * X,              // turns where buying is off (random purchases were replaced by gift cards)
     giftRate: 0.5 * X,             // games where every player starts with the same extra card (weighted toward rarely bought cards)
     giftW: giftWeights(course),
+    beam: +(env.SEARCH_BEAM || 0),
     transEps: 0 };                 // (forced random Transmitter picks removed: gift cards cover rare cards)
   const rs = await Promise.all(Array.from({ length: W }, () => new Promise((res, rej) => {
     const w = new Worker(new URL(import.meta.url), { workerData: { ...wd, games: Math.ceil(+G / W), seed0: (Math.random() * 2 ** 31) | 0 } });
