@@ -21,6 +21,14 @@ md += `### Test after each iteration: trained bot vs the benchmark bots, same ho
 md += `| Iter | Horizon (rounds) | Games so far | vs fair share | Wins 3p / 4p | Bot route left | Heuristic route left | Bot arrives in round | Heuristic arrives in round |\n|---|---|---|---|---|---|---|---|---|\n`;
 for (const r of rows) md += `| ${r.it} | ${r.horizon} | ${r.games.toLocaleString()} | **${r.vsFair == null ? '–' : r.vsFair.toFixed(2)}** | ${r.win3p == null ? pct(r.netWinRate) + ' (3p)' : pct(r.win3p) + ' / ' + pct(r.win4p)} | ${n(r.netRemaining)} | ${n(r.heurRemaining)} | ${n(r.netArrival)} | ${n(r.heurArrival)} |\n`;
 if (!rows.length) md += `| – | – | – | – | – | – | – | – | – |\n`;
+if (rows.some(r => r.table)) {
+  md += `\n### Four-way test (every iteration): new net with search · same net without search · the frozen old net · the heuristic\n\n3-player tables are the three nets; 4-player tables add the heuristic. Seats rotated. Each cell: **wins vs fair share** (1.00 = its fair share) · average place value (1st 1, 2nd ¼, 3rd ⅛, last 0).\n\n| Iter | Games | New net + search | New net, no search | Old net (frozen) | Heuristic |\n|---|---|---|---|---|---|\n`;
+  const cell = t => t ? `**${t.vsFair.toFixed(2)}** · ${t.placeValue.toFixed(3)}` : '–';
+  for (const r of rows.filter(r => r.table)) md += `| ${r.it} | ${r.table ? Object.values(r.table).reduce((a, t) => a + t.seats, 0) > 0 ? r.games : '–' : '–'} | ${cell(r.table.net)} | ${cell(r.table.netP)} | ${cell(r.table.old)} | ${cell(r.table.heur)} |\n`;
+  const sum = k => { const L = rows.filter(r => r.table && r.table[k]).map(r => r.table[k]); if (!L.length) return null; const S = L.reduce((a, t) => a + t.seats, 0);
+    return { vsFair: L.reduce((a, t) => a + t.vsFair * t.seats, 0) / S, placeValue: L.reduce((a, t) => a + t.placeValue * t.seats, 0) / S }; };
+  md += `| **all so far** | ${rows.filter(r => r.table).reduce((a, r) => a + r.games, 0)} | ${cell(sum('net'))} | ${cell(sum('netP'))} | ${cell(sum('old'))} | ${cell(sum('heur'))} |\n`;
+}
 if (lastGen && (lastGen.buysNet || lastGen.buysHeur)) {
   const b = lastGen.mode === 'self' ? lastGen.buysNet : lastGen.buysHeur, tot = Object.values(b || {}).reduce((a, x) => a + x, 0) || 1;
   md += `\n### What it buys (latest ${lastGen.mode === 'self' ? 'self-play' : 'heuristic'} batch, ${lastGen.games} games${lastGen.mode === 'self' ? `, horizon ${lastGen.horizon} rounds; exploration level ${lastGen.explore ?? 1}: softmax choices, a few random moves, and in ${Math.round(50 * (lastGen.explore ?? 1))}% of games every player starts with the same extra card (favouring cards the bot rarely buys)` : ''})\n\n| Card | Bought | Share |\n|---|---|---|\n`;

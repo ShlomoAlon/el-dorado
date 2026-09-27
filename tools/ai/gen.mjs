@@ -13,7 +13,10 @@ import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 
 if (!isMainThread) {
-  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam } = workerData;
+  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam, oldNet } = workerData;
+  // four-way test (search runs): the new net with search ('net'), the same net without search ('netP'), the frozen old net ('old'),
+  // and in 4-player games the heuristic benchmark too; seats rotated
+  const table = mode === 'eval' && beam && oldNet;
   const search = beam ? { kind: 'plan', beam } : undefined; // SEARCH_BEAM: nets play through the whole-turn planner
   const C = E.COURSES.find(c => c.id === course) || E.COURSES[0];
   if (net) E.setNet(net);
@@ -25,10 +28,11 @@ if (!isMainThread) {
     let pols;
     // 3- and 4-player games only (2-player games use different rules)
     if (mode === 'self') { const np = rnd() < .5 ? 3 : 4; pols = Array.from({ length: np }, () => rnd() < .25 ? 'heur' : 'net'); if (!pols.includes('net')) pols[0] = 'net'; }
+    else if (table) { const np = g % 2 ? 4 : 3, a = np === 4 ? ['net', 'heur', 'netP', 'old'] : ['net', 'netP', 'old']; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); }
     else { const np = g % 2 ? 4 : 3, a = ['net', ...Array(np - 1).fill('heur')]; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); } // half 3-player, half 4-player, seats rotated
     // every game is recorded as a replayable log (seeded shuffles); games that hit the final cap are saved for viewing
     const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: (rnd() * 2 ** 31) | 0, rng: (rnd() * 2 ** 32) >>> 0, fullRace: true,
-      players: pols.map((p, i) => ({ name: `${p === 'net' ? 'Bot (net)' : 'Planner'} ${i + 1}`, bot: p === 'net' ? 'net' : bench })), actions: [] };
+      players: pols.map((p, i) => ({ name: `${{ net: search ? 'Net + search' : 'Bot (net)', netP: 'Net (no search)', old: 'Old net' }[p] || 'Planner'} ${i + 1}`, bot: p === 'heur' ? bench : p })), actions: [] };
     // exploration: now and then every player starts with the same extra card, favouring cards the bot rarely buys
     if (mode === 'self' && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
       st.explore.gift = (st.explore.gift || 0) + 1; inc('Gift card given to every player (exploration)', glog.gift); }
@@ -39,7 +43,9 @@ if (!isMainThread) {
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
       if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: false && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
-      const c = mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined })
+      const c = mode === 'eval' && pols[me] === 'netP' ? E.botChoose({ mode: 'net', rnd })
+        : mode === 'eval' && pols[me] === 'old' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd })))
+        : mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined })
         : isNet ? E.botChoose({ mode: 'net', eps, temp, typeEps, turnState, rnd, search })
         : E.botChoose({ mode: bench, eps: .03, noise: .3, rnd });
       // track every kind of decision the network makes (and which of them were exploration)
@@ -87,6 +93,8 @@ if (!isMainThread) {
       const fail = capped && H >= 25 && !p.fin, win = S.places[i] === 1 && !fail, pv = E.botPlaceValue(S.places[i], n);
       const z = fail ? 0 : H >= 25 ? pv : 0.8 * pv + 0.2 / (1 + Math.exp(-lead / 5));
       if (mode === 'self') { const T = traj[i]; let G = z; for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); G = (1 - LAMBDA) * (net ? E.botNetValue(T[t]) : G) + LAMBDA * G; } }
+      if (table) { const t = (st.tab = st.tab || {})[pols[i]] = st.tab[pols[i]] || { seats: 0, exp: 0, wins: 0, pv: 0, arrSum: 0, arrN: 0 };
+        t.seats++; t.exp += 1 / n; if (win) t.wins++; t.pv += fail ? 0 : pv; if (p.fin) { t.arrSum += p.fin; t.arrN++; } }
       if (pols[i] === 'net') { st.netSeats++; if (win) st.netWins++; st['seat' + n]++; if (win) st['win' + n]++; st.netRem.push(rem[i]); if (p.fin) st.netArr.push(p.fin); }
       else { st.heurRem.push(rem[i]); if (p.fin) st.heurArr.push(p.fin); }
     });
@@ -119,9 +127,11 @@ if (isMainThread) {
     giftRate: 0.5 * X,             // games where every player starts with the same extra card (weighted toward rarely bought cards)
     giftW: giftWeights(course),
     beam: +(env.SEARCH_BEAM || 0),
+    oldNet: mode === 'eval' && +(env.SEARCH_BEAM || 0) ? JSON.parse(readFileSync(env.EVAL_OLD || 'tools/ai/models/first-td-evaluated.json', 'utf8')) : null,
     transEps: 0 };                 // (forced random Transmitter picks removed: gift cards cover rare cards)
+  const GN = wd.oldNet ? +(env.EVAL_GAMES || 72) : +G; // the four-way test uses fewer games
   const rs = await Promise.all(Array.from({ length: W }, () => new Promise((res, rej) => {
-    const w = new Worker(new URL(import.meta.url), { workerData: { ...wd, games: Math.ceil(+G / W), seed0: (Math.random() * 2 ** 31) | 0 } });
+    const w = new Worker(new URL(import.meta.url), { workerData: { ...wd, games: Math.ceil(GN / W), seed0: (Math.random() * 2 ** 31) | 0 } });
     w.on('message', res); w.on('error', rej);
   })));
   const st = {}; for (const r of rs) for (const k in r.st) { const v = r.st[k];
@@ -133,7 +143,8 @@ if (isMainThread) {
   const rel = (st.seat3 || st.seat4) ? +((st.win3 + st.win4) / (st.seat3 / 3 + st.seat4 / 4)).toFixed(3) : null;
   try { const D = 'tools/ai/data/replays/'; const old = readdirSync(D).filter(f => f.startsWith('stuck-')).map(f => [f, statSync(D + f).mtimeMs]).sort((x, y) => y[1] - x[1]).slice(60);
     for (const [f] of old) unlinkSync(D + f); } catch (e) { } // keep the newest 60 capped-game replays
-  const summary = { mode, horizon: wd.H, explore: X, games: +G, secs: (Date.now() - t0) / 1000, capped: st.capped, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
+  const tab = st.tab ? Object.fromEntries(Object.entries(st.tab).map(([k, t]) => [k, { seats: t.seats, vsFair: +(t.wins / t.exp).toFixed(3), winRate: +(t.wins / t.seats).toFixed(3), placeValue: +(t.pv / t.seats).toFixed(3), arrival: t.arrN ? +(t.arrSum / t.arrN).toFixed(2) : null }])) : undefined;
+  const summary = { mode, horizon: wd.H, explore: X, games: GN, table: tab, secs: (Date.now() - t0) / 1000, capped: st.capped, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
     win3p: r3 == null ? null : +r3.toFixed(3), win4p: r4 == null ? null : +r4.toFixed(3), vsFair: rel,
     netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur, transNet: st.transNet, transHeur: st.transHeur, decisions: st.dec, exploration: st.explore, stuck: st.stuck, bench: wd.bench };
   if (out !== '-' && mode === 'self') {
