@@ -75,3 +75,7 @@ The search-distillation run after 41 iterations. Ladder vs first-distill-22: +11
 ## first-distill-53 (frozen 2026-09-27 16:49 UTC)
 
 The distillation run after 53 iterations (12 of them with REPLAY=6). Ladder vs first-distill-22: -15±11 with search, -25±11 plain — the larger replay window did not help. Not used.
+
+## first-league-17 (frozen 2026-09-27 19:20 UTC)
+
+first-distill-22 plus 17 iterations with 25% of self-play seats played by past networks (DISTILL+MAXBACK, REPLAY=6). Ladder at it 13 vs first-distill-35: +6±12 with search, +14±12 plain (≈ +29 over its parent). Stopped by the owner to prioritise the multi-map network.
