@@ -1188,7 +1188,7 @@ function botChoose(opts){
   if(ts&&ts.forceTransmit){const tr=acts.filter(a=>a.t==='transmit');if(tr.length){ts.forceTransmit=false; // a random card, reserve included, weighted toward expensive ones (cost²)
     const w=tr.map(a=>{const s=a.src==='m'?S.market[a.idx]:S.reserve[a.idx];return CT[s.t].cost**2;});let r=rnd()*w.reduce((x,y)=>x+y,0);for(let i=0;i<tr.length;i++){r-=w[i];if(r<=0)return{a:tr[i],why:'forceTransmit'};}return{a:tr[tr.length-1],why:'forceTransmit'};}}
   // search (after exploration, so random / typed moves and no-buy turns still happen in training)
-  if(opts.search&&mode==='net')return opts.search.kind==='plan'?botPlanTurnChoose(opts):opts.search.kind==='rollout'?botRolloutChoose(opts):botTurnSearch(opts);
+  if(opts.search&&mode==='net')return opts.search.kind==='plan'?botPlanTurnChoose(opts):opts.search.kind==='deep'?botDeepChoose(opts):opts.search.kind==='rollout'?botRolloutChoose(opts):botTurnSearch(opts);
   const vals=[];let best=null,bv=-Infinity;const K=opts.draws||4;
   const one=a=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
     if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}
@@ -1227,7 +1227,7 @@ function botScoreActions(me,rnd,K){
 function botTurnKey(me){const P=S.players[me],T=S.turn,ty=ids=>ids.map(typeOf).sort().join(',');
   return[P.pieces.join('|'),ty(P.hand),ty(P.play),P.discard.length,ty(P.discard),T.bought?1:0,T.active?typeOf(T.active.id)+T.active.pi+T.active.sym+T.active.left:'',T.pending?T.pending.max:'',
     S.market.map(x=>x.n).join(''),S.reserve.map(x=>x.n).join(''),S.blockades.map(b=>b.owner??'-').join(''),S.trash.length].join('#');}
-function botPlanTurn(me,B,rnd,K,noBuy){
+function botPlanTurn(me,B,rnd,K,noBuy,top){ // top: optional array that receives every complete line {v,line}
   const root=S,seen=new Set(),start=botClone(root);S=start;shuffle(S.players[me].deck,rnd);S=root; // my deck order stays hidden
   let beam=[{st:start,line:[]}],best={v:-Infinity,line:null};
   for(let depth=0;depth<14&&beam.length;depth++){
@@ -1237,12 +1237,12 @@ function botPlanTurn(me,B,rnd,K,noBuy){
       for(const a of acts){
         if(noBuy&&(a.t==='buy'||a.t==='transmit'))continue; // exploration: a turn without gaining a card
         const line=[...node.line,a];
-        if(a.t==='end'){S=botClone(node.st);botEndView(me,a.keep);const v=botValue(me,'net');S=root;if(v>best.v)best={v,line};continue;}
-        if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(node.st);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);v+=r.ok?botValue(me,'net'):-1;S=root;}v/=K;if(v>best.v)best={v,line,draw:true};continue;}
+        if(a.t==='end'){S=botClone(node.st);botEndView(me,a.keep);const v=botValue(me,'net');S=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}
+        if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(node.st);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);v+=r.ok?botValue(me,'net'):-1;S=root;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
         S=botClone(node.st);const r=applyAction(me,a);
         if(!r.ok){S=root;continue;}
         const v=botValue(me,'net');
-        if(S.over||S.cur!==me){S=root;if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
+        if(S.over||S.cur!==me){S=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
         const key=botTurnKey(me);if(seen.has(key)){S=root;continue;}seen.add(key);
         next.push({st:S,line,v});S=root;
       }
@@ -1264,6 +1264,43 @@ function botPlanTurnChoose(opts){
   const a=best.line[0];const root=S;S=botClone(root);applyAction(me,a);const nk=!S.over&&S.cur===me?botTurnKey(me):null;S=root;
   BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(a.card)])?{me,round:S.round,line:best.line,i:1,key:nk,v:best.v}:null;
   return{a,v:best.v,why:'plan'};
+}
+/* 0b. deep planner (experiment): the whole-turn planner's best K complete turns, each played forward `depth` more of my turns
+   (everyone plays the planner; hidden cards re-dealt at random: my deck order, opponents' hands and decks; the same deals for
+   every candidate), scored by the network where the playout stops (exact once places are settled). Successive halving
+   spends `budget` network evaluations (BOT_EVALS). The chosen turn is then followed like a normal plan. */
+function botDeepPlayout(root,me,line,seed,o){
+  const g=mulberry32(seed),saved=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;S=botClone(root);const r0=RNG;setRng(g);
+  S.players.forEach((p,j)=>{if(j===me){shuffle(p.deck,g);return;}const pool=shuffle([...p.hand,...p.deck],g);p.hand=pool.slice(0,p.hand.length);p.deck=pool.slice(p.hand.length);});
+  for(const a of line){if(S.over||S.cur!==me)break;if(!applyAction(me,a).ok){applyAction(me,{t:'end',keep:[]});break;}}
+  let away=S.cur!==me,turns=0,n=0;
+  while(!S.over&&n++<3000){
+    if(S.cur!==me)away=true;else if(away){away=false;if(++turns>=o.depth)break;}
+    if(S.round>25){endGame();break;}
+    const c=botChoose({mode:'net',rnd:g,search:{kind:'plan',beam:o.beam||3}});
+    if(!applyAction(S.cur,c.a).ok)applyAction(S.cur,{t:'end',keep:[]});
+  }
+  const v=botValue(me,'net');RNG=r0;BOT_PLAN_CACHE=saved;S=root;return v;
+}
+function botDeepChoose(opts){
+  const me=S.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
+  if(C&&C.me===me&&C.round===S.round&&C.i<C.line.length&&C.key===botTurnKey(me))return botPlanTurnChoose({...opts,search:{kind:'plan',beam:o.beam||3}});
+  const root=S,top=[],e0=BOT_EVALS;const best=botPlanTurn(me,o.beam||3,rnd,opts.draws||4,!!(opts.turnState&&opts.turnState.noBuy),top);S=root;
+  if(!best.line||!best.line.length){BOT_PLAN_CACHE=null;return{a:{t:'end',keep:[]},why:'plan'};}
+  top.sort((x,y)=>y.v-x.v);const cands=[];for(const t of top){if(cands.length>=(o.cands||3))break;if(!cands.some(c=>Math.abs(c.v1-t.v)<1e-9))cands.push({line:t.line,v1:t.v,sum:0,n:0});}
+  let pick=cands[0],info={cands:cands.length,playouts:0};
+  if(cands.length>1){let live=cands,per=1;
+    while(live.length>1&&BOT_EVALS-e0<o.budget){
+      const seeds=[...Array(per)].map(()=>(rnd()*2**31)|0);
+      for(const c of live)for(const sd of seeds){c.sum+=botDeepPlayout(root,me,c.line,sd,o);c.n++;info.playouts++;}
+      live.sort((x,y)=>y.sum/y.n-x.sum/x.n);
+      if(BOT_EVALS-e0>=o.budget*.5&&live.length>2)live=live.slice(0,Math.ceil(live.length/2));else if(BOT_EVALS-e0>=o.budget*.75)live=live.slice(0,1);
+      per=Math.min(per*2,8);
+    }
+    cands.sort((x,y)=>(y.n?y.sum/y.n:-1)-(x.n?x.sum/x.n:-1));pick=cands[0];}
+  S=root;const line=pick.line,a=line[0];S=botClone(root);applyAction(me,a);const nk=!S.over&&S.cur===me?botTurnKey(me):null;S=root;
+  BOT_PLAN_CACHE=line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(a.card)])?{me,round:S.round,line,i:1,key:nk,v:pick.v1}:null;
+  return{a,v:pick.v1,why:pick.v1===best.v?'deep-agrees':'deep-changed',deep:info};
 }
 /* 1. turn search: look through whole sequences of my remaining actions this turn (top `width` actions at each step,
    up to `depth` steps), score each line by the network where it stops, play the first action of the best line */
