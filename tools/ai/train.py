@@ -6,9 +6,9 @@ import sys, json, os, time, numpy as np, torch, torch.nn as nn
 torch.set_num_threads(4)
 out, course, epochs, prefixes = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4:]
 # sparse rows from gen.mjs → one big CSR matrix; dense mini-batches are built on the fly
-L, I, V, Ys, nf = [], [], [], [], None
+L, I, V, Ys, nf, unsettled = [], [], [], [], None, False
 for p in prefixes:
-    meta = json.load(open(p + '.json')); nf = meta['nf']
+    meta = json.load(open(p + '.json')); nf = meta['nf']; unsettled = unsettled or bool(meta.get('unsettled'))
     L.append(np.fromfile(p + '.len.bin', dtype=np.uint32)); I.append(np.fromfile(p + '.idx.bin', dtype=np.uint16)); V.append(np.fromfile(p + '.val.bin', dtype=np.float32)); Ys.append(np.fromfile(p + '.Y.bin', dtype=np.float32))
 lens = np.concatenate(L).astype(np.int64); ptr = np.concatenate([[0], np.cumsum(lens)]); IDX = torch.from_numpy(np.concatenate(I).astype(np.int64)); VAL = torch.from_numpy(np.concatenate(V))
 Y = torch.from_numpy(np.concatenate(Ys)).unsqueeze(1); PTR = torch.from_numpy(ptr)
@@ -37,5 +37,6 @@ with torch.no_grad():
     pv = torch.sigmoid(net(dense(vi))); rmse = float(((pv - Y[vi]) ** 2).mean().sqrt()); base = float(((Y[vi] - Y[ti].mean()) ** 2).mean().sqrt())
 r = lambda t: [round(float(x), 6) for x in t.detach().flatten()]
 J = {'course': course, 'nf': nf, 'w1T': r(net[0].weight.T.contiguous()), 'b1': r(net[0].bias), 'w2': r(net[2].weight), 'b2': r(net[2].bias), 'w3': r(net[4].weight), 'b3': r(net[4].bias)}
+if unsettled: J['unsettled'] = True  # trained on arrived-but-not-settled positions: play may ask the network about them (botValue)
 json.dump(J, open(out, 'w'))
 print(json.dumps({'samples': len(Y), 'val_rmse': round(rmse, 4), 'predict_mean_rmse': round(base, 4), 'secs': round(time.time() - t0, 1)}))

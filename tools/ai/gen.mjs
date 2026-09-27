@@ -43,7 +43,7 @@ if (!isMainThread) {
       if (ns.length > 1 || rnd() < .5) plainSeat[ns[Math.floor(rnd() * ns.length)]] = true; }
     glog.players.forEach((p, i) => { if (pols[i] === 'net' && search) p.name = `${plainSeat[i] ? 'Net (no search)' : 'Net + search'} ${i + 1}`; });
     const shuf = E.replayStart(glog); E.setRng(null);
-    const traj = pols.map(() => []); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
+    const traj = pols.map(() => []), trajU = pols.map(() => []); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
     while (!E.S.over) {
       const S = E.S; S.log.length = 0;
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
@@ -79,10 +79,12 @@ if (!isMainThread) {
       if (!r.ok) E.applyAction(me, { t: 'end', keep: [] });
       E.setRng(null); glog.actions.push([me, r.ok ? c.a : { t: 'end', keep: [] }]);
       if (r.ok && isNet) for (const e of r.ev) if (e.e === 'block') inc('Blockades taken', '#' + e.n);
-      // no samples once I've arrived: play never asks the network about those positions (they get the exact place value),
+      // no samples once my place is settled: play never asks the network about those positions (they get the exact place value),
       // and bootstrapping through its guess for them (the average over all places) inflated the moves just before arriving,
-      // so arriving in a low place looked worse than hovering next to El Dorado. The λ-return now starts from the exact result.
-      if (mode === 'self' && !E.S.over && !E.playerDone(E.S.players[me])) traj[me].push(f || E.botNetFeatures(me));
+      // so arriving in a low place looked worse than hovering next to El Dorado. The λ-return starts from the exact result.
+      // Arrived but not settled (someone after me this round can still arrive and win the tie-break): play asks the network,
+      // so those positions are sampled; they are the last of my trajectory, so their target is the exact result.
+      if (mode === 'self' && !E.S.over && (!E.playerDone(E.S.players[me]) || !E.botPlaceSettled(me))) { traj[me].push(f || E.botNetFeatures(me)); trajU[me].push(E.playerDone(E.S.players[me])); }
     }
     if (capped) st.capped++;
     if (process.env.REPLAYALL) writeFileSync(`${process.env.REPLAYALL}/g-${glog.seed}.json`, JSON.stringify(glog)); // testing: keep every game
@@ -98,7 +100,8 @@ if (!isMainThread) {
       // Short horizons also reward getting far; at the final 25-round cap, not arriving is worth 0 whoever got closest.
       const fail = capped && H >= 25 && !p.fin, win = S.places[i] === 1 && !fail, pv = E.botPlaceValue(S.places[i], n);
       const z = fail ? 0 : H >= 25 ? pv : 0.8 * pv + 0.2 / (1 + Math.exp(-lead / 5));
-      if (mode === 'self') { const T = traj[i]; let G = z; for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); G = (1 - LAMBDA) * (net ? E.botNetValue(T[t]) : G) + LAMBDA * G; } }
+      // (a network not yet trained on arrived-but-unsettled positions has no idea there: bootstrap through the result instead)
+      if (mode === 'self') { const T = traj[i], U = trajU[i]; let G = z; for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); G = (1 - LAMBDA) * (net && (net.unsettled || !U[t]) ? E.botNetValue(T[t]) : G) + LAMBDA * G; } }
       if (table) { const tn = (st.tab = st.tab || {})['p' + n] = st.tab['p' + n] || {}, t = tn[pols[i]] = tn[pols[i]] || { seats: 0, wins: 0, pv: 0, arrSum: 0, arrN: 0 };
         t.seats++; if (win) t.wins++; t.pv += fail ? 0 : pv; if (p.fin) { t.arrSum += p.fin; t.arrN++; } if (i === 0) tn.games = (tn.games || 0) + 1; }
       if (pols[i] === 'net') { st.netSeats++; if (win) st.netWins++; st['seat' + n]++; if (win) st['win' + n]++; st.netRem.push(rem[i]); if (p.fin) st.netArr.push(p.fin); }
@@ -158,7 +161,7 @@ if (isMainThread) {
     const nf = rs.find(r => r.nf)?.nf || 0, cat = (k, T) => { const a = new T(rs.reduce((s, r) => s + r[k].length, 0)); let o = 0; for (const r of rs) { a.set(r[k], o); o += r[k].length; } return a; };
     const Y = cat('Y', Float32Array), len = cat('len', Uint32Array), idx = cat('idx', Uint16Array), val = cat('val', Float32Array);
     for (const [k, a] of [['Y', Y], ['len', len], ['idx', idx], ['val', val]]) writeFileSync(`${out}.${k}.bin`, Buffer.from(a.buffer));
-    writeFileSync(out + '.json', JSON.stringify({ n: Y.length, nf, nnz: val.length, ...summary }));
+    writeFileSync(out + '.json', JSON.stringify({ n: Y.length, nf, nnz: val.length, unsettled: true, ...summary })); // unsettled: has arrived-but-not-settled samples
     summary.samples = Y.length;
   }
   console.log(JSON.stringify(summary));

@@ -708,11 +708,19 @@ const botNetReady=()=>!!(BOT_NET&&MAP&&BOT_NET.course===MAP.course&&BOT_NET.nf==
    (3 players: 1, ¼, 0 · 4 players: 1, ¼, ⅛, 0). Training targets use the same values (tools/ai/gen.mjs). */
 const BOT_FIRST_RATIO=4;
 function botPlaceValue(pl,n){return pl>=n?0:pl<=1?1:1/BOT_FIRST_RATIO/2**(pl-2);}
+// my place is final once no one still racing moves after me in this round (turn order runs from S.start)
+function botPlaceSettled(me){const n=S.players.length;for(let i=(me+1)%n;i!==S.start;i=(i+1)%n)if(isActive(S.players[i]))return false;return true;}
 function botValue(me,mode){
   if(S.over){const pl=S.places[me],n=S.players.length;return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
   const P=S.players[me];
-  if(playerDone(P)){// arrived: my place is already locked in (only players who arrived earlier can be ahead of me)
-    const n=S.players.length,pl=1+S.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&q.blocks.length>P.blocks.length)).length;
+  if(playerDone(P)){
+    // arrived, but players still to move this round can arrive in the same round and beat me on the tie-break
+    // (more blockades, then the biggest blockade): until the round is over my place is a chance, which the network estimates
+    // once it has been trained on such positions (net.unsettled); older networks get the place as if settled (optimistic)
+    if(mode==='net'&&botNetReady()&&BOT_NET.unsettled&&!botPlaceSettled(me))return botNetValue(botNetFeatures(me));
+    // settled: only players who arrived earlier, or in the same round with a better tie-break, are ahead of me (as endGame ranks)
+    const n=S.players.length,mb=p=>Math.max(0,...p.blocks.map(b=>S.blockades[b].n));
+    const pl=1+S.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&(q.blocks.length>P.blocks.length||q.blocks.length===P.blocks.length&&mb(q)>mb(P)))).length;
     return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
   return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me)):mode==='heur2'?botHeuristic2(me):botHeuristic(me);
 }
@@ -889,4 +897,4 @@ function botRandomCourse(seed,nMid){
   return null;
 }
 
-export const E={get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
+export const E={get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
