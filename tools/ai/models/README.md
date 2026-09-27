@@ -71,3 +71,7 @@ first-distill-35 plus 8 iterations with the aggressive fading temperature (ANNEA
 ## first-distill-41 (frozen 2026-09-27 15:09 UTC)
 
 The search-distillation run after 41 iterations. Ladder vs first-distill-22: +11±12 with search, +6±12 plain — the run has plateaued since ~it 22. Next: the same run with a larger replay window (REPLAY=6).
+
+## first-distill-53 (frozen 2026-09-27 16:49 UTC)
+
+The distillation run after 53 iterations (12 of them with REPLAY=6). Ladder vs first-distill-22: -15±11 with search, -25±11 plain — the larger replay window did not help. Not used.
