@@ -47,3 +47,7 @@ plain 110 vs 99 wins, with search 141 vs 164. Frozen before trying log-odds expl
 
 first-qmax plus 5 iterations with log-odds exploration (EXPLORE_T=0.03, EXPLORE_EPS=0.01, max backup on). Head-to-head vs first-qmax
 (512 games): with search 154 vs 141 wins, plain 103 vs 119 — no clear gain; not used as a base. Next run (TreeStrap) starts from first-qmax.
+
+## first-tstrap1 (frozen 2026-09-27 08:52 UTC)
+
+first-qmax plus 4 iterations with TreeStrap (1 untaken option per decision, max backup on). Move-first test position: 39% vs 61% (first-qmax: 17% vs 55%). Frozen before raising TreeStrap to 3 options per decision.
