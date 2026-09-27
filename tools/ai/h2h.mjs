@@ -6,7 +6,7 @@
 //   PLANS='{"planB":{"safeTrash":1}}' defines candidate planner settings (see BOT_PLAN_DEF in src/engine_bot.js).
 //   Games stop at round 25; anyone who hasn't arrived by then counts as a loss.
 import { E } from '../../src/engine.gen.js';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, appendFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 const env = process.env;
 const optsFor = pol => /^net\+plan\d+$/.test(pol) ? { mode: 'net', search: { kind: 'plan', beam: +pol.slice(8) } }
@@ -25,7 +25,7 @@ if (!isMainThread) {
     const n = g % 2 ? 4 : 3, nA = n === 4 && g % 4 === 3 ? 2 : 1;
     const base = [...Array(nA).fill(A), ...Array(n - nA).fill(B)], rot = Math.floor(g / 2) % n, pols = base.map((_, i) => base[(i + rot) % n]);
     E.newGame({ course: E.COURSES[0], seed: 20000 + g, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
-    let acts = 0, capped = false;
+    let acts = 0, capped = false; const g0 = { evA: r.evA, evB: r.evB, cpuA: r.cpuA, cpuB: r.cpuB, decA: r.decA, decB: r.decB };
     while (!E.S.over) { E.S.log.length = 0; if (E.S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
       const me = E.S.cur, e0 = E.BOT_EVALS, t0 = process.cpuUsage(), ch = E.botChoose(optsFor(pols[me])), u = process.cpuUsage(t0), sd = pols[me] === A ? 'A' : 'B';
       r['ev' + sd] += E.BOT_EVALS - e0; r['cpu' + sd] += (u.user + u.system) / 1000; r['dec' + sd]++; const res = E.applyAction(me, ch.a); if (!res.ok) E.applyAction(me, { t: 'end', keep: [] }); }
@@ -33,6 +33,10 @@ if (!isMainThread) {
       const pv = capped && !p.fin ? 0 : E.botPlaceValue(E.S.places[i], n); if (isA) r.pvA += pv; else { r.pvB += pv; r.seatsB++; }
       if (isA) { r.seatsA++; r.expA += 1 / n; if (E.S.places[i] === 1 && !(capped && !p.fin)) r.wA++; }
       if (p.fin) (isA ? r.arrA : r.arrB).push(p.fin); else if (capped) r[isA ? 'capA' : 'capB']++; });
+    // one line per finished game for the live report (LOGJSONL=path)
+    if (process.env.LOGJSONL) appendFileSync(process.env.LOGJSONL, JSON.stringify({ time: new Date().toISOString(), A, B, g, n, capped, rounds: E.S.round,
+      players: pols.map((pol, i) => ({ pol, place: E.S.places[i], arrived: E.S.players[i].fin || null })),
+      cost: Object.fromEntries(['evA', 'evB', 'cpuA', 'cpuB', 'decA', 'decB'].map(k => [k, +(r[k] - g0[k]).toFixed(1)])) }) + '\n');
   }
   parentPort.postMessage(r);
 } else {

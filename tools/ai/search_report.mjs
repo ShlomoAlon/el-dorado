@@ -18,4 +18,22 @@ games.forEach((g, i) => { const cell = v => { const p = g.players.find(x => x.va
   return v === 'plain' ? `${pl} · ${f(p.thinkSec, 0)} s` : `${pl} · ${f(p.thinkSec, 0)} s · ${p.playouts} playouts · ${p.overruled}/${p.searched}`; };
   md += `| ${i + 1} | ${g.time.slice(11, 16)} | ${g.replay ? `[watch](${SITE}/?replay=${g.replay})` : '–'} | ${V.map(cell).join(' | ')} |\n`; });
 if (!games.length) md += `| – | – | – | ${V.map(() => '–').join(' | ')} |\n`;
+// ---- current experiment: the whole-turn planner vs the plain net (tools/ai/data/plan-exp.jsonl, one line per game) ----
+const PF = 'tools/ai/data/plan-exp.jsonl', PT = +(process.env.PLAN_TOTAL || 300);
+if (existsSync(PF)) {
+  const pg = readFileSync(PF, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
+  const vs = [...new Set(pg.map(x => x.A))];
+  let pm = `# Search experiment: whole-turn planner vs the plain net\n\n_Updated ${new Date().toISOString().slice(11, 19)} UTC · ${pg.length} games played_\n\n`;
+  pm += `**What's tested:** the trained network plus a planner that searches its own whole turn (beam search: keep the B most promising partial turns, extend each by every legal action, compare finished turns by the network's end-of-turn value; plan once per turn, re-plan after a draw card). Its own turn has almost no luck, so this is cheap compared with looking into opponents' turns. Each beam size plays ${PT} games against the plain network (3- and 4-player, seats rotated, the same games for every beam size; in some 4-player games two planners play two plain nets).\n\n`;
+  pm += `## Standings\n\n| Planner | Games | Seats | Wins | vs fair share (1.00 = equal) | Avg place value, planner vs plain | Cost per move vs plain (CPU) | Network evaluations per move |\n|---|---|---|---|---|---|---|---|\n`;
+  for (const v of vs) { const G = pg.filter(x => x.A === v); let seats = 0, exp = 0, wins = 0, pvA = 0, pvB = 0, sB = 0, c = { evA: 0, evB: 0, cpuA: 0, cpuB: 0, decA: 0, decB: 0 };
+    for (const x of G) { for (const p of x.players) { const fail = x.capped && !p.arrived, pv = fail ? 0 : ([1, .25, .125, 0][p.place - 1] ?? 0) * (x.n === 3 && p.place === 3 ? 0 : 1);
+        const val = x.n === 3 ? [1, .25, 0][p.place - 1] ?? 0 : [1, .25, .125, 0][p.place - 1] ?? 0; if (p.pol === v) { seats++; exp += 1 / x.n; if (p.place === 1 && !fail) wins++; pvA += fail ? 0 : val; } else { sB++; pvB += fail ? 0 : val; } }
+      for (const k in c) c[k] += x.cost[k] || 0; }
+    const ratio = exp ? wins / exp : 0, se = exp ? Math.sqrt(exp * (1 - exp / Math.max(1, seats))) / exp : 0;
+    pm += `| Beam ${v.replace('net+plan', '')} | ${G.length} of ${PT} | ${seats} | ${wins} | **${ratio.toFixed(2)}** ± ${(1.96 * se).toFixed(2)} | ${(pvA / Math.max(1, seats)).toFixed(3)} vs ${(pvB / Math.max(1, sB)).toFixed(3)} | **${c.decA && c.decB ? ((c.cpuA / c.decA) / (c.cpuB / c.decB)).toFixed(1) + '×' : '–'}** (${c.decA ? (c.cpuA / c.decA).toFixed(1) : '–'} vs ${c.decB ? (c.cpuB / c.decB).toFixed(1) : '–'} ms) | ${c.decA ? (c.evA / c.decA).toFixed(0) : '–'} vs ${c.decB ? (c.evB / c.decB).toFixed(0) : '–'} |\n`; }
+  pm += `\n± is a 95% margin: if it overlaps 1.00, the difference could still be luck. Place value: 1st = 1, 2nd = ¼, 3rd = ⅛ (4-player), last = 0.\n\n## Latest games\n\n| Time | Planner | Players | Result (place, round it arrived) |\n|---|---|---|---|\n`;
+  for (const x of pg.slice(-15).reverse()) pm += `| ${x.time.slice(11, 19)} | beam ${x.A.replace('net+plan', '')} | ${x.n} | ${x.players.map(p => `${p.pol === 'net' ? 'plain' : 'planner'} ${['1st', '2nd', '3rd', '4th'][p.place - 1]}${p.arrived ? ' (r' + p.arrived + ')' : ''}`).join(' · ')} |\n`;
+  md = pm + `\n---\n\n` + md.replace('# Search experiment: does looking ahead make the bot stronger?', '# Earlier experiment (stopped): searching 2 / 5 / 10 turns ahead');
+}
 writeFileSync('search-progress.md', md);
