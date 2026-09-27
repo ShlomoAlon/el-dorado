@@ -12,7 +12,8 @@ import { cpus } from 'node:os';
 import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 const MAXBACK = process.env.MAXBACK === '1';
-const EVAL_SELF = process.env.EVAL_SELF === '1'; // tests: the network plays itself (all seats); the tracked number is the arrival round per course
+const EVAL_SELF = process.env.EVAL_SELF === '1';
+const HEUR_P = +(process.env.HEUR_P ?? .25); // share of self-play seats played by the heuristic (0 = the network in every seat) // tests: the network plays itself (all seats); the tracked number is the arrival round per course
 const TREESTRAP = +(process.env.TREESTRAP || 0);
 const DISTILL = process.env.DISTILL === '1';
 // LEAGUE=a.json,b.json: in self-play a share (LEAGUE_P, default 0.25) of seats is played by these past frozen networks (plain play), so the network doesn't only learn to beat its own habits
@@ -41,7 +42,7 @@ if (!isMainThread) {
   for (let g = 0; g < games; g++) {
     let pols;
     // 3- and 4-player games only (2-player games use different rules)
-    if (mode === 'self') { const np = rnd() < .5 ? 3 : 4; pols = Array.from({ length: np }, () => { const r = rnd(); return r < .25 ? 'heur' : LEAGUE && r < .25 + LEAGUE_P ? 'lg' + Math.floor(rnd() * LEAGUE.length) : 'net'; }); if (!pols.includes('net')) pols[0] = 'net'; }
+    if (mode === 'self') { const np = rnd() < .5 ? 3 : 4; pols = Array.from({ length: np }, () => { const r = rnd(); return r < HEUR_P ? 'heur' : LEAGUE && r < HEUR_P + LEAGUE_P ? 'lg' + Math.floor(rnd() * LEAGUE.length) : 'net'; }); if (!pols.includes('net')) pols[0] = 'net'; }
     else if (table) { const gi = wi * games + g, np = gi % 2 ? 4 : 3, k = gi >> 1, all = ['net', 'netP', 'oldS', 'old'], a = np === 4 ? all : all.filter((_, i) => i !== k % 4);
       pols = a.map((_, i) => a[(i + (k >> 2)) % np]); }
     else if (EVAL_SELF) { const np = g % 2 ? 4 : 3; pols = Array(np).fill('net'); } // the network against itself (arrival-round test)
