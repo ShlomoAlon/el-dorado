@@ -20,6 +20,19 @@ md += `**Now:** ${stage || 'starting…'}\n\n**Games played so far:** ${games.to
 md += `**How it trains:** the network starts untrained and learns only from its own games (self-play). Each game's result is what the finishing place is worth: 1st = 1, 2nd = ¼, 3rd = ⅛, last = 0 (3 players: 1 · ¼ · 0; 4 players: 1 · ¼ · ⅛ · 0); not arriving by round 25 = 0. Games are cut short at the current **horizon** (3 rounds, then 5, 8, 12, 16, then the full game capped at 25 rounds) and ranked by who got closest to El Dorado. The horizon grows once the bot beats the heuristic in two tests in a row (or stops improving while at least as good).\n\n`;
 if (events.length) md += `**Milestones:** ${events.join(' → ')}\n\n`;
 // charts (SVG, published next to this page): the test result per iteration and the win rates, with the curriculum marked
+// the owner's key number: in which round the network reaches El Dorado (network against itself), per course
+const AR = rows.filter(r => r.arrival);
+if (AR.length) {
+  const NAMES = { first: 'First Expedition', winding: 'Winding Paths', witch: "Witch's Cauldron" }, ids = [...new Set(AR.flatMap(r => Object.keys(r.arrival)))];
+  const last = AR[AR.length - 1];
+  md += `### Rounds to reach El Dorado (network against itself, all players who arrive) — lower is better\n\n| Course | First test | Latest test | Winner's round (latest) |\n|---|---|---|---|\n`;
+  for (const id of ids) { const f = AR.find(r => r.arrival[id]); md += `| ${NAMES[id] || id} | ${f ? f.arrival[id].mean : '–'} | **${last.arrival[id] ? last.arrival[id].mean : '–'}** | ${last.arrival[id] ? last.arrival[id].winner : '–'} |\n`; }
+  if (AR.length > 1) { const all = AR.flatMap(r => Object.values(r.arrival).map(a => a.mean).filter(x => x != null)), lo = Math.floor(Math.min(...all)) - 1, hi = Math.ceil(Math.max(...all)) + 1;
+    writeFileSync('training-arrival-maps.svg', lineChart({ title: 'Round the network reaches El Dorado, per course (lower is better)', sub: 'Network against itself in every test; average of the last 3 tests.',
+      xLabel: 'Training iteration', x: [AR[0].it, AR[AR.length - 1].it], y: [lo, hi], yTicks: [...Array(hi - lo + 1)].map((_, i) => lo + i).filter((v, i, a) => a.length < 9 || i % 2 === 0), fmtY: v => 'r' + (+v).toFixed(1),
+      series: ids.slice(0, 4).map(id => ({ name: NAMES[id] || id, pts: rolling(AR.filter(r => r.arrival[id]).map(r => [r.it, r.arrival[id].mean]), 3) })) }));
+    md += `\n![Rounds to reach El Dorado per course](training-arrival-maps.svg)\n\n`; }
+}
 if (rows.length > 1) {
   const R = rows.filter(r => r.vsFair != null), X = [R[0].it, R[R.length - 1].it], marks = [];
   R.forEach((r, i) => { if (i && r.horizon !== R[i - 1].horizon) marks.push({ x: r.it, label: `horizon ${r.horizon}` }); });
