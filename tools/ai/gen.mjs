@@ -14,8 +14,9 @@ const LAMBDA = 0.7;
 
 if (!isMainThread) {
   const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam, oldNet, wi = 0 } = workerData;
-  // four-way test (search runs): the new net with search ('net'), the same net without search ('netP'), the frozen old net ('old'),
-  // and in 4-player games the heuristic benchmark too; seats rotated
+  // four-way test (search runs): the new net with search ('net'), the same net without search ('netP'), the frozen old net with
+  // search ('oldS') and without ('old'); 4-player games seat all four, 3-player games leave each one out in turn; seats rotated.
+  // new+search vs old+search is the measure of training progress (search alone makes either net much stronger)
   const table = mode === 'eval' && beam && oldNet;
   const search = beam ? { kind: 'plan', beam } : undefined; // SEARCH_BEAM: nets play through the whole-turn planner
   const C = E.COURSES.find(c => c.id === course) || E.COURSES[0];
@@ -28,11 +29,12 @@ if (!isMainThread) {
     let pols;
     // 3- and 4-player games only (2-player games use different rules)
     if (mode === 'self') { const np = rnd() < .5 ? 3 : 4; pols = Array.from({ length: np }, () => rnd() < .25 ? 'heur' : 'net'); if (!pols.includes('net')) pols[0] = 'net'; }
-    else if (table) { const gi = wi * games + g, np = gi % 2 ? 4 : 3, a = np === 4 ? ['net', 'heur', 'netP', 'old'] : ['net', 'netP', 'old']; pols = a.map((_, i) => a[(i + (gi >> 1)) % np]); }
+    else if (table) { const gi = wi * games + g, np = gi % 2 ? 4 : 3, k = gi >> 1, all = ['net', 'netP', 'oldS', 'old'], a = np === 4 ? all : all.filter((_, i) => i !== k % 4);
+      pols = a.map((_, i) => a[(i + (k >> 2)) % np]); }
     else { const np = g % 2 ? 4 : 3, a = ['net', ...Array(np - 1).fill('heur')]; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); } // half 3-player, half 4-player, seats rotated
     // every game is recorded as a replayable log (seeded shuffles); games that hit the final cap are saved for viewing
     const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: (rnd() * 2 ** 31) | 0, rng: (rnd() * 2 ** 32) >>> 0, fullRace: true,
-      players: pols.map((p, i) => ({ name: `${{ net: search ? 'Net + search' : 'Bot (net)', netP: 'Net (no search)', old: 'Old net' }[p] || 'Planner'} ${i + 1}`, bot: p === 'heur' ? bench : p })), actions: [] };
+      players: pols.map((p, i) => ({ name: `${{ net: search ? 'Net + search' : 'Bot (net)', netP: 'Net (no search)', old: 'Old net', oldS: 'Old net + search' }[p] || 'Planner'} ${i + 1}`, bot: p === 'heur' ? bench : p })), actions: [] };
     // exploration: now and then every player starts with the same extra card, favouring cards the bot rarely buys
     if (mode === 'self' && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
       st.explore.gift = (st.explore.gift || 0) + 1; inc('Gift card given to every player (exploration)', glog.gift); }
@@ -51,6 +53,7 @@ if (!isMainThread) {
       if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: false && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
       const c = mode === 'eval' && pols[me] === 'netP' ? E.botChoose({ mode: 'net', rnd })
         : mode === 'eval' && pols[me] === 'old' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd })))
+        : mode === 'eval' && pols[me] === 'oldS' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd, search })))
         : mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined })
         : isNet ? E.botChoose({ mode: 'net', eps, temp, typeEps, turnState, rnd, search: plainSeat[me] ? undefined : search })
         : E.botChoose({ mode: bench, eps: .03, noise: .3, rnd });

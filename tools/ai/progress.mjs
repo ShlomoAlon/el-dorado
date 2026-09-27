@@ -22,8 +22,8 @@ md += `| Iter | Horizon (rounds) | Games so far | vs fair share | Wins 3p / 4p |
 for (const r of rows) md += `| ${r.it} | ${r.horizon} | ${r.games.toLocaleString()} | **${r.vsFair == null ? '–' : r.vsFair.toFixed(2)}** | ${r.win3p == null ? pct(r.netWinRate) + ' (3p)' : pct(r.win3p) + ' / ' + pct(r.win4p)} | ${n(r.netRemaining)} | ${n(r.heurRemaining)} | ${n(r.netArrival)} | ${n(r.heurArrival)} |\n`;
 if (!rows.length) md += `| – | – | – | – | – | – | – | – | – |\n`;
 if (rows.some(r => r.table && r.table.p3)) {
-  const N = { net: 'New net + search', netP: 'New net, no search', old: 'Old net (frozen)', heur: 'Heuristic' };
-  md += `\n### Four-way test: each player's share of the wins (adds up to 100% per table size)\n\n3-player tables: the three nets. 4-player tables: the three nets and the heuristic. Seats rotated.\n\n| Iter | Table | Games | ${Object.values(N).join(' | ')} |\n|---|---|---|---|---|---|---|\n`;
+  const N = { net: 'New net + search', oldS: 'Old net + search', netP: 'New net, no search', old: 'Old net (frozen)', heur: 'Heuristic' };
+  md += `\n### Four-way test: each player's share of the wins (adds up to 100% per table size)\n\nNew net vs the frozen old net, each with and without search. **Training progress = New net + search vs Old net + search** (search alone makes either net much stronger). 4-player tables seat all four; 3-player tables leave one out in turn. Seats rotated. Until iteration 4 of this run the old net played without search and the heuristic sat at 4-player tables.\n\n| Iter | Table | Games | ${Object.values(N).join(' | ')} |\n|---|---|---|---|---|---|---|---|\n`;
   for (const r of rows.filter(r => r.table && r.table.p3)) for (const k of ['p3', 'p4']) { const tn = r.table[k]; if (!tn) continue;
     md += `| ${r.it} | ${k[1]}-player | ${tn.games} | ${Object.keys(N).map(p => tn[p] ? `**${Math.round(tn[p].wins / tn.games * 100)}%** (${tn[p].wins})` : '–').join(' | ')} |\n`; }
 }
