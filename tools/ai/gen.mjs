@@ -13,7 +13,7 @@ import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 
 if (!isMainThread) {
-  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile } = workerData;
+  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW } = workerData;
   const C = E.COURSES.find(c => c.id === course) || E.COURSES[0];
   if (net) E.setNet(net);
   let s = seed0 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -28,13 +28,16 @@ if (!isMainThread) {
     // every game is recorded as a replayable log (seeded shuffles); games that hit the final cap are saved for viewing
     const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: (rnd() * 2 ** 31) | 0, rng: (rnd() * 2 ** 32) >>> 0, fullRace: true,
       players: pols.map((p, i) => ({ name: `${p === 'net' ? 'Bot (net)' : 'Planner'} ${i + 1}`, bot: p === 'net' ? 'net' : bench })), actions: [] };
+    // exploration: now and then every player starts with the same extra card, favouring cards the bot rarely buys
+    if (mode === 'self' && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
+      st.explore.gift = (st.explore.gift || 0) + 1; inc('Gift card given to every player (exploration)', glog.gift); }
     const shuf = E.replayStart(glog); E.setRng(null);
     const traj = pols.map(() => []); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
     while (!E.S.over) {
       const S = E.S; S.log.length = 0;
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
-      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: !nb && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
+      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: false && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
       const c = mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd })
         : isNet ? E.botChoose({ mode: 'net', eps, temp, typeEps, turnState, rnd })
         : E.botChoose({ mode: bench, eps: .03, noise: .3, rnd });
@@ -93,6 +96,12 @@ if (!isMainThread) {
   parentPort.postMessage({ len, idx, val, Y: new Float32Array(Y), nf: X.length ? X[0].length : 0, st }, [len.buffer, idx.buffer, val.buffer]);
 }
 
+// gift-card weights: 1 / (1 + times the bot bought that card in the latest self-play batch)
+function giftWeights(course) {
+  let buys = {}; try { const L = readFileSync(`tools/ai/data/${course}.log`, 'utf8').split('\n').filter(l => l.includes('] GEN ') && l.includes('"mode":"self"'));
+    if (L.length) buys = JSON.parse(L[L.length - 1].slice(L[L.length - 1].indexOf('{'))).buysNet || {}; } catch (e) { }
+  return Object.entries(E.CT).filter(([, d]) => d.cost).map(([t]) => [t, 1 / (1 + (buys[t] || 0))]);
+}
 if (isMainThread) {
   const [, , mode = 'self', G = '100', out = '-', netPath = '', course = 'first'] = process.argv;
   const net = netPath ? JSON.parse(readFileSync(netPath, 'utf8')) : null;
@@ -105,8 +114,10 @@ if (isMainThread) {
     typeEps: 0.05 * X,             // a random kind of decision (buy / remove / keep / rubble / draw card / …), then a random option of it
     eps: 0.03 * X,                 // a uniformly random legal action
     temp: Math.max(0.004, 0.02 * X), // softmax over action scores (near-best options tried often)
-    buyEps: 0.10 * X,              // turns with one random purchase, and (same rate) turns where buying is off
-    transEps: 0.10 * X };          // Transmitter turns with a forced pick (weighted toward expensive cards)
+    buyEps: 0.10 * X,              // turns where buying is off (random purchases were replaced by gift cards)
+    giftRate: 0.5 * X,             // games where every player starts with the same extra card (weighted toward rarely bought cards)
+    giftW: giftWeights(course),
+    transEps: 0 };                 // (forced random Transmitter picks removed: gift cards cover rare cards)
   const rs = await Promise.all(Array.from({ length: W }, () => new Promise((res, rej) => {
     const w = new Worker(new URL(import.meta.url), { workerData: { ...wd, games: Math.ceil(+G / W), seed0: (Math.random() * 2 ** 31) | 0 } });
     w.on('message', res); w.on('error', rej);

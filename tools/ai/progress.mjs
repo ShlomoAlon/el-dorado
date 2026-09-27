@@ -23,13 +23,13 @@ for (const r of rows) md += `| ${r.it} | ${r.horizon} | ${r.games.toLocaleString
 if (!rows.length) md += `| – | – | – | – | – | – | – | – | – |\n`;
 if (lastGen && (lastGen.buysNet || lastGen.buysHeur)) {
   const b = lastGen.mode === 'self' ? lastGen.buysNet : lastGen.buysHeur, tot = Object.values(b || {}).reduce((a, x) => a + x, 0) || 1;
-  md += `\n### What it buys (latest ${lastGen.mode === 'self' ? 'self-play' : 'heuristic'} batch, ${lastGen.games} games${lastGen.mode === 'self' ? `, horizon ${lastGen.horizon} rounds; exploration level ${lastGen.explore ?? 1}: softmax choices, a few random moves, a random purchase on ${Math.round(10 * (lastGen.explore ?? 1))}% of turns` : ''})\n\n| Card | Bought | Share |\n|---|---|---|\n`;
+  md += `\n### What it buys (latest ${lastGen.mode === 'self' ? 'self-play' : 'heuristic'} batch, ${lastGen.games} games${lastGen.mode === 'self' ? `, horizon ${lastGen.horizon} rounds; exploration level ${lastGen.explore ?? 1}: softmax choices, a few random moves, and in ${Math.round(50 * (lastGen.explore ?? 1))}% of games every player starts with the same extra card (favouring cards the bot rarely buys)` : ''})\n\n| Card | Bought | Share |\n|---|---|---|\n`;
   for (const [t, c] of Object.entries(b || {}).sort((a, b) => b[1] - a[1])) md += `| ${NAMES[t] || t} | ${c} | ${(c / tot * 100).toFixed(1)}% |\n`;
   const never = Object.keys(NAMES).filter(t => !['explorer', 'traveler', 'sailor'].includes(t) && !(b || {})[t]); if (never.length) md += `\nNever bought in this batch: ${never.map(t => NAMES[t]).join(', ')}\n`;
 }
 if (lastGen && lastGen.transNet) {
   const T = lastGen.transNet, tot = Object.values(T).reduce((a, x) => a + x, 0);
-  md += `\n### What it takes with the Transmitter (latest self-play batch; at exploration level ${lastGen.explore ?? 1}, ${Math.round(10 * (lastGen.explore ?? 1))}% of its Transmitter turns are a forced random pick weighted toward expensive cards, reserve included)\n\n`;
+  md += `\n### What it takes with the Transmitter (latest self-play batch; its own choices, no forced picks)\n\n`;
   if (!tot) md += `No Transmitter used in this batch.\n`;
   else { md += `| Card | Taken | Share |\n|---|---|---|\n`; for (const [t, c] of Object.entries(T).sort((a, b) => b[1] - a[1])) md += `| ${NAMES[t] || t} | ${c} | ${(c / tot * 100).toFixed(1)}% |\n`; }
 }
@@ -37,7 +37,7 @@ if (lastGen && lastGen.decisions) {
   md += `\n### Every kind of decision the bot makes (latest self-play batch)\nEach of these is also explored at random now and then, so the bot keeps testing alternatives.\n\n| Decision | What it chose (count · share) |\n|---|---|\n`;
   for (const [k, v] of Object.entries(lastGen.decisions)) { const tot = Object.values(v).reduce((a, x) => a + x, 0) || 1;
     md += `| ${k} | ${Object.entries(v).sort((a, b) => b[1] - a[1]).map(([x, c]) => `${NAMES[x] || x}: ${c} (${(c / tot * 100).toFixed(0)}%)`).join(' · ')} |\n`; }
-  const ex = lastGen.exploration || {}, LBL = { softmax: 'picked a near-best option (softmax)', random: 'fully random action', typed: 'random kind of decision, random option', forceBuy: 'forced random purchase', forceTransmit: 'forced Transmitter pick', noBuyTurn: 'turns with buying switched off' };
+  const ex = lastGen.exploration || {}, LBL = { softmax: 'picked a near-best option (softmax)', random: 'fully random action', typed: 'random kind of decision, random option', gift: 'games with a gift card for every player', forceBuy: 'forced random purchase (retired)', forceTransmit: 'forced Transmitter pick (retired)', noBuyTurn: 'turns with buying switched off' };
   md += `\n**Exploration in that batch:** ${Object.entries(ex).map(([k, c]) => `${LBL[k] || k}: ${c}`).join(' · ') || '–'}\n`;
 }
 const stuckTotal = rows.reduce((a, r) => a + (r.stuck || 0), 0);
