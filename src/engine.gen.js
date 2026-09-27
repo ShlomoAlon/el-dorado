@@ -689,10 +689,17 @@ function botPlanChoose(me,O){
    each connection between tiles gets 8 (which blockade type was dealt there, its cost, owned by nobody / me / an opponent).
    The terrain itself never changes on a given course, so the network learns it per slot. */
 function botMapOrder(){if(MAP._bo)return MAP._bo;const keys=[...MAP.hexes.keys()].filter(k=>MAP.hexes.get(k).type!=='m').sort();const idx=new Map(keys.map((k,i)=>[k,i]));MAP._bo={keys,idx};return MAP._bo;}
-function botNetNF(){return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8;}
+/* multi-course networks (net.courses = [course ids]): input = the summary (BOT_NF) + BOT_FLAGS rule switches + one board block per
+   course in that order; only the current course's block is filled. Single-course networks (net.course) keep the old layout. */
+const BOT_FLAGS=4,BOT_BLOCK={};
+function botBlockSize(id){if(BOT_BLOCK[id]!=null)return BOT_BLOCK[id];const C=courseById(id);if(!C)return BOT_BLOCK[id]=0;
+  const m=MAP&&MAP.course===id?MAP:buildCourse(C,1),keys=[...m.hexes.keys()].filter(k=>m.hexes.get(k).type!=='m');return BOT_BLOCK[id]=keys.length*4+m.conns.length*8;}
+const botMulti=()=>!!(BOT_NET&&BOT_NET.courses);
+function botNetNF(){if(botMulti())return BOT_NF+BOT_FLAGS+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(id),0);return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8;}
 function botNetFeatures(me){
   const{keys,idx}=botMapOrder(),n=S.players.length,f=new Float32Array(botNetNF());
   f.set(botFeatures(me),0);let o=BOT_NF;
+  if(botMulti()){f[o]=S.rules&&S.rules.campOnce?1:0;o+=BOT_FLAGS;for(const id of BOT_NET.courses){if(id===MAP.course)break;o+=botBlockSize(id);}}
   S.players.forEach((p,j)=>{const rel=(j-me+n)%n;if(rel>3)return;for(const k of p.pieces){if(k==='done')continue;const x=idx.get(k);if(x!=null)f[o+x*4+rel]=1;}});
   o+=keys.length*4;
   S.blockades.forEach(B=>{const c=o+B.conn*8;const t='jwvr'.indexOf(B.k);if(t>=0)f[c+t]=1;f[c+4]=B.v/2;f[c+5]=B.owner===null?1:0;f[c+6]=B.owner===me?1:0;f[c+7]=B.owner!==null&&B.owner!==me?1:0;});
@@ -707,7 +714,7 @@ function botNetValue(f){BOT_EVALS++;const N=BOT_NET,H1=N.b1.length,H2=N.b2.lengt
   for(let j=0;j<H1;j++)if(h1[j]<0)h1[j]*=.01;
   let s=N.b3[0];for(let j=0;j<H2;j++){let a=N.b2[j];const r=j*H1;for(let k=0;k<H1;k++)a+=N.w2[r+k]*h1[k];s+=N.w3[j]*(a>0?a:.01*a);}
   return 1/(1+Math.exp(-s));}
-const botNetReady=()=>!!(BOT_NET&&MAP&&BOT_NET.course===MAP.course&&BOT_NET.nf===botNetNF());
+const botNetReady=()=>!!(BOT_NET&&MAP&&(botMulti()?BOT_NET.courses.includes(MAP.course):BOT_NET.course===MAP.course)&&BOT_NET.nf===botNetNF());
 /* what a finishing place is worth: 1st = 1, 2nd = 1/BOT_FIRST_RATIO, each further place half the one above, last = 0
    (3 players: 1, ¼, 0 · 4 players: 1, ¼, ⅛, 0). Training targets use the same values (tools/ai/gen.mjs). */
 const BOT_FIRST_RATIO=4;
@@ -989,4 +996,4 @@ function aiStep(id,mem){
   return r;
 }
 
-export const E={AIS,aiById,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
+export const E={AIS,aiById,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
