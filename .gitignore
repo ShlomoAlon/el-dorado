@@ -6,3 +6,5 @@ tools/ai/data/
 training-progress.md
 search-progress.md
 deep-progress.md
+training-*.svg
+deep-*.svg
