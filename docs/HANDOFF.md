@@ -76,7 +76,8 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
   then unfinished players by closeness to a finish space; then resigned players (earlier resignation = lower).
   Local games can pick the official ending (`fullRace:false`: game ends after the round in which someone arrives).
 - **Elo:** pairwise from the placement; K = 32 (48 for a player's first 10 games) divided by (n−1); start 1200;
-  zero-sum; updated once per game in `Room.finish()`.
+  zero-sum; updated once per game in `Room.finish()`, **only for rated rooms** (`opts.rated`, default true; the room creator /
+  host picks Rated or Unrated; quick matches are rated). AI players are rated like people (see §6.6).
 - **Timer (online):** host picks 60/90/120/180 s. On expiry the server auto-ends the turn (resolves pending trash with
   nothing, discards leftovers). 3 consecutive timeouts → resign (forfeit). Any successful action resets the count.
 
@@ -104,6 +105,9 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
 build.mjs                 concatenates sources → public/index.html, build/artifact.html, src/engine.gen.js
 wrangler.jsonc            Worker config: assets ./public, D1 "DB", DOs ROOMS(Room) + LOBBY(Lobby), keep_vars
 src/engine_data.js        CT (cards), MARKET0/RESERVE0, BLOCKADES, BOARDS, hex geometry, genMap/buildMap (seeded)
+src/engine_ai.js          named AI players (AIS: Humboldt / Orellana / Raleigh) over engine_bot.js: aiChoose/aiStep, per-game
+                          plan cache, aiNetDecode (half-float network). engine_bot.js itself is the training code's: don't change it
+src/ai/first.bin          the shipped network (tools/ai/pack.mjs from tools/ai/models/first-qmax.json; build copies it to public/ai/)
 src/engine_rules.js       S/MAP globals, newGame, reach/nativeTargets/payTargets, applyAction, advance, resign,
                           endGame (placements), eloDeltas, redact
 src/client/shell.html     <title>, fonts, all CSS (design tokens in :root), SVG symbol defs, DOM skeleton
@@ -119,18 +123,20 @@ src/client/ui_boot.js     wiring + startup routing (?room=CODE links, rejoin, lo
 src/worker.js             Worker routes, auth (Google JWT verify + HMAC session tokens), Lobby DO, Room DO
 test/engine.test.mjs      60 random games: termination, card conservation, placements, zero-sum Elo, no redaction leaks
 test/e2e.cjs              Playwright: 3 dev-signed-in browsers, create/join/start, moves, buys, timer, resigns, ratings
+test/e2e_ai.cjs           Playwright vs wrangler dev: rated room with 2 AI seats plays to the end (AI ratings move), unrated room
+test/ai_local.cjs         Playwright (own static server): local game vs AIs from the setup screen, 1440 and 390 px
 ```
 The browser build wraps everything in one IIFE; engine and UI share scope (`S`, `MAP`, helpers are plain globals
 inside it). The server imports `E` from `engine.gen.js` and sets `E.S`/`E.MAP` before each call (safe: DO calls are
 synchronous around the engine).
 
 ### 6.2 Game state `S` (JSON, v3)
-`{v:4, seed, course{id,name,p,e,s}, players[{name,color,pieces[hexKey|'done'],deck[],hand[],discard[],play[],blocks[blockadeIdx],fin(round|0),resigned(order|0)}],
+`{v:5, seed, course{id,name,p,e,s}, players[{name,color,ai?(AI id),pieces[hexKey|'done'],deck[],hand[],discard[],play[],blocks[blockadeIdx],fin(round|0),resigned(order|0)}],
 cards{id:type}, nid, market[{t,n}], reserve[{t,n}], blockades[{n,k,v,conn,owner}], cur, start, round, endTriggered, over,
 winners[], places[], fullRace, turn{bought, active{id,pi,sym,left}|null, pending{max}|null}, trash[], log[{p,t}], privacy, resigns,
 owners[uid] (online only), room (online only)}`.
 `MAP` is derived from `(course, seed)` by `buildCourse` (seed deals the blockades) — deterministic, never stored.
-Local save key `eldorado-save-v4`; v3 saves are ignored; v3 rooms on the server are closed on load.
+Local save key `eldorado-save-v5` (v5 added `players[].ai`); v4 saves still load (`loadSave`); v3 saves are ignored; v3 rooms on the server are closed on load.
 
 ### 6.3 Actions (`applyAction(seat, a)` → `{ok, err, ev[], reveal}`)
 `move{card,pi,to}` · `native{card,pi,to}` · `pay{pi,to,cards}` · `action{card}` · `trash{cards}` ·
@@ -179,6 +185,24 @@ Turn timer = DO alarm at `d.deadline`. Lobby DO keeps `{code → summary}` and p
 Free-tier notes: DO CPU limit 30 s/message (engine actions take <5 ms); Worker requests 100k/day (static assets free);
 incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning duration.
 
+### 6.6 AI players
+- Three named AIs (`AIS` in `src/engine_ai.js`), all the same bot code with different settings:
+  **Humboldt** (Master) = value network + whole-turn planner (`{mode:'net',search:{kind:'plan',beam:3}}`, the strongest),
+  **Orellana** (Strong) = value network one action at a time, **Raleigh** (Steady) = heuristic route planner (`mode:'plan'`).
+  The network (`first-qmax`) only fits First Expedition (`botNetReady`); elsewhere the network AIs play as the planner.
+- Network shipping: half floats, 339 KB (288 KB gzip), outputs within 2e-4 of the JSON (checked in engine.test). The site
+  fetches `/ai/first.bin` only when a network AI is about to move; the artifact has it inline (`AI_NET.b64`); the worker imports
+  the .bin (wrangler's default Data rule → ArrayBuffer). To ship a new network: `node tools/ai/pack.mjs <model.json>` then build.
+- Local: setup seat picker (Human / AI); `aiKick()` after every render schedules one AI action at a time (~0.65 s apart, waits for
+  piece animations). `canAct()` is false on AI turns; `viewIdx()` keeps showing the last human's hand. No Elo locally.
+  Thinking runs on the main thread: Humboldt's first action of a turn takes up to ~150 ms (rest of the turn follows the plan, ~0 ms).
+- Online: the host adds AI seats in the room lobby (`addAI {ai}`, `removeAI {uid}`, each AI once per room; not in quick matches).
+  The Room DO plays them: `nextTurn()` gives people the turn timer and AIs an alarm (`d.aiAt`); `aiMove()` plays one action per
+  alarm (0.7 s apart) while a person still racing has the page open, otherwise ~0.3 s of actions per alarm until a person's turn
+  or the end. Plan cache is per room (`this.aiMem`), so rooms sharing an isolate can't mix plans.
+- Ratings: each AI is a `users` row `id='ai-<id>'`, `bot=<id>`, no google_sub (created in `ensureSchema`; if a person already has the
+  name, the AI gets "(AI)" appended). Leaderboard lists them (with `bot`) even before their first game.
+
 ### Replays (game logs)
 - A game log is `{kind:'eldorado-replay', v:1, title, course, seed, rng, fullRace, players:[{name,bot}], actions:[[seat,action],…], notes:[…]}`.
   Shuffles draw from `RNG` (engine_data.js); `replayStart(log)` seeds it with `log.rng` and starts the game, so re-applying the
@@ -207,6 +231,8 @@ node build.mjs && node test/engine.test.mjs
 printf 'DEV_AUTH=1\n' > .dev.vars
 npx wrangler dev --ip 127.0.0.1 --port 8787 &     # local Worker + DOs + D1 (state in .wrangler/)
 NODE_PATH=$(npm root -g) node test/e2e.cjs        # Playwright is preinstalled globally; Chromium at /opt/pw-browsers
+NODE_PATH=$(npm root -g) node test/e2e_ai.cjs     # AI seats online: rated game to the end, unrated game
+NODE_PATH=$(npm root -g) node test/ai_local.cjs   # local game vs the AIs (no server needed)
 NODE_PATH=$(npm root -g) node test/match.cjs      # quick match + private rooms (use a fresh --persist-to dir)
 ```
 Performance checks used before: count rAF frames for 1.5 s while panning / sweeping the hand / moving the arrow;

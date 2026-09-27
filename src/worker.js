@@ -8,6 +8,7 @@
    Tables are created automatically on first use; no migrations to run. */
 import { DurableObject } from 'cloudflare:workers';
 import { E } from './engine.gen.js';
+import NET_BIN from './ai/first.bin'; // the AI's neural network as half floats (tools/ai/pack.mjs); wrangler imports .bin as an ArrayBuffer
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const bad = (msg, status = 400) => json({ error: msg }, status);
@@ -18,16 +19,31 @@ const TURN_CHOICES = [60, 90, 120, 180, 300];
 /* ---------------- database ---------------- */
 let schemaReady = null;
 function ensureSchema(env) {
-  if (!schemaReady) schemaReady = env.DB.batch([
+  if (!schemaReady) schemaReady = createSchema(env).catch(e => { schemaReady = null; throw e; });
+  return schemaReady;
+}
+const aiUid = id => 'ai-' + id; // the named AIs are players in the users table (bot = AI id, no Google account)
+async function createSchema(env) {
+  await env.DB.batch([
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, google_sub TEXT UNIQUE, name TEXT NOT NULL UNIQUE COLLATE NOCASE, rating REAL NOT NULL DEFAULT 1200, games INTEGER NOT NULL DEFAULT 0, wins INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`),
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS users_rating ON users(rating DESC)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS matches(id TEXT PRIMARY KEY, room TEXT, finished INTEGER, data TEXT)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS replays(id TEXT PRIMARY KEY, created INTEGER NOT NULL, title TEXT, players TEXT, actions INTEGER, body TEXT NOT NULL)`),
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS replays_created ON replays(created DESC)`),
-  ]).catch(e => { schemaReady = null; throw e; });
-  return schemaReady;
+  ]);
+  try { await env.DB.prepare(`ALTER TABLE users ADD COLUMN bot TEXT`).run(); } catch (e) { } // already there
+  for (const A of E.AIS) { // one rated player per named AI; if a person already has the name, the AI gets "(AI)" after it
+    const id = aiUid(A.id);
+    if (await env.DB.prepare(`SELECT id FROM users WHERE id=?`).bind(id).first()) continue;
+    for (const name of [A.name, A.name + ' (AI)', A.name + ' (AI) ' + id.slice(-4)]) {
+      const r = await env.DB.prepare(`INSERT OR IGNORE INTO users(id,google_sub,name,created,bot) VALUES(?,NULL,?,?,?)`).bind(id, name, Date.now(), A.id).run();
+      if (r.meta && r.meta.changes) break;
+    }
+  }
 }
+let NET = null;
+function useNet() { if (!NET) NET = E.aiNetDecode(NET_BIN); E.aiSetNet(NET); }
 let secretCache = null;
 async function sessionSecret(env) {
   if (secretCache) return secretCache;
@@ -159,7 +175,7 @@ export default {
         return r ? new Response(r.body, { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' } }) : bad('No replay with that id.', 404);
       }
       if (p === '/api/leaderboard') {
-        const r = await env.DB.prepare(`SELECT id,name,rating,games,wins FROM users WHERE games>0 ORDER BY rating DESC LIMIT 100`).all();
+        const r = await env.DB.prepare(`SELECT id,name,rating,games,wins,bot FROM users WHERE games>0 OR bot IS NOT NULL ORDER BY rating DESC LIMIT 100`).all();
         return json({ players: r.results });
       }
       const user = await authUser(req, env);
@@ -177,7 +193,7 @@ export default {
       }
       if (p === '/api/rooms' && req.method === 'POST') {
         const b = await req.json().catch(() => ({}));
-        const opts = { max: Math.min(4, Math.max(2, +b.max || 3)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn: TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90, pub: b.pub !== false, auto: false };
+        const opts = { max: Math.min(4, Math.max(2, +b.max || 3)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn: TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90, pub: b.pub !== false, rated: b.rated !== false, auto: false };
         const code = await createRoom(env, user.id, opts);
         return code ? json({ code }) : bad('Could not create a room, try again.', 500);
       }
@@ -207,7 +223,7 @@ export default {
 export class Lobby extends DurableObject {
   constructor(ctx, env) { super(ctx, env); this.rooms = null; ctx.blockConcurrencyWhile(async () => { this.rooms = (await ctx.storage.get('rooms')) || {}; }); }
   prune() { const now = Date.now(); for (const c in this.rooms) { const r = this.rooms[c]; if (now - r.updated > (r.status === 'playing' ? 12 : 2) * 3600e3) delete this.rooms[c]; } }
-  list() { return Object.values(this.rooms).filter(r => r.pub !== false && (r.status === 'lobby' || r.status === 'playing')).map(r => ({ code: r.code, host: r.host, names: r.names, count: r.names.length, max: r.max, status: r.status, course: r.course, turn: r.turn, auto: !!r.auto })); }
+  list() { return Object.values(this.rooms).filter(r => r.pub !== false && (r.status === 'lobby' || r.status === 'playing')).map(r => ({ code: r.code, host: r.host, names: r.names, count: r.names.length, max: r.max, status: r.status, course: r.course, turn: r.turn, rated: r.rated !== false, ai: (r.uids || []).filter(u => u.startsWith('ai-')).length, auto: !!r.auto })); }
   broadcast() { const msg = JSON.stringify({ t: 'rooms', rooms: this.list() }); for (const ws of this.ctx.getWebSockets()) { try { ws.send(msg); } catch (e) { } } }
   async fetch(req) {
     const url = new URL(req.url);
@@ -223,7 +239,7 @@ export class Lobby extends DurableObject {
       if (mine) return json({ code: mine.code });
       const open = Object.values(this.rooms).filter(x => x.auto && x.status === 'lobby' && x.names.length < x.max && now - x.updated < 15 * 60e3).sort((a, b) => b.names.length - a.names.length);
       if (open.length) return json({ code: open[0].code });
-      const opts = { max: MATCH_SIZE, course: 'random', turn: dev ? 20 : 90, pub: true, auto: true };
+      const opts = { max: MATCH_SIZE, course: 'random', turn: dev ? 20 : 90, pub: true, rated: true, auto: true };
       const code = await createRoom(this.env, uid, opts); if (!code) return json({ code: null });
       // listed right away so a second quick-matcher lands in the same room
       this.rooms[code] = { code, host: '', names: [], uids: [], max: MATCH_SIZE, status: 'lobby', course: 'random', turn: opts.turn, pub: true, auto: true, updated: now };
@@ -252,10 +268,10 @@ export class Room extends DurableObject {
     await this.ctx.storage.put(w);
   }
   engine() { E.S = this.S; E.MAP = mapFor(this.S); return E; }
-  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn, pub: d.opts.pub !== false, auto: !!d.opts.auto }; }
+  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn, pub: d.opts.pub !== false, rated: d.opts.rated !== false, auto: !!d.opts.auto }; }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.summary()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
-  roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, online: this.online(s.uid) })), results: d.results || null }; }
+  roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid) })), results: d.results || null }; }
   send(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (e) { } }
   stateFor(uid, ev) {
     const seat = this.S.owners.indexOf(uid);
@@ -311,6 +327,20 @@ export class Room extends DurableObject {
         d.seats = d.seats.filter(s => s.uid !== uid); await this.persist('d'); this.tellLobby(); this.sendAll(); try { ws.close(1000, 'Left'); } catch (e) { }
       }
       else if (m.t === 'join' && !seat) { if (d.seats.length >= d.opts.max) return err('This room is full.'); const used = d.seats.map(s => s.color); const { name } = ws.deserializeAttachment(); d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) }); if (await this.seatsChanged()) return; await this.persist('d'); this.tellLobby(); this.sendAll(); }
+      else if (m.t === 'addAI') { // host seats a named AI (each at most once per room); it plays server-side
+        if (d.opts.auto || uid !== d.host) return err('Only the host can add AI players.');
+        const A = E.aiById(m.ai); if (!A) return err('Unknown AI.');
+        if (d.seats.length >= d.opts.max) return err('This room is full.');
+        if (d.seats.some(s => s.ai === A.id)) return;
+        const used = d.seats.map(s => s.color); const row = await this.env.DB.prepare(`SELECT name FROM users WHERE id=?`).bind(aiUid(A.id)).first().catch(() => null);
+        d.seats.push({ uid: aiUid(A.id), name: row ? row.name : A.name, color: PCOLORS.find(c => !used.includes(c)), ai: A.id });
+        await this.persist('d'); this.tellLobby(); this.sendAll();
+      }
+      else if (m.t === 'removeAI') {
+        if (uid !== d.host) return err('Only the host can remove AI players.');
+        d.seats = d.seats.filter(s => !(s.ai && s.uid === m.uid)); await this.persist('d'); this.tellLobby(); this.sendAll();
+      }
+      else if (m.t === 'rated' && uid === d.host && !d.opts.auto) { d.opts.rated = !!m.v; await this.persist('d'); this.tellLobby(); this.sendAll(); }
       else if (m.t === 'now' && seat && d.opts.auto) { seat.now = !seat.now; if (await this.seatsChanged()) return; await this.persist('d'); this.sendAll(); }
       else if (m.t === 'start') {
         if (d.opts.auto) return;
@@ -322,7 +352,7 @@ export class Room extends DurableObject {
     }
     if (d.status !== 'playing' || !this.S) return;
     const seat = this.S.owners.indexOf(uid);
-    if (m.t === 'resign') { if (seat < 0) return; const eng = this.engine(); const prevCur = this.S.cur; const r = eng.resign(seat); if (!r.ok) return; if (this.S.cur !== prevCur) { this.undo = []; await this.startTurnTimer(); } await this.afterChange(r.ev); return; }
+    if (m.t === 'resign') { if (seat < 0) return; const eng = this.engine(); const prevCur = this.S.cur; const r = eng.resign(seat); if (!r.ok) return; if (this.S.cur !== prevCur) { this.undo = []; await this.nextTurn(); } await this.afterChange(r.ev); return; }
     if (m.t === 'undo') {
       if (seat !== this.S.cur || !this.undo.length) return err('Nothing to undo.');
       this.S = JSON.parse(this.undo.pop()); await this.persist('Su'); this.sendAll([{ e: 'undo' }]); return;
@@ -334,7 +364,7 @@ export class Room extends DurableObject {
       if (!r.ok) { this.S = JSON.parse(before); return err(r.err); }
       this.S = E.S; d.timeouts[seat] = 0;
       if (r.reveal || this.S.cur !== prevCur) this.undo = []; else { this.undo.push(before); if (this.undo.length > 6) this.undo.shift(); }
-      if (this.S.cur !== prevCur && !this.S.over) await this.startTurnTimer();
+      if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn();
       await this.afterChange(r.ev); return;
     }
   }
@@ -346,10 +376,10 @@ export class Room extends DurableObject {
   }
   async startGame() {
     const d = this.d;
-    E.newGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color })), fullRace: true });
+    E.newGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
     this.S = E.S; this.S.owners = d.seats.map(s => s.uid); this.S.room = d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
     d.status = 'playing'; d.timeouts = {}; this.undo = [];
-    await this.startTurnTimer(); await this.persist(); this.tellLobby(); this.sendAll([{ e: 'start' }]);
+    await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll([{ e: 'start' }]);
   }
   async afterChange(ev) {
     if (this.S.log.length > 120) this.S.log = this.S.log.slice(-120);
@@ -357,11 +387,31 @@ export class Room extends DurableObject {
     await this.persist(); this.sendAll(ev);
   }
   async startTurnTimer() {
-    this.d.deadline = Date.now() + this.d.opts.turn * 1000;
+    this.d.deadline = Date.now() + this.d.opts.turn * 1000; this.d.aiAt = null;
     await this.ctx.storage.setAlarm(this.d.deadline);
+  }
+  /* the turn passed to someone new: a person gets the turn timer, an AI gets its next move scheduled (same alarm) */
+  async nextTurn() { if (this.aiToMove()) await this.scheduleAI(900); else await this.startTurnTimer(); }
+  aiToMove() { return !!(this.S && !this.S.over && this.S.players[this.S.cur].ai); }
+  // someone is following the game: a person still racing with the page open. Otherwise the AIs play on without pauses.
+  watched() { return this.S.players.some((p, i) => !p.ai && !p.resigned && !p.pieces.every(k => k === 'done') && this.online(this.S.owners[i])); }
+  async scheduleAI(ms) { const d = this.d; d.deadline = null; d.aiAt = Date.now() + (this.watched() ? ms : 0); await this.ctx.storage.setAlarm(d.aiAt); }
+  /* AI seats play server-side, one action per alarm while people watch (so the table can follow),
+     or up to ~0.3 s of actions per alarm when nobody is racing with the page open */
+  async aiMove() {
+    const eng = this.engine(); useNet(); const ev = []; const t0 = Date.now(); const fast = !this.watched();
+    this.aiMem = this.aiMem || {};
+    do {
+      const seat = this.S.cur, mem = this.aiMem[seat] || (this.aiMem[seat] = {});
+      const r = eng.aiStep(this.S.players[seat].ai, mem); this.S = E.S; ev.push(...r.ev);
+    } while (fast && this.aiToMove() && Date.now() - t0 < 300);
+    this.undo = [];
+    if (!this.S.over) { if (this.aiToMove()) await this.scheduleAI(700); else await this.startTurnTimer(); }
+    await this.afterChange(ev);
   }
   async alarm() {
     const d = this.d; if (!d || d.status !== 'playing' || !this.S || this.S.over) return;
+    if (this.aiToMove()) { if (d.aiAt && Date.now() < d.aiAt - 50) { await this.ctx.storage.setAlarm(d.aiAt); return; } await this.aiMove(); return; }
     if (Date.now() < d.deadline - 1000) { await this.ctx.storage.setAlarm(d.deadline); return; }
     const eng = this.engine(); const seat = this.S.cur; const ev = [{ e: 'timeout', pl: seat }];
     d.timeouts[seat] = (d.timeouts[seat] || 0) + 1;
@@ -373,12 +423,16 @@ export class Room extends DurableObject {
       const r = eng.applyAction(seat, { t: 'end', keep: [] }); ev.push(...r.ev);
     }
     this.S = E.S; this.undo = [];
-    if (!this.S.over) await this.startTurnTimer();
+    if (!this.S.over) await this.nextTurn();
     await this.afterChange(ev);
   }
   async finish() {
     const d = this.d; d.status = 'over'; d.deadline = null;
     await this.ctx.storage.deleteAlarm();
+    if (!d.rated && d.opts.rated === false) { // unrated room: the result is kept, ratings don't move
+      d.rated = true; d.results = { places: this.S.places, unrated: true };
+      try { await this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: this.S.owners, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), places: this.S.places, rated: false, rounds: this.S.round })).run(); } catch (e) { }
+    }
     if (!d.rated) {
       d.rated = true;
       const uids = this.S.owners;
@@ -388,7 +442,7 @@ export class Room extends DurableObject {
         const ratings = uids.map(u => (by[u] ? by[u].rating : 1200)), games = uids.map(u => (by[u] ? by[u].games : 0));
         const deltas = E.eloDeltas(ratings, this.S.places, games);
         const stmts = uids.map((u, i) => this.env.DB.prepare(`UPDATE users SET rating=rating+?, games=games+1, wins=wins+? WHERE id=?`).bind(deltas[i], this.S.places[i] === 1 ? 1 : 0, u));
-        stmts.push(this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: uids, names: this.S.players.map(p => p.name), places: this.S.places, before: ratings, deltas, rounds: this.S.round })));
+        stmts.push(this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: uids, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), rated: true, places: this.S.places, before: ratings, deltas, rounds: this.S.round })));
         await this.env.DB.batch(stmts);
         d.results = { places: this.S.places, before: ratings, deltas };
       } catch (e) { d.results = { places: this.S.places, error: String(e && e.message || e) }; }
