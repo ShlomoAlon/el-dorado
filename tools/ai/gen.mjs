@@ -7,7 +7,7 @@
 // Result for each player, in [0,1]: 0.8 × placement (1 = first, 0 = last) + 0.2 × how far ahead of the others (distance).
 // Samples are sparse: <out>.len.bin (u32 non-zeros per row) .idx.bin (u16 columns) .val.bin (f32) .Y.bin (f32 target).
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { writeFileSync, readFileSync, appendFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, readFileSync, appendFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
@@ -63,7 +63,10 @@ if (!isMainThread) {
       if (!r.ok) E.applyAction(me, { t: 'end', keep: [] });
       E.setRng(null); glog.actions.push([me, r.ok ? c.a : { t: 'end', keep: [] }]);
       if (r.ok && isNet) for (const e of r.ev) if (e.e === 'block') inc('Blockades taken', '#' + e.n);
-      if (mode === 'self' && !E.S.over) traj[me].push(f || E.botNetFeatures(me));
+      // no samples once I've arrived: play never asks the network about those positions (they get the exact place value),
+      // and bootstrapping through its guess for them (the average over all places) inflated the moves just before arriving,
+      // so arriving in a low place looked worse than hovering next to El Dorado. The λ-return now starts from the exact result.
+      if (mode === 'self' && !E.S.over && !E.playerDone(E.S.players[me])) traj[me].push(f || E.botNetFeatures(me));
     }
     if (capped) st.capped++;
     if (process.env.REPLAYALL) writeFileSync(`${process.env.REPLAYALL}/g-${glog.seed}.json`, JSON.stringify(glog)); // testing: keep every game
@@ -115,6 +118,8 @@ if (isMainThread) {
   const r3 = st.seat3 ? st.win3 / st.seat3 : null, r4 = st.seat4 ? st.win4 / st.seat4 : null;
   // win rate relative to a fair share (1/3 in 3-player, 1/4 in 4-player); 1.0 = as good as the heuristic
   const rel = (st.seat3 || st.seat4) ? +((st.win3 + st.win4) / (st.seat3 / 3 + st.seat4 / 4)).toFixed(3) : null;
+  try { const D = 'tools/ai/data/replays/'; const old = readdirSync(D).filter(f => f.startsWith('stuck-')).map(f => [f, statSync(D + f).mtimeMs]).sort((x, y) => y[1] - x[1]).slice(60);
+    for (const [f] of old) unlinkSync(D + f); } catch (e) { } // keep the newest 60 capped-game replays
   const summary = { mode, horizon: wd.H, explore: X, games: +G, secs: (Date.now() - t0) / 1000, capped: st.capped, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
     win3p: r3 == null ? null : +r3.toFixed(3), win4p: r4 == null ? null : +r4.toFixed(3), vsFair: rel,
     netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur, transNet: st.transNet, transHeur: st.transHeur, decisions: st.dec, exploration: st.explore, stuck: st.stuck, bench: wd.bench };
