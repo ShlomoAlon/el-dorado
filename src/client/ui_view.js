@@ -902,9 +902,9 @@ function closeModal(){const o=$('#overlay');const sc=o.firstChild;if(!sc)return;
 function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:(courseById(id)||COURSES[0]);}
 function courseName(id){return id==='random'&&COURSES.length>1?'Random course':(courseById(id)||COURSES[0]).name;}
 function coursePicker(gid,sel){
-  const opts=COURSES.map(c=>[c.id,c.name,`${c.diff?c.diff+' · ':''}${c.p.map(x=>x[0]).join(' · ')}`]);
+  const opts=COURSES.map(c=>[c.id,c.name,'Boards '+c.p.map(x=>x[0]).join(' · '),c.diff]);
   if(COURSES.length>1)opts.push(['random','Random course','Any course from this list']);
-  return `<div class="clist" id="${gid}">${opts.map(([id,n,d])=>`<button data-c="${id}" class="${sel===id?'on':''}"><b>${esc(n)}</b><span>${esc(d)}</span></button>`).join('')}</div>`;
+  return `<div class="clist" id="${gid}">${opts.map(([id,n,d,df])=>`<button data-c="${id}" class="${sel===id?'on':''}"><b>${esc(n)}${df?` <i class="dtag d-${esc(df.toLowerCase())}">${esc(df)}</i>`:''}</b><span>${esc(d)}</span></button>`).join('')}</div>`;
 }
 let setup={mode:'local',full:true,oMax:3,oPub:true,oRated:true,oTurn:90,oCourse:'first',n:3,names:['Ana','Ben','Cleo','Dev'],ai:['','','',''],colors:['crimson','ivory','violet','orange'],course:'first',privacy:false,seed:(Math.random()*1e9)|0};
 function showSetup(){

@@ -83,17 +83,30 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
 
 ## 5. Boards — what is real and what is reconstructed (important, owner asked about this)
 
-- **Real, verified space by space** (terrain + strength): **B, C, I, K, N** — transcribed from the BoardGameHelpers tile
+- **Real, verified space by space** (terrain + strength): **B, C, F, G, I, K, N** — transcribed from the BoardGameHelpers tile
   catalogue images (https://www.boardgamehelpers.com/QuestforElDorado/TileCatalogue.aspx, `Images/Q4eD.<n>.<L>.gif`;
-  reachable from the sandbox with curl), checked against the published terrain counts, and K rendered side by side
-  for the owner, who confirmed it. Image orientation = rotation 0 in `BOARDS` (rows 4·5·6·7·6·5·4, pointy-top).
+  reachable from the sandbox with curl). Image orientation = rotation 0 in `BOARDS` (rows 4·5·6·7·6·5·4, pointy-top).
   Strength = number of icons (machetes, paddles, coins; cards on camps/rubble). Start spaces `s1`–`s4` carry the
-  printed numbers.
-- Still reconstructed: **A, D–H, J, L, M** (terrain counts right, layouts guessed) and strips **O–R** (not in).
+  printed numbers. K was confirmed by the owner; F, G onwards have side-by-side images in `tools/course-check/tile-<L>.jpg`.
+- **Independent check:** the catalogue page lists per tile the terrain counts and a "Traverse Rating", which turns out to be
+  exactly Σ strength + 6 per mountain (start spaces 0). Every transcription must match both. B, C, F, G, K match (so do
+  the transcriptions of A, D, L, M made for the next courses) — but **I and N are each 1 short**, and the images show why: **I's base camp (row 4, 5th space) is 3 cards (c3, we
+  have c2)**, **N's row 4, 5th space is a 3-coin village (v3, we have v2)**. Not fixed yet because First Expedition uses
+  both and the AI network is trained on it (coordinate with the training side; it's a one-token change each in `BOARDS`).
+- Still reconstructed: **A, D, E, H, J, L, M** (terrain counts right, layouts guessed) and strips **O–R** (not in).
   Transcribe them from the same images the same way before adding courses that use them.
 - First Expedition layout and rotations come from Ravensburger's German setup sheet
   (brettspiele-report.de …/Wettlauf nach El Dorado_Spielaufbau.pdf, page 1; page 2 has the 6 other official routes,
-  clear vector-ish art — much better than the English rulebook scans). That sheet is rotated ≈12° vs our lattice.
+  clear vector-ish art — much better than the English rulebook scans). Page 1 is rotated ≈12° vs our lattice; page 2 is
+  flat-topped (exactly 30°), 85.15 px per hex at 500 dpi.
+- **Courses from page 2** were placed by fitting: each board's 37 spaces are colour-classified in the 500 dpi render and
+  matched against the transcription at every lattice offset and rotation, chaining board to board (36–37 of 37 match;
+  misses are under the big printed letters). Result = exact integer positions/rotations; the course is then turned 60°
+  steps so it lies wide on screen. Comparison images: `tools/course-check/course-<id>.jpg` (sheet turned 30° above the
+  game), made with `tools/course-check/shots.cjs` + `compose.py`.
+  Official difficulty (rulebook p. 10 / sheet): easy = First Expedition, Hills of Gold, Home Stretch (needs strip Q);
+  medium = Winding Paths, Serpentine; hard = Witch's Cauldron, Swamplands (needs strips O, R).
+  In the game: `first`, `winding` (Medium).
 - Blockade costs 1,1,1,1,2,2 are still a guess (BoardGameHelpers has blockade images too).
 - Board rendering: harder spaces are darker (`TSHADE` in ui_view.js), icons laid out 1 / 2 side by side / 3 triangle /
   4 square — owner's request, mirrors the printed tiles.
