@@ -189,6 +189,15 @@ incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning
 - Server: `POST /api/replays` (public, ≤1.9 MB, `replayCheck` validation, newest 1000 kept in D1 `replays`), `GET /api/replays`,
   `GET /api/replays/<id>`. Page: `/?replay=<id>`, or "Replays" on the start screen (upload + recent list).
   Viewer: `src/client/ui_replay.js`; `REPLAY` non-null makes `canAct()` false and disables saving.
+  Its controls live in grid cells beside/under the game (`#rdock`, `#rside`), never on top of it; the game area shrinks.
+
+### Layout (why it is built this way)
+- `#shell` is a CSS grid: `#gamecell` (holds `#app`, the whole game) + `#rside` + `#rdock` (replay only). Separate cells can't overlap.
+- Inside `#app`, breakpoints are container queries on the game cell, so the game lays out for the space it actually gets.
+- Floating game controls keep clear of each other through variables, not measurements: the prompt spans between
+  `--zoomFoot` and `--mktFoot`; the market's own sizing code (`updateMktH`) publishes `--mktW`, tries every column count,
+  and steps aside (`#mkt.cramped`, Market button opens the card view) when nothing fits.
+- `test/layout.cjs` checks 11 sizes × play/replay states for off-screen or overlapping controls. Run it after UI changes.
 
 ## 7. Testing recipes
 

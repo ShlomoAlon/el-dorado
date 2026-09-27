@@ -362,7 +362,7 @@ function cardHTML(t){
   return `<div class="cface k-${d.c}"><div class="c-art">${cardArt(t)}</div>${pow}<div class="c-title">${esc(d.n)}</div><div class="c-body">${body}</div>${foot}</div>`;
 }
 function cardTitle(t){const d=CT[t];let s=d.n;if(d.c!=='p')s+=` — ${d.p} ${d.s==='*'?'joker (machete, paddle or coin)':SYMNAME[d.s]}`;else s+=' — '+d.txt;if(d.once)s+=' Single use: removed from the game after its effect.';if(d.cost!=null)s+=` Cost ${d.cost}.`;return s;}
-const cardW=()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cw'))||132;
+const cardW=()=>parseFloat(getComputedStyle($('#app')).getPropertyValue('--cw'))||132; // set per game-area size (container queries)
 
 /* =========================================================
    CARDS — layout (hand floats over the board, fanned)
@@ -621,7 +621,7 @@ window.addEventListener('pointerdown',e=>{aim.touch=e.pointerType!=='mouse';},{p
    SIDE / HUD / PROMPT
    ========================================================= */
 /* ---------- market: floating strip (six market cards + "All cards" tile) and the all-cards spread ---------- */
-function setMkt(open){setTimeout(()=>{if(REPLAY)replayLayout();},0);UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
+function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
   updateMktH();if(!userZoomed)setTimeout(()=>fit(true),10);}
 /* size the right-hand market stack so it always ends above the action buttons (End turn / Undo);
    shrink the cards, and add a column when that isn't enough */
@@ -630,11 +630,18 @@ function updateMktH(){
   const top=mk.offsetTop,ab=$('#actBtns'),abBottom=ab?parseFloat(getComputedStyle(ab).bottom)||0:0;
   let avail=H-abBottom-150-top; // room for up to three stacked buttons below
   if(avail<60&&ab)avail=ab.getBoundingClientRect().top-v.getBoundingClientRect().top-top-12; // very short screens: just stay above the current ones
-  const def=phone?44:72,min=phone?34:56,gap=phone?7:10,n=S?S.market.length+1:7;
-  let pick=null;
-  for(let cols=phone?1:2;cols<=n;cols++){const rows=Math.ceil(n/cols),mw=Math.min(def,(avail-(rows-1)*gap-8)/(rows*1.4));pick={cols,mw};if(mw>=min)break;}
+  const dp=$('#discPile');if(dp)avail=Math.min(avail,dp.getBoundingClientRect().top-v.getBoundingClientRect().top-top-10); // and above the discard pile
+  const def=phone?44:72,min=phone?34:56,gap=phone?7:10,cg=phone?7:8,n=S?S.market.length+1:7;
+  // try every column count against the room below (height) and beside (width: at most ~55% of the game area); keep the largest cards
+  const availW=W*.55;let pick=null;
+  for(let cols=phone?1:2;cols<=n;cols++){const rows=Math.ceil(n/cols);
+    const mw=Math.min(def,(avail-(rows-1)*gap-8)/(rows*1.4),(availW-(cols-1)*cg)/cols);if(!pick||mw>pick.mw+.5)pick={cols,mw};}
+  // no arrangement fits (tiny game area): the market steps aside; the Market button then opens the full card view
+  const cramped=pick.mw<min*.8;mk.classList.toggle('cramped',cramped);
   const mw=Math.max(28,Math.floor(pick.mw));
-  if(mk.dataset.sz!==pick.cols+'/'+mw){mk.dataset.sz=pick.cols+'/'+mw;mk.style.setProperty('--mw',mw+'px');$('#market').style.gridTemplateColumns=`repeat(${pick.cols},var(--mw))`;}
+  if(mk.dataset.sz!==pick.cols+'/'+mw){mk.dataset.sz=pick.cols+'/'+mw;mk.style.setProperty('--mw',mw+'px');$('#market').style.gridTemplateColumns=`repeat(${pick.cols},var(--mw))`;
+    // the market's width, for everything that must stay clear of it (the prompt)
+    $('#app').style.setProperty('--mktW',(pick.cols*mw+(pick.cols-1)*cg)+'px');}
 }
 function openAll(open){UI.allOpen=open;$('#allc').hidden=!open;if(open){$('#allc').scrollTop=0;renderMarket();}}
 const ALL_ICON='<svg viewBox="-10 -10 20 20"><rect x="-8.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".45" transform="rotate(-14)"/><rect x="-4.5" y="-7.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".7"/><rect x="-.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" transform="rotate(12)"/></svg>';

@@ -17,7 +17,7 @@ function boot(){
     const sync=()=>{const on=!!fsOn();fb.classList.toggle('full',on);fb.title=fb.ariaLabel=on?'Exit full screen':'Full screen';};
     document.addEventListener('fullscreenchange',sync);document.addEventListener('webkitfullscreenchange',sync);}
   $('#menuBtn').onclick=()=>{if(REPLAY){exitReplay();return;}if(online()&&!S.over)resignOnline();else if(online()){exitOnline();showHub();}else showSetup();};
-  $('#mktBtn').onclick=()=>setMkt(!UI.mktOpen);
+  $('#mktBtn').onclick=()=>{if($('#mkt').classList.contains('cramped')){openAll(true);return;}setMkt(!UI.mktOpen);};
   let so=null;try{so=localStorage.getItem('eldorado-mkt');}catch(e){}
   UI.mktOpen=so!=='0';$('#mkt').classList.toggle('hid',!UI.mktOpen);$('#mktBtn').classList.toggle('on',UI.mktOpen);
   window.addEventListener('keydown',e=>{if(replayKeys(e))return;if(e.target.tagName==='INPUT')return;

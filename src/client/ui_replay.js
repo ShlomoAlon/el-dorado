@@ -18,7 +18,9 @@ function buildReplay(log,id){
       lines.push(S.log.slice());evs.push(r.ev||null);snap();
     }
   }finally{setRng(null);}
-  return{log,id,states,lines,evs,rem,fails,i:0,timer:0,speed:+(localStorage.getItem('eldorado-rspeed')||1)||1};
+  // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
+  let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}
+  return{log,id,states,lines,evs,rem,fails,i:0,timer:0,speed:sp,side};
 }
 function startReplay(log,id){
   let R;try{R=buildReplay(log,id);}catch(e){console.error(e);toast('Could not load that replay: '+e.message,3500);showSetup();return;}
@@ -39,20 +41,6 @@ function replayGo(i,anim){
   render();
 }
 const replayNext=()=>REPLAY&&REPLAY.log.actions[REPLAY.i];
-/* fit the replay panel into the free space: left of the market column, above the hand and piles, below the prompt;
-   the options list scrolls if that space is short; on narrow screens the zoom buttons move up out of its way */
-function replayLayout(){const b=$('#rbar');if(!b||!REPLAY)return;
-  const W=innerWidth,H=innerHeight,m=$('#mkt'),z=document.querySelector('.zoomctl');
-  const mr=m&&!m.classList.contains('hid')?m.getBoundingClientRect():null;
-  let low=H;for(const e of document.querySelectorAll('#cards .card,#deckPile,#discPile'))low=Math.min(low,e.getBoundingClientRect().top);
-  const top=$('#prompt').getBoundingClientRect().bottom+10,right=mr&&mr.width?W-mr.left+8:16,bottom=Math.max(16,H-low+8);
-  const narrow=W-right-12<380;
-  b.style.right=right+'px';b.style.bottom=bottom+'px';b.style.left=narrow?'12px':'auto';b.style.width=narrow?'auto':'360px';
-  b.style.maxHeight=Math.max(120,H-bottom-top)+'px';
-  if(z){z.style.cssText='';const zr=z.getBoundingClientRect(),br=b.getBoundingClientRect();
-    if(!(zr.right<=br.left||br.right<=zr.left||zr.bottom<=br.top||br.bottom<=zr.top)){z.style.top='auto';z.style.transform='none';z.style.bottom=(H-br.top+8)+'px';}}
-}
-addEventListener('resize',()=>{if(REPLAY)replayLayout();});
 /* jump to the start of the next / previous turn */
 function replayTurn(dir){const R=REPLAY;if(!R)return;let i=R.i;
   const turnAt=k=>{const s=JSON.parse(R.states[k]);return s.round*8+s.cur;};const t0=turnAt(i);
@@ -61,10 +49,13 @@ function replayTurn(dir){const R=REPLAY;if(!R)return;let i=R.i;
   replayStop();replayGo(i,false);}
 function replayPlay(){const R=REPLAY;if(!R)return;if(R.timer){replayStop();return;}
   if(R.i>=R.states.length-1)replayGo(0,false);
-  const tick=()=>{if(!REPLAY)return;if(REPLAY.i>=REPLAY.states.length-1){replayStop();return;}replayGo(REPLAY.i+1,true);REPLAY.timer=setTimeout(tick,(reduceMotion?500:750)/REPLAY.speed);};
+  // one move every ~1.3 s at Normal, with an extra pause when a turn ends
+  const tick=()=>{if(!REPLAY)return;if(REPLAY.i>=REPLAY.states.length-1){replayStop();return;}
+    const endTurn=(replayNext()||[])[1]&&replayNext()[1].t==='end';replayGo(REPLAY.i+1,true);
+    REPLAY.timer=setTimeout(tick,(1300+(endTurn?900:0))/REPLAY.speed);};
   R.timer=setTimeout(tick,50);replayBar();}
 function replayStop(){const R=REPLAY;if(R&&R.timer){clearTimeout(R.timer);R.timer=0;}replayBar();}
-function exitReplay(){replayStop();REPLAY=null;const b=$('#rbar');if(b)b.remove();const z=document.querySelector('.zoomctl');if(z)z.style.cssText='';
+function exitReplay(){replayStop();REPLAY=null;$('#app').classList.remove('replaying');$('#rdock').hidden=true;$('#rside').hidden=true;$('#rdock').innerHTML='';
   try{const u=new URL(location.href);u.searchParams.delete('replay');history.replaceState(null,'',u);}catch(e){}
   for(const[,el]of cardEls)el.remove();cardEls.clear();S=null;showSetup();}
 
@@ -99,32 +90,44 @@ function replayPromptHTML(){
   return`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>${describeAction(a[1],st)} <span class="m">· now ${fmtR(r0)} left</span>`;
 }
 const fmtR=x=>Math.round(x*10)/10;
+/* Replay UI lives in its own grid cells (#rdock under the game, #rside beside it or under it on narrow screens),
+   never on top of the game: the game area (#app) shrinks to make room, and everything in it lays itself out in
+   the space it gets (container queries). Nothing here measures other elements, so nothing can overlap. */
+const RSPEEDS=[['Slow','½×',.5],['Normal','1×',1],['Fast','2×',2],['Faster','4×',4]];
 function replayBar(){
-  const R=REPLAY;if(!R)return;let b=$('#rbar');
-  if(!b){b=document.createElement('div');b.id='rbar';b.className='glass';$('#app').appendChild(b);
-    b.innerHTML=`<div class="rrow"><button id="rbS" title="Start (Home)">⏮</button><button id="rbT0" title="Previous turn (↑)">«</button><button id="rbP" title="Back one move (←)">‹</button><button id="rbGo" class="pri" title="Play / pause (space)">▶</button><button id="rbN" title="Forward one move (→)">›</button><button id="rbT1" title="Next turn (↓)">»</button><button id="rbE" title="End (End)">⏭</button><select id="rbSp" aria-label="Speed">${[.5,1,2,4,8].map(v=>`<option value="${v}">${v}×</option>`).join('')}</select><span id="rbPos"></span></div>
-      <input type="range" id="rbR" min="0" value="0" aria-label="Position in the game"><div id="rbWhy"></div>`;
+  const R=REPLAY;if(!R)return;const d=$('#rdock'),side=$('#rside');
+  if(!d.firstChild){
+    d.innerHTML=`<div class="rgrp"><button id="rbS" class="ends" title="Start (Home)" aria-label="Start">⏮</button><button id="rbT0" title="Previous turn (↑)" aria-label="Previous turn">«</button><button id="rbP" title="Back one move (←)" aria-label="Back one move">‹</button><button id="rbGo" class="pri" title="Play / pause (space)" aria-label="Play">▶</button><button id="rbN" title="Forward one move (→)" aria-label="Forward one move">›</button><button id="rbT1" title="Next turn (↓)" aria-label="Next turn">»</button><button id="rbE" class="ends" title="End (End)" aria-label="End">⏭</button></div>
+      <div class="rspd" role="group" aria-label="Replay speed">${RSPEEDS.map(([t,s,v])=>`<button data-v="${v}" aria-label="${t}" title="${t}"><span class="lg">${t}</span><span class="sm">${s}</span></button>`).join('')}</div>
+      <input type="range" id="rbR" min="0" value="0" aria-label="Position in the game"><span id="rbPos"></span>
+      <button id="rbA" class="rtog" title="Show or hide the bot's options">Bot's view</button><div id="rbTxt" aria-live="polite"></div>`;
     const go=(i,an)=>{replayStop();replayGo(i,an);};
-    b.querySelector('#rbS').onclick=()=>go(0);b.querySelector('#rbE').onclick=()=>go(1e9);
-    b.querySelector('#rbP').onclick=()=>go(REPLAY.i-1);b.querySelector('#rbN').onclick=()=>go(REPLAY.i+1,true);
-    b.querySelector('#rbT0').onclick=()=>replayTurn(-1);b.querySelector('#rbT1').onclick=()=>replayTurn(1);
-    b.querySelector('#rbGo').onclick=replayPlay;
-    const sp=b.querySelector('#rbSp');sp.value=String(R.speed);sp.onchange=()=>{REPLAY.speed=+sp.value;try{localStorage.setItem('eldorado-rspeed',sp.value);}catch(e){}};
-    const rr=b.querySelector('#rbR');rr.oninput=()=>go(+rr.value);}
-  const n=R.states.length-1;b.querySelector('#rbGo').textContent=R.timer?'❚❚':'▶';
-  const rr=b.querySelector('#rbR');rr.max=n;rr.value=R.i;
-  b.querySelector('#rbPos').textContent=`move ${R.i} / ${n} · round ${S.round}`;
+    d.querySelector('#rbS').onclick=()=>go(0);d.querySelector('#rbE').onclick=()=>go(1e9);
+    d.querySelector('#rbP').onclick=()=>go(REPLAY.i-1);d.querySelector('#rbN').onclick=()=>go(REPLAY.i+1,true);
+    d.querySelector('#rbT0').onclick=()=>replayTurn(-1);d.querySelector('#rbT1').onclick=()=>replayTurn(1);
+    d.querySelector('#rbGo').onclick=replayPlay;
+    d.querySelectorAll('.rspd button').forEach(b=>b.onclick=()=>{REPLAY.speed=+b.dataset.v;try{localStorage.setItem('eldorado-rspeed2',b.dataset.v);}catch(e){}replayBar();});
+    d.querySelector('#rbA').onclick=()=>{REPLAY.side=!REPLAY.side;try{localStorage.setItem('eldorado-rside',REPLAY.side?'1':'0');}catch(e){}replayBar();};
+    const rr=d.querySelector('#rbR');rr.oninput=()=>go(+rr.value);}
+  d.hidden=false;side.hidden=!R.side;$('#app').classList.add('replaying');d.querySelector('#rbTxt').innerHTML=replayPromptHTML()+`<span class="rpos"> · move ${R.i} / ${R.states.length-1} · round ${S.round}</span>`;
+  const n=R.states.length-1,gb=d.querySelector('#rbGo');gb.textContent=R.timer?'❚❚':'▶';gb.setAttribute('aria-label',R.timer?'Pause':'Play');
+  d.querySelectorAll('.rspd button').forEach(b=>b.classList.toggle('on',+b.dataset.v===R.speed));
+  const tg=d.querySelector('#rbA');tg.classList.toggle('on',R.side);tg.setAttribute('aria-pressed',R.side?'true':'false');
+  const rr=d.querySelector('#rbR');rr.max=n;rr.value=R.i;
+  d.querySelector('#rbPos').textContent=`move ${R.i} / ${n} · round ${S.round}`;
+  if(!R.side)return;
   // what the bot thought of this decision (recorded with the log): its top options and their estimated chance to finish ahead
-  const note=R.log.notes&&R.log.notes[R.i],w=b.querySelector('#rbWhy'),st=JSON.parse(R.states[R.i]);
-  const bot=R.log.players[(replayNext()||[S.cur])[0]].bot;
-  if(note&&note.alts&&replayNext()){const chosen=JSON.stringify(replayNext()[1]);
-    w.innerHTML=`<div class="rwh">Bot's options here <span class="m">(estimated chance to finish ahead)</span></div>`+note.alts.map((o,j)=>`<div class="ralt${JSON.stringify(o.a)===chosen?' on':''}" data-j="${j}"><b>${o.v==null?'–':Math.round(o.v*100)+'%'}</b><span>${describeAction(o.a,st)}</span></div>`).join('');w.hidden=false;
-    // hovering an option marks its space on the board
-    w.querySelectorAll('.ralt').forEach(el=>{const o=note.alts[+el.dataset.j].a;
-      el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(o.to)){UI.targets=new Map([[o.to,{kind:'move'}]]);renderTargets();}};
-      el.onpointerleave=()=>{computeTargets();replayDecorate();renderTargets();};});}
-  else{w.innerHTML='';w.hidden=true;}
-  replayLayout();
+  const nx=replayNext(),note=R.log.notes&&R.log.notes[R.i],st=JSON.parse(R.states[R.i]);
+  const who=nx?R.log.players[nx[0]]:null;
+  let h=`<div class="rwh">Bot's view <span class="m">· estimated chance to finish ahead</span></div>`;
+  if(note&&note.alts&&nx){const chosen=JSON.stringify(nx[1]);
+    h+=note.alts.map((o,j)=>`<div class="ralt${JSON.stringify(o.a)===chosen?' on':''}" data-j="${j}"><b>${o.v==null?'–':Math.round(o.v*100)+'%'}</b><span>${describeAction(o.a,st)}</span></div>`).join('');}
+  else h+=`<p class="m">${!nx?'End of the replay.':who&&who.bot&&who.bot!=='net'?`${esc(who.name)} is a heuristic bot; its moves have no recorded options.`:'No recorded options for this move.'}</p>`;
+  side.innerHTML=h;
+  // hovering an option marks its space on the board
+  side.querySelectorAll('.ralt').forEach(el=>{const o=note.alts[+el.dataset.j].a;
+    el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(o.to)){UI.targets=new Map([[o.to,{kind:'move'}]]);renderTargets();}};
+    el.onpointerleave=()=>{computeTargets();replayDecorate();renderTargets();};});
 }
 /* replays list: upload a log file, or open a recent one */
 function showReplays(){
