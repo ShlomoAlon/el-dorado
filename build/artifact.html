@@ -1187,6 +1187,11 @@ function botChoose(opts){
     if(opts.noise&&v>-Infinity)v+=(rnd()-.5)*opts.noise;
     vals.push(v);if(v>bv){bv=v;best=a;}
   }
+  // exploration by log-odds: pick each option with probability ∝ (its odds of winning)^(1/lotemp), so every option is tried,
+  // near-best ones often and clearly worse ones rarely (Boltzmann over logits; probabilities clamped to [0.002, 0.998])
+  if(opts.lotemp&&acts.length>1){const lo=v=>{const p=Math.min(.998,Math.max(.002,v));return Math.log(p/(1-p));},lb=lo(bv);
+    const w=vals.map(v=>v===-Infinity?0:Math.exp((lo(v)-lb)/opts.lotemp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
+    for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],best:bv,why:acts[i]===best?undefined:'explore'};}}
   if(opts.temp&&acts.length>1){const w=vals.map(v=>v===-Infinity?0:Math.exp((v-bv)/opts.temp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
     for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],best:bv,why:acts[i]===best?undefined:'softmax'};}}
   return{a:best||{t:'end',keep:[]},v:bv,best:bv,alts:opts.explain?acts.map((x,i)=>({a:x,v:vals[i]})).sort((x,y)=>y.v-x.v).slice(0,5):undefined};

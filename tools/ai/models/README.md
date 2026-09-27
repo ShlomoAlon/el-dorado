@@ -36,3 +36,9 @@ The plain self-play network after iteration 137 (resumed from first-td at iterat
 the arrival-place fix). Tests vs the planner heuristic at iterations 116–137 averaged 2.24× its fair share (wins 69% 3p / 62% 4p),
 arriving in round 14.7 vs 16.1. Frozen before trying the within-turn max backup (MAXBACK=1, run `first-qmax`).
 To go back: `cp tools/ai/models/first-td2.json tools/ai/data/first.net.json`.
+
+## first-qmax (frozen 2026-09-27 08:10 UTC)
+
+first-td2 plus 10 iterations of plain self-play with the within-turn max backup (MAXBACK=1). Tests vs the planner heuristic
+averaged about 2.5× its fair share (first-td2: 2.24×); head-to-head vs first-td2 (512 games, after 7 iterations) about even:
+plain 110 vs 99 wins, with search 141 vs 164. Frozen before trying log-odds exploration (run `first-explore`).

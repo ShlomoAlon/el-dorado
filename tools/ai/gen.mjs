@@ -14,7 +14,7 @@ const LAMBDA = 0.7;
 const MAXBACK = process.env.MAXBACK === '1'; // within-turn max backup (see the self-play loop)
 
 if (!isMainThread) {
-  const { mode, games, seed0, net, course, H, eps, temp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam, oldNet, wi = 0 } = workerData;
+  const { mode, games, seed0, net, course, H, eps, temp, lotemp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam, oldNet, wi = 0 } = workerData;
   // four-way test (search runs): the new net with search ('net'), the same net without search ('netP'), the frozen old net with
   // search ('oldS') and without ('old'); 4-player games seat all four, 3-player games leave each one out in turn; seats rotated.
   // new+search vs old+search is the measure of training progress (search alone makes either net much stronger)
@@ -37,7 +37,7 @@ if (!isMainThread) {
     const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: (rnd() * 2 ** 31) | 0, rng: (rnd() * 2 ** 32) >>> 0, fullRace: true,
       players: pols.map((p, i) => ({ name: `${{ net: search ? 'Net + search' : 'Bot (net)', netP: 'Net (no search)', old: 'Old net', oldS: 'Old net + search' }[p] || 'Planner'} ${i + 1}`, bot: p === 'heur' ? bench : p })), actions: [] };
     // exploration: now and then every player starts with the same extra card, favouring cards the bot rarely buys
-    if (mode === 'self' && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
+    if (mode === 'self' && !lotemp && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
       st.explore.gift = (st.explore.gift || 0) + 1; inc('Gift card given to every player (exploration)', glog.gift); }
     // MIX_PLAIN=1 (search runs): one net seat per self-play game plays plain (no planner), the others through the planner.
     // Off by default: the mixed run (2026-09-27) saw search's lead over the old net stall while the plain net caught up.
@@ -51,12 +51,12 @@ if (!isMainThread) {
       const S = E.S; S.log.length = 0;
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
-      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: false && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
+      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && !lotemp && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: false && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
       const c = mode === 'eval' && pols[me] === 'netP' ? E.botChoose({ mode: 'net', rnd })
         : mode === 'eval' && pols[me] === 'old' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd })))
         : mode === 'eval' && pols[me] === 'oldS' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd, search })))
         : mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined })
-        : isNet ? E.botChoose({ mode: 'net', eps, temp, typeEps, turnState, rnd, search: plainSeat[me] ? undefined : search })
+        : isNet ? E.botChoose(lotemp ? { mode: 'net', eps, lotemp, rnd } : { mode: 'net', eps, temp, typeEps, turnState, rnd, search: plainSeat[me] ? undefined : search })
         : E.botChoose({ mode: bench, eps: .03, noise: .3, rnd });
       // MAXBACK=1 (Q-learning style max backup within a turn): my turn has no luck between my own actions, so the position after
       // my previous action is worth the BEST option available now, not whatever I happen to do next (exploration, habits).
@@ -68,7 +68,7 @@ if (!isMainThread) {
       // track every kind of decision the network makes (and which of them were exploration)
       if (isNet) {
         const a = c.a, P = S.players[me];
-        if (c.why) st.explore[c.why] = (st.explore[c.why] || 0) + 1;
+        st.netDec = (st.netDec || 0) + 1; if (c.why) st.explore[c.why] = (st.explore[c.why] || 0) + 1;
         if (turnState && turnState.noBuy && !turnState.nbCounted) { turnState.nbCounted = 1; st.explore.noBuyTurn = (st.explore.noBuyTurn || 0) + 1; }
         if (a.t === 'trash') { inc('Remove (Scientist / Travel Log): how many', a.cards.length + ''); for (const id of a.cards) inc('Remove (Scientist / Travel Log): which card', T(id)); }
         else if (a.t === 'pay') { const kind = a.to[0] === 'B' ? 'Rubble blockade: cards given up' : E.MAPX.hexes.get(a.to).type === 'c' ? 'Base camp: cards removed from the game' : 'Rubble: cards discarded'; for (const id of a.cards) inc(kind, T(id)); }
@@ -141,7 +141,8 @@ if (isMainThread) {
     bench: env.BENCH || 'plan',    // the benchmark / opponent bot (the planner heuristic)
     stuckFile: `tools/ai/data/${course}.stuck.jsonl`,
     typeEps: 0.05 * X,             // a random kind of decision (buy / remove / keep / rubble / draw card / …), then a random option of it
-    eps: 0.03 * X,                 // a uniformly random legal action
+    eps: env.EXPLORE_EPS ? +env.EXPLORE_EPS : 0.03 * X,                 // a uniformly random legal action
+    lotemp: +(env.EXPLORE_T || 0),   // EXPLORE_T: log-odds exploration temperature (replaces temp, typeEps, no-buy turns and gift cards)
     temp: Math.max(0.004, 0.02 * X), // softmax over action scores (near-best options tried often)
     buyEps: 0.10 * X,              // turns where buying is off (random purchases were replaced by gift cards)
     giftRate: 0.5 * X,             // games where every player starts with the same extra card (weighted toward rarely bought cards)
@@ -165,7 +166,7 @@ if (isMainThread) {
     for (const [f] of old) unlinkSync(D + f); } catch (e) { } // keep the newest 60 capped-game replays
   // per table size: every player's share of the wins (sums to 100% minus games nobody finished), place value, arrival round
   const tab = st.tab ? Object.fromEntries(Object.entries(st.tab).map(([n, tn]) => [n, { games: tn.games, ...Object.fromEntries(Object.entries(tn).filter(([k]) => k !== 'games').map(([k, t]) => [k, { games: t.seats, wins: t.wins, winRate: +(t.wins / t.seats).toFixed(3), placeValue: +(t.pv / t.seats).toFixed(3), arrival: t.arrN ? +(t.arrSum / t.arrN).toFixed(2) : null }])) }])) : undefined;
-  const summary = { mode, horizon: wd.H, explore: X, games: GN, table: tab, secs: (Date.now() - t0) / 1000, capped: st.capped, maxback: st.maxback || 0, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
+  const summary = { mode, horizon: wd.H, explore: X, games: GN, table: tab, secs: (Date.now() - t0) / 1000, capped: st.capped, maxback: st.maxback || 0, netDecisions: st.netDec || 0, explored: (st.explore && st.explore.explore) || 0, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
     win3p: r3 == null ? null : +r3.toFixed(3), win4p: r4 == null ? null : +r4.toFixed(3), vsFair: rel,
     netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur, transNet: st.transNet, transHeur: st.transHeur, decisions: st.dec, exploration: st.explore, stuck: st.stuck, bench: wd.bench };
   if (out !== '-' && mode === 'self') {
