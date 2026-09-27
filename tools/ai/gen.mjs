@@ -12,7 +12,8 @@ import { cpus } from 'node:os';
 import { E } from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 const MAXBACK = process.env.MAXBACK === '1';
-const TREESTRAP = +(process.env.TREESTRAP || 0); // untaken options learned per decision (see the self-play loop) // within-turn max backup (see the self-play loop)
+const TREESTRAP = +(process.env.TREESTRAP || 0);
+const DISTILL = process.env.DISTILL === '1'; // max-backup targets from the whole-turn planner (needs MAXBACK=1) // untaken options learned per decision (see the self-play loop) // within-turn max backup (see the self-play loop)
 
 if (!isMainThread) {
   const { mode, games, seed0, net, course, H, eps, temp, lotemp, buyEps, transEps, typeEps, bench, stuckFile, giftRate, giftW, beam, oldNet, wi = 0 } = workerData;
@@ -64,7 +65,9 @@ if (!isMainThread) {
       // Only within the same turn and never across "end turn"; other steps keep the TD(λ) update.
       if (MAXBACK && mode === 'self' && isNet) { const lp = lastPush[me];
         if (lp && lp.round === S.round && !lp.ended && traj[me].length === lp.idx + 1) {
-          const b = c.best != null && !(turnState && turnState.noBuy) ? c.best : E.botChoose({ mode: 'net', rnd }).best;
+          // DISTILL=1: the target is the whole-turn planner's best completion from here (search distilled into the network)
+          const b = DISTILL ? E.botChoose({ mode: 'net', rnd, search: { kind: 'plan', beam: 3 } }).v
+            : c.best != null && !(turnState && turnState.noBuy) ? c.best : E.botChoose({ mode: 'net', rnd }).best;
           trajB[me][lp.idx] = b; st.maxback = (st.maxback || 0) + 1; } }
       // TREESTRAP=n (TreeStrap-style): also learn from n options I did NOT take. Each is scored one step further ahead (the best
       // option available after it, within my turn), so positions my habits never reach (e.g. move before buying) get trained too.
