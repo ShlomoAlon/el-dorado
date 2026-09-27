@@ -44,7 +44,7 @@ function aiFinishGuard(a){
   const P=S.players[S.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>aiFinishCard(S.cards[id])).length;
   if(a.t==='trash'&&a.cards){let c=a.cards;
     if(n){const out=c.filter(id=>aiFinishCard(S.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
-    c=c.slice(0,Math.max(0,all.length-6)); // and never thin the deck below 6 cards (a 2-card deck can't even buy a card)
+    c=c.slice(0,Math.max(0,all.length-4)); // and never thin the deck below 4 cards (owner: 4 can be valid, fewer can't)
     if(c.length!==a.cards.length)return{...a,cards:c};}
   if(a.t==='end'&&!n&&!S.turn.bought&&!S.turn.pending){
     const buys=botActions().filter(b=>b.t==='buy'&&aiFinishCard((b.src==='m'?S.market:S.reserve)[b.idx].t));

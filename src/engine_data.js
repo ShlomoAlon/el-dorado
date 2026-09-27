@@ -49,12 +49,12 @@ const BOARDS={
  F:['j1 mm mm w1','j2 j1 mm w1 w1','r1 j1 w2 w3 w1 r1','r1 v1 v2 mm j2 j1 r1','r1 v1 r2 j1 j1 r1','j1 j3 j1 w2 w2','c1 j2 r1 c2'],
  G:['j1 j1 j1 j1','j1 j2 v1 mm j1','v1 v2 v2 r1 v1 j1','mm mm v4 v3 v2 j2 c1','v1 v2 v2 r1 v1 j1','j1 j2 v1 mm j1','j1 j1 j1 j1'],
  H:['v1 v1 w1 j1','v2 v1 w1 w1 j1','v1 v3 v1 w2 j1 j1','j1 v1 v2 mm w1 w1 j2','j1 v1 v1 v4 w1 j1','j1 j2 v1 w2 w1','j1 v1 j1 w1'],
- I:['j1 j1 j1 j1','v1 j1 mm j1 j1','v1 v2 j1 mm j2 j1','v1 v2 j1 j2 c2 mm mm','v2 r3 mm mm j2 j1','w2 w1 w1 j1 j1','w2 w2 w1 j1'],
+ I:['j1 j1 j1 j1','v1 j1 mm j1 j1','v1 v2 j1 mm j2 j1','v1 v2 j1 j2 c3 mm mm','v2 r3 mm mm j2 j1','w2 w1 w1 j1 j1','w2 w2 w1 j1'],
  J:['w1 w1 w1 w1','w1 mm w2 w1 r2','w1 w2 j1 j2 r2 r1','v1 v1 j2 c1 j1 r2 r1','v1 v2 j1 j1 r2 r1','v1 v2 v2 mm r1','v1 v1 v1 r2'],
  K:['c1 j2 j2 j1','j1 j1 w3 j1 j2','j1 j2 j1 j3 j1 j2','j2 j1 j3 j1 j3 j1 j2','j2 j1 j3 j1 j2 j1','j2 j1 v4 j1 j1','j1 j2 j2 c1'],
  L:['w1 c1 c1 j3','j1 w1 w1 j3 j1','j2 j1 j1 j3 j1 j2','j2 j1 mm j1 mm j1 j2','j1 j2 j2 j1 j2 j1','v2 c2 v2 j1 j1','j2 j2 j1 mm'],
  M:['j1 j1 j1 c1','j1 v4 mm mm w4','j1 v2 j1 j1 w1 mm','mm j1 j1 r2 j1 j1 mm','mm mm mm mm r2 j1','j1 j1 j1 r2 j1','w1 w1 j1 j1'],
- N:['j1 j1 j1 j1','v1 j1 j2 j1 w1','v1 v2 j1 w1 w1 w1','w1 w1 v3 v4 v2 v2 v1','w1 w1 w1 j1 v2 v1','j1 j1 j2 j1 j1','j1 j1 j1 j1'],
+ N:['j1 j1 j1 j1','v1 j1 j2 j1 w1','v1 v2 j1 w1 w1 w1','w1 w1 v3 v4 v3 v2 v1','w1 w1 w1 j1 v2 v1','j1 j1 j2 j1 j1','j1 j1 j1 j1'],
 };
 function parseTok(t){
   if(t==='mm')return{type:'m',val:0};if(t[0]==='s')return{type:'s',val:0,num:+t[1]||0}; // s1–s4: numbered start spaces

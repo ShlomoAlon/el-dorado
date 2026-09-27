@@ -91,7 +91,7 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
 - **Independent check:** the catalogue page lists per tile the terrain counts and a "Traverse Rating", which turns out to be
   exactly Σ strength + 6 per mountain (start spaces 0). Every transcription must match both. A, B, C, D, F, G, J, K, L, M match
   — but **I and N are each 1 short**, and the images show why: **I's base camp (row 4, 5th space) is 3 cards (c3, we
-  have c2)**, **N's row 4, 5th space is a 3-coin village (v3, we have v2)**. Not fixed yet because First Expedition uses
+  have c2)**, **N's row 4, 5th space is a 3-coin village (v3, we have v2)**. FIXED 2026-09-27 (owner: accuracy first); First Expedition uses
   both and the AI network is trained on it (coordinate with the training side; it's a one-token change each in `BOARDS`).
 - Still reconstructed: **E, H** (terrain counts right, layouts guessed) and strips **O–R** (not in).
   Transcribe them from the same images the same way before adding courses that use them.
@@ -109,7 +109,7 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
   In the game: `first` + `hills` (Easy), `winding` (Medium), `witch` (Hard). Hills of Gold is drawn pointy-topped on the sheet (not turned).
 - **AI safety net** (`aiFinishGuard`, engine_ai.js): on the new courses the planner sometimes trashed its last paddle/machete card
   (or its deck down to 2 cards) and then waited next to El Dorado forever. The named AIs now keep one card that can enter
-  El Dorado, never trash below 6 cards, and buy such a card before ending a turn without one. engine_bot.js untouched.
+  El Dorado, never trash below 4 cards, and buy such a card before ending a turn without one. engine_bot.js untouched.
 - Blockade costs 1,1,1,1,2,2 are still a guess (BoardGameHelpers has blockade images too).
 - Board rendering: harder spaces are darker (`TSHADE` in ui_view.js), icons laid out 1 / 2 side by side / 3 triangle /
   4 square — owner's request, mirrors the printed tiles.
