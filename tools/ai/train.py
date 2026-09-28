@@ -73,10 +73,17 @@ with torch.no_grad():
     act = lambda x: nn.functional.leaky_relu(x, LEAK)
     fnet = lambda x: act(act(x @ W1.T + B1) @ W2.T + B2) @ W3.T + B3
     assert float((fnet(dense(vi[:500])) - net(dense(vi[:500]))).abs().max()) < 1e-3, 'batch-norm folding changed the output'
-with torch.no_grad():  # dead hidden units: never positive on (up to 4000) held-out positions
-    xs = dense(vi[:4000]); p1 = xs @ W1.T + B1; p2 = act(p1) @ W2.T + B2
+# dead hidden units: never positive on a fixed set of 4000 full-game positions (tools/ai/models/probe-full.*). Measured on this
+# batch instead, a short-horizon curriculum stage would count late-game units (near El Dorado, …) as dead: they are unused, not broken.
+PROBE = os.environ.get('PROBE', 'tools/ai/models/probe-full'); probe_x = None
+if os.path.exists(PROBE + '.json') and json.load(open(PROBE + '.json'))['nf'] == nf:
+    pl = np.fromfile(PROBE + '.len.bin', dtype=np.uint32).astype(np.int64); pp = np.concatenate([[0], np.cumsum(pl)]); pi_ = np.fromfile(PROBE + '.idx.bin', dtype=np.uint16).astype(np.int64); pv_ = np.fromfile(PROBE + '.val.bin', dtype=np.float32)
+    probe_x = torch.zeros(len(pl), nf)
+    for i in range(len(pl)): probe_x[i, torch.from_numpy(pi_[pp[i]:pp[i + 1]])] = torch.from_numpy(pv_[pp[i]:pp[i + 1]])
+with torch.no_grad():
+    xs = probe_x if probe_x is not None else dense(vi[:4000]); p1 = xs @ W1.T + B1; p2 = act(p1) @ W2.T + B2
     dead1, dead2 = int((p1.max(0).values <= 0).sum()), int((p2.max(0).values <= 0).sum())
-    ps = torch.sigmoid(act(p2) @ W3.T + B3); sat = float(((ps < .01) | (ps > .99)).float().mean()); bias = float(ps.mean() - Y[vi[:4000]].mean())
+    xs = dense(vi[:4000]); p2 = act(xs @ W1.T + B1) @ W2.T + B2; ps = torch.sigmoid(act(p2) @ W3.T + B3); sat = float(((ps < .01) | (ps > .99)).float().mean()); bias = float(ps.mean() - Y[vi[:4000]].mean())
     wmax = max(float(t.abs().max()) for t in (W1, B1, W2, B2, W3, B3)); finite = all(bool(torch.isfinite(t).all()) for t in (W1, B1, W2, B2, W3, B3))
 with torch.no_grad():
     pv = torch.sigmoid(fnet(dense(vi))); rmse = float(((pv - Y[vi]) ** 2).mean().sqrt()); base = float(((Y[vi] - Y[ti].mean()) ** 2).mean().sqrt())
@@ -94,4 +101,4 @@ r = lambda t: [round(float(x), 6) for x in t.detach().flatten()]
 J = {**keep, 'course': 'multi' if 'courses' in keep else course, 'nf': nf, 'leak': LEAK, 'w1T': r(W1.T.contiguous()), 'b1': r(B1), 'w2': r(W2), 'b2': r(B2), 'w3': r(W3), 'b3': r(B3)}
 if unsettled: J['unsettled'] = True  # trained on arrived-but-not-settled positions: play may ask the network about them (botValue)
 json.dump(J, open(out, 'w'))
-print(json.dumps({'samples': len(Y), 'val_rmse': round(rmse, 4), 'predict_mean_rmse': round(base, 4), 'dead1': f'{dead1}/{H1}', 'dead2': f'{dead2}/{H2}', 'saturated': round(sat, 4), 'bias': round(bias, 4), 'wmax': round(wmax, 2), 'warn': warn, 'halt': halt, 'secs': round(time.time() - t0, 1)}))
+print(json.dumps({'samples': len(Y), 'val_rmse': round(rmse, 4), 'predict_mean_rmse': round(base, 4), 'dead1': f'{dead1}/{H1}', 'dead2': f'{dead2}/{H2}', 'dead_on': 'full-game probe' if probe_x is not None else 'this batch', 'saturated': round(sat, 4), 'bias': round(bias, 4), 'wmax': round(wmax, 2), 'warn': warn, 'halt': halt, 'secs': round(time.time() - t0, 1)}))
