@@ -417,7 +417,7 @@ export class Room extends DurableObject {
     const d = this.d;
     this.rec = E.recNewGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
     this.S = E.S; this.S.owners = d.seats.map(s => s.uid); this.S.room = d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
-    d.status = 'playing'; d.timeouts = {}; this.undo = [];
+    d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null; this.undo = [];
     await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll([{ e: 'start' }]);
   }
   async afterChange(ev) {
@@ -425,8 +425,15 @@ export class Room extends DurableObject {
     if (this.S.over && this.d.status === 'playing') await this.finish();
     await this.persist(); this.sendAll(ev);
   }
+  /* time bank: each turn adds opts.turn seconds to the player's clock, and time not used carries over to their later
+     turns (undo doesn't change it). d.bank[seat] = ms left when their last turn ended; d.clock = whose clock is running. */
+  settleClock() {
+    const d = this.d; if (d.clock == null || !d.deadline) { d.clock = null; return; }
+    d.bank = d.bank || {}; d.bank[d.clock] = Math.max(0, d.deadline - Date.now()); d.clock = null;
+  }
   async startTurnTimer() {
-    this.d.deadline = Date.now() + this.d.opts.turn * 1000; this.d.aiAt = null;
+    this.settleClock(); const d = this.d, seat = this.S.cur;
+    d.clock = seat; d.deadline = Date.now() + ((d.bank && d.bank[seat]) || 0) + d.opts.turn * 1000; d.aiAt = null;
     await this.ctx.storage.setAlarm(this.d.deadline);
   }
   /* the turn passed to someone new: a person gets the turn timer, an AI gets its next move scheduled (same alarm) */
@@ -434,7 +441,7 @@ export class Room extends DurableObject {
   aiToMove() { return !!(this.S && !this.S.over && this.S.players[this.S.cur].ai); }
   // someone is following the game: a person still racing with the page open. Otherwise the AIs play on without pauses.
   watched() { return this.S.players.some((p, i) => !p.ai && !p.resigned && !p.pieces.every(k => k === 'done') && this.online(this.S.owners[i])); }
-  async scheduleAI(ms) { const d = this.d; d.deadline = null; d.aiAt = Date.now() + (this.watched() ? ms : 0); await this.ctx.storage.setAlarm(d.aiAt); }
+  async scheduleAI(ms) { this.settleClock(); const d = this.d; d.deadline = null; d.aiAt = Date.now() + (this.watched() ? ms : 0); await this.ctx.storage.setAlarm(d.aiAt); }
   /* AI seats play server-side, one action per alarm while people watch (so the table can follow),
      or up to ~0.3 s of actions per alarm when nobody is racing with the page open */
   async aiMove() {
@@ -477,7 +484,7 @@ export class Room extends DurableObject {
     return d.replay;
   }
   async finish() {
-    const d = this.d; d.status = 'over'; d.deadline = null;
+    const d = this.d; this.settleClock(); d.status = 'over'; d.deadline = null;
     await this.ctx.storage.deleteAlarm();
     const replay = await this.saveReplay();
     if (!d.rated && d.opts.rated === false) { // unrated room: the result is kept, ratings don't move

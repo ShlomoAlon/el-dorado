@@ -51,7 +51,7 @@ function hubHTML(){
   return head+tabs+`
     ${NET.active?`<div class="prow" style="padding:10px 12px;border-radius:10px;border:1px solid var(--gold);background:rgba(233,178,74,.1);justify-content:space-between"><span>You have a game in progress.</span><button class="btn pri" data-join="${NET.active}">Rejoin</button></div>`:''}
     <div class="field"><label>Quick match</label>
-      <div class="prow" style="justify-content:space-between;padding:10px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line)"><span class="note" style="margin:0">Join the next public game. It starts as soon as 3 players are in (90 s turns, rated).</span><button class="btn pri" id="qGo">Quick match</button></div></div>
+      <div class="prow" style="justify-content:space-between;padding:10px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line)"><span class="note" style="margin:0">Join the next public game. It starts as soon as 3 players are in (90 s added per turn, unused time carries over, rated).</span><button class="btn pri" id="qGo">Quick match</button></div></div>
     <div class="field"><label>Create a room</label>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <div class="seg" id="cPub"><button data-v="1" class="${setup.oPub?'on':''}">Public</button><button data-v="0" class="${setup.oPub?'':'on'}">Private</button></div>
@@ -60,7 +60,7 @@ function hubHTML(){
         <div class="seg" id="cTurn">${[60,90,120,180].map(n=>`<button data-v="${n}" class="${setup.oTurn===n?'on':''}">${n<120?n+'s':(n/60)+' min'}</button>`).join('')}</div>
       </div>
       <div style="margin-top:10px">${coursePicker('cCourse',setup.oCourse)}</div>
-      <p class="note">${setup.oPub?'Public rooms are listed below for anyone to join.':'Private rooms are not listed; share the code or link.'} ${setup.oRated?'Rated: the result changes everyone’s rating, AIs included.':'Unrated: a friendly game, ratings stay as they are.'} You can add AI players in the room. Turn timer: when it runs out the turn ends automatically; missing 3 turns in a row forfeits.</p>
+      <p class="note">${setup.oPub?'Public rooms are listed below for anyone to join.':'Private rooms are not listed; share the code or link.'} ${setup.oRated?'Rated: the result changes everyone’s rating, AIs included.':'Unrated: a friendly game, ratings stay as they are.'} You can add AI players in the room. Clock: each turn adds the chosen time to your clock, and time you don't use carries over to your next turns. When it runs out the turn ends automatically; missing 3 turns in a row forfeits.</p>
       <div style="margin-top:10px"><button class="btn pri big" id="cGo">Create room</button></div></div>
     <div class="field"><label>Join with a code</label><div class="prow"><input id="jCode" maxlength="5" placeholder="e.g. K7Q2M" style="text-transform:uppercase;letter-spacing:.15em;font-weight:700" autocomplete="off"><button class="btn" id="jGo">Join</button></div></div>
     <div class="field"><label>Open rooms</label>${rooms.map(rrow).join('')||'<p class="note">No open rooms right now. Create one and share the code.</p>'}</div>
