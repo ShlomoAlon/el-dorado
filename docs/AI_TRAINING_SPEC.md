@@ -80,17 +80,16 @@ A typical position has about 180 non-zero inputs.
   - otherwise: sampling with probability ∝ exp((v − v_best) / τ), τ = max(0.004, 0.02·X) (v on the 0–1 value scale);
   - per turn, with probability 0.10·X, buying is disallowed for that turn;
   - per game, with probability 0.5·X, every player starts with the same one extra card, chosen with weight
-    1 / (1 + number of times the network bought that card type in the most recent self-play batch recorded in the log
-    file of an older, different training run).
+    1 / (1 + number of times the network bought that card type in this run's most recent self-play batch).
 
 ## 5. Result value (training target at game end)
 
 - Place value: 1st = 1, 2nd = 1/4, 3rd = 1/8, last = 0 (3 players: 1, 1/4, 0).
-- Games are stopped after round H (the current cap, §7). Unfinished players are ranked behind arrived players by
-  remaining route cost to El Dorado.
-- For H < 25: result = 0.8 × place value + 0.2 × sigmoid(lead / 5), where lead = (mean remaining route cost of the other
-  players) − (my remaining route cost).
-- For H ≥ 25: result = place value; a player who has not arrived when the cap is reached gets 0.
+- Games are stopped after round H = 20. Arrived players get their place value (their place is final: players still
+  racing rank behind them).
+- A player still racing when the game is stopped: result = the generating network's value of that player's last sample
+  position (bootstrapped).
+- In tests, a game stopped at the cap with nobody arrived is won by the player with the lowest remaining route cost.
 
 ## 6. Training data (self-play)
 
@@ -98,16 +97,18 @@ A typical position has about 180 non-zero inputs.
 - Each seat is independently a heuristic player with probability 0.25, otherwise the network (at least one network seat
   per game). The heuristic player is a hand-written evaluation function with a whole-turn planner (beam search over
   action sequences within the turn); it does not explore.
-- Samples: after every action of every seat (network and heuristic), the position from that seat's point of view becomes
-  a sample (for "end turn": after discarding, before drawing). No samples are taken once that player's place is final.
+- Samples: after every action of a network seat, the position from that seat's point of view becomes a sample (for
+  "end turn": after discarding, before drawing). Heuristic seats produce no samples. No samples are taken once that
+  player's place is final. Each sample records which game it came from.
 - Targets, computed at generation time with the network that generated the games, going backwards through each player's
   own sequence of samples:
   - last sample: the result value (§5);
-  - for network seats, if the next sample of the same player is in the same turn (no "end turn" between), the target is
-    the maximum over all legal actions at that next decision of the value after the action (one-step look-ahead values as
-    in §4), whatever action was actually taken there;
-  - otherwise: TD(λ) return with λ = 0.7: G_t = (1 − λ)·V(s_{t+1}) + λ·G_{t+1}, where V is the generating network's value
-    of the player's next sample.
+  - if the next sample of the same player is in the same turn (no "end turn" between), the target is the value of the
+    action at that next decision that the generating network rates highest, where that value is computed (one-step
+    look-ahead as in §4) by the network from before the previous training step (from the second iteration on; in the
+    first iteration by the generating network itself), whatever action was actually taken there;
+  - otherwise: G_t = (1 − λ)·V(s_{t+1}) + λ·Y_{t+1} with λ = 0.7, where V is the generating network's value of the player's
+    next sample and Y_{t+1} is the target assigned to that next sample (which may itself be a within-turn target above).
 - About 70,000–220,000 samples per iteration depending on the cap.
 
 ## 7. Training loop
@@ -115,19 +116,19 @@ A typical position has about 180 non-zero inputs.
 - Start: a network previously trained (about 100 iterations over several earlier runs) under a rules implementation in
   which some single-use cards were not removed after use; that network had a negative slope of 0.01 and no batch
   normalisation.
-- Curriculum over the round cap H: 15 → 20 → 25 → 30. Exploration level X per stage: 1.0, 0.85, 0.7, 0.5.
+- Round cap H = 20 throughout (no curriculum). Exploration level X = 0.3.
 - Each iteration:
   1. 600 self-play games at cap H (§6).
-  2. Train on the samples of the 3 most recent iterations at the same cap (fewer at the start of a stage).
-  3. Test: 160 games, the network (greedy, no exploration) in one seat against heuristic players in the others, half
-     3-player and half 4-player, seats rotated, same cap H. Score = network wins / (expected wins if every seat were
-     equal); 1.0 = fair share.
-  4. The cap goes up one stage after two consecutive tests with score ≥ 1.15. There is no other condition.
+  2. Train on the samples of the 3 most recent iterations.
+  3. Test: 168 games against heuristic players, same cap. Deals are fixed (the same 24 three-player and 24 four-player
+     deals every iteration, maps in turn); each deal is played once with the network (greedy, no exploration) in each
+     seat and heuristic players in the others. Reported: score = network wins / (expected wins if every seat were
+     equal), 1.0 = fair share; and mean place value of the network's seats and of the heuristic's seats.
 - Training step (each iteration):
   - Warm start from the current network. Batch-norm layers are initialised each iteration so that they compute the
     identity on the current data (scale = standard deviation, shift = mean of each unit's pre-activation over 8,000
     training samples).
-  - 5% of samples held out for validation; 3 epochs over the rest; mini-batches of 512.
+  - The samples of 5% of the games are held out for validation; 3 epochs over the rest; mini-batches of 512.
   - Loss: binary cross-entropy between the sigmoid output and the target (targets are in [0, 1]).
   - Optimiser: AdamW (fresh state every iteration), peak learning rate 1e-3, linear warm-up over the first 300 steps then
     constant; weight decay 0.01 on linear-layer weights only; gradient-norm clipping at 1.0.

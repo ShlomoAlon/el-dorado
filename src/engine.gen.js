@@ -780,6 +780,14 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
    Chance is handled as an expectation: "end turn" is scored before the next hand is drawn (botEndView), and a card that
    draws is scored as the average over opts.draws imagined draws from my (unordered) draw pile.
    Training exploration: eps = uniformly random action; temp = softmax over scores; turnState.forceBuy = a random purchase this turn. */
+/* value of one legal action for `me`: copy the state, reshuffle my own draw pile (hidden order), apply it and score the
+   position (for "end turn": after discarding, before drawing); actions that draw cards: mean over K reshuffles */
+function botActionValue(me,a,mode,rnd,K){const root=S;K=K||4;
+  const one=()=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
+    if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}
+    else{const r=applyAction(me,a);v=r.ok?botValue(me,mode):-Infinity;}
+    S=root;return v;};
+  return a.t==='action'&&BOT_DRAW[typeOf(a.card)]?[...Array(K)].reduce(x=>x+one(),0)/K:one();}
 function botChoose(opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
   if(mode.startsWith('plan'))return{a:botPlanChoose(S.cur,BOT_PLANS[mode])};
@@ -796,12 +804,8 @@ function botChoose(opts){
   // search (after exploration, so random / typed moves and no-buy turns still happen in training)
   if(opts.search&&mode==='net')return opts.search.kind==='plan'?botPlanTurnChoose(opts):opts.search.kind==='deep'?botDeepChoose(opts):opts.search.kind==='rollout'?botRolloutChoose(opts):botTurnSearch(opts);
   const vals=[];let best=null,bv=-Infinity;const K=opts.draws||4;
-  const one=a=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
-    if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}
-    else{const r=applyAction(me,a);v=r.ok?botValue(me,mode):-Infinity;}
-    S=root;return v;};
   for(const a of acts){
-    let v=a.t==='action'&&BOT_DRAW[typeOf(a.card)]?[...Array(K)].reduce(x=>x+one(a),0)/K:one(a);
+    let v=botActionValue(me,a,mode,rnd,K);
     if(opts.noise&&v>-Infinity)v+=(rnd()-.5)*opts.noise;
     vals.push(v);if(v>bv){bv=v;best=a;}
   }
@@ -809,10 +813,10 @@ function botChoose(opts){
   // near-best ones often and clearly worse ones rarely (Boltzmann over logits; probabilities clamped to [0.002, 0.998])
   if(opts.lotemp&&acts.length>1){const lo=v=>{const p=Math.min(.998,Math.max(.002,v));return Math.log(p/(1-p));},lb=lo(bv);
     const w=vals.map(v=>v===-Infinity?0:Math.exp((lo(v)-lb)/opts.lotemp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
-    for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],best:bv,why:acts[i]===best?undefined:'explore'};}}
+    for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],best:bv,bestA:best,why:acts[i]===best?undefined:'explore'};}}
   if(opts.temp&&acts.length>1){const w=vals.map(v=>v===-Infinity?0:Math.exp((v-bv)/opts.temp)),tot=w.reduce((x,y)=>x+y,0);let r=rnd()*tot;
-    for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],best:bv,why:acts[i]===best?undefined:'softmax'};}}
-  return{a:best||{t:'end',keep:[]},v:bv,best:bv,alts:opts.explain?acts.map((x,i)=>({a:x,v:vals[i]})).sort((x,y)=>y.v-x.v).slice(0,5):undefined};
+    for(let i=0;i<acts.length;i++){r-=w[i];if(r<=0)return{a:acts[i],v:vals[i],best:bv,bestA:best,why:acts[i]===best?undefined:'softmax'};}}
+  return{a:best||{t:'end',keep:[]},v:bv,best:bv,bestA:best,alts:opts.explain?acts.map((x,i)=>({a:x,v:vals[i]})).sort((x,y)=>y.v-x.v).slice(0,5):undefined};
 }
 /* ---- search at decision time (experiments; training and normal play don't use it) ----
    Same value network, but look further ahead before choosing. */
@@ -1033,4 +1037,4 @@ function aiStep(id,mem){
   return r;
 }
 
-export const E={AIS,aiById,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
+export const E={AIS,aiById,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botActionValue,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};

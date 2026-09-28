@@ -16,6 +16,17 @@ const EVAL_SELF = process.env.EVAL_SELF === '1';
 const HEUR_P = +(process.env.HEUR_P ?? .25); // share of self-play seats played by the heuristic (0 = the network in every seat) // tests: the network plays itself (all seats); the tracked number is the arrival round per course
 const TREESTRAP = +(process.env.TREESTRAP || 0);
 const DISTILL = process.env.DISTILL === '1';
+// HEUR_SAMPLES=1: also learn from the heuristic seats' positions (off: heuristic players are opponents only)
+const HEUR_SAMPLES = process.env.HEUR_SAMPLES === '1';
+// TRUNC=1: a player still racing when the round cap stops the game is scored by the network's own estimate of its last
+// position (bootstrapped, as if the game went on); arrived players get their exact place value; no lead bonus at any cap
+const TRUNC = process.env.TRUNC === '1';
+// PREV_NET=path (with MAXBACK): Double-Q style within-turn target — the best next action is chosen by the current network
+// and its value is taken from this previous network (tools/ai/loop.sh keeps the network from before the last training)
+const PREV = process.env.PREV_NET ? (() => { try { return JSON.parse(readFileSync(process.env.PREV_NET, 'utf8')); } catch (e) { return null; } })() : null;
+// PAIRED=1 (tests against the heuristic): every deal is played once with the network in each seat (3-player deals ×3,
+// 4-player deals ×4, fixed seeds, maps in turn), so luck of the deal cancels out; use a multiple of 7 games
+const PAIRED = process.env.PAIRED === '1';
 // LEAGUE=a.json,b.json: in self-play a share (LEAGUE_P, default 0.25) of seats is played by these past frozen networks (plain play), so the network doesn't only learn to beat its own habits
 const LEAGUE = process.env.LEAGUE ? process.env.LEAGUE.split(',').map(f => JSON.parse(readFileSync(f, 'utf8'))) : null, LEAGUE_P = +(process.env.LEAGUE_P || .25);
 // ANNEAL=T0,factor,floor: log-odds exploration whose temperature starts at T0 in round 1 and is multiplied by factor each round down to floor
@@ -36,7 +47,7 @@ if (!isMainThread) {
   let C = C0;
   if (net) E.setNet(net);
   let s = seed0 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const X = [], Y = [], st = { win3: 0, seat3: 0, win4: 0, seat4: 0, netWins: 0, netSeats: 0, netRem: [], heurRem: [], netArr: [], heurArr: [], capped: 0, buysNet: {}, buysHeur: {}, transNet: {}, transHeur: {}, dec: {}, explore: {}, stuck: 0 };
+  const X = [], Y = [], GID = [], st = { win3: 0, seat3: 0, win4: 0, seat4: 0, netWins: 0, netSeats: 0, netRem: [], heurRem: [], netArr: [], heurArr: [], capped: 0, buysNet: {}, buysHeur: {}, transNet: {}, transHeur: {}, dec: {}, explore: {}, stuck: 0 };
   const inc = (k, sub, by = 1) => { const o = st.dec[k] = st.dec[k] || {}; o[sub] = (o[sub] || 0) + by; };
   const T = id => E.S.cards[id];
   for (let g = 0; g < games; g++) {
@@ -46,10 +57,14 @@ if (!isMainThread) {
     else if (table) { const gi = wi * games + g, np = gi % 2 ? 4 : 3, k = gi >> 1, all = ['net', 'netP', 'oldS', 'old'], a = np === 4 ? all : all.filter((_, i) => i !== k % 4);
       pols = a.map((_, i) => a[(i + (k >> 2)) % np]); }
     else if (EVAL_SELF) { const np = g % 2 ? 4 : 3; pols = Array(np).fill('net'); } // the network against itself (arrival-round test)
+    else if (PAIRED) { const gi = wi * games + g, r = gi % 7, np = r < 3 ? 3 : 4; pols = Array(np).fill('heur'); pols[r < 3 ? r : r - 3] = 'net'; }
     else { const np = g % 2 ? 4 : 3, a = ['net', ...Array(np - 1).fill('heur')]; pols = a.map((_, i) => a[(i + (g >> 1)) % np]); } // half 3-player, half 4-player, seats rotated
     // every game is recorded as a replayable log (seeded shuffles); games that hit the final cap are saved for viewing
-    C = pickCourse(); st.byCourse = st.byCourse || {}; st.byCourse[C.id] = (st.byCourse[C.id] || 0) + 1;
-    const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: (rnd() * 2 ** 31) | 0, rng: (rnd() * 2 ** 32) >>> 0, fullRace: true,
+    C = pickCourse(); let dealSeed = (rnd() * 2 ** 31) | 0, dealRng = (rnd() * 2 ** 32) >>> 0;
+    if (PAIRED && mode === 'eval' && !table && !EVAL_SELF) { const gi = wi * games + g, deal = Math.floor(gi / 7) * 2 + (gi % 7 < 3 ? 0 : 1); // same deal for each seat
+      if (MAPS) C = MAPS[deal % MAPS.length]; dealSeed = 1000003 * (deal + 1) % 2147483647; dealRng = (2654435761 * (deal + 7)) >>> 0; }
+    st.byCourse = st.byCourse || {}; st.byCourse[C.id] = (st.byCourse[C.id] || 0) + 1;
+    const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: dealSeed, rng: dealRng, fullRace: true,
       players: pols.map((p, i) => ({ name: `${{ net: search ? 'Net + search' : 'Bot (net)', netP: 'Net (no search)', old: 'Old net', oldS: 'Old net + search' }[p] || 'Planner'} ${i + 1}`, bot: p === 'heur' ? bench : p })), actions: [] };
     // exploration: now and then every player starts with the same extra card, favouring cards the bot rarely buys
     if (mode === 'self' && !lotemp && !ANNEAL && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
@@ -81,8 +96,10 @@ if (!isMainThread) {
         const explored = c.why === 'explore' || c.why === 'random';
         if (lp && traj[me].length === lp.idx + 1 && trajB[me][lp.idx] == null && ((lp.round === S.round && !lp.ended) || (explored && (lotemp || ANNEAL)))) {
           // DISTILL=1: the target is the whole-turn planner's best completion from here (search distilled into the network)
+          const cb = c.best != null && !(turnState && turnState.noBuy) ? c : DISTILL ? null : E.botChoose({ mode: 'net', rnd });
           const b = DISTILL ? E.botChoose({ mode: 'net', rnd, search: { kind: 'plan', beam: 3 } }).v
-            : c.best != null && !(turnState && turnState.noBuy) ? c.best : E.botChoose({ mode: 'net', rnd }).best;
+            : PREV && cb.bestA ? (E.setNet(PREV), ((x) => (E.setNet(net), x))(E.botActionValue(me, cb.bestA, 'net', rnd, 4))) // Double-Q style
+            : cb.best;
           trajB[me][lp.idx] = b; st.maxback = (st.maxback || 0) + 1; } }
       // TREESTRAP=n (TreeStrap-style): also learn from n options I did NOT take. Each is scored one step further ahead (the best
       // option available after it, within my turn), so positions my habits never reach (e.g. move before buying) get trained too.
@@ -90,7 +107,7 @@ if (!isMainThread) {
         for (let k = 0; k < TREESTRAP && sib.length; k++) { const a = sib.splice(Math.floor(rnd() * sib.length), 1)[0];
           E.S = E.botClone(root); const r = E.applyAction(me, a);
           if (r.ok && !E.S.over && E.S.cur === me && !E.playerDone(E.S.players[me])) { const f = E.botNetFeatures(me), b = E.botChoose({ mode: 'net', rnd }).best;
-            if (b != null && b > -Infinity) { X.push(f); Y.push(b); st.treestrap = (st.treestrap || 0) + 1; } }
+            if (b != null && b > -Infinity) { X.push(f); Y.push(b); GID.push(wi * games + g); st.treestrap = (st.treestrap || 0) + 1; } }
           E.S = root; } }
       // track every kind of decision the network makes (and which of them were exploration)
       if (isNet) {
@@ -122,7 +139,7 @@ if (!isMainThread) {
       // so arriving in a low place looked worse than hovering next to El Dorado. The λ-return starts from the exact result.
       // Arrived but not settled (someone after me this round can still arrive and win the tie-break): play asks the network,
       // so those positions are sampled; they are the last of my trajectory, so their target is the exact result.
-      if (mode === 'self' && !E.S.over && (!E.playerDone(E.S.players[me]) || !E.botPlaceSettled(me))) { traj[me].push(f || E.botNetFeatures(me)); trajU[me].push(E.playerDone(E.S.players[me])); trajB[me].push(null); lastPush[me] = { idx: traj[me].length - 1, round: E.S.round, ended: c.a.t === 'end' || E.S.cur !== me }; }
+      if (mode === 'self' && (isNet || HEUR_SAMPLES) && !E.S.over && (!E.playerDone(E.S.players[me]) || !E.botPlaceSettled(me))) { traj[me].push(f || E.botNetFeatures(me)); trajU[me].push(E.playerDone(E.S.players[me])); trajB[me].push(null); lastPush[me] = { idx: traj[me].length - 1, round: E.S.round, ended: c.a.t === 'end' || E.S.cur !== me }; }
     }
     if (capped) st.capped++;
     if (process.env.REPLAYALL) writeFileSync(`${process.env.REPLAYALL}/g-${glog.seed}.json`, JSON.stringify(glog)); // testing: keep every game
@@ -136,27 +153,28 @@ if (!isMainThread) {
       const others = rem.filter((_, j) => j !== i), lead = others.reduce((a, x) => a + x, 0) / others.length - rem[i];
       // result = what the place is worth (1st 1, 2nd ¼, 3rd ⅛, last 0; E.botPlaceValue).
       // Short horizons also reward getting far; at the final 25-round cap, not arriving is worth 0 whoever got closest.
-      const fail = capped && H >= 25 && !p.fin, win = S.places[i] === 1 && !fail, pv = E.botPlaceValue(S.places[i], n);
-      const z = fail ? 0 : H >= 25 ? pv : 0.8 * pv + 0.2 / (1 + Math.exp(-lead / 5));
+      const fail = capped && H >= 25 && !p.fin && !TRUNC, win = S.places[i] === 1 && !fail, pv = E.botPlaceValue(S.places[i], n);
+      const z = TRUNC ? (capped && !p.fin && traj[i].length && net ? E.botNetValue(traj[i][traj[i].length - 1]) : pv)
+        : fail ? 0 : H >= 25 ? pv : 0.8 * pv + 0.2 / (1 + Math.exp(-lead / 5));
       // (a network not yet trained on arrived-but-unsettled positions has no idea there: bootstrap through the result instead)
-      if (mode === 'self') { const T = traj[i], U = trajU[i], Bv = trajB[i]; let G = z; for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); G = t > 0 && Bv[t - 1] != null ? Bv[t - 1] : (1 - LAMBDA) * (net && (net.unsettled || !U[t]) ? E.botNetValue(T[t]) : G) + LAMBDA * G; } }
+      if (mode === 'self') { const T = traj[i], U = trajU[i], Bv = trajB[i]; let G = z; for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); GID.push(wi * games + g); G = t > 0 && Bv[t - 1] != null ? Bv[t - 1] : (1 - LAMBDA) * (net && (net.unsettled || !U[t]) ? E.botNetValue(T[t]) : G) + LAMBDA * G; } }
       if (table) { const tn = (st.tab = st.tab || {})['p' + n] = st.tab['p' + n] || {}, t = tn[pols[i]] = tn[pols[i]] || { seats: 0, wins: 0, pv: 0, arrSum: 0, arrN: 0 };
         t.seats++; if (win) t.wins++; t.pv += fail ? 0 : pv; if (p.fin) { t.arrSum += p.fin; t.arrN++; } if (i === 0) tn.games = (tn.games || 0) + 1; }
       if (mode === 'eval' && p.fin) { const A = (st.arrC = st.arrC || {})[C.id] = st.arrC[C.id] || { sum: 0, n: 0, win: 0, wn: 0, games: 0 }; A.sum += p.fin; A.n++; if (S.places[i] === 1) { A.win += p.fin; A.wn++; } }
       if (mode === 'eval' && i === 0) { const A = (st.arrC = st.arrC || {})[C.id] = st.arrC[C.id] || { sum: 0, n: 0, win: 0, wn: 0, games: 0 }; A.games++; }
-      if (pols[i] === 'net') { st.netSeats++; if (win) st.netWins++; st['seat' + n]++; if (win) st['win' + n]++; st.netRem.push(rem[i]); if (p.fin) st.netArr.push(p.fin); }
-      else { st.heurRem.push(rem[i]); if (p.fin) st.heurArr.push(p.fin); }
+      if (pols[i] === 'net') { st.netSeats++; if (win) st.netWins++; st['seat' + n]++; if (win) st['win' + n]++; st.netRem.push(rem[i]); if (p.fin) st.netArr.push(p.fin); st.netPV = (st.netPV || 0) + (fail ? 0 : pv); }
+      else { st.heurRem.push(rem[i]); if (p.fin) st.heurArr.push(p.fin); st.heurPV = (st.heurPV || 0) + (fail ? 0 : pv); st.heurSeats = (st.heurSeats || 0) + 1; }
     });
   }
   let nnz = 0; for (const x of X) for (const v of x) if (v !== 0) nnz++;
   const len = new Uint32Array(X.length), idx = new Uint16Array(nnz), val = new Float32Array(nnz); let o = 0;
   X.forEach((x, i) => { let c = 0; for (let k = 0; k < x.length; k++) if (x[k] !== 0) { idx[o] = k; val[o++] = x[k]; c++; } len[i] = c; });
-  parentPort.postMessage({ len, idx, val, Y: new Float32Array(Y), nf: X.length ? X[0].length : 0, st }, [len.buffer, idx.buffer, val.buffer]);
+  parentPort.postMessage({ len, idx, val, Y: new Float32Array(Y), gid: new Uint32Array(GID), nf: X.length ? X[0].length : 0, st }, [len.buffer, idx.buffer, val.buffer]);
 }
 
-// gift-card weights: 1 / (1 + times the bot bought that card in the latest self-play batch)
+// gift-card weights: 1 / (1 + times the bot bought that card in the latest self-play batch of THIS run (RUN=… from loop.sh))
 function giftWeights(course) {
-  let buys = {}; try { const L = readFileSync(`tools/ai/data/${course}.log`, 'utf8').split('\n').filter(l => l.includes('] GEN ') && l.includes('"mode":"self"'));
+  let buys = {}; try { const L = readFileSync(`tools/ai/data/${course}${process.env.RUN ? '-' + process.env.RUN : ''}.log`, 'utf8').split('\n').filter(l => l.includes('] GEN ') && l.includes('"mode":"self"'));
     if (L.length) buys = JSON.parse(L[L.length - 1].slice(L[L.length - 1].indexOf('{'))).buysNet || {}; } catch (e) { }
   return Object.entries(E.CT).filter(([, d]) => d.cost).map(([t]) => [t, 1 / (1 + (buys[t] || 0))]);
 }
@@ -198,11 +216,13 @@ if (isMainThread) {
   const arrival = st.arrC ? Object.fromEntries(Object.entries(st.arrC).map(([k, A]) => [k, { games: A.games, mean: A.n ? +(A.sum / A.n).toFixed(2) : null, winner: A.wn ? +(A.win / A.wn).toFixed(2) : null }])) : undefined;
   const summary = { arrival, mode, horizon: wd.H, explore: X, games: GN, table: tab, secs: (Date.now() - t0) / 1000, capped: st.capped, maxback: st.maxback || 0, treestrap: st.treestrap || 0, netDecisions: st.netDec || 0, explored: (st.explore && st.explore.explore) || 0, netWinRate: st.netSeats ? +(st.netWins / st.netSeats).toFixed(3) : null,
     win3p: r3 == null ? null : +r3.toFixed(3), win4p: r4 == null ? null : +r4.toFixed(3), vsFair: rel,
+    netPlace: st.netSeats ? +(st.netPV / st.netSeats).toFixed(3) : null, heurPlace: st.heurSeats ? +(st.heurPV / st.heurSeats).toFixed(3) : null, // mean place value (1st 1, 2nd ¼, 3rd ⅛, last 0)
     netRemaining: avg(st.netRem), heurRemaining: avg(st.heurRem), netArrival: avg(st.netArr), heurArrival: avg(st.heurArr), buysNet: st.buysNet, buysHeur: st.buysHeur, transNet: st.transNet, transHeur: st.transHeur, decisions: st.dec, exploration: st.explore, stuck: st.stuck, bench: wd.bench };
   if (out !== '-' && mode === 'self') {
     const nf = rs.find(r => r.nf)?.nf || 0, cat = (k, T) => { const a = new T(rs.reduce((s, r) => s + r[k].length, 0)); let o = 0; for (const r of rs) { a.set(r[k], o); o += r[k].length; } return a; };
-    const Y = cat('Y', Float32Array), len = cat('len', Uint32Array), idx = cat('idx', Uint16Array), val = cat('val', Float32Array);
-    for (const [k, a] of [['Y', Y], ['len', len], ['idx', idx], ['val', val]]) writeFileSync(`${out}.${k}.bin`, Buffer.from(a.buffer));
+    const Y = cat('Y', Float32Array), len = cat('len', Uint32Array), idx = cat('idx', Uint16Array), val = cat('val', Float32Array), gid = cat('gid', Uint32Array);
+    // .gid.bin: the game each sample comes from (train.py holds out whole games for validation)
+    for (const [k, a] of [['Y', Y], ['len', len], ['idx', idx], ['val', val], ['gid', gid]]) writeFileSync(`${out}.${k}.bin`, Buffer.from(a.buffer));
     writeFileSync(out + '.json', JSON.stringify({ n: Y.length, nf, nnz: val.length, unsettled: true, ...summary })); // unsettled: has arrived-but-not-settled samples
     summary.samples = Y.length;
   }

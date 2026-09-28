@@ -95,3 +95,7 @@ Start of RUN=shared (the four-map shared network, continued): first-multi4-33 wi
 ## first-shared-8 (frozen 2026-09-28 05:06 UTC)
 
 RUN=shared after 8 iterations (from first-shared-start, AdamW lr 3e-4). Trained under the OLD rules bug: single-use cards played for movement (Giant Machete, Prop Plane, Treasure Chest) were discarded instead of removed — fixed in 0e2bdbb. Dead units 1/256 and 0/128. Arrival (its 5–7) recovering from the dip after reviving; ladder at it5 +s 1579 / plain 1486 (multi4@33 1614 / 1565). Starting point of RUN=rules (retraining under the fixed rules).
+
+## first-reuse-7 (frozen 2026-09-28 06:52 UTC)
+
+first-shared-8 after 7 iterations at a 15-round cap (BatchNorm, leak 0.03, exploration 1.0, lr 1e-3) under the fixed rules. Tests against the heuristic: 0.06 then 0 wins; dead units rose to 25/256, 21/128 on the full-game probe. Superseded by RUN=r20 (review fixes).

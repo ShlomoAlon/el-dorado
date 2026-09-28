@@ -7,10 +7,12 @@ import sys, json, os, time, numpy as np, torch, torch.nn as nn
 torch.set_num_threads(4)
 out, course, epochs, prefixes = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4:]
 # sparse rows from gen.mjs → one big CSR matrix; dense mini-batches are built on the fly
-L, I, V, Ys, nf, unsettled = [], [], [], [], None, False
-for p in prefixes:
+L, I, V, Ys, Gs, nf, unsettled = [], [], [], [], [], None, False
+for pi, p in enumerate(prefixes):
     meta = json.load(open(p + '.json')); nf = meta['nf']; unsettled = unsettled or bool(meta.get('unsettled'))
     L.append(np.fromfile(p + '.len.bin', dtype=np.uint32)); I.append(np.fromfile(p + '.idx.bin', dtype=np.uint16)); V.append(np.fromfile(p + '.val.bin', dtype=np.float32)); Ys.append(np.fromfile(p + '.Y.bin', dtype=np.float32))
+    # game of each sample (older batches have none): validation holds out whole games, not single positions
+    Gs.append(np.fromfile(p + '.gid.bin', dtype=np.uint32).astype(np.int64) + (pi << 24) if os.path.exists(p + '.gid.bin') else None)
 lens = np.concatenate(L).astype(np.int64); ptr = np.concatenate([[0], np.cumsum(lens)]); IDX = torch.from_numpy(np.concatenate(I).astype(np.int64)); VAL = torch.from_numpy(np.concatenate(V))
 Y = torch.from_numpy(np.concatenate(Ys)).unsqueeze(1); PTR = torch.from_numpy(ptr)
 def dense(rows):
@@ -43,7 +45,12 @@ if J:
             net.l1.weight.copy_(torch.tensor(J['w1T']).view(nf, H1).T); net.l1.bias.copy_(torch.tensor(J['b1']))
             net.l2.weight.copy_(torch.tensor(J['w2']).view(H2, H1)); net.l2.bias.copy_(torch.tensor(J['b2']))
             net.l3.weight.copy_(torch.tensor(J['w3']).view(1, H2)); net.l3.bias.copy_(torch.tensor(J['b3']))
-perm = torch.randperm(len(Y)); nv = max(1, len(Y) // 20); vi, ti = perm[:nv], perm[nv:]
+if all(g is not None for g in Gs):  # 5% of the games held out for validation (positions of one game are strongly correlated)
+    G = np.concatenate(Gs); games = np.unique(G); held = np.random.default_rng().choice(games, max(1, len(games) // 20), replace=False)
+    m = torch.from_numpy(np.isin(G, held)); vi, ti = torch.nonzero(m).flatten(), torch.nonzero(~m).flatten()
+    vi, ti = vi[torch.randperm(len(vi))], ti[torch.randperm(len(ti))]
+else:
+    perm = torch.randperm(len(Y)); nv = max(1, len(Y) // 20); vi, ti = perm[:nv], perm[nv:]
 # start each batch-norm layer as the identity (scale = the unit's spread, shift = its mean on this data), so training
 # starts from exactly the network it was given
 with torch.no_grad():

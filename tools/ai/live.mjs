@@ -20,7 +20,7 @@ function status() {
   const secs = lines.map(l => { const m = l.match(/^\[(\d\d):(\d\d):(\d\d)\]/); return m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : null; });
   const times = new Array(lines.length); let add = 0;
   for (let i = lines.length - 1, next = null; i >= 0; i--) { const s = secs[i]; if (s == null) continue; if (next != null && s > next) add -= 86400; times[i] = day.getTime() + (s + add) * 1000; next = s; }
-  const iters = [], events = []; let cur = null, phase = { name: 'starting', since: times[0] || Date.now() };
+  let baselineEval = null; const iters = [], events = []; let cur = null, phase = { name: 'starting', since: times[0] || Date.now() };
   lines.forEach((l, i) => {
     const t = times[i], body = l.replace(/^\[[^\]]*\] /, ''), kind = body.split(' ')[0], rest = body.slice(kind.length + 1);
     if (kind === 'STAGE') { const it = +(body.match(/iter (\d+)/) || [])[1]; if (cur && cur.it === it) { cur.start = t; cur.restarted = true; } else { cur = { it, start: t, warn: [] }; iters.push(cur); } cur.horizon = +(body.match(/horizon (\d+)/) || [])[1] || null; phase = { name: 'self-play', since: t, it, horizon: cur.horizon }; }
@@ -28,14 +28,15 @@ function status() {
     else if (kind === 'TRAIN' && cur) { const j = json(rest); cur.trainEnd = t; if (j) Object.assign(cur, { train_s: j.secs, dead1: j.dead1, dead2: j.dead2, sat: j.saturated, bias: j.bias, rmse: j.val_rmse, base_rmse: j.predict_mean_rmse }); phase = { name: 'testing', since: t, it: cur.it }; }
     else if (kind === 'WARN') { if (cur) cur.warn.push(rest); events.push({ t, kind, text: rest }); }
     else if (kind === 'HALT') { events.push({ t, kind, text: rest }); phase = { name: 'halted', since: t, text: rest }; }
-    else if (kind === 'EVAL' && cur) { const j = json(rest); cur.end = t; if (j) { if (j.arrival) cur.arrival = Object.fromEntries(Object.entries(j.arrival).map(([k, v]) => [k, v.mean])); cur.test_capped = j.capped; if (j.vsFair != null) cur.vsFair = j.vsFair; } phase = { name: 'between iterations', since: t }; }
+    else if (kind === 'EVAL' && cur) { const j = json(rest); cur.end = t; if (j) { if (j.arrival) cur.arrival = Object.fromEntries(Object.entries(j.arrival).map(([k, v]) => [k, v.mean])); cur.test_capped = j.capped; if (j.vsFair != null) cur.vsFair = j.vsFair; for (const k of ['netPlace', 'heurPlace', 'netArrival', 'heurArrival']) if (j[k] != null) cur[k] = j[k]; cur.evalGames = j.games; } phase = { name: 'between iterations', since: t }; }
+    else if (kind === 'BASELINE') baselineEval = json(rest);
     else if (kind === 'HORIZON') events.push({ t, kind: 'CAP UP', text: rest });
     else if (kind === 'STALL' || kind === 'ERROR') events.push({ t, kind, text: rest });
   });
   const med = a => { a = a.filter(x => x > 0).sort((x, y) => x - y); return a.length ? a[a.length >> 1] : null; };
   const done = iters.filter(x => x.end);
   const typical = { 'self-play': med(done.map(x => (x.genEnd - x.start) / 1000)), training: med(done.map(x => (x.trainEnd - x.genEnd) / 1000)), testing: med(done.map(x => (x.end - x.trainEnd) / 1000)) };
-  return { run, env, started: times[0] || null, phase, typical, iters: iters.slice(-80), events: events.slice(-30), baseline: BASE };
+  return { run, env, started: times[0] || null, phase, typical, iters: iters.slice(-80), events: events.slice(-30), baseline: BASE, baselineEval };
 }
 
 let last = '', lastSent = 0;

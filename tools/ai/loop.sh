@@ -3,6 +3,8 @@
 # RUN=<name> keeps a separate run's files (tools/ai/data/<course>-<name>.*); SEARCH_BEAM=<n> makes the nets play through the
 # whole-turn planner in self-play and tests (training with search in the loop); MIX_PLAIN=1 also has one net seat per game play plain.
 # REPLAY=<n>: train on the last n self-play batches of this horizon (default 3). HCAP=<rounds>: fixed round cap. EXPLORE_LEVEL=<x>: exploration level.
+# DOUBLE=1: Double-Q style within-turn targets (gen.mjs PREV_NET = the network from before the last training step).
+# PAIRED=1: tests play each deal with the network in every seat (EVAL_GAMES, default 168 = 24 × (a 3-seat + a 4-seat deal)).
 # Reusable for any course: everything below depends only on the course id.
 # Starts from an untrained network (TD-Gammon style). Games stop after HORIZON rounds and unfinished players
 # are ranked by how close they got; the horizon grows 3 → 5 → 8 → 12 → 16 → full once the bot stops improving.
@@ -22,13 +24,16 @@ if [ ! -f $NET ]; then  # untrained network with the right input size
   log "START untrained network, horizon ${HS[$hi]}"
 fi
 bestH=-1; stall=0; beat=0
+EG=${EVAL_GAMES:-$([ "${PAIRED:-0}" = 1 ] && echo 168 || echo 160)}   # paired: a multiple of 7 per worker set (4 workers × 42)
 for i in $(seq 1 $N); do
   H=${HCAP:-${HS[$hi]}}; it=$(( $( (ls $D/$P.it*.json 2>/dev/null || true) | wc -l) + 1 ))
   X=${EXPLORE_LEVEL:-${EX[$(( hi < ${#EX[@]} ? hi : ${#EX[@]}-1 ))]}}   # EXPLORE_LEVEL: override the curriculum's exploration level
+  PV=""; [ "${DOUBLE:-0}" = 1 ] && [ -f $D/$P.prev.json ] && PV=$D/$P.prev.json
   log "STAGE iter $it · horizon $H rounds · exploration level $X · 600 self-play games${SEARCH_BEAM:+ · nets play through the whole-turn planner (beam $SEARCH_BEAM)}"
-  out=$(HORIZON=$H EXPLORE=$X node tools/ai/gen.mjs self 600 $D/$P.it$it $NET $C) || { log "ERROR gen failed"; exit 1; }
+  out=$(HORIZON=$H EXPLORE=$X PREV_NET=$PV node tools/ai/gen.mjs self 600 $D/$P.it$it $NET $C) || { log "ERROR gen failed"; exit 1; }
   log "GEN $out"
   prev=$( (grep -l "\"horizon\":$H," $D/$P.it*.json 2>/dev/null || true) | xargs -r ls -t | head -${REPLAY:-3} | sed 's/\.json$//' | tr '\n' ' ')
+  cp $NET $D/$P.prev.json   # the network before this training step (Double-Q targets in the next self-play)
   tr=$(python3 tools/ai/train.py $NET $C 3 $prev 2>/dev/null); log "TRAIN $tr"
   [ -z "$tr" ] && { log "HALT training failed (train.py printed nothing)"; echo "training failed" > $D/$P.halt; exit 2; }
   # model-quality checks (train.py): log the warnings; on a halt (dead units, broken weights) stop until the cause is found —
@@ -38,7 +43,7 @@ for i in $(seq 1 $N); do
   if [ -n "$h" ]; then log "HALT $h — training stopped; find the cause, then delete $D/$P.halt"; echo "$h" > $D/$P.halt; exit 2; fi
   # keep the disk bounded: only the newest ${KEEP_BATCHES:-8} self-play batches keep their sample files (summaries stay)
   ( ls -t $D/$P.it*.json 2>/dev/null | tail -n +$(( ${KEEP_BATCHES:-8} + 1 )) | sed 's/\.json$//' | while read b; do rm -f $b.*.bin; done ) || true
-  ev=$(HORIZON=$H node tools/ai/gen.mjs eval 160 - $NET $C); log "EVAL $ev"
+  ev=$(HORIZON=${EVAL_CAP:-$H} node tools/ai/gen.mjs eval $EG - $NET $C); log "EVAL $ev"   # EVAL_CAP: test on longer games than training
   wr=$(echo "$ev" | num vsFair)   # 1.0 = wins its fair share (as good as the heuristic)
   cp $NET $D/$P.h$H.json
   if python3 -c "import sys;sys.exit(0 if $wr>$bestH+0.05 else 1)"; then bestH=$wr; stall=0; else stall=$((stall+1)); fi
