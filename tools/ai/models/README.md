@@ -103,3 +103,7 @@ first-shared-8 after 7 iterations at a 15-round cap (BatchNorm, leak 0.03, explo
 ## first-r20-9 (frozen 2026-09-28 07:58 UTC)
 
 RUN=r20 after 9 iterations (four maps, cap 20, review fixes; bootstrapped cut-off scoring until iteration 7). Tests vs heuristic flat (wins 0-0.08, place 0.01-0.04, arrival ~25); dead units rising to 25/256, 30/128. Superseded: owner switched to one map.
+
+## first-first1-27 (frozen 2026-09-28 09:06 UTC)
+
+First Expedition only, from first-distill-35 under the fixed rules: 27 iterations (400 games each, cap 20 scored by how far players got, exploration 0.3, BatchNorm + leak 0.03, lr 1e-3, max backup with Double-Q, no heuristic-seat samples). Paired full-game test vs the heuristic planner (168 games): wins 1.23x fair share, place value 0.436 (heuristic 0.34), arrival round 19.0 (heuristic 19.25). Before training: 0.08x, 0.041, 23.7. Dead units 14/128, 11/64.
