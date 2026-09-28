@@ -91,3 +91,7 @@ first-multi4-33 fine-tuned on First Expedition only for 8 iterations (max backup
 ## first-shared-start (frozen 2026-09-28 03:10 UTC)
 
 Start of RUN=shared (the four-map shared network, continued): first-multi4-33 with its dead units revived (223/256 layer-1, 81/128 layer-2; value change mean 1.8e-3, max 6.1e-3). Trained with the new trainer (AdamW, lr 3e-4 with warm-up, gradient clipping, dead-unit count per iteration, auto-revive over 10%).
+
+## first-shared-8 (frozen 2026-09-28 05:06 UTC)
+
+RUN=shared after 8 iterations (from first-shared-start, AdamW lr 3e-4). Trained under the OLD rules bug: single-use cards played for movement (Giant Machete, Prop Plane, Treasure Chest) were discarded instead of removed — fixed in 0e2bdbb. Dead units 1/256 and 0/128. Arrival (its 5–7) recovering from the dip after reviving; ladder at it5 +s 1579 / plain 1486 (multi4@33 1614 / 1565). Starting point of RUN=rules (retraining under the fixed rules).
