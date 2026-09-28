@@ -85,10 +85,10 @@ A typical position has about 180 non-zero inputs.
 ## 5. Result value (training target at game end)
 
 - Place value: 1st = 1, 2nd = 1/4, 3rd = 1/8, last = 0 (3 players: 1, 1/4, 0).
-- Games are stopped after round H = 20. Arrived players get their place value (their place is final: players still
-  racing rank behind them).
-- A player still racing when the game is stopped: result = the generating network's value of that player's last sample
-  position (bootstrapped).
+- Games are stopped after round H = 20. Players still racing are ranked behind arrived players by remaining route cost
+  to El Dorado.
+- Result = 0.8 × place value + 0.2 × sigmoid(lead / 5), where lead = (mean remaining route cost of the other players) −
+  (my remaining route cost).
 - In tests, a game stopped at the cap with nobody arrived is won by the player with the lowest remaining route cost.
 
 ## 6. Training data (self-play)
