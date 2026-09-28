@@ -310,6 +310,29 @@ html,body{overflow:clip;overscroll-behavior:none}
 .acct{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--muted)}
 .acct b{color:var(--text)}.acct .rt{color:var(--gold2)}.acct .linkbtn{margin-left:auto}
 .acct .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(233,178,74,.18);color:var(--gold2);font-weight:800;flex:none}
+/* title screen (start + in-game Menu): three big choices; the setup form is one link away */
+.modal.titlem{width:min(440px,calc(100% - 24px));padding:34px clamp(18px,5vw,28px) 22px;box-sizing:border-box}
+.title h2{font-size:clamp(28px,8.4vw,36px);text-align:center;margin:0 0 6px}
+.title .sub{text-align:center;margin:0 0 26px}
+.ttiles{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.ttile{display:flex;align-items:center;gap:14px;width:100%;min-height:64px;padding:10px 16px;box-sizing:border-box;border-radius:14px;background:#0c1512;border:1px solid var(--line2);color:var(--text);font:inherit;text-align:left;cursor:pointer;transition:background .15s,border-color .15s,transform .12s}
+.ttile:hover{border-color:var(--gold);background:#101c17}
+.ttile:active{transform:translateY(1px)}
+.ttile .tic{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:rgba(233,178,74,.12);color:var(--gold2)}
+.ttile .tic svg{width:20px;height:20px}
+.ttile .ttx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ttile b{font-size:17px;font-weight:800}
+.ttile .ttx span{font-size:13px;color:var(--muted);line-height:1.3}
+.ttile.pri{background:linear-gradient(#f3c461,#d99a2b);border-color:#f5cf7c;color:var(--goldInk);box-shadow:0 8px 24px rgba(233,178,74,.25)}
+.ttile.pri:hover{background:linear-gradient(#f8d27a,#e2a638)}
+.ttile.pri .tic{background:rgba(58,40,7,.16);color:var(--goldInk)}
+.ttile.pri .ttx span{color:rgba(58,40,7,.78)}
+.ttile:focus-visible,.tlinks .linkbtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.tlinks{display:flex;justify-content:center;flex-wrap:wrap;gap:4px 22px;margin-top:20px}
+.tlinks .linkbtn{color:var(--muted);text-decoration:none;font-size:14px;font-weight:600;padding:8px 2px}
+.tlinks .linkbtn:hover{color:var(--gold2)}
+.tlinks #sMore{color:var(--gold2)}
+.linkbtn.tback{display:block;margin:-6px 0 12px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:600}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--gold2);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 #rside .revl{display:grid;gap:6px;margin-bottom:10px}
 #rside .rev{display:grid;grid-template-columns:10px minmax(0,7em) 1fr 40px;gap:8px;align-items:center;padding:3px 6px;border-radius:8px;color:#cfd8d2}

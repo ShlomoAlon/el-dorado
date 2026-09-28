@@ -923,39 +923,49 @@ function showSetup(){
   const canResume=saved&&!saved.over&&(saved.v===4||saved.v===5)&&(!S||S.over);
   const routeTxt=()=>MAP&&(!S||S.over)?`<div class="routeInfo">Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random</div>`:'';
   const inGame=!!(S&&!S.over&&!REPLAY),rs=inGame?resignSeat():-1;
-  const gameRow=()=>inGame?`<div class="ingame"><span><b>Game in progress</b> · round ${S.round}${online()?' · online':''}</span><span class="ig-b">${rs>=0?`<button class="btn" id="sResign">Resign${!online()&&S.players.filter(p=>!p.ai).length>1?' ('+esc(S.players[rs].name)+')':''}</button>`:''}<button class="btn pri" id="sBack">Back to game</button></span></div>`:'';
+  const gameRow=()=>inGame&&setup.view==='form'?`<div class="ingame"><span><b>Game in progress</b> · round ${S.round}${online()?' · online':''}</span><span class="ig-b">${rs>=0?`<button class="btn" id="sResign">Resign${!online()&&S.players.filter(p=>!p.ai).length>1?' ('+esc(S.players[rs].name)+')':''}</button>`:''}<button class="btn pri" id="sBack">Back to game</button></span></div>`:'';
   // who is signed in (the site only: online play needs the server)
   const acct=()=>!NET.available?'':NET.user?`<div class="acct"><span class="av">${esc(NET.user.name.slice(0,1).toUpperCase())}</span><span><b>${esc(NET.user.name)}</b> · rating <b class="rt">${Math.round(NET.user.rating)}</b></span><button class="linkbtn" id="sOut">Sign out</button></div>`:`<div class="acct"><span class="m">Not signed in</span>${NET.cfg&&NET.cfg.google?'<div id="gsiBtn" class="gsiSm"></div>':'<button class="linkbtn" id="sIn">Sign in</button>'}</div>`;
-  const html=()=>`${acct()}${gameRow()}<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
-    <div class="field"><label>How are you playing?</label><div class="seg" id="sMode"><button data-m="local" class="on">On this device</button><button data-m="online">Online</button></div></div>
+  // the title screen: Play (the remembered setup, one tap), Online, Continue; the full form is one link away
+  const seatTxt=()=>{const ais=setup.ai.slice(0,setup.n).filter(x=>x).length,hum=setup.n-ais;return(ais?`${hum===1?'You':hum+' players'} vs ${ais} AI`:`${setup.n} players on this device`)+' · '+esc(courseName(setup.course));};
+  const tile=(id,ic,t,s,pri)=>`<button class="ttile${pri?' pri':''}" id="${id}"><span class="tic" aria-hidden="true">${ic}</span><span class="ttx"><b>${t}</b><span>${s}</span></span></button>`;
+  const IC={play:'<svg viewBox="0 0 20 20"><path d="M6.5 4.2v11.6L15.8 10z" fill="currentColor"/></svg>',online:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2.2 2.3 2.2 11.7 0 14M10 3c-2.2 2.3-2.2 11.7 0 14"/></svg>',cont:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8v13l-4-3-4 3z"/></svg>',back:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 5 6.5 10l5 5"/></svg>'};
+  const titleHTML=()=>`${acct()}<div class="title"><h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city.</p>
+    <div class="ttiles">${inGame?tile('sBack',IC.back,'Back to game',`Round ${S.round}${online()?' · online':''}`,1):''}${canResume?tile('sResume',IC.cont,'Continue',`Saved game · round ${saved.round}`,1):''}
+    ${tile('sGo',IC.play,inGame?'New game':'Play',seatTxt(),!inGame&&!canResume)}${tile('sOnline',IC.online,'Play online','Rated games against people and AIs')}</div>
+    <div class="tlinks"><button class="linkbtn" id="sMore">Set up game…</button><button class="linkbtn" id="sRules">Rules</button><button class="linkbtn" id="sReplays">Replays</button>${rs>=0?`<button class="linkbtn" id="sResign">Resign${!online()&&S.players.filter(p=>!p.ai).length>1?' ('+esc(S.players[rs].name)+')':''}</button>`:''}</div></div>`;
+  const html=()=>setup.view!=='form'?titleHTML():`${acct()}${gameRow()}<button class="linkbtn tback" id="sTitle">‹ Back</button><h2>Set up game</h2><p class="sub">Players, course and rules for a game on this device.</p>
     <div class="field"><label>Players</label><div class="seg" id="sN">${[2,3,4].map(n=>`<button data-n="${n}" class="${setup.n===n?'on':''}">${n}</button>`).join('')}</div>${setup.n===2?'<p class="note">Two players each lead two explorers. Both must reach El Dorado.</p>':''}</div>
     <div class="field"><label>Expedition leaders</label>${[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return`<div class="prow seat"><select class="who" id="pt${i}" aria-label="Player ${i+1}: human or AI"><option value="">Human</option><optgroup label="AI players">${AIS.map(a=>`<option value="${a.id}" ${setup.ai[i]===a.id?'selected':''} ${!aiAllowed(setup.course,setup.n)||setup.ai.slice(0,setup.n).some((x,j)=>j!==i&&x===a.id)?'disabled':''}>${a.name} · ${a.tier}</option>`).join('')}</optgroup></select>${A?`<div class="ainm" title="${esc(A.desc)}"><span>${esc(A.desc)}</span></div>`:`<input id="pn${i}" maxlength="14" value="${esc(setup.names[i])}" aria-label="Player ${i+1} name">`}<div class="sws">${COLORS.map(c=>`<button data-p="${i}" data-c="${c.id}" style="--c:${c.hex}" class="${setup.colors[i]===c.id?'on':''}" ${setup.colors.slice(0,setup.n).some((x,j)=>j!==i&&x===c.id)?'disabled':''} aria-label="${c.name}"></button>`).join('')}</div></div>`;}).join('')}${allAI()?'<p class="note" style="color:#f3c98b">Seat at least one human player.</p>':''}</div>
     <div class="field"><label>Course</label>${coursePicker('sC',setup.course)}<div id="rInfo">${routeTxt()}</div>${aiAllowed(setup.course,setup.n)?'':'<div class="aiNote">AI players are available on First Expedition with 3 or 4 players for now.</div>'}</div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><button data-f="1" class="${setup.full?'on':''}">When all but one arrive</button><button data-f="0" class="${setup.full?'':'on'}">At the first arrival (official)</button></div></div>
     <div class="field"><label class="chk"><input type="checkbox" id="sPriv" ${setup.privacy?'checked':''}> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
-    <div class="mrow"><button class="btn" id="sReplays">Replays</button>${canResume?'<button class="btn" id="sResume">Resume saved game</button>':''}<button class="btn pri big" id="sGo">${inGame?'Start a new game':'Start expedition'}</button></div>`;
+    <div class="mrow"><button class="btn" id="sTitle2">Back</button><button class="btn pri big" id="sGo">${inGame?'Start a new game':'Start expedition'}</button></div>`;
   const allAI=()=>setup.ai.slice(0,setup.n).every(x=>x);
   const preview=()=>{if(S&&!S.over)return;try{setup.cur=pickCourse(setup.course);MAP=buildCourse(setup.cur,setup.seed);buildBoard();fit();L.pieces.innerHTML='';const ri=document.getElementById('rInfo');if(ri)ri.innerHTML=routeTxt();}catch(e){console.error(e);}};
   const mount=sc=>{
     const m=sc.querySelector('.modal');
     const sync=()=>{for(let i=0;i<setup.n;i++){const e=m.querySelector('#pn'+i);if(e)setup.names[i]=e.value.trim()||('Player '+(i+1));}const jc=m.querySelector('#jCode');if(jc)setup.code=jc.value.trim().toUpperCase();};
-    const rerender=()=>{sync();m.innerHTML=html();wire();};
+    const rerender=()=>{sync();m.innerHTML=html();m.classList.toggle('titlem',setup.view!=='form');wire();};
     const wire=()=>{
-      m.querySelectorAll('#sMode button').forEach(b=>b.onclick=()=>{if(b.dataset.m==='online')showHub();});
+      const on=(sel,fn)=>{const e=m.querySelector(sel);if(e)e.onclick=fn;};
+      on('#sOnline',()=>showHub());
+      on('#sMore',()=>{setup.view='form';rerender();m.scrollTop=0;});on('#sTitle',()=>{setup.view='title';rerender();});on('#sTitle2',()=>{setup.view='title';rerender();});
+      on('#sRules',()=>{showRules();const c=document.querySelector('#rClose');if(c)c.onclick=()=>showSetup();});
       m.querySelectorAll('#sN button').forEach(b=>b.onclick=()=>{setup.n=+b.dataset.n;if(!aiAllowed(setup.course,setup.n))setup.ai=setup.ai.map(()=>'');rerender();});
       m.querySelectorAll('#sC button').forEach(b=>b.onclick=()=>{setup.course=b.dataset.c;if(!aiAllowed(setup.course,setup.n))setup.ai=setup.ai.map(()=>'');preview();rerender();}); // AI seats only on AI courses
       m.querySelectorAll('.sws button').forEach(b=>b.onclick=()=>{setup.colors[+b.dataset.p]=b.dataset.c;rerender();});
       m.querySelectorAll('select.who').forEach(e=>e.onchange=()=>{sync();setup.ai[+e.id.slice(2)]=e.value;try{localStorage.setItem('eldorado-seats',JSON.stringify(setup.ai));}catch(_){}m.innerHTML=html();wire();});
       m.querySelector('#sGo').disabled=allAI();
-      m.querySelector('#sPriv').onchange=e=>setup.privacy=e.target.checked;
+      const pv=m.querySelector('#sPriv');if(pv)pv.onchange=e=>setup.privacy=e.target.checked;
       m.querySelectorAll('#sFull button').forEach(b=>b.onclick=()=>{setup.full=b.dataset.f==='1';rerender();});
-      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{aiReset();UI.viewer=null;S=saved;REC=loadRec(S);MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
+      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{closeModal();resumeSaved();};
       const so=m.querySelector('#sOut');if(so)so.onclick=()=>signOut(()=>{m.innerHTML=html();wire();});
       if(!NET.user)gsiMount(m.querySelector('#gsiBtn'),t=>toast(t,3000),()=>{m.innerHTML=html();wire();},'medium');
       const si=m.querySelector('#sIn');if(si)si.onclick=()=>showHub();
       const cl=m.querySelector('#sBack');if(cl)cl.onclick=closeModal;
       const rb=m.querySelector('#sResign');if(rb)rb.onclick=()=>online()?resignOnline():resignLocal();
-      m.querySelector('#sReplays').onclick=()=>showReplays();
+      on('#sReplays',()=>showReplays());
       m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];if(online())exitOnline(); // an online game goes on without you (rejoin it from Online)
         for(const[,el]of cardEls)el.remove();cardEls.clear();
         if(allAI())return;aiReset();
@@ -965,8 +975,9 @@ function showSetup(){
         if(!UI.cover)banner(cur().name,isAI(S.cur)?'AI · Round 1':'Round 1');
         setup.seed=(Math.random()*1e9)|0;};
     };
-    m.innerHTML=html();wire();
+    m.innerHTML=html();m.classList.toggle('titlem',setup.view!=='form');wire();
   };
+  setup.view='title';
   for(let i=0;i<setup.n;i++){if(setup.colors.slice(0,i).includes(setup.colors[i]))setup.colors[i]=COLORS.find(c=>!setup.colors.slice(0,setup.n).includes(c.id)).id;}
   if(!S||S.over)preview();
   modal('',mount,!!(S&&!S.over));

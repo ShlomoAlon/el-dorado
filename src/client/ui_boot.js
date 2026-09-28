@@ -31,8 +31,7 @@ function boot(){
     let room=null;try{room=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'')||null;}catch(e){}
     if(room&&NET.available){if(NET.user){joinRoom(room);return;}NET.pendingRoom=room;showHub();return;}
     if(NET.user&&NET.active){showHub();return;}
-    if(resumeSaved())return;
-    showSetup();
+    showSetup(); // a saved game waits on the title screen as Continue
   });
 }
 window.__ED={NET,UI,act,playEvents,openReplay,applyAction,render,get S(){return S},get MAP(){return MAP},showCourse(C,seed){MAP=buildCourse(typeof C==="string"?courseById(C):C,seed||1);buildBoard();fit();return MAP;},joinRoom,netSend,onHandCard,doMove,pickFromMarket,confirmBuy,startEndTurn,finishTurn,confirmDiscardFor,confirmTrash,cancelMode,reach,myId,canAct,view};
