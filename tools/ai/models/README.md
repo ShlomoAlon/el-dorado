@@ -87,3 +87,7 @@ One network for four courses (first, hills, winding, witch), 256×128 hidden uni
 ## first-ftfirst-8 (frozen 2026-09-28 03:10 UTC)
 
 first-multi4-33 fine-tuned on First Expedition only for 8 iterations (max backup + search distillation, no heuristic seats, 256×128). Arrival on First (network vs itself) 14.2 → ~13.9 by iteration 2, then flat. Not laddered (the owner switched focus back to the shared model). Health: 222/256 layer-1 and 82/128 layer-2 units dead — inherited from first-multi4-33 (225/256, 81/128), so the four-map run killed the units, not this fine-tune.
+
+## first-shared-start (frozen 2026-09-28 03:25 UTC)
+
+Start of RUN=shared (the four-map shared network, continued): first-multi4-33 with its dead units revived (223/256 layer-1, 81/128 layer-2; value change mean 1.8e-3, max 6.1e-3). Trained with the new trainer (AdamW, lr 3e-4 with warm-up, gradient clipping, dead-unit count per iteration, auto-revive over 10%).
