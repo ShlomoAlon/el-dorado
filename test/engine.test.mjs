@@ -102,4 +102,14 @@ for (let g = 0; g < 60; g++) {
   E.aiSetNet(null);
   console.log(`ok: AI games finish (network on First Expedition, planner elsewhere), packed network within ${diff.toExponential(1)}`);
 }
+// single-use cards played for movement are removed from the game (Giant Machete, Prop Plane, Treasure Chest), never discarded
+for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's reach from the start)
+  E.newGame({ course: E.COURSES[0], seed: 4242, fullRace: true, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) });
+  const S = E.S, seat = S.cur, P = S.players[seat], id = P.hand[0]; S.cards[id] = t;
+  let to = null, pi = 0; for (; pi < P.pieces.length && !to; pi++) for (const [k] of E.reach(seat, pi, t === 'plane' ? ['j', 'w', 'v'] : [E.CT[t].s], E.CT[t].p)) if (k[0] !== 'B') { to = k; break; }
+  assert(to, t + ': no move found'); const r = E.applyAction(seat, { t: 'move', card: id, pi: pi - 1, to }); assert(r.ok, r.err);
+  assert(S.trash.includes(id) && !P.play.includes(id), t + ' played for movement was not removed from the game');
+  E.applyAction(seat, { t: 'end', keep: [] });
+  assert(!P.discard.includes(id) && !P.deck.includes(id) && !P.hand.includes(id), t + ' came back after the turn');
+}
 console.log(`ok: ${games} games, map ${mapMs.toFixed(2)} ms, slowest action ${maxAct.toFixed(2)} ms`);

@@ -767,7 +767,7 @@ function applyAction(seat,a){
       const syms=act?[act.sym]:(d.s==='*'?['j','w','v']:[d.s]);const budget=act?act.left:d.p;
       const tg=reach(seat,pi,syms,budget).get(a.to);if(!tg)return fail('That space is out of reach.');
       ev.push({e:'play',pl:seat,k:'move',ts:[typeOf(a.card)],more:!!act,n:tg.path.length,sym:tg.sym});
-      if(!act){T.active=null;rm(P.hand,a.card);P.play.push(a.card);}
+      if(!act){T.active=null;rm(P.hand,a.card);if(d.once)S.trash.push(a.card);else P.play.push(a.card);} // single-use (Giant Machete, Prop Plane, Treasure Chest): removed from the game
       const from=P.pieces[pi];let pos=from;const path=[from];
       for(const st of tg.path){const b=blockAt(pos,st);if(b!==null)takeBlock(b);pos=st;path.push(st);}
       if(tg.kind==='bl')takeBlock(tg.bl);
