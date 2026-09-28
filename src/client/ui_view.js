@@ -901,7 +901,10 @@ function banner(t,s){const b=$('#banner');b.querySelector('.t').textContent=t;b.
   b.getAnimations().forEach(a=>a.cancel());
   b.animate([{opacity:0,transform:'translate(-50%,-44%) scale(.96)'},{opacity:1,transform:'translate(-50%,-50%) scale(1)',offset:.18},{opacity:1,transform:'translate(-50%,-50%) scale(1)',offset:.75},{opacity:0,transform:'translate(-50%,-56%) scale(1)'}],{duration:1400,easing:'ease-out'});}
 let toastT=0;function toast(t,ms){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),ms||1700);}
-function modal(html,onMount,dismiss){const o=$('#overlay');o.innerHTML=`<div class="scrim"><div class="modal">${html}</div></div>`;const sc=o.firstChild;
+/* one overlay at a time. Opening a screen while another is up swaps it in place (no fade out and in again: menu screens
+   feel like one screen); only the first one fades in over the game. */
+function modal(html,onMount,dismiss){const o=$('#overlay'),old=o.firstChild,swap=!!old&&!old.classList.contains('closing');
+  o.innerHTML=`<div class="scrim${swap?' swap':''}${swap&&old.classList.contains('plain')?' plain':''}"><div class="modal">${html}</div></div>`;const sc=o.firstChild;
   if(dismiss)sc.addEventListener('click',e=>{if(e.target===sc)closeModal();});onMount&&onMount(sc);}
 function closeModal(){const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');const mo=sc.querySelector('.modal');if(mo)mo.className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
 
@@ -921,7 +924,9 @@ function showSetup(){
   const routeTxt=()=>MAP&&(!S||S.over)?`<div class="routeInfo">Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random</div>`:'';
   const inGame=!!(S&&!S.over&&!REPLAY),rs=inGame?resignSeat():-1;
   const gameRow=()=>inGame?`<div class="ingame"><span><b>Game in progress</b> · round ${S.round}${online()?' · online':''}</span><span class="ig-b">${rs>=0?`<button class="btn" id="sResign">Resign${!online()&&S.players.filter(p=>!p.ai).length>1?' ('+esc(S.players[rs].name)+')':''}</button>`:''}<button class="btn pri" id="sBack">Back to game</button></span></div>`:'';
-  const html=()=>`${gameRow()}<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
+  // who is signed in (the site only: online play needs the server)
+  const acct=()=>!NET.available?'':NET.user?`<div class="acct"><span class="av">${esc(NET.user.name.slice(0,1).toUpperCase())}</span><span><b>${esc(NET.user.name)}</b> · rating <b class="rt">${Math.round(NET.user.rating)}</b></span><button class="linkbtn" id="sOut">Sign out</button></div>`:`<div class="acct"><span class="m">Not signed in</span>${NET.cfg&&NET.cfg.google?'<div id="gsiBtn" class="gsiSm"></div>':'<button class="linkbtn" id="sIn">Sign in</button>'}</div>`;
+  const html=()=>`${acct()}${gameRow()}<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
     <div class="field"><label>How are you playing?</label><div class="seg" id="sMode"><button data-m="local" class="on">On this device</button><button data-m="online">Online</button></div></div>
     <div class="field"><label>Players</label><div class="seg" id="sN">${[2,3,4].map(n=>`<button data-n="${n}" class="${setup.n===n?'on':''}">${n}</button>`).join('')}</div>${setup.n===2?'<p class="note">Two players each lead two explorers. Both must reach El Dorado.</p>':''}</div>
     <div class="field"><label>Expedition leaders</label>${[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return`<div class="prow seat"><select class="who" id="pt${i}" aria-label="Player ${i+1}: human or AI"><option value="">Human</option><optgroup label="AI players">${AIS.map(a=>`<option value="${a.id}" ${setup.ai[i]===a.id?'selected':''} ${!aiAllowed(setup.course,setup.n)||setup.ai.slice(0,setup.n).some((x,j)=>j!==i&&x===a.id)?'disabled':''}>${a.name} · ${a.tier}</option>`).join('')}</optgroup></select>${A?`<div class="ainm" title="${esc(A.desc)}"><span>${esc(A.desc)}</span></div>`:`<input id="pn${i}" maxlength="14" value="${esc(setup.names[i])}" aria-label="Player ${i+1} name">`}<div class="sws">${COLORS.map(c=>`<button data-p="${i}" data-c="${c.id}" style="--c:${c.hex}" class="${setup.colors[i]===c.id?'on':''}" ${setup.colors.slice(0,setup.n).some((x,j)=>j!==i&&x===c.id)?'disabled':''} aria-label="${c.name}"></button>`).join('')}</div></div>`;}).join('')}${allAI()?'<p class="note" style="color:#f3c98b">Seat at least one human player.</p>':''}</div>
@@ -936,7 +941,7 @@ function showSetup(){
     const sync=()=>{for(let i=0;i<setup.n;i++){const e=m.querySelector('#pn'+i);if(e)setup.names[i]=e.value.trim()||('Player '+(i+1));}const jc=m.querySelector('#jCode');if(jc)setup.code=jc.value.trim().toUpperCase();};
     const rerender=()=>{sync();m.innerHTML=html();wire();};
     const wire=()=>{
-      m.querySelectorAll('#sMode button').forEach(b=>b.onclick=()=>{if(b.dataset.m==='online'){closeModal();setTimeout(showHub,170);}});
+      m.querySelectorAll('#sMode button').forEach(b=>b.onclick=()=>{if(b.dataset.m==='online')showHub();});
       m.querySelectorAll('#sN button').forEach(b=>b.onclick=()=>{setup.n=+b.dataset.n;if(!aiAllowed(setup.course,setup.n))setup.ai=setup.ai.map(()=>'');rerender();});
       m.querySelectorAll('#sC button').forEach(b=>b.onclick=()=>{setup.course=b.dataset.c;if(!aiAllowed(setup.course,setup.n))setup.ai=setup.ai.map(()=>'');preview();rerender();}); // AI seats only on AI courses
       m.querySelectorAll('.sws button').forEach(b=>b.onclick=()=>{setup.colors[+b.dataset.p]=b.dataset.c;rerender();});
@@ -945,9 +950,12 @@ function showSetup(){
       m.querySelector('#sPriv').onchange=e=>setup.privacy=e.target.checked;
       m.querySelectorAll('#sFull button').forEach(b=>b.onclick=()=>{setup.full=b.dataset.f==='1';rerender();});
       const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{aiReset();UI.viewer=null;S=saved;REC=loadRec(S);MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
+      const so=m.querySelector('#sOut');if(so)so.onclick=()=>signOut(()=>{m.innerHTML=html();wire();});
+      if(!NET.user)gsiMount(m.querySelector('#gsiBtn'),t=>toast(t,3000),()=>{m.innerHTML=html();wire();},'medium');
+      const si=m.querySelector('#sIn');if(si)si.onclick=()=>showHub();
       const cl=m.querySelector('#sBack');if(cl)cl.onclick=closeModal;
-      const rb=m.querySelector('#sResign');if(rb)rb.onclick=()=>{closeModal();setTimeout(()=>online()?resignOnline():resignLocal(),170);};
-      m.querySelector('#sReplays').onclick=()=>{closeModal();setTimeout(showReplays,170);};
+      const rb=m.querySelector('#sResign');if(rb)rb.onclick=()=>online()?resignOnline():resignLocal();
+      m.querySelector('#sReplays').onclick=()=>showReplays();
       m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];if(online())exitOnline(); // an online game goes on without you (rejoin it from Online)
         for(const[,el]of cardEls)el.remove();cardEls.clear();
         if(allAI())return;aiReset();
@@ -985,7 +993,7 @@ function showGameOver(){
   const tie=fin.length>1?'<p class="sub" style="margin:10px 0 0">Explorers arriving in the same round are split by blockades held, then the highest-numbered blockade.</p>':'';
   modal(`<h2>${w.length?w.map(i=>esc(S.players[i].name)).join(' & ')+' win'+(w.length>1?'':'s'):'Expedition over'}</h2><p class="sub">The race ended in round ${S.round}.${res&&res.deltas?' Ratings updated.':res&&res.unrated?' Unrated game: ratings unchanged.':''}</p>${rows}${tie}<div class="mrow">${rid||UI.lastReplay&&!online()?'<button class="btn" id="gRep">Watch replay</button>':''}<button class="btn" id="gClose">View board</button><button class="btn pri" id="gNew">New game</button></div>`,
     sc=>{sc.querySelector('#gClose').onclick=closeModal;
-      const gr=sc.querySelector('#gRep');if(gr)gr.onclick=()=>{closeModal();if(online()){exitOnline();loadReplayId(rid);}else openReplay(UI.lastReplay,null);};sc.querySelector('#gNew').onclick=()=>{closeModal();if(online()){exitOnline();setTimeout(showHub,180);}else setTimeout(showSetup,180);};},true);
+      const gr=sc.querySelector('#gRep');if(gr)gr.onclick=()=>{closeModal();if(online()){exitOnline();loadReplayId(rid);}else openReplay(UI.lastReplay,null);};sc.querySelector('#gNew').onclick=()=>{if(online()){exitOnline();showHub();}else showSetup();};},true);
 }
 function showPile(which){
   if(!S||UI.cover)return;const pl=hp();

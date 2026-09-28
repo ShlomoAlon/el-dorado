@@ -15,13 +15,17 @@ async function netInit(){
   try{NET.token=localStorage.getItem('ed-token');}catch(e){}
   if(NET.token){try{const r=await api('/api/me');NET.user=r.user;NET.active=r.active;}catch(e){if(e.status===401){NET.token=null;try{localStorage.removeItem('ed-token');}catch(_){}}}}
 }
-function signedIn(r){
+function signedIn(r,after){
   NET.token=r.token;NET.user=r.user;try{localStorage.setItem('ed-token',r.token);}catch(e){}
   if(r.isNew)toast('Welcome, '+r.user.name+'! You can change your name any time.',3000);
   if(NET.pendingRoom){const c=NET.pendingRoom;NET.pendingRoom=null;joinRoom(c);return;}
-  showHub();
+  (after||showHub)();
 }
-function signOut(){NET.token=null;NET.user=null;try{localStorage.removeItem('ed-token');}catch(e){}closeLobbyWs();showHub();}
+/* the Google sign-in button, drawn into el. after(): what to show once signed in (default: the Online screen) */
+function gsiMount(el,err,after,size){if(!el||!NET.cfg||!NET.cfg.google)return;
+  loadGsi().then(()=>{google.accounts.id.initialize({client_id:NET.cfg.google,callback:async r=>{try{signedIn(await api('/api/auth/google',{method:'POST',body:JSON.stringify({credential:r.credential})}),after);}catch(e){err(e.message);}}});
+    if(el.isConnected)google.accounts.id.renderButton(el,{theme:'filled_black',size:size||'large',shape:'pill',text:'signin_with'});}).catch(()=>err('Could not load Google sign-in.'));}
+function signOut(then){NET.token=null;NET.user=null;try{localStorage.removeItem('ed-token');}catch(e){}closeLobbyWs();(then||showHub)();}
 let gsiLoading=null;
 function loadGsi(){if(window.google&&google.accounts)return Promise.resolve();if(!gsiLoading)gsiLoading=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=res;s.onerror=rej;document.head.appendChild(s);});return gsiLoading;}
 function wsUrl(path){return(location.protocol==='https:'?'wss://':'ws://')+location.host+path+(path.includes('?')?'&':'?')+'t='+encodeURIComponent(NET.token);}
@@ -32,7 +36,7 @@ function hubHTML(){
   const u=NET.user;
   if(!NET.available)return`<h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
   if(!u)return`<h2>Play online</h2><p class="sub">Sign in so your rating follows you. Rated games move your Elo rating, and you can play against people, the AIs, or both.</p>
-    ${NET.cfg.google?'<div id="gsiBtn" style="min-height:44px"></div>':'<p class="note" style="color:#f3c98b">Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>'}
+    ${NET.cfg.google?'<div id="gsiBtn"></div>':'<p class="note" style="color:#f3c98b">Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>'}
     ${NET.cfg.dev?'<div class="field" style="margin-top:16px"><label>Developer sign-in (local testing only)</label><div class="prow"><input id="devName" maxlength="16" placeholder="Name"><button class="btn" id="devGo">Sign in</button></div></div>':''}
     <p class="note" id="hErr"></p>
     <div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
@@ -76,19 +80,18 @@ function renderHub(){
   if(jv&&m.querySelector('#jCode'))m.querySelector('#jCode').value=jv;
   if(focus&&m.querySelector('#'+focus))m.querySelector('#'+focus).focus();
   const q=s=>m.querySelector(s);const err=t=>{const e=q('#hErr');if(e)e.textContent=t;};
-  q('#hBack').onclick=()=>{closeLobbyWs();closeModal();setTimeout(()=>{if(!S||S.over||online())showSetup();},180);};
+  q('#hBack').onclick=()=>{closeLobbyWs();showSetup();};
   if(!NET.available)return;
   if(!NET.user){
-    if(NET.cfg.google)loadGsi().then(()=>{google.accounts.id.initialize({client_id:NET.cfg.google,callback:async r=>{try{signedIn(await api('/api/auth/google',{method:'POST',body:JSON.stringify({credential:r.credential})}));}catch(e){err(e.message);}}});
-      const b=q('#gsiBtn');if(b)google.accounts.id.renderButton(b,{theme:'filled_black',size:'large',shape:'pill',text:'signin_with'});}).catch(()=>err('Could not load Google sign-in.'));
+    gsiMount(q('#gsiBtn'),err);
     const dg=q('#devGo');if(dg)dg.onclick=async()=>{try{signedIn(await api('/api/auth/dev',{method:'POST',body:JSON.stringify({name:q('#devName').value||'Tester'})}));}catch(e){err(e.message);}};
     return;
   }
   m.querySelectorAll('#hTabs button').forEach(b=>b.onclick=()=>{hubTab=b.dataset.k;renderHub();});
-  q('#hOut2').onclick=signOut;
+  q('#hOut2').onclick=()=>signOut();
   if(hubTab==='board'){api('/api/leaderboard').then(r=>{const l=q('#lbList');if(!l)return;
     l.innerHTML=r.players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${r.players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span style="color:var(--muted)">${i+1}</span><span style="display:flex;align-items:center;gap:7px;min-width:0"><b style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</b>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note" style="margin:0">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note" style="margin-top:12px">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';}).catch(e=>{const l=q('#lbList');if(l)l.textContent=e.message;});return;}
-  if(hubTab==='me'){q('#meSave').onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};q('#hOut').onclick=signOut;return;}
+  if(hubTab==='me'){q('#meSave').onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};q('#hOut').onclick=()=>signOut();return;}
   const seg=(id,key)=>m.querySelectorAll(id+' button').forEach(b=>b.onclick=()=>{setup[key]=+b.dataset.v;renderHub();});
   seg('#cMax','oMax');seg('#cTurn','oTurn');
   m.querySelectorAll('#cPub button').forEach(b=>b.onclick=()=>{setup.oPub=b.dataset.v==='1';renderHub();});
@@ -133,7 +136,7 @@ function connectRoom(){
 }
 function onRoomMsg(m){
   if(m.t==='error'){NET.busy=false;sfx('error');toast(m.msg);if(S)render();return;}
-  if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');closeModal();setTimeout(showHub,200);return;}renderRoomLobby();return;}
+  if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}renderRoomLobby();return;}
   if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.deadline=m.deadline;NET.skew=m.now-Date.now();NET.busy=false;applyServerState(m.S,m.ev);}
 }
 function applyServerState(S2,ev){
@@ -180,7 +183,7 @@ function renderRoomLobby(){
   m.innerHTML=roomLobbyHTML();
   m.querySelector('#lkCopy').onclick=()=>{const i=m.querySelector('#lkIn');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value).then(()=>toast('Link copied')).catch(()=>{});};
   m.querySelectorAll('[data-col]').forEach(b=>b.onclick=()=>netSend({t:'color',color:b.dataset.col}));
-  m.querySelector('#rlLeave').onclick=()=>{netSend({t:'leave'});NET.code=null;leaveRoomSocket();try{history.replaceState(null,'',location.pathname);}catch(e){}closeModal();setTimeout(showHub,200);};
+  m.querySelector('#rlLeave').onclick=()=>{netSend({t:'leave'});NET.code=null;leaveRoomSocket();try{history.replaceState(null,'',location.pathname);}catch(e){}showHub();};
   const st=m.querySelector('#rlStart');if(st)st.onclick=()=>netSend({t:'start'});
   const nw=m.querySelector('#rlNow');if(nw)nw.onclick=()=>netSend({t:'now'});
   m.querySelectorAll('[data-addai]').forEach(b=>b.onclick=()=>netSend({t:'addAI',ai:b.dataset.addai}));

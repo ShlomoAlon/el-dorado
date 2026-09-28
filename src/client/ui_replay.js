@@ -159,7 +159,7 @@ function showReplays(){
     <div class="field"><label>Recent games and uploads</label><div id="rList" class="rlist"><p class="note">Loading…</p></div></div>
     <div class="mrow"><button class="btn" id="rBack">Back</button></div>`;
   modal(html,sc=>{
-    sc.querySelector('#rBack').onclick=()=>{closeModal();setTimeout(()=>{if(!S||S.over)showSetup();},170);};
+    sc.querySelector('#rBack').onclick=()=>showSetup();
     const msg=sc.querySelector('#rMsg');
     sc.querySelector('#rUp').onclick=()=>sc.querySelector('#rFile').click();
     sc.querySelector('#rFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;msg.textContent='Uploading…';
