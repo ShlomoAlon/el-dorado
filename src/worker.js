@@ -35,7 +35,8 @@ async function createSchema(env) {
   ]);
   try { await env.DB.prepare(`ALTER TABLE users ADD COLUMN bot TEXT`).run(); } catch (e) { } // already there
   // replays of online games (game=1) are kept for good; uids = ',uid1,uid2,' (who played); listed=0: a private room's game
-  for (const c of ['game INTEGER NOT NULL DEFAULT 0', 'uids TEXT', 'listed INTEGER NOT NULL DEFAULT 1'])
+  // places: JSON array of finishing places, in the order of uids
+  for (const c of ['game INTEGER NOT NULL DEFAULT 0', 'uids TEXT', 'listed INTEGER NOT NULL DEFAULT 1', 'places TEXT'])
     try { await env.DB.prepare(`ALTER TABLE replays ADD COLUMN ${c}`).run(); } catch (e) { }
   for (const A of E.AIS) { // one rated player per named AI; if a person already has the name, the AI gets "(AI)" after it
     const id = aiUid(A.id);
@@ -141,7 +142,8 @@ async function createRoom(env, uid, opts) {
   return null;
 }
 const REPLAY_MAX_BYTES = 1.9e6, // D1 rows hold at most 2 MB
-      REPLAY_KEEP = 1000;
+      REPLAY_KEEP = 1000, // uploaded logs
+      REPLAYS_PER_PLAYER = 10; // online games: each player's latest are kept
 const MATCH_SIZE = 3; // quick-match rooms start by themselves once this many have joined,
                       // or earlier (with 2+) when everyone in the room asks to start now
 
@@ -195,18 +197,23 @@ export default {
         return json({ id });
       }
       if (p === '/api/replays' && req.method === 'GET') {
-        // ?mine=1: the signed-in player's own online games (private rooms included); otherwise everything listed
-        if (url.searchParams.get('mine')) {
-          const me = await authUser(req, env); if (!me) return bad('Sign in first.', 401);
-          const r = await env.DB.prepare(`SELECT id,created,title,players,actions FROM replays WHERE game=1 AND uids LIKE ? ORDER BY created DESC LIMIT 50`).bind('%,' + me.id + ',%').all();
-          return json({ replays: r.results });
-        }
         const r = await env.DB.prepare(`SELECT id,created,title,players,actions FROM replays WHERE listed=1 ORDER BY created DESC LIMIT 50`).all();
         return json({ replays: r.results });
       }
       if ((m0 = p.match(/^\/api\/replays\/([a-z0-9]{6,12})$/)) && req.method === 'GET') {
         const r = await env.DB.prepare(`SELECT body FROM replays WHERE id=?`).bind(m0[1]).first();
         return r ? new Response(r.body, { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' } }) : bad('No replay with that id.', 404);
+      }
+      // a player's profile: stats and their most recent games (each with its replay). Private rooms' games only for the player.
+      if ((m0 = p.match(/^\/api\/users\/([A-Za-z0-9_-]{1,40})$/)) && req.method === 'GET') {
+        const u = await env.DB.prepare(`SELECT id,name,rating,games,wins,bot FROM users WHERE id=?`).bind(m0[1]).first();
+        if (!u) return bad('No such player.', 404);
+        const me = await authUser(req, env).catch(() => null), own = !!me && me.id === u.id;
+        const rank = await env.DB.prepare(`SELECT COUNT(*)+1 AS r FROM users WHERE (games>0 OR bot IS NOT NULL) AND rating>?`).bind(u.rating).first();
+        const g = await env.DB.prepare(`SELECT id,created,title,actions,uids,places FROM replays WHERE game=1 AND uids LIKE ?${own ? '' : ' AND listed=1'} ORDER BY created DESC LIMIT ${REPLAYS_PER_PLAYER}`).bind('%,' + u.id + ',%').all();
+        const games = g.results.map(r => { const i = r.uids.split(',').filter(Boolean).indexOf(u.id), pl = r.places ? JSON.parse(r.places) : null;
+          return { id: r.id, created: r.created, title: r.title, actions: r.actions, place: pl ? pl[i] : null, of: pl ? pl.length : null }; });
+        return json({ user: { ...u, rank: rank.r }, games });
       }
       if (p === '/api/leaderboard') {
         const r = await env.DB.prepare(`SELECT id,name,rating,games,wins,bot FROM users WHERE games>0 OR bot IS NOT NULL ORDER BY rating DESC LIMIT 100`).all();
@@ -286,6 +293,22 @@ export class Lobby extends DurableObject {
   async webSocketClose(ws, code) { try { ws.close(code); } catch (e) { } }
 }
 
+/* each player keeps their REPLAYS_PER_PLAYER latest online games: an older game's replay goes once it is past that for
+   every person who played it (the AIs play too many games to count) */
+async function pruneReplays(DB, uids) {
+  const people = uid => !uid.startsWith('ai-');
+  for (const uid of uids.filter(people)) {
+    const old = (await DB.prepare(`SELECT id,created,uids FROM replays WHERE game=1 AND uids LIKE ? ORDER BY created DESC LIMIT -1 OFFSET ${REPLAYS_PER_PLAYER}`).bind('%,' + uid + ',%').all()).results;
+    for (const r of old) {
+      let keep = false;
+      for (const o of r.uids.split(',').filter(x => x && x !== uid && people(x))) {
+        const n = await DB.prepare(`SELECT COUNT(*) AS n FROM replays WHERE game=1 AND uids LIKE ? AND created>?`).bind('%,' + o + ',%', r.created).first();
+        if (n.n < REPLAYS_PER_PLAYER) { keep = true; break; }
+      }
+      if (!keep) await DB.prepare(`DELETE FROM replays WHERE id=?`).bind(r.id).run();
+    }
+  }
+}
 /* ---------------- Room: one live game ---------------- */
 const mapCache = new Map();
 function mapFor(S) { const k = S.course.id + ':' + S.seed; let m = mapCache.get(k); if (!m) { m = E.mapFor(S); mapCache.set(k, m); if (mapCache.size > 200) mapCache.delete(mapCache.keys().next().value); } return m; }
@@ -399,7 +422,9 @@ export class Room extends DurableObject {
       if (seat < 0) return err('You are watching this game.');
       const eng = this.engine(); const before = JSON.stringify(this.S); const prevCur = this.S.cur;
       if (!m.a || typeof m.a !== 'object') return err('Bad action.');
-      const r = eng.recAct(this.rec, seat, m.a);
+      const recN = this.rec ? this.rec.actions.length : 0; let r;
+      // an engine exception must never leave the game half-changed: put the state and the record back
+      try { r = eng.recAct(this.rec, seat, m.a); } catch (e) { r = { ok: false, err: 'Bad action.' }; if (this.rec) this.rec.actions.length = recN; }
       if (!r.ok) { this.S = JSON.parse(before); return err(r.err); }
       this.S = E.S; d.timeouts[seat] = 0;
       if (r.reveal || this.S.cur !== prevCur) this.undo = []; else { this.undo.push(before); if (this.undo.length > 6) this.undo.shift(); }
@@ -479,7 +504,9 @@ export class Room extends DurableObject {
     try {
       await this.env.DB.prepare(`INSERT INTO replays(id,created,title,players,actions,body,game,uids,listed) VALUES(?,?,?,?,?,?,1,?,?)`)
         .bind(id, Date.now(), log.title.slice(0, 120), log.players.map(x => x.name).join(', '), log.actions.length, text, ',' + this.S.owners.join(',') + ',', d.opts.pub === false ? 0 : 1).run();
+      await this.env.DB.prepare(`UPDATE replays SET places=? WHERE id=?`).bind(JSON.stringify(this.S.places || []), id).run();
       d.replay = id;
+      await pruneReplays(this.env.DB, this.S.owners);
     } catch (e) { }
     return d.replay;
   }

@@ -906,9 +906,17 @@ function banner(t,s){const b=$('#banner');b.querySelector('.t').textContent=t;b.
 let toastT=0;function toast(t,ms){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),ms||1700);}
 /* one overlay at a time. Opening a screen while another is up swaps it in place (no fade out and in again: menu screens
    feel like one screen); only the first one fades in over the game. */
-function modal(html,onMount,dismiss){const o=$('#overlay'),old=o.firstChild,swap=!!old&&!old.classList.contains('closing');
+function modal(html,onMount,dismiss){const o=$('#overlay'),old=o.firstChild;
+  // a menu screen replacing another menu screen: same panel, only its contents change (nothing moves or fades)
+  if(old&&!old.classList.contains('closing')&&old.dataset.menu&&MENU_NEXT){const m=old.querySelector('.modal');m.className='modal menu';m.innerHTML=html;m.scrollTop=0;
+    const sc=old.cloneNode(false);old.replaceWith(sc);sc.appendChild(m);MENU_NEXT=false; // fresh listeners on the scrim
+    if(dismiss)sc.addEventListener('click',e=>{if(e.target===sc)closeModal();});onMount&&onMount(sc);return;}
+  const swap=!!old&&!old.classList.contains('closing');
   o.innerHTML=`<div class="scrim${swap?' swap':''}${swap&&old.classList.contains('plain')?' plain':''}"><div class="modal">${html}</div></div>`;const sc=o.firstChild;
+  if(MENU_NEXT){sc.dataset.menu='1';sc.firstChild.classList.add('menu');MENU_NEXT=false;}
   if(dismiss)sc.addEventListener('click',e=>{if(e.target===sc)closeModal();});onMount&&onMount(sc);}
+/* menu screens (start screen, Online, Replays, room lobby) share one fixed-size panel: call menuModal(...) like modal(...) */
+let MENU_NEXT=false;function menuModal(html,onMount,dismiss){MENU_NEXT=true;modal(html,onMount,dismiss);}
 function closeModal(){const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');const mo=sc.querySelector('.modal');if(mo)mo.className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
 
 /* course list: official routes first; 'random' picks one of them */
@@ -928,7 +936,7 @@ function showSetup(){
   const inGame=!!(S&&!S.over&&!REPLAY),rs=inGame?resignSeat():-1;
   const gameRow=()=>inGame?`<div class="ingame"><span><b>Game in progress</b> · round ${S.round}${online()?' · online':''}</span><span class="ig-b">${rs>=0?`<button class="btn" id="sResign">Resign${!online()&&S.players.filter(p=>!p.ai).length>1?' ('+esc(S.players[rs].name)+')':''}</button>`:''}<button class="btn pri" id="sBack">Back to game</button></span></div>`:'';
   // who is signed in (the site only: online play needs the server)
-  const acct=()=>!NET.available?'':NET.user?`<div class="acct"><span class="av">${esc(NET.user.name.slice(0,1).toUpperCase())}</span><span><b>${esc(NET.user.name)}</b> · rating <b class="rt">${Math.round(NET.user.rating)}</b></span><button class="linkbtn" id="sOut">Sign out</button></div>`:`<div class="acct"><span class="m">Not signed in</span>${NET.cfg&&NET.cfg.google?'<div id="gsiBtn" class="gsiSm"></div>':'<button class="linkbtn" id="sIn">Sign in</button>'}</div>`;
+  const acct=acctBar;
   const html=()=>`${acct()}${gameRow()}<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
     <div class="field"><label>How are you playing?</label><div class="seg" id="sMode"><button data-m="local" class="on">On this device</button><button data-m="online">Online</button></div></div>
     <div class="field"><label>Players</label><div class="seg" id="sN">${[2,3,4].map(n=>`<button data-n="${n}" class="${setup.n===n?'on':''}">${n}</button>`).join('')}</div>${setup.n===2?'<p class="note">Two players each lead two explorers. Both must reach El Dorado.</p>':''}</div>
@@ -953,9 +961,7 @@ function showSetup(){
       m.querySelector('#sPriv').onchange=e=>setup.privacy=e.target.checked;
       m.querySelectorAll('#sFull button').forEach(b=>b.onclick=()=>{setup.full=b.dataset.f==='1';rerender();});
       const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{aiReset();UI.viewer=null;S=saved;REC=loadRec(S);MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
-      const so=m.querySelector('#sOut');if(so)so.onclick=()=>signOut(()=>{m.innerHTML=html();wire();});
-      if(!NET.user)gsiMount(m.querySelector('#gsiBtn'),t=>toast(t,3000),()=>{m.innerHTML=html();wire();},'medium');
-      const si=m.querySelector('#sIn');if(si)si.onclick=()=>showHub();
+      wireAcct(m,()=>{m.innerHTML=html();wire();});
       const cl=m.querySelector('#sBack');if(cl)cl.onclick=closeModal;
       const rb=m.querySelector('#sResign');if(rb)rb.onclick=()=>online()?resignOnline():resignLocal();
       m.querySelector('#sReplays').onclick=()=>showReplays();
@@ -972,7 +978,7 @@ function showSetup(){
   };
   for(let i=0;i<setup.n;i++){if(setup.colors.slice(0,i).includes(setup.colors[i]))setup.colors[i]=COLORS.find(c=>!setup.colors.slice(0,setup.n).includes(c.id)).id;}
   if(!S||S.over)preview();
-  modal('',mount,!!(S&&!S.over));
+  menuModal('',mount,!!(S&&!S.over));
 }
 function showRules(){
   modal(`<h2>How to play</h2><div class="rules">

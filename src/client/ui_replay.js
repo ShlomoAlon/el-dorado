@@ -158,7 +158,7 @@ function showReplays(){
     <div class="field"><button class="btn" id="rUp">Upload a game log</button><input type="file" id="rFile" accept=".json,application/json" hidden> <span id="rMsg" class="note" style="margin-left:8px"></span></div>
     <div class="field"><label>Recent games and uploads</label><div id="rList" class="rlist"><p class="note">Loading…</p></div></div>
     <div class="mrow"><button class="btn" id="rBack">Back</button></div>`;
-  modal(html,sc=>{
+  menuModal(acctBar()+html,sc=>{wireAcct(sc,showReplays);
     sc.querySelector('#rBack').onclick=()=>showSetup();
     const msg=sc.querySelector('#rMsg');
     sc.querySelector('#rUp').onclick=()=>sc.querySelector('#rFile').click();
@@ -174,12 +174,12 @@ function showReplays(){
     const row=(attr,title,sub)=>`<button ${attr}><b>${esc(title)}</b><span>${esc(sub)}</span></button>`;
     const showMine=online=>{
       const items=[...loc.map(L=>({t:L.created,h:row(`data-lid="${esc(L.lid)}"`,L.title||'Game',`on this device · ${L.actions.length} moves · ${new Date(L.created).toLocaleString()}`)})),
-        ...online.map(r=>({t:r.created,h:row(`data-id="${esc(r.id)}"`,r.title||r.players,`online · ${r.actions} moves · ${new Date(r.created).toLocaleString()}`)}))].sort((a,b)=>b.t-a.t);
+        ...online.map(r=>({t:r.created,h:row(`data-id="${esc(r.id)}"`,r.title||'Game',`online · ${r.actions} moves · ${new Date(r.created).toLocaleString()}`)}))].sort((a,b)=>b.t-a.t);
       mine.innerHTML=items.length?items.map(x=>x.h).join(''):'<p class="note">No finished games yet. Games you finish here are kept to watch again.</p>';
       mine.querySelectorAll('button[data-lid]').forEach(b=>b.onclick=()=>{const L=loc.find(x=>x.lid===b.dataset.lid);if(L)openReplay(L,null);});
       mine.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>loadReplayId(b.dataset.id));};
     showMine([]);
-    if(NET.available&&NET.user)api('/api/replays?mine=1').then(j=>showMine(j.replays||[])).catch(()=>{});
+    if(NET.available&&NET.user)api('/api/users/'+encodeURIComponent(myId())).then(j=>showMine(j.games||[])).catch(()=>{});
     const list=sc.querySelector('#rList');
     if(!NET.available){list.innerHTML='<p class="note">Uploading and the shared list need the online server; a file you pick still plays here.</p>';return;}
     fetch('/api/replays').then(r=>r.json()).then(j=>{const rs=j.replays||[];

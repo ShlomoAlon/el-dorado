@@ -30,22 +30,36 @@ let gsiLoading=null;
 function loadGsi(){if(window.google&&google.accounts)return Promise.resolve();if(!gsiLoading)gsiLoading=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=res;s.onerror=rej;document.head.appendChild(s);});return gsiLoading;}
 function wsUrl(path){return(location.protocol==='https:'?'wss://':'ws://')+location.host+path+(path.includes('?')?'&':'?')+'t='+encodeURIComponent(NET.token);}
 
+/* ---------- the account bar: at the top of every menu screen ---------- */
+function acctBar(){
+  if(!NET.available)return'';
+  const u=NET.user;
+  if(!u)return`<div class="acct"><span class="m">Not signed in</span>${NET.cfg&&NET.cfg.google?'<div id="gsiTop" class="gsiSm gsi"></div>':''}</div>`;
+  return`<div class="acct"><span class="av">${esc(u.name.slice(0,1).toUpperCase())}</span><span><b>${esc(u.name)}</b> · <b class="rt">${Math.round(u.rating)}</b> · ${plural(u.games,'game')} · ${plural(u.wins,'win')}</span><span class="acb"><button class="linkbtn" id="acProfile">Profile</button><button class="linkbtn" id="acOut">Sign out</button></span></div>`;
+}
+// rerender: redraw the current screen after signing in or out
+function wireAcct(root,rerender){
+  const g=root.querySelector('#gsiTop');if(g)gsiMount(g,t=>toast(t,3000),rerender,'medium');
+  const o=root.querySelector('#acOut');if(o)o.onclick=()=>signOut(rerender);
+  const p=root.querySelector('#acProfile');if(p)p.onclick=()=>{hubTab='me';NET.viewUser=null;showHub();};
+}
 /* ---------- hub ---------- */
 let hubTab='play';
 function hubHTML(){
   const u=NET.user;
   if(!NET.available)return`<h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
-  if(!u)return`<h2>Play online</h2><p class="sub">Sign in so your rating follows you. Rated games move your Elo rating, and you can play against people, the AIs, or both.</p>
-    ${NET.cfg.google?'<div id="gsiBtn"></div>':'<p class="note" style="color:#f3c98b">Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>'}
+  if(!u)return acctBar()+`<h2>Play online</h2><p class="sub">Sign in (top of this screen) so your rating follows you. Rated games move your Elo rating, and you can play against people, the AIs, or both.</p>
+    ${NET.cfg.google?'':'<p class="note" style="color:#f3c98b">Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>'}
     ${NET.cfg.dev?'<div class="field" style="margin-top:16px"><label>Developer sign-in (local testing only)</label><div class="prow"><input id="devName" maxlength="16" placeholder="Name"><button class="btn" id="devGo">Sign in</button></div></div>':''}
     <p class="note" id="hErr"></p>
     <div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
   const tabs=`<div class="seg" id="hTabs" style="margin-bottom:16px">${[['play','Play'],['board','Leaderboard'],['me','Profile']].map(([k,t])=>`<button data-k="${k}" class="${hubTab===k?'on':''}">${t}</button>`).join('')}</div>`;
-  const head=`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2>Online</h2><span class="note" style="margin:0"><b style="color:var(--text)">${esc(u.name)}</b> · rating <b style="color:var(--gold2)">${Math.round(u.rating)}</b> · ${plural(u.games,'game')} · <button class="linkbtn" id="hOut2">Sign out</button></span></div>`;
+  const head=acctBar()+`<h2>Online</h2>`;
   if(hubTab==='board')return head+tabs+`<div id="lbList"><p class="note">Loading…</p></div><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
-  if(hubTab==='me')return head+tabs+`<div class="field"><label>Display name</label><div class="prow"><input id="meName" maxlength="16" value="${esc(u.name)}"><button class="btn" id="meSave">Save</button></div></div>
-    <p class="note">${plural(u.wins,'win')} in ${plural(u.games,'game')} (rated). Everyone starts at 1200, the AIs too; ratings move faster during a player's first 10 games. Unrated games don't count.</p>
-    <div class="mrow"><button class="btn" id="hOut">Sign out</button><button class="btn" id="hBack">Back</button></div>`;
+  if(hubTab==='me'){const own=!NET.viewUser||NET.viewUser===u.id;
+    return head+tabs+`${own?'':'<button class="linkbtn" id="pfBack" style="margin-bottom:10px">‹ Leaderboard</button>'}<div id="pf"><p class="note">Loading…</p></div>
+    ${own?`<div class="field"><label>Display name</label><div class="prow"><input id="meName" maxlength="16" value="${esc(u.name)}"><button class="btn" id="meSave">Save</button></div></div>`:''}
+    <div class="mrow"><button class="btn" id="hBack">Back</button></div>`;}
   const rooms=NET.rooms.filter(r=>r.status==='lobby');const live=NET.rooms.filter(r=>r.status==='playing');
   const rrow=r=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line)"><span>${r.auto?'<b>Quick match</b>':`<b>${esc(r.host)}</b>’s room`} <span class="note" style="margin:0">· ${r.count}/${r.max}${r.ai?` (${r.ai} AI)`:''} · ${r.turn}s turns · ${r.rated===false?'unrated':'rated'} · ${esc(courseName(r.course))}</span></span>${r.status==='lobby'&&r.count<r.max?`<button class="btn" data-join="${r.code}">Join</button>`:'<span class="note" style="margin:0">in progress</span>'}</div>`;
   return head+tabs+`
@@ -71,8 +85,15 @@ function hubHTML(){
 function showHub(){
   if(NET.user)openLobbyWs(); // also right after signing in, when the hub is already open
   if(document.querySelector('#overlay .modal.hub')){renderHub();return;}
-  modal('',sc=>{sc.querySelector('.modal').classList.add('hub');renderHub();},false);
+  menuModal('',sc=>{sc.querySelector('.modal').classList.add('hub');renderHub();},false);
 }
+/* a player's profile: stats, then their latest online games, each opening its replay */
+const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
+function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
+  const stat=(v,l)=>`<div class="pst"><b>${v}</b><span>${l}</span></div>`;
+  return`<div class="pfh"><span class="av big">${esc(u.name.slice(0,1).toUpperCase())}</span><div><h3>${esc(u.name)}${A?' <span class="aitag">AI</span>':''}</h3>${A?`<span class="note" style="margin:0">${esc(A.tier)} · ${esc(A.desc)}</span>`:''}</div></div>
+  <div class="pstats">${stat(Math.round(u.rating),'rating')}${stat('#'+u.rank,'rank')}${stat(u.games,'rated games')}${stat(u.wins,'wins')}${stat(u.games?Math.round(100*u.wins/u.games)+'%':'–','win rate')}</div>
+  <div class="field"><label>Recent games</label><div class="rlist">${r.games.length?r.games.map(g=>`<button data-rid="${esc(g.id)}"><b>${g.place?`<span class="plc p${g.place}">${ordn(g.place)}</span> `:''}${esc(g.title||'Game')}</b><span>${new Date(g.created).toLocaleString()} · ${g.actions} moves · watch replay</span></button>`).join(''):'<p class="note">No recorded games yet.</p>'}</div></div>`;}
 function renderHub(){
   const m=document.querySelector('#overlay .modal.hub');if(!m)return;
   const focus=document.activeElement&&document.activeElement.id;const jv=m.querySelector('#jCode')?.value;
@@ -83,15 +104,21 @@ function renderHub(){
   q('#hBack').onclick=()=>{closeLobbyWs();showSetup();};
   if(!NET.available)return;
   if(!NET.user){
-    gsiMount(q('#gsiBtn'),err);
+    wireAcct(m,renderHub);
     const dg=q('#devGo');if(dg)dg.onclick=async()=>{try{signedIn(await api('/api/auth/dev',{method:'POST',body:JSON.stringify({name:q('#devName').value||'Tester'})}));}catch(e){err(e.message);}};
     return;
   }
   m.querySelectorAll('#hTabs button').forEach(b=>b.onclick=()=>{hubTab=b.dataset.k;renderHub();});
-  q('#hOut2').onclick=()=>signOut();
+  wireAcct(m,renderHub);
   if(hubTab==='board'){api('/api/leaderboard').then(r=>{const l=q('#lbList');if(!l)return;
-    l.innerHTML=r.players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${r.players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span style="color:var(--muted)">${i+1}</span><span style="display:flex;align-items:center;gap:7px;min-width:0"><b style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</b>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note" style="margin:0">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note" style="margin-top:12px">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';}).catch(e=>{const l=q('#lbList');if(l)l.textContent=e.message;});return;}
-  if(hubTab==='me'){q('#meSave').onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};q('#hOut').onclick=()=>signOut();return;}
+    l.innerHTML=r.players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${r.players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span style="color:var(--muted)">${i+1}</span><span style="display:flex;align-items:center;gap:7px;min-width:0"><button class="lbn" data-uid="${esc(p.id)}" style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</button>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note" style="margin:0">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note" style="margin-top:12px">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';l.querySelectorAll('.lbn').forEach(b=>b.onclick=()=>{NET.viewUser=b.dataset.uid;hubTab='me';renderHub();});}).catch(e=>{const l=q('#lbList');if(l)l.textContent=e.message;});return;}
+  if(hubTab==='me'){
+    const ms=q('#meSave');if(ms)ms.onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};
+    const pb=q('#pfBack');if(pb)pb.onclick=()=>{NET.viewUser=null;hubTab='board';renderHub();};
+    const id=NET.viewUser||myId();
+    api('/api/users/'+encodeURIComponent(id)).then(r=>{const el=q('#pf');if(!el)return;el.innerHTML=profileHTML(r);
+      el.querySelectorAll('[data-rid]').forEach(b=>b.onclick=()=>{closeLobbyWs();loadReplayId(b.dataset.rid);});}).catch(e=>{const el=q('#pf');if(el)el.textContent=e.message;});
+    return;}
   const seg=(id,key)=>m.querySelectorAll(id+' button').forEach(b=>b.onclick=()=>{setup[key]=+b.dataset.v;renderHub();});
   seg('#cMax','oMax');seg('#cTurn','oTurn');
   m.querySelectorAll('#cPub button').forEach(b=>b.onclick=()=>{setup.oPub=b.dataset.v==='1';renderHub();});
@@ -177,10 +204,10 @@ function roomLobbyHTML(){
   ${NET.status?`<p class="note" style="color:#f3c98b">${esc(NET.status)}</p>`:''}
   <div class="mrow"><button class="btn" id="rlLeave">${host&&!(r.opts&&r.opts.auto)?'Close room':'Leave'}</button>${r.opts&&r.opts.auto&&mine?`<button class="btn${mine.now?'':' pri'} big" id="rlNow" ${(r.seats||[]).length<2?'disabled':''}>${mine.now?'Waiting for the others… (cancel)':'Start now'}</button>`:host&&!(r.opts&&r.opts.auto)?`<button class="btn pri big" id="rlStart" ${(r.seats||[]).length<2?'disabled':''}>Start game</button>`:''}</div>`;
 }
-function showRoomLobby(){modal('',sc=>{sc.querySelector('.modal').classList.add('roomlobby');renderRoomLobby();},false);}
+function showRoomLobby(){menuModal('',sc=>{sc.querySelector('.modal').classList.add('roomlobby');renderRoomLobby();},false);}
 function renderRoomLobby(){
   const m=document.querySelector('#overlay .modal.roomlobby');if(!m)return;
-  m.innerHTML=roomLobbyHTML();
+  m.innerHTML=acctBar()+roomLobbyHTML();wireAcct(m,renderRoomLobby);
   m.querySelector('#lkCopy').onclick=()=>{const i=m.querySelector('#lkIn');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value).then(()=>toast('Link copied')).catch(()=>{});};
   m.querySelectorAll('[data-col]').forEach(b=>b.onclick=()=>netSend({t:'color',color:b.dataset.col}));
   m.querySelector('#rlLeave').onclick=()=>{netSend({t:'leave'});NET.code=null;leaveRoomSocket();try{history.replaceState(null,'',location.pathname);}catch(e){}showHub();};

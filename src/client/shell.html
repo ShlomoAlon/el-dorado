@@ -149,8 +149,17 @@ html,body{overflow:clip;overscroll-behavior:none}
 .sclose:hover{color:var(--text)}
 .note{font-size:11.5px;color:var(--muted);margin:8px 0 0;line-height:1.4}
 /* journal (game log): its own HUD button opens it; it stays live while open. No backdrop blur: the board may move under it */
-.scrim.swap{animation:none}.scrim.swap .modal{animation:swapIn .14s ease}
-@keyframes swapIn{from{opacity:.4}}
+.scrim.swap{animation:none}.scrim.swap .modal{animation:none}
+/* the menu panel: one size for every menu screen, the contents scroll inside it */
+.modal.menu{width:min(620px,calc(100% - 32px));height:min(860px,calc(100% - 32px));box-sizing:border-box}
+.acct .acb{margin-left:auto;display:flex;gap:14px;white-space:nowrap}.acct>span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lbn{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;text-align:left}.lbn:hover{text-decoration:underline}
+.pfh{display:flex;align-items:center;gap:12px;margin:4px 0 12px}.pfh h3{margin:0;font-size:18px}
+.av.big{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(233,178,74,.18);color:var(--gold2);font-weight:800;font-size:18px;flex:none}
+.pstats{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}
+.pst{display:flex;flex-direction:column;align-items:center;padding:8px 4px;border-radius:10px;background:#0c1512;border:1px solid var(--line)}
+.pst b{font-size:17px;color:var(--gold2);font-variant-numeric:tabular-nums}.pst span{font-size:11px;color:var(--muted)}
+.plc{color:var(--muted)}.plc.p1{color:var(--gold2)}
 .gsiSm{min-height:32px;margin-left:auto}
 .scrim.plain{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(4,8,7,.7)}
 .modal.jrn{display:flex;flex-direction:column;padding:22px 22px 18px;max-height:min(720px,calc(100% - 32px))}
@@ -308,7 +317,9 @@ html,body{overflow:clip;overscroll-behavior:none}
 /* Google's sign-in button is a light-scheme iframe: in our dark page the browser would paint an opaque white box behind it */
 #gsiBtn{color-scheme:light;min-height:44px;display:inline-block}
 .acct{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--muted)}
-.acct b{color:var(--text)}.acct .rt{color:var(--gold2)}.acct .linkbtn{margin-left:auto}
+.acct b{color:var(--text)}.acct .rt{color:var(--gold2)}
+.gsi{color-scheme:light}
+@media (max-width:500px){.pstats{grid-template-columns:repeat(3,1fr)}}
 .acct .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(233,178,74,.18);color:var(--gold2);font-weight:800;flex:none}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--gold2);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 #rside .revl{display:grid;gap:6px;margin-bottom:10px}

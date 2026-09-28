@@ -211,7 +211,8 @@ function replayStep(log,i){
    action cuts the record back to it. */
 function recRng(rng,k){return mulberry32(((rng>>>0)+Math.imul(k+2,0x9E3779B1))>>>0);}
 function recNewGame(o){
-  const rng=(Math.random()*4294967296)>>>0,r0=RNG;setRng(recRng(rng,-1));
+  // the secret: from the platform's cryptographic generator where there is one (Math.random's state could be guessed)
+  const c=globalThis.crypto,rng=c&&c.getRandomValues?c.getRandomValues(new Uint32Array(1))[0]:(Math.random()*4294967296)>>>0,r0=RNG;setRng(recRng(rng,-1));
   try{newGame(o);}finally{RNG=r0;}
   S.nact=0;
   return{kind:'eldorado-replay',v:2,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,
@@ -333,6 +334,7 @@ function applyAction(seat,a){
   if(!S||S.over)return fail('The game is over.');
   if(seat!==S.cur)return fail('It is not your turn.');
   if(!a||typeof a!=='object')return fail('Bad action.');
+  if('idx' in a&&!(Number.isInteger(a.idx)&&a.idx>=0&&a.idx<16))return fail('Bad action.'); // a market / reserve index (never a property name)
   const P=S.players[seat],T=S.turn,ev=[];let reveal=false;
   const inHand=id=>typeof id==='string'&&P.hand.includes(id);
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
