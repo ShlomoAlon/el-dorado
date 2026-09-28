@@ -13,10 +13,10 @@ async function netInit(){
   if(location.protocol==='file:'||/claude\.ai$|claudeusercontent/.test(location.hostname))return;
   try{NET.cfg=await api('/api/config');NET.available=true;}catch(e){NET.available=false;return;}
   try{NET.token=localStorage.getItem('ed-token');}catch(e){}
-  if(NET.token){try{const r=await api('/api/me');NET.user=r.user;NET.active=r.active;}catch(e){if(e.status===401){NET.token=null;try{localStorage.removeItem('ed-token');}catch(_){}}}}
+  if(NET.token){try{const r=await api('/api/me');NET.user=r.user;NET.active=r.active;loadProfile(r.user.id).catch(()=>{});}catch(e){if(e.status===401){NET.token=null;try{localStorage.removeItem('ed-token');}catch(_){}}}}
 }
 function signedIn(r,after){
-  NET.token=r.token;NET.user=r.user;try{localStorage.setItem('ed-token',r.token);}catch(e){}
+  NET.token=r.token;NET.user=r.user;try{localStorage.setItem('ed-token',r.token);}catch(e){}loadProfile(r.user.id).catch(()=>{});
   if(r.isNew)toast('Welcome, '+r.user.name+'! You can change your name any time.',3000);
   if(NET.pendingRoom){const c=NET.pendingRoom;NET.pendingRoom=null;joinRoom(c);return;}
   (after||showHub)();
@@ -56,8 +56,8 @@ function hubHTML(){
   const tabs=`<div class="seg" id="hTabs" style="margin-bottom:16px">${[['play','Play'],['board','Leaderboard'],['me','Profile']].map(([k,t])=>`<button data-k="${k}" class="${hubTab===k?'on':''}">${t}</button>`).join('')}</div>`;
   const head=acctBar()+`<h2>Online</h2>`;
   if(hubTab==='board')return head+tabs+`<div id="lbList"><p class="note">Loading…</p></div><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
-  if(hubTab==='me'){const own=!NET.viewUser||NET.viewUser===u.id;
-    return head+tabs+`${own?'':'<button class="linkbtn" id="pfBack" style="margin-bottom:10px">‹ Leaderboard</button>'}<div id="pf"><p class="note">Loading…</p></div>
+  if(hubTab==='me'){const own=!NET.viewUser||NET.viewUser===u.id,pc=PROFILES[NET.viewUser||u.id];
+    return head+tabs+`${own?'':'<button class="linkbtn" id="pfBack" style="margin-bottom:10px">‹ Leaderboard</button>'}<div id="pf">${pc?profileHTML(pc):'<p class="note">Loading…</p>'}</div>
     ${own?`<div class="field"><label>Display name</label><div class="prow"><input id="meName" maxlength="16" value="${esc(u.name)}"><button class="btn" id="meSave">Save</button></div></div>`:''}
     <div class="mrow"><button class="btn" id="hBack">Back</button></div>`;}
   const rooms=NET.rooms.filter(r=>r.status==='lobby');const live=NET.rooms.filter(r=>r.status==='playing');
@@ -87,6 +87,9 @@ function showHub(){
   if(document.querySelector('#overlay .modal.hub')){renderHub();return;}
   menuModal('',sc=>{sc.querySelector('.modal').classList.add('hub');renderHub();},false);
 }
+/* profiles are cached (and your own is fetched as soon as you're signed in), so opening one never flashes "Loading" */
+const PROFILES={};
+function loadProfile(id){return api('/api/users/'+encodeURIComponent(id)).then(r=>{const same=JSON.stringify(PROFILES[id])===JSON.stringify(r);PROFILES[id]=r;return same?null:r;});}
 /* a player's profile: stats, then their latest online games, each opening its replay */
 const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
 function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
@@ -116,8 +119,9 @@ function renderHub(){
     const ms=q('#meSave');if(ms)ms.onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};
     const pb=q('#pfBack');if(pb)pb.onclick=()=>{NET.viewUser=null;hubTab='board';renderHub();};
     const id=NET.viewUser||myId();
-    api('/api/users/'+encodeURIComponent(id)).then(r=>{const el=q('#pf');if(!el)return;el.innerHTML=profileHTML(r);
-      el.querySelectorAll('[data-rid]').forEach(b=>b.onclick=()=>{closeLobbyWs();loadReplayId(b.dataset.rid);});}).catch(e=>{const el=q('#pf');if(el)el.textContent=e.message;});
+    const show=r=>{const el=q('#pf');if(!el)return;el.innerHTML=profileHTML(r);el.querySelectorAll('[data-rid]').forEach(b=>b.onclick=()=>{closeLobbyWs();loadReplayId(b.dataset.rid);});};
+    if(PROFILES[id])show(PROFILES[id]); // shown at once from the cache, refreshed below
+    loadProfile(id).then(r=>{if(r)show(r);}).catch(e=>{const el=q('#pf');if(el&&!PROFILES[id])el.textContent=e.message;});
     return;}
   const seg=(id,key)=>m.querySelectorAll(id+' button').forEach(b=>b.onclick=()=>{setup[key]=+b.dataset.v;renderHub();});
   seg('#cMax','oMax');seg('#cTurn','oTurn');

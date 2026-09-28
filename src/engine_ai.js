@@ -53,7 +53,7 @@ function aiFinishGuard(a){
     c=c.slice(0,Math.max(0,all.length-4)); // and never thin the deck below 4 cards (owner: 4 can be valid, fewer can't)
     if(c.length!==a.cards.length)return{...a,cards:c};}
   if(a.t==='end'&&!n&&!S.turn.bought&&!S.turn.pending){
-    const buys=botActions().filter(b=>b.t==='buy'&&aiFinishCard((b.src==='m'?S.market:S.reserve)[b.idx].t));
+    const buys=botActions().filter(b=>b.t==='buy'&&aiFinishCard(b.type));
     if(buys.length){buys.sort((x,y)=>x.cards.length-y.cards.length);return buys[0];}
   }
   return a;

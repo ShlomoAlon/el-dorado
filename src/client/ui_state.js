@@ -96,7 +96,7 @@ function playEvents(ev,viewer){
     if(e.e==='move')animatePiece(e.pl,e.pi,e.path);
     else if(e.e==='block'){if(!watched)toast(S.players[e.pl].name+' claims blockade #'+e.n);}
     else if(e.e==='arrive')toast(S.players[e.pl].name+' reaches El Dorado!',2200);
-    else if(e.e==='gain'&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.t,takeBuyFrom()||marketRect(e.src,e.idx));
+    else if(e.e==='gain'&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.t,takeBuyFrom()||marketRectOf(e.t));
     else if(e.e==='timeout')toast(S.players[e.pl].name+' ran out of time');
     else if(e.e==='resign')toast(S.players[e.pl].name+' left the game');
   }
@@ -158,7 +158,7 @@ function confirmTrash(){if(UI.picks.length)sfx('trash');act({t:'trash',cards:UI.
 function pickFromMarket(src,idx){
   if(!canAct()){sfx('error');toast('Wait for your turn to buy.');return;}
   const stack=src==='m'?S.market[idx]:S.reserve[idx];if(!stack||stack.n<=0)return;
-  if(UI.mode==='transmit'){openAll(false);act({t:'transmit',card:UI.card,src,idx});return;}
+  if(UI.mode==='transmit'){openAll(false);act({t:'transmit',card:UI.card,type:stack.t});return;}
   if(S.turn.bought){sfx('error');toast('You can buy only one card per turn.');return;}
   if(src==='r'&&!S.market.some(s=>s.n===0)){sfx('error');toast('The reserve opens once a market slot is empty.');return;}
   if(UI.mode==='pay'&&UI.buy.src===src&&UI.buy.idx===idx){cancelMode();return;}
@@ -167,7 +167,7 @@ function pickFromMarket(src,idx){
 }
 function payTotal(){return UI.picks.reduce((a,id)=>a+coinVal(id),0);}
 let buyFrom=null;const takeBuyFrom=()=>{const r=buyFrom;buyFrom=null;return r&&Date.now()-r.at<3000?r:null;};
-function confirmBuy(){const B=UI.buy;if(!B||payTotal()<CT[B.t].cost)return;{const e=document.querySelector('#buySlot .mcard');if(e){const r=e.getBoundingClientRect();buyFrom={left:r.left,top:r.top,width:r.width,height:r.height,at:Date.now()};}}act({t:'buy',src:B.src,idx:B.idx,cards:UI.picks.slice()});}
+function confirmBuy(){const B=UI.buy;if(!B||payTotal()<CT[B.t].cost)return;{const e=document.querySelector('#buySlot .mcard');if(e){const r=e.getBoundingClientRect();buyFrom={left:r.left,top:r.top,width:r.width,height:r.height,at:Date.now()};}}act({t:'buy',type:B.t,cards:UI.picks.slice()});}
 function cancelMode(){
   if(S&&S.turn.pending)return;
   UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;render();

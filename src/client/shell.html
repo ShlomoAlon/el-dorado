@@ -151,7 +151,8 @@ html,body{overflow:clip;overscroll-behavior:none}
 /* journal (game log): its own HUD button opens it; it stays live while open. No backdrop blur: the board may move under it */
 .scrim.swap{animation:none}.scrim.swap .modal{animation:none}
 /* the menu panel: one size for every menu screen, the contents scroll inside it */
-.modal.menu{width:min(620px,calc(100% - 32px));height:min(860px,calc(100% - 32px));box-sizing:border-box}
+.modal.menu{width:min(620px,calc(100% - 32px));height:min(860px,calc(100% - 32px));box-sizing:border-box;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.modal.menu::-webkit-scrollbar{width:8px}.modal.menu::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
 .acct .acb{margin-left:auto;display:flex;gap:14px;white-space:nowrap}.acct>span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lbn{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;text-align:left}.lbn:hover{text-decoration:underline}
 .pfh{display:flex;align-items:center;gap:12px;margin:4px 0 12px}.pfh h3{margin:0;font-size:18px}

@@ -12,7 +12,7 @@ for (let g = 0; g < +MAX; g++) {
     if (!S.turn.active && !S.turn.pending && !P.play.length && !S.turn.bought) log[me].push(`R${S.round} at ${P.pieces} left ${E.botRemaining(me).toFixed(1)} hand [${P.hand.map(T)}] deck ${P.deck.length + P.hand.length + P.discard.length + P.play.length}`);
     const a = E.botChoose({ mode: POL }).a, d = { ...a };
     if (a.card) d.card = T(a.card); if (a.cards) d.cards = a.cards.map(T); if (a.keep) d.keep = a.keep.map(T);
-    if (a.t === 'buy' || a.t === 'transmit') { const s = a.src === 'm' ? S.market[a.idx] : S.reserve[a.idx]; d.what = s && s.t; }
+    if (a.t === 'buy' || a.t === 'transmit') { d.what = a.type; }
     const r = E.applyAction(me, a); log[me].push('   ' + JSON.stringify(d) + (r.ok ? '' : ' FAILED ' + r.err));
     if (!r.ok) E.applyAction(me, { t: 'end', keep: [] }); }
   const bad = capped ? E.S.players.map((p, i) => i).filter(i => !E.S.players[i].fin) : [];

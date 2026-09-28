@@ -14,6 +14,8 @@ function playerDone(p){return p.pieces.every(k=>k==='done');}
 function isActive(p){return !playerDone(p)&&!p.resigned;}
 
 function mapFor(st){return buildCourse(st.course,st.seed);}
+/* where a card type is sold: every type has exactly one stack, in the market or the reserve. {src:'m'|'r', i, s} or null */
+function stackOf(t){let i=S.market.findIndex(s=>s.t===t);if(i>=0)return{src:'m',i,s:S.market[i]};i=S.reserve.findIndex(s=>s.t===t);return i>=0?{src:'r',i,s:S.reserve[i]}:null;}
 /* ---- game logs (replays) ----
    {kind:'eldorado-replay', v:1 (training logs) or 2 (game records, below), title, course, seed, rng, fullRace, players:[{name,color,bot}], actions:[[seat,action],…], notes:[…]}
    Every shuffle draws from a generator seeded with log.rng, so re-applying the same actions rebuilds the identical game. */
@@ -172,7 +174,6 @@ function applyAction(seat,a){
   if(!S||S.over)return fail('The game is over.');
   if(seat!==S.cur)return fail('It is not your turn.');
   if(!a||typeof a!=='object')return fail('Bad action.');
-  if('idx' in a&&!(Number.isInteger(a.idx)&&a.idx>=0&&a.idx<16))return fail('Bad action.'); // a market / reserve index (never a property name)
   const P=S.players[seat],T=S.turn,ev=[];let reveal=false;
   const inHand=id=>typeof id==='string'&&P.hand.includes(id);
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
@@ -240,27 +241,27 @@ function applyAction(seat,a){
     }
     case 'transmit':{
       if(!inHand(a.card)||typeOf(a.card)!=='transmitter')return fail('You need the Transmitter.');
-      const stack=a.src==='m'?S.market[a.idx]:a.src==='r'?S.reserve[a.idx]:null;if(!stack||stack.n<=0)return fail('That card is sold out.');
+      const st=stackOf(a.type),stack=st&&st.s;if(!stack||stack.n<=0)return fail('That card is sold out.');
       T.active=null;rm(P.hand,a.card);S.trash.push(a.card);
       stack.n--;P.discard.push(newCard(stack.t));ev.push({e:'play',pl:seat,k:'transmit',ts:['transmitter'],got:stack.t});
-      log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');ev.push({e:'gain',pl:seat,t:stack.t,src:a.src,idx:a.idx});
+      log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');ev.push({e:'gain',pl:seat,t:stack.t});
       break;
     }
     case 'buy':{
       if(T.bought)return fail('You can buy only one card per turn.');
       const open=S.market.some(s=>s.n===0);
-      let stack=a.src==='m'?S.market[a.idx]:a.src==='r'?S.reserve[a.idx]:null;
+      const st=stackOf(a.type);let stack=st&&st.s;
       if(!stack||stack.n<=0)return fail('That card is sold out.');
-      if(a.src==='r'&&!open)return fail('The reserve opens once a market slot is empty.');
+      if(st.src==='r'&&!open)return fail('The reserve opens once a market slot is empty.');
       if(!distinctHand(a.cards))return fail('Pay with cards from your hand.');
       const total=a.cards.reduce((s,id)=>s+coinVal(id),0),cost=CT[stack.t].cost;
       if(total<cost)return fail('Not enough coins.');
       T.active=null;ev.push({e:'play',pl:seat,k:'buy',ts:a.cards.map(typeOf),got:stack.t,paid:total});
       for(const id of a.cards){rm(P.hand,id);const d=def(id);if(d.once&&(d.c==='y'||d.c==='x'))S.trash.push(id);else P.play.push(id);}
       const t=stack.t;
-      if(a.src==='r'){const slot=S.market.findIndex(s=>s.n===0);S.market[slot]={t,n:stack.n};S.reserve.splice(a.idx,1);stack=S.market[slot];}
+      if(st.src==='r'){const slot=S.market.findIndex(s=>s.n===0);S.market[slot]={t,n:stack.n};S.reserve.splice(st.i,1);stack=S.market[slot];}
       stack.n--;P.discard.push(newCard(t));T.bought=true;
-      log(seat,'buys '+CT[t].n+' for '+fmt(total)+' coin'+(total===1?'':'s')+'.');ev.push({e:'gain',pl:seat,t,src:a.src,idx:a.idx});
+      log(seat,'buys '+CT[t].n+' for '+fmt(total)+' coin'+(total===1?'':'s')+'.');ev.push({e:'gain',pl:seat,t});
       break;
     }
     case 'end':{

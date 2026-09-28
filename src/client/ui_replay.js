@@ -82,7 +82,7 @@ function exitReplay(){replayStop();REPLAY=null;$('#app').classList.remove('repla
 function describeAction(a,st){
   const T=id=>CT[st.cards[id]]?CT[st.cards[id]].n:'?',sp=k=>{if(!k)return'';if(k[0]==='B'){const B=st.blockades[+k.slice(1)];return`blockade #${B?B.n:'?'}`;}const h=hexAt(k);return h?`${TERR[h.type]||h.type}${h.val>1?' '+h.val:''} <span class="m">(${fmtR(botCost(k))} left)</span>`:k;};
   const list=ids=>ids&&ids.length?ids.map(T).join(', '):'nothing';
-  const stack=a=>{const s=a.src==='m'?st.market[a.idx]:st.reserve[a.idx];return s?CT[s.t].n:'?';};
+  const stack=a=>CT[a.type]?CT[a.type].n:'?';
   switch(a.t){
     case'move':{const act=st.turn.active&&st.turn.active.id===a.card;return`${act?'keeps moving with':'plays'} <b>${esc(T(a.card))}</b> → ${sp(a.to)}`;}
     case'pay':return`gives up <b>${esc(list(a.cards))}</b> for ${sp(a.to)}`;

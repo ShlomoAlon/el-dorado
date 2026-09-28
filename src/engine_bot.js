@@ -50,15 +50,14 @@ function botActions(){
   for(const id of hand){const t=typeOf(id);if(['cartographer','compass','scientist','travellog'].includes(t))out.push({t:'action',card:id});}
   const open=S.market.some(s=>s.n===0);
   const tr=hand.find(id=>typeOf(id)==='transmitter');
-  if(tr){S.market.forEach((s,i)=>{if(s.n>0)out.push({t:'transmit',card:tr,src:'m',idx:i});});S.reserve.forEach((s,i)=>{if(s.n>0)out.push({t:'transmit',card:tr,src:'r',idx:i});});}
+  if(tr)for(const s of[...S.market,...S.reserve])if(s.n>0)out.push({t:'transmit',card:tr,type:s.t});
   if(!T.bought){
     // every minimal way to pay (no card could be left out), distinct by card types
     const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),pays=new Map();
     const payFor=cost=>{if(pays.has(cost))return pays.get(cost);const res=[];
       for(let k=1;k<=P.hand.length&&res.length<8;k++)for(const c of botCombos(P.hand,k)){const tot=c.reduce((a,id)=>a+coinVal(id),0);if(tot>=cost&&c.every(id=>tot-coinVal(id)<cost))res.push(c);}
       pays.set(cost,res);return res;};
-    const tryStack=(src,s,i)=>{if(s.n<=0||CT[s.t].cost>cash)return;for(const cards of payFor(CT[s.t].cost))out.push({t:'buy',src,idx:i,cards});};
-    S.market.forEach((s,i)=>tryStack('m',s,i));if(open)S.reserve.forEach((s,i)=>tryStack('r',s,i));
+    for(const s of open?[...S.market,...S.reserve]:S.market)if(s.n>0&&CT[s.t].cost<=cash)for(const cards of payFor(CT[s.t].cost))out.push({t:'buy',type:s.t,cards});
   }
   // end turn keeping any distinct choice of 0–3 cards
   for(let k=0;k<=Math.min(3,P.hand.length);k++)for(const c of botCombos(P.hand,k))out.push({t:'end',keep:c});
@@ -213,13 +212,12 @@ function botPlanChoose(me,O){
   const left=botRemaining(me);
   if(!T.bought&&left>O.buyStop){
     const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),open=S.market.some(s=>s.n===0);let pick=null;
-    const consider=(src,s,i)=>{if(s.n<=0||CT[s.t].cost>cash)return;const w=botCardWorth(s.t,me)*(1+CT[s.t].cost*O.costW);if(!pick||w>pick.w)pick={w,src,idx:i};};
-    S.market.forEach((s,i)=>consider('m',s,i));if(open)S.reserve.forEach((s,i)=>consider('r',s,i));
-    if(pick&&pick.w>O.buyMin){const buys=botActions().filter(a=>a.t==='buy'&&a.src===pick.src&&a.idx===pick.idx);
+    for(const s of open?[...S.market,...S.reserve]:S.market){if(s.n<=0||CT[s.t].cost>cash)continue;const w=botCardWorth(s.t,me)*(1+CT[s.t].cost*O.costW);if(!pick||w>pick.w)pick={w,t:s.t};}
+    if(pick&&pick.w>O.buyMin){const buys=botActions().filter(a=>a.t==='buy'&&a.type===pick.t);
       if(buys.length){buys.sort((a,b)=>a.cards.length-b.cards.length);return buys[0];}}
   }
   const tr=P.hand.find(id=>typeOf(id)==='transmitter');
-  if(tr&&left>O.transStop){let pick=null;const c=(src,s,i)=>{if(s.n<=0)return;const w=botCardWorth(s.t,me)+CT[s.t].cost*.3;if(!pick||w>pick.w)pick={w,src,idx:i};};S.market.forEach((s,i)=>c('m',s,i));S.reserve.forEach((s,i)=>c('r',s,i));if(pick)return{t:'transmit',card:tr,src:pick.src,idx:pick.idx};}
+  if(tr&&left>O.transStop){let pick=null;for(const s of[...S.market,...S.reserve]){if(s.n<=0)continue;const w=botCardWorth(s.t,me)+CT[s.t].cost*.3;if(!pick||w>pick.w)pick={w,t:s.t};}if(pick)return{t:'transmit',card:tr,type:pick.t};}
   if(O.keepEnd){// keep unplayed strong cards (not starters) for next turn
     const keep=P.hand.filter(id=>!BOT_STARTER[typeOf(id)]&&CT[typeOf(id)].c!=='p'&&(CT[typeOf(id)].p||0)>=O.keepEnd).slice(0,3);return{t:'end',keep};}
   return{t:'end',keep:[]};
@@ -358,7 +356,7 @@ function botChoose(opts){
   const ts=opts.turnState;
   if(ts&&ts.forceBuy&&!S.turn.bought){const buys=acts.filter(a=>a.t==='buy');if(buys.length){ts.forceBuy=false;return{a:buys[Math.floor(rnd()*buys.length)],why:'forceBuy'};}}
   if(ts&&ts.forceTransmit){const tr=acts.filter(a=>a.t==='transmit');if(tr.length){ts.forceTransmit=false; // a random card, reserve included, weighted toward expensive ones (cost²)
-    const w=tr.map(a=>{const s=a.src==='m'?S.market[a.idx]:S.reserve[a.idx];return CT[s.t].cost**2;});let r=rnd()*w.reduce((x,y)=>x+y,0);for(let i=0;i<tr.length;i++){r-=w[i];if(r<=0)return{a:tr[i],why:'forceTransmit'};}return{a:tr[tr.length-1],why:'forceTransmit'};}}
+    const w=tr.map(a=>CT[a.type].cost**2);let r=rnd()*w.reduce((x,y)=>x+y,0);for(let i=0;i<tr.length;i++){r-=w[i];if(r<=0)return{a:tr[i],why:'forceTransmit'};}return{a:tr[tr.length-1],why:'forceTransmit'};}}
   // search (after exploration, so random / typed moves and no-buy turns still happen in training)
   if(opts.search&&mode==='net')return opts.search.kind==='plan'?botPlanTurnChoose(opts):opts.search.kind==='deep'?botDeepChoose(opts):opts.search.kind==='rollout'?botRolloutChoose(opts):botTurnSearch(opts);
   const vals=[];let best=null,bv=-Infinity;const K=opts.draws||4;

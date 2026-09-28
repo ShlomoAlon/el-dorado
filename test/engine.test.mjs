@@ -48,10 +48,10 @@ for (let g = 0; g < 60; g++) {
     const S2 = E.S;
     // illegal actions must be rejected
     assert(!E.applyAction((seat + 1) % np, { t: 'end', keep: [] }).ok, 'out-of-turn action accepted');
-    assert(!E.applyAction(seat, { t: 'buy', src: 'm', idx: 0, cards: ['nope'] }).ok, 'fake card accepted');
+    assert(!E.applyAction(seat, { t: 'buy', type: S2.market[0].t, cards: ['nope'] }).ok, 'fake card accepted');
     const tot = P.hand.reduce((a, id) => a + (['y', 'x'].includes(E.CT[S2.cards[id]].c) ? E.CT[S2.cards[id]].p : .5), 0);
     const opts = S2.market.map((s, i) => [i, s]).filter(([i, s]) => s.n > 0 && E.CT[s.t].cost <= tot && E.CT[s.t].c !== 'p');
-    if (opts.length && !S2.turn.bought) { const [i] = opts[Math.floor(Math.random() * opts.length)]; assert(E.applyAction(seat, { t: 'buy', src: 'm', idx: i, cards: P.hand.slice() }).ok, 'buy failed'); }
+    if (opts.length && !S2.turn.bought) { const [i] = opts[Math.floor(Math.random() * opts.length)]; assert(E.applyAction(seat, { t: 'buy', type: S2.market[i].t, cards: P.hand.slice() }).ok, 'buy failed'); }
     if (Math.random() < .01 && S2.players.filter(p => !p.resigned).length > 2) { E.resign(seat); continue; }
     const r = E.applyAction(seat, { t: 'end', keep: [] }); assert(r.ok, r.err);
   }
@@ -140,4 +140,16 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
   assert(recs >= 8, 'too few recorded games finished: ' + recs);
   console.log(`ok: ${recs} recorded games replay exactly (undo, timeouts, resignations)`);
 }
+// a buy / transmit names a card type; anything else is refused without touching the state
+{ E.newGame({ course: E.COURSES[0], seed: 77, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) });
+  const before = JSON.stringify(E.S);
+  for (const type of ['__proto__', 'constructor', 'length', 'nope', 0, null, undefined, {}]) { const r = E.applyAction(0, { t: 'buy', type, cards: E.S.players[0].hand.slice() }); assert(!r.ok, 'buy of ' + String(type) + ' accepted'); }
+  assert(JSON.stringify(E.S) === before && Array.prototype.n === undefined, 'refused buys changed the state'); }
+// the value network's inputs and outputs at fixed positions are exactly as when the shipped networks were trained
+{ const { golden } = await import('../tools/ai/golden.mjs'), { readFileSync } = await import('node:fs');
+  const want = JSON.parse(readFileSync(new URL('./fixtures/features.json', import.meta.url), 'utf8'));
+  const got = golden(E, E.aiNetDecode(readFileSync(new URL('../src/ai/first.bin', import.meta.url))));
+  assert(got.length === want.length, 'golden positions: ' + got.length + ' vs ' + want.length);
+  for (let i = 0; i < want.length; i++) assert(JSON.stringify(got[i]) === JSON.stringify(want[i]), 'network features changed at golden position ' + i + ': ' + JSON.stringify(got[i]) + ' vs ' + JSON.stringify(want[i]));
+  console.log(`ok: network features and values identical at ${want.length} golden positions`); }
 console.log(`ok: ${games} games, map ${mapMs.toFixed(2)} ms, slowest action ${maxAct.toFixed(2)} ms`);

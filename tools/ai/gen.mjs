@@ -130,7 +130,7 @@ if (!isMainThread) {
           else inc('Buying', 'bought a card');
         }
       }
-      if (c.a.t === 'buy' || c.a.t === 'transmit') { const stk = c.a.src === 'm' ? S.market[c.a.idx] : S.reserve[c.a.idx]; if (stk) { const b = c.a.t === 'transmit' ? (isNet ? st.transNet : st.transHeur) : (isNet ? st.buysNet : st.buysHeur); b[stk.t] = (b[stk.t] || 0) + 1; } }
+      if (c.a.t === 'buy' || c.a.t === 'transmit') { const stk = { t: c.a.type }; if (stk.t) { const b = c.a.t === 'transmit' ? (isNet ? st.transNet : st.transHeur) : (isNet ? st.buysNet : st.buysHeur); b[stk.t] = (b[stk.t] || 0) + 1; } }
       // sample = the position right after my action, as I'll see it: for "end turn", before the next hand is drawn
       const f = mode === 'self' ? (c.a.t === 'end' ? E.botEndFeatures(me, c.a.keep) : null) : null;
       E.setRng(shuf); const r = E.applyAction(me, c.a); acts++;

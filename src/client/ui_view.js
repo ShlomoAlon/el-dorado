@@ -513,6 +513,7 @@ function flyToDiscard(t,from){
   layer.appendChild(el);placeAt(el,from,0);void el.offsetWidth;el.classList.add('anim');el.style.transitionDuration='.5s';
   requestAnimationFrame(()=>{const A=appRect(),cw=cardW();const t0=el.__t;setT(el,t0.x,t0.y-30,0,t0.sc*1.15);setTimeout(()=>{placeAt(el,pileRect('disc'),6);},180);setTimeout(()=>el.remove(),720);});
 }
+function marketRectOf(t){const s=stackOf(t);return s?marketRect(s.src,s.i):null;}
 function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpen?`#market [data-i="${idx}"] .mcard`:'#mktBtn'):(UI.allOpen?`#reserve [data-i="${idx}"] .mcard`:(UI.mktOpen?'#allTile':'#mktBtn')));if(!e)return null;const r=e.getBoundingClientRect();
   if(src==='r'){const cw=86;return{left:r.left+r.width/2-cw/2,top:r.top-cw*.7+r.height/2,width:cw,height:cw*1.4};}return r;}
 
@@ -542,7 +543,7 @@ function feedEvent(e){
     return;}
   if(FEED.pl!==e.pl)return;
   const last=FEED.groups[FEED.groups.length-1];if(!last)return;
-  if(e.e==='gain'&&(last.k==='buy'||last.k==='transmit'))FEED.fly.push({gid:last.id,kind:'got',from:marketRect(e.src,e.idx)});
+  if(e.e==='gain'&&(last.k==='buy'||last.k==='transmit'))FEED.fly.push({gid:last.id,kind:'got',from:marketRectOf(e.t)});
   else if(e.e==='block'){last.bl=e.n;last.v++;}
   else if(e.e==='arrive'){last.arr=true;last.v++;}
   else if(e.e==='move'){FEED.trail.push(e.path);feedTrail();}
@@ -908,13 +909,13 @@ let toastT=0;function toast(t,ms){const e=$('#toast');e.textContent=t;e.classLis
    feel like one screen); only the first one fades in over the game. */
 function modal(html,onMount,dismiss){const o=$('#overlay'),old=o.firstChild;
   // a menu screen replacing another menu screen: same panel, only its contents change (nothing moves or fades)
+  // (the same scrim element stays: a new one would replay its fade-in and re-blur the board: a visible flicker)
   if(old&&!old.classList.contains('closing')&&old.dataset.menu&&MENU_NEXT){const m=old.querySelector('.modal');m.className='modal menu';m.innerHTML=html;m.scrollTop=0;
-    const sc=old.cloneNode(false);old.replaceWith(sc);sc.appendChild(m);MENU_NEXT=false; // fresh listeners on the scrim
-    if(dismiss)sc.addEventListener('click',e=>{if(e.target===sc)closeModal();});onMount&&onMount(sc);return;}
+    MENU_NEXT=false;old.onclick=dismiss?e=>{if(e.target===old)closeModal();}:null;onMount&&onMount(old);return;}
   const swap=!!old&&!old.classList.contains('closing');
   o.innerHTML=`<div class="scrim${swap?' swap':''}${swap&&old.classList.contains('plain')?' plain':''}"><div class="modal">${html}</div></div>`;const sc=o.firstChild;
   if(MENU_NEXT){sc.dataset.menu='1';sc.firstChild.classList.add('menu');MENU_NEXT=false;}
-  if(dismiss)sc.addEventListener('click',e=>{if(e.target===sc)closeModal();});onMount&&onMount(sc);}
+  if(dismiss)sc.onclick=e=>{if(e.target===sc)closeModal();};onMount&&onMount(sc);}
 /* menu screens (start screen, Online, Replays, room lobby) share one fixed-size panel: call menuModal(...) like modal(...) */
 let MENU_NEXT=false;function menuModal(html,onMount,dismiss){MENU_NEXT=true;modal(html,onMount,dismiss);}
 function closeModal(){const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');const mo=sc.querySelector('.modal');if(mo)mo.className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
