@@ -16,7 +16,9 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "Lobby"] }],
   // Google OAuth Web client ID (public; the browser sees it via /api/config anyway).
-  "vars": { "GOOGLE_CLIENT_ID": "1035625687997-84toqn5qir80bpbpial56cmivj602t7c.apps.googleusercontent.com" },
+  "vars": { "GOOGLE_CLIENT_ID": "1035625687997-84toqn5qir80bpbpial56cmivj602t7c.apps.googleusercontent.com",
+    // SHA-256 of the secret token the AI-training machine uses to post progress to /api/train (the token itself is not in the repo)
+    "TRAIN_TOKEN_HASH": "9741c320676994fb5c9d8971c3c4c9144bad0d1fd2d8f9fda51b721f5f380f6c" },
   // keep_vars stops deploys from wiping any variables added in the dashboard.
   "keep_vars": true,
   "observability": { "enabled": true }

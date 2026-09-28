@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a1310">
+<title>AI Training · El Dorado</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Young+Serif&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a1310;--card:#0f1b17;--line:rgba(255,255,255,.08);--text:#ecf1ec;--muted:#98aa9f;--faint:#62756a;--gold:#e9b24a;--danger:#e8634f;--ok:#4fbf8a;
+  --c1:#2a78d6;--c2:#eb6834;--c3:#1baf7a;--c4:#eda100;--display:'Young Serif',Georgia,serif;--ui:'Figtree',system-ui,-apple-system,'Segoe UI',sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 var(--ui);-webkit-font-smoothing:antialiased}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 48px}
+h1{font:400 26px/1.2 var(--display);margin:0}
+h2{font:600 13px/1.2 var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.fresh{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}.fresh.stale{color:var(--danger)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}.stale .dot{background:var(--danger)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.grid .card{margin:0}
+@media (max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.now{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.phase{font:400 22px/1.2 var(--display)}.phase small{font:500 14px var(--ui);color:var(--muted);margin-left:8px}
+.clock{font-variant-numeric:tabular-nums;color:var(--muted)}
+.bar{height:8px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden;margin:12px 0 8px}
+.bar i{display:block;height:100%;width:100%;background:var(--gold);transform-origin:left;transform:scaleX(0);transition:transform 1s linear}
+.bar.over i{background:var(--danger)}
+.steps{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted)}.steps b{color:var(--text);font-weight:600}.steps .on b{color:var(--gold)}
+.env{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint);margin-top:10px;overflow-wrap:anywhere}
+.halt{border-color:rgba(232,99,79,.5);background:#1d1311}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px}.legend i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:6px;vertical-align:3px}
+.note{font-size:12.5px;color:var(--faint);margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--muted);font-weight:500}th:first-child,td:first-child{text-align:left}
+.tw{overflow-x:auto}
+td.bad{color:var(--danger)}td.good{color:var(--ok)}
+.events{list-style:none;margin:0;padding:0;font-size:13px}.events li{padding:6px 0;border-bottom:1px solid var(--line)}.events .k{font-weight:600;margin-right:8px}.events .HALT .k,.events .ERROR .k{color:var(--danger)}.events .WARN .k{color:var(--gold)}
+.events time{color:var(--faint);margin-right:8px;font-variant-numeric:tabular-nums}
+.empty{color:var(--faint);font-size:13px}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><h1>AI Training</h1><div class="fresh" id="fresh"><span class="dot"></span>connecting…</div></div>
+  <div class="card" id="nowCard">
+    <div class="now"><div class="phase" id="phase">—</div><div class="clock" id="clock"></div></div>
+    <div class="bar" id="bar"><i id="barFill"></i></div>
+    <div class="steps" id="steps"></div>
+    <div class="env" id="env"></div>
+  </div>
+  <div class="grid">
+    <div class="card"><h2>Arrival round (lower is better)</h2><div id="arr"></div><div class="legend" id="arrLeg"></div><div class="note">Dashed: the four-map network before this run. Each test is ~40 games per map, so points wobble by about ±0.3.</div></div>
+    <div class="card"><h2>Dead hidden units</h2><div id="dead"></div><div class="legend"><span><i style="background:var(--c1)"></i>layer 1 (of 256)</span><span><i style="background:var(--c2)"></i>layer 2 (of 128)</span></div><div class="note">The run stops itself above 10% (26 / 13 units).</div></div>
+    <div class="card"><h2>Single-use cards bought (% of all buys)</h2><div id="buys"></div><div class="legend"><span><i style="background:var(--c1)"></i>Giant Machete</span><span><i style="background:var(--c2)"></i>Prop Plane</span><span><i style="background:var(--c4)"></i>Treasure Chest</span></div></div>
+    <div class="card"><h2>Minutes per iteration</h2><div id="time"></div><div class="legend"><span><i style="background:var(--c1)"></i>self-play</span><span><i style="background:var(--c4)"></i>training</span><span><i style="background:var(--c3)"></i>test</span></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Iterations</h2><div class="tw"><table id="tbl"></table></div></div>
+  <div class="card"><h2>Warnings and events</h2><ul class="events" id="events"></ul></div>
+</main>
+<script>
+(()=>{
+'use strict';
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const MAPS=[['first','First','var(--c1)'],['hills','Hills','var(--c3)'],['winding','Winding','var(--c4)'],['witch','Witch','var(--c2)']];
+let data=null,skew=0,lastOk=0;
+const mmss=s=>{s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0');};
+const hhmm=t=>new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+// small line chart: series [{name,color,pts:[[x,y]]}], optional dashed reference lines [{y,color}]
+function chart(series,{refs=[],yMin=null,yMax=null,h=190,fmt=v=>v}={}){
+  const pts=series.flatMap(s=>s.pts);if(!pts.length)return'<div class="empty">No finished iterations yet.</div>';
+  const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]).concat(refs.map(r=>r.y));
+  let x0=Math.min(...xs),x1=Math.max(...xs);if(x0===x1){x0-=1;x1+=1;}
+  let y0=yMin??Math.min(...ys),y1=yMax??Math.max(...ys);if(y1-y0<1e-9){y0-=1;y1+=1;}const pad=(y1-y0)*.08;if(yMin==null)y0-=pad;if(yMax==null)y1+=pad;
+  const W=520,L=40,R=10,T=8,B=24,X=x=>L+(x-x0)/(x1-x0)*(W-L-R),Y=y=>T+(1-(y-y0)/(y1-y0))*(h-T-B);
+  let g='';for(let i=0;i<=4;i++){const v=y0+(y1-y0)*i/4;g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(255,255,255,.06)"/><text x="${L-6}" y="${Y(v)+4}" fill="#62756a" font-size="11" text-anchor="end">${fmt(+v.toFixed(2))}</text>`;}
+  const step=Math.max(1,Math.ceil((x1-x0)/8));for(let x=Math.ceil(x0);x<=x1;x+=step)g+=`<text x="${X(x)}" y="${h-6}" fill="#62756a" font-size="11" text-anchor="middle">${x}</text>`;
+  for(const r of refs)g+=`<line x1="${L}" x2="${W-R}" y1="${Y(r.y)}" y2="${Y(r.y)}" stroke="${r.color}" stroke-dasharray="4 4" opacity=".55"/>`;
+  for(const s of series){if(!s.pts.length)continue;g+=`<polyline fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" points="${s.pts.map(p=>X(p[0])+','+Y(p[1])).join(' ')}"/>`;
+    const lp=s.pts[s.pts.length-1];g+=`<circle cx="${X(lp[0])}" cy="${Y(lp[1])}" r="3" fill="${s.color}"/>`;}
+  return`<svg viewBox="0 0 ${W} ${h}" role="img">${g}</svg>`;
+}
+function stacked(rows,h=190){ // rows: [{x,parts:[[value,color]]}]
+  if(!rows.length)return'<div class="empty">No finished iterations yet.</div>';
+  const W=520,L=40,R=10,T=8,B=24,max=Math.max(...rows.map(r=>r.parts.reduce((a,p)=>a+p[0],0)))*1.1||1,bw=Math.min(28,(W-L-R)/rows.length*.7);
+  const X=i=>L+(i+.5)/rows.length*(W-L-R),Y=v=>T+(1-v/max)*(h-T-B);let g='';
+  for(let i=0;i<=4;i++){const v=max*i/4;g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(255,255,255,.06)"/><text x="${L-6}" y="${Y(v)+4}" fill="#62756a" font-size="11" text-anchor="end">${v.toFixed(v<10?1:0)}</text>`;}
+  const every=Math.max(1,Math.ceil(rows.length/10));
+  rows.forEach((r,i)=>{let acc=0;for(const[v,c]of r.parts){g+=`<rect x="${X(i)-bw/2}" y="${Y(acc+v)}" width="${bw}" height="${Math.max(0,Y(acc)-Y(acc+v))}" fill="${c}" rx="2"/>`;acc+=v;}
+    if(i%every===0)g+=`<text x="${X(i)}" y="${h-6}" fill="#62756a" font-size="11" text-anchor="middle">${r.x}</text>`;});
+  return`<svg viewBox="0 0 ${W} ${h}" role="img">${g}</svg>`;
+}
+const frac=s=>s?+String(s).split('/')[0]:null;
+function render(){
+  const st=data&&data.status;if(!st){$('#phase').textContent='No training run has reported yet.';return;}
+  const it=(st.iters||[]),fin=it.filter(x=>x.arrival),base=st.baseline||{};
+  $('#env').textContent=st.env||'';
+  $('#nowCard').classList.toggle('halt',st.phase&&st.phase.name==='halted');
+  $('#arr').innerHTML=chart(MAPS.map(([k,,c])=>({color:c,pts:fin.filter(x=>x.arrival[k]!=null).map(x=>[x.it,x.arrival[k]])})),{refs:MAPS.filter(([k])=>base[k]!=null).map(([k,,c])=>({y:base[k],color:c})),fmt:v=>v.toFixed(1)});
+  $('#arrLeg').innerHTML=MAPS.map(([k,n,c])=>{const l=fin.length?fin[fin.length-1].arrival[k]:null;return`<span><i style="background:${c}"></i>${n}${l!=null?` <b style="color:var(--text)">${l.toFixed(2)}</b>`:''}${base[k]!=null?` <span style="color:var(--faint)">(was ${base[k]})</span>`:''}</span>`;}).join('');
+  const tr=it.filter(x=>x.dead1);
+  $('#dead').innerHTML=chart([{color:'var(--c1)',pts:tr.map(x=>[x.it,frac(x.dead1)])},{color:'var(--c2)',pts:tr.map(x=>[x.it,frac(x.dead2)])}],{yMin:0,refs:[{y:26,color:'var(--danger)'}],fmt:v=>Math.round(v)});
+  const bu=it.filter(x=>x.buys);
+  $('#buys').innerHTML=chart([['giant','var(--c1)'],['plane','var(--c2)'],['chest','var(--c4)']].map(([k,c])=>({color:c,pts:bu.map(x=>[x.it,x.buys[k]])})),{yMin:0,fmt:v=>v.toFixed(1)+'%'});
+  const done=it.filter(x=>x.end);
+  $('#time').innerHTML=stacked(done.map(x=>({x:x.it,parts:[[(x.genEnd-x.start)/6e4,'var(--c1)'],[(x.trainEnd-x.genEnd)/6e4,'var(--c4)'],[(x.end-x.trainEnd)/6e4,'var(--c3)']]})));
+  // table: newest first
+  const hd=`<tr><th>Iter</th><th>Ended</th>${MAPS.map(m=>`<th>${m[1]}</th>`).join('')}<th>Dead L1 / L2</th><th>Giant %</th><th>Buys / game</th><th>Min</th><th>Warnings</th></tr>`;
+  $('#tbl').innerHTML=hd+[...done].reverse().map(x=>`<tr><td>${x.it}</td><td>${hhmm(x.end)}</td>${MAPS.map(([k])=>{const v=x.arrival&&x.arrival[k];if(v==null)return'<td>–</td>';const b=base[k],cl=b==null?'':v<b-.15?'good':v>b+.15?'bad':'';return`<td class="${cl}">${v.toFixed(2)}</td>`;}).join('')}<td>${x.dead1||'–'} / ${x.dead2||'–'}</td><td>${x.buys?x.buys.giant:'–'}</td><td>${x.buysPerGame??'–'}</td><td>${((x.end-x.start)/6e4).toFixed(1)}</td><td>${(x.warn||[]).length?esc(x.warn.join('; ')):''}</td></tr>`).join('')||`<tr><td colspan="10" class="empty">No finished iterations yet.</td></tr>`;
+  const ev=[...(st.events||[])].reverse();
+  $('#events').innerHTML=ev.length?ev.map(e=>`<li class="${esc(e.kind)}"><time>${hhmm(e.t)}</time><span class="k">${esc(e.kind)}</span>${esc(e.text)}</li>`).join(''):'<li class="empty">None — the model-quality checks are all passing.</li>';
+  tick();
+}
+// the live part: phase, elapsed time and the progress bar (estimated from the typical length of this phase), every second
+function tick(){
+  const st=data&&data.status;if(!st)return;const now=Date.now()+skew,ph=st.phase||{},typ=(st.typical||{})[ph.name];
+  const names={'self-play':'Self-play','training':'Training','testing':'Testing','between iterations':'Starting next iteration','halted':'Stopped','paused':'Paused','starting':'Starting'};
+  $('#phase').innerHTML=`${esc(names[ph.name]||ph.name||'—')}${ph.it?`<small>iteration ${ph.it} · run “${esc(st.run)}”</small>`:`<small>run “${esc(st.run)}”</small>`}`;
+  const el=ph.since?(now-ph.since)/1000:0;
+  if(ph.name==='halted'){$('#clock').textContent='since '+hhmm(ph.since);$('#bar').style.visibility='hidden';$('#steps').innerHTML=`<span style="color:var(--danger)">${esc(ph.text||'')}</span>`;return;}
+  $('#bar').style.visibility='';
+  $('#clock').textContent=ph.since?(typ?`${mmss(el)} of about ${mmss(typ)}`:`${mmss(el)} elapsed`):'';
+  const p=typ?el/typ:0;$('#barFill').style.transform=`scaleX(${Math.min(1,p)})`;$('#bar').classList.toggle('over',p>1.5);
+  const order=['self-play','training','testing'];$('#steps').innerHTML=order.map(k=>`<span class="${k===ph.name?'on':''}">${k[0].toUpperCase()+k.slice(1)} <b>${st.typical&&st.typical[k]?mmss(st.typical[k]):'–'}</b></span>`).join('')+'<span>typical time per step</span>';
+  const age=data.updated?(now-data.updated)/1000:1e9,f=$('#fresh'),stale=age>150||Date.now()-lastOk>30000;
+  f.classList.toggle('stale',stale);f.innerHTML=`<span class="dot"></span>${stale?'no update for '+mmss(Math.min(age,(Date.now()-lastOk)/1000))+' — training machine may be down':'live · updated '+mmss(age)+' ago'}`;
+}
+async function poll(){
+  try{const r=await fetch('/api/train',{cache:'no-store'});if(r.ok){const j=await r.json();skew=j.now-Date.now();lastOk=Date.now();const changed=JSON.stringify(j.status)!==JSON.stringify(data&&data.status);data=j;if(changed)render();}}
+  catch(e){}
+  tick();
+}
+poll();setInterval(poll,5000);setInterval(tick,1000);
+})();
+</script>
+</body>
+</html>

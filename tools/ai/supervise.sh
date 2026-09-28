@@ -20,6 +20,8 @@ while true; do
       say "STALL: $rlog unchanged for over $STALL min — restarting the loop"; echo "[$(date +%H:%M:%S)] STALL watchdog restarted the loop (log unchanged for over $STALL min)" >> "$rlog"
       pkill -f 'tools/ai/loop\.sh'; pkill -f 'node tools/ai/gen\.mjs'; pkill -f 'python3 tools/ai/train\.py'; sleep 3
     fi
+    # live progress for the site's /train.html (needs the token in /tmp/claude-0/train-token)
+    if [ -f /tmp/claude-0/train-token ] && ! pgrep -f 'tools/ai/live\.mjs' >/dev/null; then say "starting live progress poster"; (setsid nohup node tools/ai/live.mjs "$CFG" >> /tmp/claude-0/live.out 2>&1 < /dev/null &); fi
     if ! pgrep -f 'tools/ai/publish\.sh' >/dev/null; then say "starting publisher for first-$run"; (setsid nohup tools/ai/publish.sh first-$run > /tmp/claude-0/publish.out 2>&1 < /dev/null &); fi
   fi
   sleep 60

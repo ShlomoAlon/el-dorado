@@ -31,6 +31,7 @@ async function createSchema(env) {
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS replays(id TEXT PRIMARY KEY, created INTEGER NOT NULL, title TEXT, players TEXT, actions INTEGER, body TEXT NOT NULL)`),
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS replays_created ON replays(created DESC)`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS train(run TEXT PRIMARY KEY, updated INTEGER NOT NULL, body TEXT NOT NULL)`),
   ]);
   try { await env.DB.prepare(`ALTER TABLE users ADD COLUMN bot TEXT`).run(); } catch (e) { } // already there
   for (const A of E.AIS) { // one rated player per named AI; if a person already has the name, the AI gets "(AI)" after it
@@ -149,6 +150,21 @@ export default {
     let m0;
     try {
       await ensureSchema(env);
+      // AI training progress (/train.html polls it): the training machine posts its run's status with a secret token
+      // whose SHA-256 is TRAIN_TOKEN_HASH (wrangler.jsonc); anyone may read it
+      if (p === '/api/train' && req.method === 'POST') {
+        const tok = (req.headers.get('authorization') || '').replace(/^Bearer /, '');
+        const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tok)))].map(b => b.toString(16).padStart(2, '0')).join('');
+        if (!env.TRAIN_TOKEN_HASH || h !== env.TRAIN_TOKEN_HASH) return bad('Not allowed', 403);
+        const text = await req.text(); if (text.length > 300000) return bad('Too large', 413);
+        let st; try { st = JSON.parse(text); } catch (e) { return bad('Not JSON', 400); }
+        await env.DB.prepare(`INSERT INTO train(run,updated,body) VALUES(?,?,?) ON CONFLICT(run) DO UPDATE SET updated=excluded.updated, body=excluded.body`).bind(String(st.run || 'run').slice(0, 40), Date.now(), text).run();
+        return json({ ok: true });
+      }
+      if (p === '/api/train') {
+        const r = await env.DB.prepare(`SELECT updated, body FROM train ORDER BY updated DESC LIMIT 1`).first();
+        return r ? new Response(`{"updated":${r.updated},"now":${Date.now()},"status":${r.body}}`, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } }) : json({ updated: null, now: Date.now(), status: null });
+      }
       if (p === '/api/config') return json({ google: env.GOOGLE_CLIENT_ID || null, dev: env.DEV_AUTH === '1' });
       if (p === '/api/auth/google' && req.method === 'POST') {
         if (!env.GOOGLE_CLIENT_ID) return bad('Google sign-in is not set up yet (GOOGLE_CLIENT_ID).', 500);
