@@ -126,15 +126,15 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
       const before = JSON.stringify(S), prevCur = S.cur;
       const r = E.recApply(rec, me, a); if (!r.ok) { E.recApply(rec, me, { t: 'timeout' }); continue; }
       // sometimes undo (as the page does: bring back the earlier state), when the action drew nothing and the turn did not pass
-      if (!r.reveal && E.S.cur === prevCur && rnd() < .1) { E.S = JSON.parse(before); undos++; }
+      if (rnd() < .1 && E.recCanUndo(rec)) { assert(E.recUndo(rec), 'undo refused'); assert(JSON.stringify({ ...E.S, log: [] }) === JSON.stringify({ ...JSON.parse(before), log: [] }), 'undo did not restore the position'); undos++; }
     }
     if (!E.S.over) continue;
-    const fin = JSON.stringify({ ...E.S, log: [], nact: 0 }), log = JSON.parse(JSON.stringify(E.recFinal(rec)));
+    const fin = JSON.stringify({ ...E.S, log: [] }), log = JSON.parse(JSON.stringify(E.recFinal(rec)));
     assert(!E.replayCheck(log), 'record fails replayCheck: ' + E.replayCheck(log));
     E.replayStart(log);
     for (let i = 0; i < log.actions.length; i++) { const r = E.replayStep(log, i); assert(r.ok, 'replay step ' + i + ' failed: ' + r.err); }
     E.setRng(null);
-    assert(JSON.stringify({ ...E.S, log: [], nact: 0 }) === fin, 'replay differs from the recorded game (' + C.id + ', ' + np + ' players, ' + undos + ' undos)');
+    assert(JSON.stringify({ ...E.S, log: [] }) === fin, 'replay differs from the recorded game (' + C.id + ', ' + np + ' players, ' + undos + ' undos)');
     recs++;
   }
   assert(recs >= 8, 'too few recorded games finished: ' + recs);

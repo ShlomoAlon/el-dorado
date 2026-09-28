@@ -3,7 +3,6 @@
    locally it runs the shared engine; online it is sent to the server,
    which runs the same engine and sends back the new state.
    ========================================================= */
-let undoStack=[];
 let REPLAY=null; // set while watching a replay (ui_replay.js): nothing can be played then
 let REC=null; // the local game's log (engine recNewGame): saved with the game, kept as a replay once the game is over
 const UI={mode:'idle',card:null,piece:0,picks:[],targets:new Map(),cover:false,hover:null,mktOpen:true,allOpen:false};
@@ -16,17 +15,13 @@ const canAct=()=>!REPLAY&&(!S||(online()?S.owners[S.cur]===myId()&&NET.connected
 // local games with AI seats: while an AI moves, the table shows the hand of the human who played last
 const viewIdx=()=>{if(!online()){if(!isAI(S.cur)||REPLAY)return S.cur;const h=isAI(UI.viewer)||UI.viewer==null||UI.viewer>=S.players.length?S.players.findIndex(p=>!p.ai):UI.viewer;return h<0?S.cur:h;}const i=S.owners.indexOf(myId());return i<0?S.cur:i;};
 const hp=()=>S.players[viewIdx()];
-function snapshot(){undoStack.push(JSON.stringify(S));if(undoStack.length>60)undoStack.shift();}
-/* local save: v5 (players may have .ai); v4 saves have the same shape without AI seats */
-function loadSave(){let s=null;try{s=JSON.parse(localStorage.getItem('eldorado-save-v5')||localStorage.getItem('eldorado-save-v4')||'null');}catch(e){}
-  if(!s||(s.v!==4&&s.v!==5)||s.owners)return null;s.v=5;return s;}
-function save(){if(online()||REPLAY)return;try{localStorage.setItem('eldorado-save-v5',JSON.stringify(S));if(REC)localStorage.setItem('eldorado-rec-v1',JSON.stringify(REC));else localStorage.removeItem('eldorado-rec-v1');}catch(e){}}
-// the saved game's log, if it belongs to that game (games saved before games were recorded have none)
-function loadRec(s){try{const r=JSON.parse(localStorage.getItem('eldorado-rec-v1')||'null');
-  if(r&&s&&r.seed===s.seed&&r.course===s.course.id&&Number.isInteger(s.nact)&&Array.isArray(r.actions)&&r.actions.length>=s.nact)return r;}catch(e){}return null;}
+/* the local save is the game's record (the state is rebuilt from it): {rec, S, MAP} or null */
+const SAVE_KEY='eldorado-game-v1';
+function loadSave(){try{const rec=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');if(!rec||replayCheck(rec))return null;return{rec,...recState(rec)};}catch(e){return null;}}
+function save(){if(online()||REPLAY)return;try{if(REC)localStorage.setItem(SAVE_KEY,JSON.stringify(REC));else localStorage.removeItem(SAVE_KEY);}catch(e){}}
 /* continue the saved local game (first visit, or back from a replay). Returns false if there is none in progress. */
-function resumeSaved(){const saved=loadSave();if(!saved||saved.over)return false;
-  try{aiReset();UI.viewer=null;S=saved;REC=loadRec(S);MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);lastPlayer=-1;render();requestAnimationFrame(()=>fit());
+function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
+  try{aiReset();UI.viewer=null;REC=g.rec;S=g.S;MAP=g.MAP;buildBoard();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);lastPlayer=-1;render();requestAnimationFrame(()=>fit());
     if(!UI.cover)banner(cur().name,'Round '+S.round);return true;}catch(e){console.error(e);S=null;return false;}}
 /* resign: online the server does it; locally the player whose turn it is (or, while an AI moves, the human watching) leaves.
    Everyone else plays on; with no human left racing, the AIs finish the game quickly. */
@@ -37,7 +32,7 @@ function resignLocal(){const seat=resignSeat();if(seat<0)return;
   modal(`<h2>Resign?</h2><p class="sub">${esc(S.players[seat].name)} leaves the expedition and finishes last among the players still racing. ${humans?'The others play on.':'The AIs finish the race.'}</p><div class="mrow"><button class="btn" id="rsNo">Keep playing</button><button class="btn pri" id="rsYes">Resign</button></div>`,sc=>{
     sc.querySelector('#rsNo').onclick=closeModal;
     sc.querySelector('#rsYes').onclick=()=>{closeModal();if(!S||S.over||online())return;const prevCur=S.cur,prevRound=S.round;
-      const r=recApply(REC,seat,{t:'resign'});if(!r.ok)return;undoStack=[];playEvents(r.ev);afterLocalChange(S.cur!==prevCur||S.round!==prevRound);};},true);}
+      const r=recApply(REC,seat,{t:'resign'});if(!r.ok)return;playEvents(r.ev);afterLocalChange(S.cur!==prevCur||S.round!==prevRound);};},true);}
 const humanRacing=()=>S.players.some(p=>!p.ai&&isActive(p));
 /* finished local games are kept on this device (newest first, up to 20) to watch again from Replays */
 const MYGAMES='eldorado-games-v1';
@@ -105,10 +100,8 @@ function act(a){
   if(!S||!canAct())return;
   if(online()){NET.busy=true;netSend({t:'act',a});render();return;}
   const prevCur=S.cur,prevRound=S.round;
-  snapshot();
   const r=recApply(REC,S.cur,a);
-  if(!r.ok){undoStack.pop();sfx('error');toast(r.err);render();return;}
-  if(r.reveal||S.cur!==prevCur)undoStack=[];
+  if(!r.ok){sfx('error');toast(r.err);render();return;}
   playEvents(r.ev);
   afterLocalChange(S.cur!==prevCur||S.round!==prevRound);
 }
@@ -190,11 +183,11 @@ function finishTurn(){act({t:'end',keep:UI.mode==='endTurn'?UI.picks.slice():[]}
 function undo(){
   if(!canAct())return;
   if(online()){if(NET.canUndo){NET.busy=true;netSend({t:'undo'});}return;}
-  if(!undoStack.length)return;
-  S=JSON.parse(undoStack.pop());UI.picks=[];UI.buy=null;UI.pending=null;UI.mode='idle';UI.card=null;
+  if(!recUndo(REC))return;
+  UI.picks=[];UI.buy=null;UI.pending=null;UI.mode='idle';UI.card=null;
   syncMode(false);render();
 }
-const canUndo=()=>online()?NET.canUndo:undoStack.length>0;
+const canUndo=()=>online()?NET.canUndo:recCanUndo(REC);
 
 /* =========================================================
    LOCAL AI SEATS (engine_ai.js). The AI decides with the shared engine in this page and plays through the
@@ -227,7 +220,7 @@ function aiKick(){
     aiSetNet(AIX.net);
     const prevCur=S.cur,prevRound=S.round,mem=AIX.mem[seat]||(AIX.mem[seat]={});
     const r=aiStep(id,mem,REC);
-    undoStack=[];AIX.timer=0;
+    AIX.timer=0;
     playEvents(r.ev,viewIdx()); // the AI's purchases don't fly into the human's discard pile
     afterLocalChange(S.cur!==prevCur||S.round!==prevRound);
   };

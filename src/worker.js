@@ -316,16 +316,18 @@ const PCOLORS = ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636']; // matches COLORS:
 
 export class Room extends DurableObject {
   constructor(ctx, env) {
-    super(ctx, env); this.d = null; this.S = null; this.undo = []; this.rec = null;
-    // rec: the game's log (engine recNewGame). It holds the secret shuffle seed, so it is never sent out; once the game is over
-    // it is saved as the game's replay.
-    ctx.blockConcurrencyWhile(async () => { this.d = (await ctx.storage.get('d')) || null; this.S = (await ctx.storage.get('S')) || null; this.undo = (await ctx.storage.get('undo')) || []; this.rec = (await ctx.storage.get('rec')) || null;
-      if (this.S && !this.S.course) { this.S = null; this.undo = []; if (this.d) this.d.status = 'closed'; } }); // pre-course (v3) games can't be rebuilt
+    super(ctx, env); this.d = null; this.S = null; this.rec = null;
+    // storage: d (the room) and rec (the game's record: engine recNewGame). The game state S is rebuilt from rec. rec holds the
+    // secret shuffle seed, so it is never sent out; once the game is over it is saved as the game's replay.
+    ctx.blockConcurrencyWhile(async () => {
+      this.d = (await ctx.storage.get('d')) || null; this.rec = (await ctx.storage.get('rec')) || null;
+      if (this.rec) this.load();
+      else if (this.d && this.d.status === 'playing') this.d.status = 'closed'; // a game from before games were records
+    });
   }
-  async persist(parts = 'dSu') {
-    const w = {}; if (parts.includes('d')) w.d = this.d; if (parts.includes('S')) { w.S = this.S; if (this.rec) w.rec = this.rec; } if (parts.includes('u')) w.undo = this.undo;
-    await this.ctx.storage.put(w);
-  }
+  // S from the record, plus who plays each seat
+  load() { const g = E.recState(this.rec); this.S = g.S; this.S.owners = this.d.seats.map(s => s.uid); this.S.room = this.d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, g.MAP); }
+  async persist() { await this.ctx.storage.put(this.rec ? { d: this.d, rec: this.rec } : { d: this.d }); }
   engine() { E.S = this.S; E.MAP = mapFor(this.S); return E; }
   summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn, pub: d.opts.pub !== false, rated: d.opts.rated !== false, auto: !!d.opts.auto }; }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.summary()) }); } catch (e) { } }
@@ -334,7 +336,7 @@ export class Room extends DurableObject {
   send(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (e) { } }
   stateFor(uid, ev) {
     const seat = this.S.owners.indexOf(uid);
-    return { t: 'state', S: E.redact(this.S, seat), ev: ev || [], seat, undo: seat >= 0 && seat === this.S.cur && this.undo.length > 0, deadline: this.d.deadline || null, now: Date.now(), room: this.roomInfo() };
+    return { t: 'state', S: E.redact(this.S, seat), ev: ev || [], seat, undo: seat >= 0 && seat === this.S.cur && E.recCanUndo(this.rec), deadline: this.d.deadline || null, now: Date.now(), room: this.roomInfo() };
   }
   sendAll(ev) {
     for (const ws of this.ctx.getWebSockets()) {
@@ -348,7 +350,7 @@ export class Room extends DurableObject {
       if (this.d) return json({ ok: false });
       const b = await req.json();
       this.d = { code: b.code, host: b.uid, seats: [], status: 'lobby', opts: b.opts, created: Date.now(), deadline: null, timeouts: {}, rated: false, results: null };
-      await this.persist('d'); return json({ ok: true });
+      await this.persist(); return json({ ok: true });
     }
     if (url.pathname === '/ws') {
       if (!this.d || this.d.status === 'closed') return new Response('No such room', { status: 404 });
@@ -360,7 +362,7 @@ export class Room extends DurableObject {
         this.d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) });
         if (!this.d.seats.find(s => s.uid === this.d.host)) this.d.host = uid;
         if (await this.seatsChanged()) return new Response(null, { status: 101, webSocket: pair[0] });
-        await this.persist('d'); this.tellLobby();
+        await this.persist(); this.tellLobby();
       }
       this.sendAll();
       return new Response(null, { status: 101, webSocket: pair[0] });
@@ -375,17 +377,17 @@ export class Room extends DurableObject {
     const err = msg => this.send(ws, { t: 'error', msg });
     if (d.status === 'lobby') {
       const seat = d.seats.find(s => s.uid === uid);
-      if (m.t === 'color' && seat && PCOLORS.includes(m.color) && !d.seats.some(s => s !== seat && s.color === m.color)) { seat.color = m.color; await this.persist('d'); this.sendAll(); }
+      if (m.t === 'color' && seat && PCOLORS.includes(m.color) && !d.seats.some(s => s !== seat && s.color === m.color)) { seat.color = m.color; await this.persist(); this.sendAll(); }
       else if (m.t === 'leave') {
         if (d.opts.auto) { // match rooms never close on the host; the next player hosts
           d.seats = d.seats.filter(s => s.uid !== uid); if (d.host === uid && d.seats.length) d.host = d.seats[0].uid;
           if (!d.seats.length) d.status = 'closed';
-          await this.seatsChanged(); await this.persist('d'); this.tellLobby(); this.sendAll(); try { ws.close(1000, 'Left'); } catch (e) { } return;
+          await this.seatsChanged(); await this.persist(); this.tellLobby(); this.sendAll(); try { ws.close(1000, 'Left'); } catch (e) { } return;
         }
-        if (uid === d.host) { d.status = 'closed'; await this.persist('d'); this.tellLobby(); this.sendAll(); for (const w of this.ctx.getWebSockets()) try { w.close(1000, 'Room closed'); } catch (e) { } return; }
-        d.seats = d.seats.filter(s => s.uid !== uid); await this.persist('d'); this.tellLobby(); this.sendAll(); try { ws.close(1000, 'Left'); } catch (e) { }
+        if (uid === d.host) { d.status = 'closed'; await this.persist(); this.tellLobby(); this.sendAll(); for (const w of this.ctx.getWebSockets()) try { w.close(1000, 'Room closed'); } catch (e) { } return; }
+        d.seats = d.seats.filter(s => s.uid !== uid); await this.persist(); this.tellLobby(); this.sendAll(); try { ws.close(1000, 'Left'); } catch (e) { }
       }
-      else if (m.t === 'join' && !seat) { if (d.seats.length >= d.opts.max) return err('This room is full.'); const used = d.seats.map(s => s.color); const { name } = ws.deserializeAttachment(); d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) }); if (await this.seatsChanged()) return; await this.persist('d'); this.tellLobby(); this.sendAll(); }
+      else if (m.t === 'join' && !seat) { if (d.seats.length >= d.opts.max) return err('This room is full.'); const used = d.seats.map(s => s.color); const { name } = ws.deserializeAttachment(); d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) }); if (await this.seatsChanged()) return; await this.persist(); this.tellLobby(); this.sendAll(); }
       else if (m.t === 'addAI') { // host seats a named AI (each at most once per room); it plays server-side
         if (d.opts.auto || uid !== d.host) return err('Only the host can add AI players.');
         const A = E.aiById(m.ai); if (!A) return err('Unknown AI.');
@@ -394,14 +396,14 @@ export class Room extends DurableObject {
         if (d.seats.some(s => s.ai === A.id)) return;
         const used = d.seats.map(s => s.color); const row = await this.env.DB.prepare(`SELECT name FROM users WHERE id=?`).bind(aiUid(A.id)).first().catch(() => null);
         d.seats.push({ uid: aiUid(A.id), name: row ? row.name : A.name, color: PCOLORS.find(c => !used.includes(c)), ai: A.id });
-        await this.persist('d'); this.tellLobby(); this.sendAll();
+        await this.persist(); this.tellLobby(); this.sendAll();
       }
       else if (m.t === 'removeAI') {
         if (uid !== d.host) return err('Only the host can remove AI players.');
-        d.seats = d.seats.filter(s => !(s.ai && s.uid === m.uid)); await this.persist('d'); this.tellLobby(); this.sendAll();
+        d.seats = d.seats.filter(s => !(s.ai && s.uid === m.uid)); await this.persist(); this.tellLobby(); this.sendAll();
       }
-      else if (m.t === 'rated' && uid === d.host && !d.opts.auto) { d.opts.rated = !!m.v; await this.persist('d'); this.tellLobby(); this.sendAll(); }
-      else if (m.t === 'now' && seat && d.opts.auto) { seat.now = !seat.now; if (await this.seatsChanged()) return; await this.persist('d'); this.sendAll(); }
+      else if (m.t === 'rated' && uid === d.host && !d.opts.auto) { d.opts.rated = !!m.v; await this.persist(); this.tellLobby(); this.sendAll(); }
+      else if (m.t === 'now' && seat && d.opts.auto) { seat.now = !seat.now; if (await this.seatsChanged()) return; await this.persist(); this.sendAll(); }
       else if (m.t === 'start') {
         if (d.opts.auto) return;
         if (uid !== d.host) return err('Only the host can start.');
@@ -414,19 +416,16 @@ export class Room extends DurableObject {
     if (d.status !== 'playing' || !this.S) return;
     const seat = this.S.owners.indexOf(uid);
     if (m.t === 'undo') {
-      if (seat !== this.S.cur || !this.undo.length) return err('Nothing to undo.');
-      this.S = JSON.parse(this.undo.pop()); await this.persist('Su'); this.sendAll([{ e: 'undo' }]); return;
+      if (seat !== this.S.cur || !E.recCanUndo(this.rec)) return err('Nothing to undo.');
+      this.rec.actions.pop(); this.load(); await this.persist(); this.sendAll([{ e: 'undo' }]); return;
     }
     if (m.t === 'act') {
       if (seat < 0) return err('You are watching this game.');
-      const eng = this.engine(); const before = JSON.stringify(this.S); const prevCur = this.S.cur;
-      if (!m.a || typeof m.a !== 'object') return err('Bad action.');
-      const recN = this.rec ? this.rec.actions.length : 0; let r;
-      // an engine exception must never leave the game half-changed: put the state and the record back
-      try { r = eng.recApply(this.rec, seat, m.a); } catch (e) { r = { ok: false, err: 'Bad action.' }; if (this.rec) this.rec.actions.length = recN; }
-      if (!r.ok) { this.S = JSON.parse(before); return err(r.err); }
+      const eng = this.engine(); const prevCur = this.S.cur; let r;
+      try { r = eng.recApply(this.rec, seat, m.a); } catch (e) { r = { ok: false, err: 'Bad action.' }; }
+      // a refused action (or an engine exception) must never leave the game half-changed: rebuild it from the record
+      if (!r.ok) { this.load(); return err(r.err); }
       this.S = E.S; d.timeouts[seat] = 0;
-      if (r.reveal || m.a.t === 'resign' || this.S.cur !== prevCur) this.undo = []; else { this.undo.push(before); if (this.undo.length > 6) this.undo.shift(); }
       if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn();
       await this.afterChange(r.ev); return;
     }
@@ -441,7 +440,7 @@ export class Room extends DurableObject {
     const d = this.d;
     this.rec = E.recNewGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
     this.S = E.S; this.S.owners = d.seats.map(s => s.uid); this.S.room = d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
-    d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null; this.undo = [];
+    d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null;
     await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll([{ e: 'start' }]);
   }
   async afterChange(ev) {
@@ -475,7 +474,6 @@ export class Room extends DurableObject {
       const seat = this.S.cur, mem = this.aiMem[seat] || (this.aiMem[seat] = {});
       const r = eng.aiStep(this.S.players[seat].ai, mem, this.rec); this.S = E.S; ev.push(...r.ev);
     } while (fast && this.aiToMove() && Date.now() - t0 < 300);
-    this.undo = [];
     if (!this.S.over) { if (this.aiToMove()) await this.scheduleAI(700); else await this.startTurnTimer(); }
     await this.afterChange(ev);
   }
@@ -483,12 +481,10 @@ export class Room extends DurableObject {
     const d = this.d; if (!d || d.status !== 'playing' || !this.S || this.S.over) return;
     if (this.aiToMove()) { if (d.aiAt && Date.now() < d.aiAt - 50) { await this.ctx.storage.setAlarm(d.aiAt); return; } await this.aiMove(); return; }
     if (Date.now() < d.deadline - 1000) { await this.ctx.storage.setAlarm(d.deadline); return; }
-    const eng = this.engine(); const seat = this.S.cur; const ev = [{ e: 'timeout', pl: seat }];
-    d.timeouts[seat] = (d.timeouts[seat] || 0) + 1;
-    this.S.log.push({ p: seat, t: 'ran out of time.' });
-    if (d.timeouts[seat] >= 3) { const r = eng.recApply(this.rec, seat, { t: 'resign' }); ev.push(...r.ev); this.S.log.push({ p: seat, t: 'missed 3 turns in a row and forfeits.' }); }
-    else { const r = eng.recApply(this.rec, seat, { t: 'timeout' }); ev.push(...r.ev); }
-    this.S = E.S; this.undo = [];
+    // the clock ran out: the turn ends; the third time in a row the player forfeits
+    const eng = this.engine(), seat = this.S.cur; d.timeouts[seat] = (d.timeouts[seat] || 0) + 1;
+    const { ev } = eng.recApply(this.rec, seat, { t: d.timeouts[seat] >= 3 ? 'resign' : 'timeout' });
+    this.S = E.S;
     if (!this.S.over) await this.nextTurn();
     await this.afterChange(ev);
   }
@@ -541,7 +537,7 @@ export class Room extends DurableObject {
     if (d.opts.auto && d.status === 'lobby' && uid && !this.ctx.getWebSockets(uid).some(w => w !== ws && w.readyState === 1)) {
       d.seats = d.seats.filter(s => s.uid !== uid); if (d.host === uid && d.seats.length) d.host = d.seats[0].uid;
       if (!d.seats.length) d.status = 'closed';
-      await this.persist('d'); this.tellLobby();
+      await this.persist(); this.tellLobby();
     }
     this.sendAll();
   }

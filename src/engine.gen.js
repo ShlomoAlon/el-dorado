@@ -191,7 +191,7 @@ function replayCheck(log){
   if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
   return null;}
 function replayStart(log){const v2=log.v===2,g=v2?recRng(log.rng,-1):mulberry32(log.rng>>>0);setRng(g);
-  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:v2&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex}))});
+  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,privacy:v2&&!!log.privacy,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:v2&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:v2?p.bot:undefined}))});
   // training exploration: every player starts with the same extra card, shuffled into the draw pile
   if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(RNG()*(p.deck.length+1)),0,newCard(log.gift));
   if(v2)setRng(null);
@@ -203,32 +203,37 @@ function replayStep(log,i){
     return applyAction(seat,a);
   }finally{if(v2)RNG=r0;}
 }
-/* ---- game records (log v2): every game keeps its log, so it can be watched afterwards ----
+/* ---- game records (log v2): a game is its setup and its list of actions; the state is rebuilt from them ----
    Each action's shuffles come from a generator of its own, seeded from the game's secret number (rec.rng) and the action's
    index (newGame's: index -1), so re-applying the log rebuilds the same game and nothing needs a generator's state between
-   moves (a server room may sleep). rec.rng would reveal every future shuffle, so the record stays on the server (or in the
-   local save) until the game is over. S.nact counts the recorded actions: an undo brings back an older S, and the next
-   action cuts the record back to it. */
+   moves. rec.rng would reveal every future shuffle, so the record stays on the server (or in the local save) until the game
+   is over. Undo drops the last action and rebuilds; rec.mark = how many actions can no longer be undone (up to the last
+   one that drew cards, passed the turn, or was a resignation). The saved game is the record (the state is rebuilt). */
 function recRng(rng,k){return mulberry32(((rng>>>0)+Math.imul(k+2,0x9E3779B1))>>>0);}
 function recNewGame(o){
   // the secret: from the platform's cryptographic generator where there is one (Math.random's state could be guessed)
   const c=globalThis.crypto,rng=c&&c.getRandomValues?c.getRandomValues(new Uint32Array(1))[0]:(Math.random()*4294967296)>>>0,r0=RNG;setRng(recRng(rng,-1));
   try{newGame(o);}finally{RNG=r0;}
-  S.nact=0;
-  return{kind:'eldorado-replay',v:2,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,
-    players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[]};
+  return{kind:'eldorado-replay',v:2,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(S.privacy?{privacy:true}:{}),
+    players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0};
 }
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
 function recApply(rec,seat,a){
-  const on=!!rec&&Number.isInteger(S.nact),r0=RNG;if(on)setRng(recRng(rec.rng,S.nact));
+  const r0=RNG,prev=S.cur;if(rec)setRng(recRng(rec.rng,rec.actions.length));
   let r;try{r=applyAction(seat,a);}finally{RNG=r0;}
-  if(r.ok&&on){rec.actions.length=Math.min(rec.actions.length,S.nact);rec.actions.push([seat,a]);S.nact++;}
+  if(r.ok&&rec){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||S.cur!==prev||S.over)rec.mark=rec.actions.length;}
   return r;
 }
-/* the finished log, ready to save and watch: cut to S.nact (undone actions dropped), with a title */
+const recCanUndo=rec=>!!rec&&rec.actions.length>(rec.mark||0);
+/* the state a record leads to, as {S, MAP} (the module's S and MAP are left as they were) */
+function recState(rec){const s0=S,m0=MAP,r0=RNG;
+  try{replayStart(rec);for(let i=0;i<rec.actions.length;i++)replayStep(rec,i);return{S,MAP};}finally{S=s0;MAP=m0;RNG=r0;}}
+/* take back the last action (S becomes the rebuilt state). false: nothing to undo */
+function recUndo(rec){if(!recCanUndo(rec))return false;rec.actions.pop();({S,MAP}=recState(rec));return true;}
+/* the finished log, ready to save and watch, with a title */
 function recFinal(rec){
-  if(!rec||!Number.isInteger(S.nact))return null;
-  const L={...rec,actions:rec.actions.slice(0,S.nact)};
+  if(!rec)return null;
+  const{mark,...L}=rec;
   L.title=L.title||S.players.map(p=>p.name).join(', ')+' · '+(courseById(rec.course)||{name:rec.course}).name;
   L.result={places:S.places||null,rounds:S.round};
   return L;
@@ -331,7 +336,8 @@ function applyAction(seat,a){
   if(!a||typeof a!=='object')return fail('Bad action.');
   if(a.t==='resign')return resign(seat);
   if(seat!==S.cur)return fail('It is not your turn.');
-  if(a.t==='timeout'){if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;return applyAction(seat,{t:'end',keep:[]});}
+  if(a.t==='timeout'){log(seat,'ran out of time.');if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;
+    const r=applyAction(seat,{t:'end',keep:[]});return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}
   const P=S.players[seat],T=S.turn,ev=[];let reveal=false;
   const inHand=id=>typeof id==='string'&&P.hand.includes(id);
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
@@ -1116,4 +1122,4 @@ function aiStep(id,mem,rec){
   return r;
 }
 
-export const E={AIS,aiById,aiCourseOK,aiAllowed,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,replayStep,recNewGame,recApply,recFinal,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botActionValue,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
+export const E={AIS,aiById,aiCourseOK,aiAllowed,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,replayStep,recNewGame,recApply,recCanUndo,recUndo,recState,recFinal,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botActionValue,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};

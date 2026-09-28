@@ -42,7 +42,7 @@ function replayAlts(){const R=REPLAY;if(R.alts[R.i])return R.alts[R.i];if(!repla
 function startReplay(log,id){
   if(online())exitOnline(); // an online game in progress goes on (rejoin it from Online)
   aiReset();let R;try{R=buildReplay(log,id);}catch(e){console.error(e);toast('Could not load that replay: '+e.message,3500);showSetup();return;}
-  closeModal();REPLAY=R;undoStack=[];
+  closeModal();REPLAY=R;
   for(const[,el]of cardEls)el.remove();cardEls.clear();
   S=JSON.parse(R.states[0]);MAP=mapFor(S);buildBoard();lastPlayer=-1;replayGo(0,false);fit();
   banner(log.title||'Replay',`${log.players.length} players · ${log.actions.length} moves`);

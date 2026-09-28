@@ -932,7 +932,7 @@ let setup={mode:'local',full:true,oMax:3,oPub:true,oRated:true,oTurn:90,oCourse:
 function showSetup(){
   try{const a=JSON.parse(localStorage.getItem('eldorado-seats')||'null');if(Array.isArray(a)&&!setup.aiLoaded)a.slice(0,4).forEach((x,i)=>setup.ai[i]=aiById(x)?x:'');}catch(e){}setup.aiLoaded=true;if(!aiAllowed(setup.course,setup.n))setup.ai=setup.ai.map(()=>''); // saved AI seats only where AI plays
   const saved=loadSave();
-  const canResume=saved&&!saved.over&&(saved.v===4||saved.v===5)&&(!S||S.over);
+  const canResume=saved&&!saved.S.over&&(!S||S.over);
   const routeTxt=()=>MAP&&(!S||S.over)?`<div class="routeInfo">Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random</div>`:'';
   const inGame=!!(S&&!S.over&&!REPLAY),rs=inGame?resignSeat():-1;
   const gameRow=()=>inGame?`<div class="ingame"><span><b>Game in progress</b> · round ${S.round}${online()?' · online':''}</span><span class="ig-b">${rs>=0?`<button class="btn" id="sResign">Resign${!online()&&S.players.filter(p=>!p.ai).length>1?' ('+esc(S.players[rs].name)+')':''}</button>`:''}<button class="btn pri" id="sBack">Back to game</button></span></div>`:'';
@@ -961,12 +961,12 @@ function showSetup(){
       m.querySelector('#sGo').disabled=allAI();
       m.querySelector('#sPriv').onchange=e=>setup.privacy=e.target.checked;
       m.querySelectorAll('#sFull button').forEach(b=>b.onclick=()=>{setup.full=b.dataset.f==='1';rerender();});
-      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{aiReset();UI.viewer=null;S=saved;REC=loadRec(S);MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
+      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{closeModal();resumeSaved();};
       wireAcct(m,()=>{m.innerHTML=html();wire();});
       const cl=m.querySelector('#sBack');if(cl)cl.onclick=closeModal;
       const rb=m.querySelector('#sResign');if(rb)rb.onclick=()=>online()?resignOnline():resignLocal();
       m.querySelector('#sReplays').onclick=()=>showReplays();
-      m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];if(online())exitOnline(); // an online game goes on without you (rejoin it from Online)
+      m.querySelector('#sGo').onclick=()=>{sync();if(online())exitOnline(); // an online game goes on without you (rejoin it from Online)
         for(const[,el]of cardEls)el.remove();cardEls.clear();
         if(allAI())return;aiReset();
         UI.lastReplay=null;REC=recNewGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return{name:A?A.name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex,ai:A?A.id:undefined};})});
