@@ -1,6 +1,6 @@
 """Trains the per-map value network on samples from gen.mjs and exports it for the JS bot.
    python3 tools/ai/train.py <net.json> <course-id> <epochs> <data-prefix> [<data-prefix> ...]
-Architecture (must match botNetValue in src/engine_bot.js): nf -> 128 -> 64 -> 1, leaky-ReLU(0.01), sigmoid.
+Architecture (must match botNetValue in src/engine_bot.js): nf -> H1 -> H2 -> 1 (128 -> 64 for new networks), leaky-ReLU(0.01), sigmoid.
 Warm-starts from <net.json> if it exists. Loss: binary cross-entropy against targets in [0,1]."""
 import sys, json, os, time, numpy as np, torch, torch.nn as nn
 torch.set_num_threads(4)
@@ -29,17 +29,28 @@ if os.path.exists(out):
             net[2].weight.copy_(torch.tensor(J['w2']).view(H2, H1)); net[2].bias.copy_(torch.tensor(J['b2']))
             net[4].weight.copy_(torch.tensor(J['w3']).view(1, H2)); net[4].bias.copy_(torch.tensor(J['b3']))
 perm = torch.randperm(len(Y)); nv = max(1, len(Y) // 20); vi, ti = perm[:nv], perm[nv:]
-opt = torch.optim.Adam(net.parameters(), lr=1e-3, weight_decay=1e-5); lossf = nn.BCEWithLogitsLoss()
-t0 = time.time()
+# AdamW (weight decay decoupled from the gradient, and not on biases), a lower rate with a warm-up and gradient clipping.
+# The optimizer starts fresh every iteration; with plain Adam at 1e-3 its first steps moved every weight by the full rate
+# whatever its gradient, and weight decay inside the gradient kept pushing units that had gone negative further down:
+# most hidden units ended up dead (never positive on any position).
+LR, WARM = float(os.environ.get('TRAIN_LR', '3e-4')), 300
+opt = torch.optim.AdamW([{'params': [net[0].weight, net[2].weight, net[4].weight], 'weight_decay': 1e-2},
+                         {'params': [net[0].bias, net[2].bias, net[4].bias], 'weight_decay': 0}], lr=LR); lossf = nn.BCEWithLogitsLoss()
+t0 = time.time(); step = 0
 for ep in range(epochs):
     net.train(); idx = ti[torch.randperm(len(ti))]
     for b in range(0, len(idx), 512):
-        j = idx[b:b + 512]; opt.zero_grad(); l = lossf(net(dense(j)), Y[j]); l.backward(); opt.step()
+        step += 1
+        for g in opt.param_groups: g['lr'] = LR * min(1.0, step / WARM)
+        j = idx[b:b + 512]; opt.zero_grad(); l = lossf(net(dense(j)), Y[j]); l.backward(); nn.utils.clip_grad_norm_(net.parameters(), 1.0); opt.step()
 net.eval()
+with torch.no_grad():  # dead hidden units: never positive on (up to 4000) held-out positions
+    xs = dense(vi[:4000]); p1 = net[0](xs); p2 = net[2](net[1](p1))
+    dead1, dead2 = int((p1.max(0).values <= 0).sum()), int((p2.max(0).values <= 0).sum())
 with torch.no_grad():
     pv = torch.sigmoid(net(dense(vi))); rmse = float(((pv - Y[vi]) ** 2).mean().sqrt()); base = float(((Y[vi] - Y[ti].mean()) ** 2).mean().sqrt())
 r = lambda t: [round(float(x), 6) for x in t.detach().flatten()]
 J = {**keep, 'course': 'multi' if 'courses' in keep else course, 'nf': nf, 'w1T': r(net[0].weight.T.contiguous()), 'b1': r(net[0].bias), 'w2': r(net[2].weight), 'b2': r(net[2].bias), 'w3': r(net[4].weight), 'b3': r(net[4].bias)}
 if unsettled: J['unsettled'] = True  # trained on arrived-but-not-settled positions: play may ask the network about them (botValue)
 json.dump(J, open(out, 'w'))
-print(json.dumps({'samples': len(Y), 'val_rmse': round(rmse, 4), 'predict_mean_rmse': round(base, 4), 'secs': round(time.time() - t0, 1)}))
+print(json.dumps({'samples': len(Y), 'val_rmse': round(rmse, 4), 'predict_mean_rmse': round(base, 4), 'dead1': f'{dead1}/{H1}', 'dead2': f'{dead2}/{H2}', 'secs': round(time.time() - t0, 1)}))

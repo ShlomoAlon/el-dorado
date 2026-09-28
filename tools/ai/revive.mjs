@@ -30,6 +30,7 @@ for (const j of d1) { for (let k = 0; k < nf; k++) N.w1T[k * H1 + j] = gauss() *
 const live2 = [...Array(H2).keys()].filter(j => !d2.includes(j)), rms2 = Math.sqrt(live2.reduce((s, j) => { let t = 0; for (let k = 0; k < H1; k++) t += N.w2[j * H1 + k] ** 2; return s + t / H1; }, 0) / live2.length);
 for (const j of d2) { for (let k = 0; k < H1; k++) N.w2[j * H1 + k] = d1.includes(k) ? 0 : gauss() * rms2; const z = a1.map(h => { let s = 0; for (let k = 0; k < H1; k++) s += N.w2[j * H1 + k] * h[k]; return s; }); N.b2[j] = -median(z); N.w3[j] = 0; }
 N.revived = (N.revived || 0) + d1.length + d2.length;
+delete N._p; // the engine caches typed copies of the weights; they were changed in place above
 writeFileSync(out, JSON.stringify(N));
 // check: how much did the output change on these positions?
 const O = JSON.parse(readFileSync(inp, 'utf8')); let maxd = 0, sum = 0;

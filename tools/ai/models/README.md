@@ -83,3 +83,7 @@ first-distill-22 plus 17 iterations with 25% of self-play seats played by past n
 ## first-multi4-33 / first-multi4-40 (frozen 2026-09-28 01:34 UTC)
 
 One network for four courses (first, hills, winding, witch), 256×128 hidden units, trained with max backup + search distillation, no heuristic seats. On First Expedition vs the specialist first-distill-35: it33 -10±11 with search / +8±11 plain (level); it40 -45±11 / -51±11 (slipped back). Arrival (network vs itself) plateaued around first 14.1, hills 15.3, winding 16.3, witch 16.4.
+
+## first-ftfirst-8 (frozen 2026-09-28 03:10 UTC)
+
+first-multi4-33 fine-tuned on First Expedition only for 8 iterations (max backup + search distillation, no heuristic seats, 256×128). Arrival on First (network vs itself) 14.2 → ~13.9 by iteration 2, then flat. Not laddered (the owner switched focus back to the shared model). Health: 222/256 layer-1 and 82/128 layer-2 units dead — inherited from first-multi4-33 (225/256, 81/128), so the four-map run killed the units, not this fine-tune.
