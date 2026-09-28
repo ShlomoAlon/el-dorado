@@ -79,3 +79,7 @@ The distillation run after 53 iterations (12 of them with REPLAY=6). Ladder vs f
 ## first-league-17 (frozen 2026-09-27 19:20 UTC)
 
 first-distill-22 plus 17 iterations with 25% of self-play seats played by past networks (DISTILL+MAXBACK, REPLAY=6). Ladder at it 13 vs first-distill-35: +6±12 with search, +14±12 plain (≈ +29 over its parent). Stopped by the owner to prioritise the multi-map network.
+
+## first-multi4-33 / first-multi4-40 (frozen 2026-09-28 01:34 UTC)
+
+One network for four courses (first, hills, winding, witch), 256×128 hidden units, trained with max backup + search distillation, no heuristic seats. On First Expedition vs the specialist first-distill-35: it33 -10±11 with search / +8±11 plain (level); it40 -45±11 / -51±11 (slipped back). Arrival (network vs itself) plateaued around first 14.1, hills 15.3, winding 16.3, witch 16.4.
