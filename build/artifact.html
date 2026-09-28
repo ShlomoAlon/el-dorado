@@ -45,14 +45,14 @@ html,body{overflow:clip;overscroll-behavior:none}
 /* ---------- HUD */
 /* no backdrop-filter on anything that floats over the board: a live blur is recomputed every frame the board moves */
 .glass{background:var(--glass);border:1px solid var(--line2);box-shadow:0 10px 30px rgba(0,0,0,.35)}
-#hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:flex-start;gap:10px;padding:12px 16px;pointer-events:none;z-index:20}
+#hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:12px 16px;pointer-events:none;z-index:20;--hudH:38px} /* every HUD item is --hudH tall, centred on one line */
 #hud>*{pointer-events:auto}
-.brandbox{display:flex;align-items:baseline;gap:10px;padding:8px 14px;border-radius:12px;white-space:nowrap}
-.brand{font-family:var(--display);font-size:19px;color:var(--gold2)}
+.brandbox{display:flex;align-items:baseline;gap:10px;padding:0 14px;height:var(--hudH);box-sizing:border-box;border-radius:12px;white-space:nowrap}
+.brand{font-family:var(--display);font-size:19px;color:var(--gold2);line-height:calc(var(--hudH) - 2px)}
 #roundLbl{color:var(--muted);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-variant-numeric:tabular-nums}
 #players{display:flex;gap:8px;flex:1;min-width:0;justify-content:safe center;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
-.pchip{display:flex;align-items:center;gap:8px;padding:6px 11px 6px 8px;border-radius:12px;white-space:nowrap;font-size:13px;transition:border-color .3s,box-shadow .3s,transform .3s var(--ease)}
-.pchip.on{border-color:var(--pc);box-shadow:0 0 0 1px var(--pc) inset,0 10px 30px rgba(0,0,0,.35);transform:translateY(1px)}
+.pchip{display:flex;align-items:center;gap:8px;padding:0 11px 0 8px;height:var(--hudH);box-sizing:border-box;flex:none;border-radius:12px;white-space:nowrap;font-size:13px;transition:border-color .3s,box-shadow .3s,transform .3s var(--ease)}
+.pchip.on{border-color:var(--pc);box-shadow:0 0 0 1px var(--pc) inset,0 10px 30px rgba(0,0,0,.35)}
 .pchip .dot{width:14px;height:14px;border-radius:50%;background:var(--pc);box-shadow:0 0 0 2px rgba(0,0,0,.45) inset}
 .pchip .nm{font-weight:700}
 .pchip .st{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
@@ -60,10 +60,10 @@ html,body{overflow:clip;overscroll-behavior:none}
 .pchip .bk i{width:9px;height:9px;border-radius:2px;display:block;transform:rotate(45deg);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
 .pchip .fin{color:var(--gold);font-weight:800;font-size:12px}
 .hbtns{display:flex;gap:8px}
-.tbtn{border-radius:11px;padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
+.tbtn{border-radius:11px;padding:0 13px;height:var(--hudH);box-sizing:border-box;display:inline-flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
 .tbtn:hover{background:var(--glass2)}
 .tbtn.on{border-color:var(--gold);color:var(--gold2)}
-.tbtn.ico{padding:8px 10px;display:inline-grid;place-items:center}
+.tbtn.ico{padding:0 10px;display:inline-grid;place-items:center}
 .tbtn.ico svg{display:block}
 #jrnBtn{display:inline-flex;align-items:center;gap:6px}#jrnBtn svg{flex:none;color:var(--gold2)}
 #fsBtn .fs-out,#fsBtn.full .fs-in{display:none}
@@ -78,7 +78,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 #app.replaying #prompt{display:none}
 #app:has(#mkt.hid),#app:has(#mkt.cramped){--mktFoot:16px}
 #mkt.cramped{display:none}
-#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;width:max-content;box-sizing:border-box;top:64px;max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
+#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;width:max-content;box-sizing:border-box;top:var(--row2,64px);max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
 #prompt b{color:var(--gold2)}
 #prompt .who{display:inline-flex;align-items:center;gap:7px;font-weight:800;margin-right:8px;color:var(--text)}
 #prompt .who i{width:11px;height:11px;border-radius:50%}
@@ -110,7 +110,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 .timer.low{background:rgba(232,99,79,.28);color:#ffb3a5;animation:pulse 1s ease-in-out infinite}
 
 /* ---------- market: six cards floating over the top of the board, plus an "all cards" spread */
-#mkt{position:absolute;right:var(--mktR);top:66px;z-index:16;transition:transform .35s var(--ease),opacity .25s}
+#mkt{position:absolute;right:var(--mktR);top:var(--row2,64px);z-index:16;transition:transform .35s var(--ease),opacity .25s}
 #mkt.hid{transform:translateX(30px);opacity:0;pointer-events:none}
 #market{display:grid;grid-template-columns:repeat(2,var(--mw));gap:10px 8px}
 #mkt .mslot{filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
@@ -263,6 +263,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 .seg button{border:0;background:none;padding:7px 14px;border-radius:7px;cursor:pointer;font-weight:700;font-size:13.5px;color:var(--muted);transition:background .15s,color .15s}
 .seg button.on{background:#1f2f28;color:var(--text);box-shadow:0 0 0 1px var(--line2) inset}
 .clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.clist button{min-height:60px} /* course cards the same height with or without a difficulty tag */
 .clist button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:10px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);color:var(--text);cursor:pointer;font:inherit;transition:border-color .15s,background .15s}
 .clist button b{font-size:14px}
 .clist button span{font-size:12px;color:var(--muted)}
@@ -321,9 +322,9 @@ html,body{overflow:clip;overscroll-behavior:none}
 .card.rnext .cface{box-shadow:0 0 0 .18em var(--gold2),0 0 1.6em rgba(248,220,151,.5)}
 .card.rpay .cface{box-shadow:0 0 0 .16em #e08a74}
 .prow{display:flex;gap:10px;align-items:center;margin-bottom:8px}
-.prow input{flex:1;min-width:0;background:#0c1512;border:1px solid var(--line2);border-radius:9px;padding:9px 12px;font:inherit;font-size:14px;color:var(--text);outline:none;user-select:text;-webkit-user-select:text}
+.prow input{flex:1;min-width:0;height:38px;box-sizing:border-box;background:#0c1512;border:1px solid var(--line2);border-radius:9px;padding:0 12px;font:inherit;font-size:14px;color:var(--text);outline:none;user-select:text;-webkit-user-select:text}
 .prow input:focus{border-color:var(--gold)}
-select.who{flex:0 0 auto;appearance:none;-webkit-appearance:none;background:#0c1512 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2398aa9f' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--line2);border-radius:9px;padding:9px 28px 9px 11px;font:inherit;font-size:13.5px;font-weight:700;color:var(--text);cursor:pointer;outline:none;max-width:48%}
+select.who{height:38px;box-sizing:border-box;flex:0 0 auto;appearance:none;-webkit-appearance:none;background:#0c1512 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2398aa9f' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--line2);border-radius:9px;padding:9px 28px 9px 11px;font:inherit;font-size:13.5px;font-weight:700;color:var(--text);cursor:pointer;outline:none;max-width:48%}
 select.who:focus-visible{border-color:var(--gold)}
 select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .prow .ainm{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:0 4px;font-size:12.5px;color:var(--muted);line-height:1.25;min-height:38px}
@@ -342,7 +343,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .sws button.on{border-color:#fff;transform:scale(1.1)}
 .sws button:disabled{opacity:.2;cursor:default}
 .chk{display:flex;gap:10px;align-items:flex-start;cursor:pointer;line-height:1.4}
-.chk input{margin-top:3px;accent-color:var(--gold)}
+.chk input{margin:3px 0 0;flex:none;accent-color:var(--gold)} /* no default side margin: its left edge lines up with the column */
 .mrow{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
 .routeInfo{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5}
 .routeInfo b{color:var(--text)}
@@ -363,25 +364,25 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* short game areas (landscape phones): the zoom column keeps fit / full screen / sound and sits clear of the piles */
 /* short game areas: the prompt (with another player's cards under it) also keeps clear of the turn buttons' column (--actFoot) */
 @container game (max-height:520px){#app{--mktFoot2:max(var(--mktFoot),var(--actFoot,16px))}#prompt{right:var(--mktFoot2);max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot2)))}#feed{--fw:34px;margin-top:5px;padding-top:5px}}
-@container game (max-height:520px){#app{--zoomFoot:140px}.zoomctl{top:62px;transform:none;flex-direction:row}.zoomctl button:not(#fsBtn):not(#sndBtn):not(#zfit){display:none}}
+@container game (max-height:520px){#app{--zoomFoot:140px}.zoomctl{top:var(--row2,64px);transform:none;flex-direction:row}.zoomctl button:not(#fsBtn):not(#sndBtn):not(#zfit){display:none}}
 @container game (max-width:900px){
   #app{--cw:104px}
   .brandbox .brand{font-size:16px}
   .pchip .st{display:none}
   #players{justify-content:flex-start}
-  #prompt{top:62px;font-size:13px}
+  #prompt{font-size:13px}
 }
 @media (max-width:600px){#overlay .btn.big{font-size:14px;padding:10px 16px}}
 @container game (max-width:600px){
   #app{--cw:86px}
-  #hud{padding:10px 12px;gap:6px}
+  #hud{padding:10px 12px;gap:6px;--hudH:34px}
   .brandbox{display:none}
-  .tbtn{padding:7px 10px;font-size:12.5px}
+  .tbtn{padding:0 10px;font-size:12.5px}
   #rulesBtn{display:none}
-  #jrnBtn{padding:7px 9px}#jrnBtn span{display:none} /* phones: the book icon alone leaves the player chips room */
+  #jrnBtn{padding:0 9px}#jrnBtn span{display:none} /* phones: the book icon alone leaves the player chips room */
   #app{--mw:44px;--mktR:6px;--zoomFoot:12px}
   #feed{--fw:34px;flex-direction:column;gap:5px}#feed .frow{gap:12px;max-width:100%}.fg .fcap{font-size:10px}#feed .fwho{font-size:10px}
-  #mkt{top:58px}
+  #app{--row2:58px}
   #market{gap:7px}
   #mkt .mslot:hover{transform:none}
   .mslot.can::after{content:'';width:8px;height:8px;padding:0;bottom:-4px}
@@ -3269,7 +3270,7 @@ function onRoomMsg(m){
 function applyServerState(S2,ev){
   const old=S;const fresh=!old||!old.owners||old.seed!==S2.seed||old.room!==S2.room;
   S=S2;
-  if(fresh){for(const[,el]of cardEls)el.remove();cardEls.clear();MAP=mapFor(S);buildBoard();closeModal();lastPlayer=-1;UI.cover=false;fit();}
+  if(fresh){for(const[,el]of cardEls)el.remove();cardEls.clear();MAP=mapFor(S);buildBoard();closeModal();lastPlayer=-1;UI.cover=false;fit();setTimeout(()=>{if(!userZoomed)fit();},0);} // again once render() has sized the market (--mktFoot), as local games do
   const turnChanged=fresh||old.cur!==S.cur||old.round!==S.round;
   if(!fresh)playEvents(ev,viewIdx());
   // the only thing that changes the game during my turn is me, so any new state closes pick modes
@@ -3288,7 +3289,7 @@ function exitOnline(){NET.code=null;leaveRoomSocket();S=null;try{history.replace
 /* ---------- pre-game room lobby ---------- */
 function roomLobbyHTML(){
   const r=NET.room||{};const host=r.host===myId();const link=location.origin+location.pathname+'?room='+NET.code;
-  const seats=(r.seats||[]).map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);min-height:40px;box-sizing:border-box"><span style="display:flex;align-items:center;gap:9px;min-width:0"><i style="width:13px;height:13px;border-radius:50%;background:${s.color};display:inline-block;flex:none"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note" style="margin:0">(you)</span>':''}</span>${A?`<span style="display:flex;align-items:center;gap:10px"><span class="note" style="margin:0">${esc(A.tier)}</span>${host&&r.status==='lobby'?`<button class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note" style="margin:0">${s.now?'wants to start · ':''}${s.uid===r.host&&!(r.opts&&r.opts.auto)?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('');
+  const seats=(r.seats||[]).map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="prow" style="justify-content:space-between;padding:0 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);min-height:48px;box-sizing:border-box"><span style="display:flex;align-items:center;gap:9px;min-width:0"><i style="width:13px;height:13px;border-radius:50%;background:${s.color};display:inline-block;flex:none"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note" style="margin:0">(you)</span>':''}</span>${A?`<span style="display:flex;align-items:center;gap:10px"><span class="note" style="margin:0">${esc(A.tier)}</span>${host&&r.status==='lobby'?`<button class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note" style="margin:0">${s.now?'wants to start · ':''}${s.uid===r.host&&!(r.opts&&r.opts.auto)?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('');
   const auto=!!(r.opts&&r.opts.auto),room=(r.seats||[]).length<(r.opts?r.opts.max:4),rated=!(r.opts&&r.opts.rated===false);
   const addAI=host&&!auto&&r.status==='lobby'?`<div class="field"><label>Add an AI player</label>${room?`<div class="clist ailist">${AIS.map(a=>{const on=(r.seats||[]).some(s=>s.ai===a.id);return`<button data-addai="${a.id}" ${on?'disabled':''}><b>${esc(a.name)} <span class="aitag">AI</span></b><span>${esc(a.tier)} · ${esc(a.desc)}</span></button>`;}).join('')}</div>`:'<p class="note">The room is full. Remove an AI to add another.</p>'}<p class="note">AI players move on the server${rated?' and gain or lose rating like everyone else':''}.</p></div>`:'';
   const ratedCtl=host&&!auto&&r.status==='lobby'?`<div class="field"><label>Rating</label><div class="seg" id="rlRated"><button data-v="1" class="${rated?'on':''}">Rated</button><button data-v="0" class="${rated?'':'on'}">Unrated</button></div></div>`:'';
