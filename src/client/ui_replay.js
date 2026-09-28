@@ -1,5 +1,5 @@
 /* =========================================================
-   REPLAYS: step through a recorded game (tools/ai/record.mjs, or any uploaded game log).
+   REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
    The log holds the seeds and every action; the engine rebuilds each position (replayStart),
    so a replay is exactly the game that was played. Nothing here changes any rules.
    ========================================================= */
@@ -12,22 +12,41 @@ function buildReplay(log,id){
   try{
     lines.push(S.log.slice());snap();
     for(let i=0;i<log.actions.length;i++){
-      const[seat,a]=log.actions[i];S.log=[];
-      let r=seat===S.cur&&!S.over?applyAction(seat,a):{ok:false,err:'not '+(S.players[seat]||{}).name+'’s turn'};
+      S.log=[];
+      let r=replayStep(log,i);
       if(!r.ok){fails.push(i+1);r=applyAction(S.cur,{t:'end',keep:[]});}
       lines.push(S.log.slice());evs.push(r.ev||null);snap();
     }
   }finally{setRng(null);}
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
   let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}
-  return{log,id,states,lines,evs,rem,fails,i:0,timer:0,speed:sp,side};
+  let ex=false;try{ex=localStorage.getItem('eldorado-rexp')==='1';}catch(e){}
+  return{log,id,states,lines,evs,rem,fails,i:0,timer:0,speed:sp,side,ex,ev:{},alts:{}};
 }
+/* ---- the evaluation: the shipped network's estimate for the position on screen ----
+   Only where a network was trained (First Expedition, 3-4 players: aiAllowed); elsewhere the replay shows none.
+   By default one line per explorer (the position itself); expanded, every option of the player to move is scored too. */
+const replayEvalOK=()=>!!(REPLAY&&S&&aiAllowed(S.course.id,S.players.length)&&!AIX.failed);
+function replayNet(){if(!AIX.net)return false;aiSetNet(AIX.net);return botNetReady();}
+function replayEval(){const R=REPLAY;if(R.ev[R.i])return R.ev[R.i];if(!replayNet())return null;
+  // the network scores each explorer on its own (its expected result: 1st = 1, 2nd = ¼, …); shown as shares of the
+  // winning chances, so they add up to 100%
+  const raw=S.players.map((p,j)=>p.resigned?0:Math.max(0,botValue(j,'net'))),tot=raw.reduce((a,x)=>a+x,0)||1;
+  return R.ev[R.i]={raw,share:raw.map((x,j)=>S.players[j].resigned?null:x/tot)};}
+function replayAlts(){const R=REPLAY;if(R.alts[R.i])return R.alts[R.i];if(!replayNet()||S.over)return null;
+  const g=mulberry32(R.i*7919+1),r0=RNG;let sc;
+  try{sc=botScoreActions(S.cur,g,8);}finally{RNG=r0;}
+  // each option's score for the player to move, as a share against the others' current scores (same scale as above)
+  const ev=replayEval(),me=S.cur,others=ev.raw.reduce((a,x,j)=>j===me?a:a+x,0);
+  return R.alts[R.i]=sc.filter(x=>x.v>-Infinity).map(x=>({a:x.a,v:Math.max(0,x.v)/((Math.max(0,x.v)+others)||1)}));}
 function startReplay(log,id){
-  let R;try{R=buildReplay(log,id);}catch(e){console.error(e);toast('Could not load that replay: '+e.message,3500);showSetup();return;}
+  if(online())exitOnline(); // an online game in progress goes on (rejoin it from Online)
+  aiReset();let R;try{R=buildReplay(log,id);}catch(e){console.error(e);toast('Could not load that replay: '+e.message,3500);showSetup();return;}
   closeModal();REPLAY=R;undoStack=[];
   for(const[,el]of cardEls)el.remove();cardEls.clear();
   S=JSON.parse(R.states[0]);MAP=mapFor(S);buildBoard();lastPlayer=-1;replayGo(0,false);fit();
   banner(log.title||'Replay',`${log.players.length} players · ${log.actions.length} moves`);
+  if(replayEvalOK()&&!AIX.net)aiNetLoad().then(()=>{if(REPLAY===R)replayBar();});
   if(R.fails.length)toast(`${R.fails.length} move${R.fails.length>1?'s':''} in this log didn't fit the game (first: move ${R.fails[0]}); those turns were ended instead.`,4200);
 }
 /* show position i (after i actions). anim: play the moves of action i-1 → i */
@@ -57,7 +76,7 @@ function replayPlay(){const R=REPLAY;if(!R)return;if(R.timer){replayStop();retur
 function replayStop(){const R=REPLAY;if(R&&R.timer){clearTimeout(R.timer);R.timer=0;}replayBar();}
 function exitReplay(){replayStop();REPLAY=null;$('#app').classList.remove('replaying');$('#rdock').hidden=true;$('#rside').hidden=true;$('#rdock').innerHTML='';
   try{const u=new URL(location.href);u.searchParams.delete('replay');history.replaceState(null,'',u);}catch(e){}
-  for(const[,el]of cardEls)el.remove();cardEls.clear();S=null;showSetup();}
+  for(const[,el]of cardEls)el.remove();cardEls.clear();S=null;if(!resumeSaved())showSetup();} // back to the local game in progress, if any
 
 /* words for one action, read against the position before it */
 function describeAction(a,st){
@@ -100,7 +119,7 @@ function replayBar(){
     d.innerHTML=`<div class="rgrp"><button id="rbS" class="ends" title="Start (Home)" aria-label="Start">⏮</button><button id="rbT0" title="Previous turn (↑)" aria-label="Previous turn">«</button><button id="rbP" title="Back one move (←)" aria-label="Back one move">‹</button><button id="rbGo" class="pri" title="Play / pause (space)" aria-label="Play">▶</button><button id="rbN" title="Forward one move (→)" aria-label="Forward one move">›</button><button id="rbT1" title="Next turn (↓)" aria-label="Next turn">»</button><button id="rbE" class="ends" title="End (End)" aria-label="End">⏭</button></div>
       <div class="rspd" role="group" aria-label="Replay speed">${RSPEEDS.map(([t,s,v])=>`<button data-v="${v}" aria-label="${t}" title="${t}"><span class="lg">${t}</span><span class="sm">${s}</span></button>`).join('')}</div>
       <input type="range" id="rbR" min="0" value="0" aria-label="Position in the game"><span id="rbPos"></span>
-      <button id="rbA" class="rtog" title="Show or hide the bot's options">Bot's view</button><div id="rbTxt" aria-live="polite"></div>`;
+      <button id="rbA" class="rtog" title="Show or hide the evaluation">Evaluation</button><div id="rbTxt" aria-live="polite"></div>`;
     const go=(i,an)=>{replayStop();replayGo(i,an);};
     d.querySelector('#rbS').onclick=()=>go(0);d.querySelector('#rbE').onclick=()=>go(1e9);
     d.querySelector('#rbP').onclick=()=>go(REPLAY.i-1);d.querySelector('#rbN').onclick=()=>go(REPLAY.i+1,true);
@@ -112,28 +131,32 @@ function replayBar(){
   d.hidden=false;side.hidden=!R.side;$('#app').classList.add('replaying');d.querySelector('#rbTxt').innerHTML=replayPromptHTML()+`<span class="rpos"> · move ${R.i} / ${R.states.length-1} · round ${S.round}</span>`;
   const n=R.states.length-1,gb=d.querySelector('#rbGo');gb.textContent=R.timer?'❚❚':'▶';gb.setAttribute('aria-label',R.timer?'Pause':'Play');
   d.querySelectorAll('.rspd button').forEach(b=>b.classList.toggle('on',+b.dataset.v===R.speed));
-  const tg=d.querySelector('#rbA');tg.classList.toggle('on',R.side);tg.setAttribute('aria-pressed',R.side?'true':'false');
+  const tg=d.querySelector('#rbA'),ok=replayEvalOK();tg.hidden=!ok;if(!ok)side.hidden=true;
+  tg.classList.toggle('on',R.side);tg.setAttribute('aria-pressed',R.side?'true':'false');
   const rr=d.querySelector('#rbR');rr.max=n;rr.value=R.i;
   d.querySelector('#rbPos').textContent=`move ${R.i} / ${n} · round ${S.round}`;
-  if(!R.side)return;
-  // what the bot thought of this decision (recorded with the log): its top options and their estimated chance to finish ahead
-  const nx=replayNext(),note=R.log.notes&&R.log.notes[R.i],st=JSON.parse(R.states[R.i]);
-  const who=nx?R.log.players[nx[0]]:null;
-  let h=`<div class="rwh">Bot's view <span class="m">· estimated chance to finish ahead</span></div>`;
-  if(note&&note.alts&&nx){const chosen=JSON.stringify(nx[1]);
-    h+=note.alts.map((o,j)=>`<div class="ralt${JSON.stringify(o.a)===chosen?' on':''}" data-j="${j}"><b>${o.v==null?'–':Math.round(o.v*100)+'%'}</b><span>${describeAction(o.a,st)}</span></div>`).join('');}
-  else h+=`<p class="m">${!nx?'End of the replay.':who&&who.bot&&who.bot!=='net'?`${esc(who.name)} is a heuristic bot; its moves have no recorded options.`:'No recorded options for this move.'}</p>`;
+  if(!R.side||!ok)return;
+  const ev=replayEval(),pc=v=>v==null?'–':Math.round(v*100)+'%';
+  let h=`<div class="rwh">Evaluation <span class="m">· estimated winning chances</span></div>`;
+  if(!ev)h+=`<p class="m">Loading the network…</p>`;
+  else h+=`<div class="revl">${S.players.map((p,j)=>`<div class="rev${j===S.cur&&!S.over?' now':''}"><i style="background:${p.color}"></i><span class="n">${esc(p.name)}</span><span class="bar"><span style="transform:scaleX(${ev.share[j]==null?0:Math.max(0,Math.min(1,ev.share[j]))})"></span></span><b>${p.resigned?'left':pc(ev.share[j])}</b></div>`).join('')}</div>`;
+  const nx=replayNext(),st=JSON.parse(R.states[R.i]),alts=ev&&!S.over&&R.ex?replayAlts():null;
+  if(ev&&!S.over)h+=`<button id="rbX" class="rexp" aria-expanded="${R.ex}">${R.ex?'Hide':'Show'} every option for ${esc(S.players[S.cur].name)}</button>`;
+  if(alts){const chosen=nx?JSON.stringify(nx[1]):'';
+    h+=alts.map((o,j)=>`<div class="ralt${JSON.stringify(o.a)===chosen?' on':''}" data-j="${j}"><b>${pc(o.v)}</b><span>${describeAction(o.a,st)}</span></div>`).join('');}
   side.innerHTML=h;
+  const xb=side.querySelector('#rbX');if(xb)xb.onclick=()=>{R.ex=!R.ex;try{localStorage.setItem('eldorado-rexp',R.ex?'1':'0');}catch(e){}replayBar();};
   // hovering an option marks its space on the board
-  side.querySelectorAll('.ralt').forEach(el=>{const o=note.alts[+el.dataset.j].a;
+  side.querySelectorAll('.ralt').forEach(el=>{const o=alts[+el.dataset.j].a;
     el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(o.to)){UI.targets=new Map([[o.to,{kind:'move'}]]);renderTargets();}};
     el.onpointerleave=()=>{computeTargets();replayDecorate();renderTargets();};});
 }
 /* replays list: upload a log file, or open a recent one */
 function showReplays(){
-  const html=`<h2>Replays</h2><p class="sub">Watch a recorded game move by move. Upload a game log (.json) to get a link you can share.</p>
-    <div class="field"><button class="btn pri" id="rUp">Upload a game log</button><input type="file" id="rFile" accept=".json,application/json" hidden> <span id="rMsg" class="note" style="margin-left:8px"></span></div>
-    <div class="field"><label>Recent replays</label><div id="rList" class="rlist"><p class="note">Loading…</p></div></div>
+  const html=`<h2>Replays</h2><p class="sub">Every finished game can be watched again move by move. You can also upload a game log (.json) to get a link you can share.</p>
+    <div class="field"><label>Your games</label><div id="rMine" class="rlist"><p class="note">Loading…</p></div></div>
+    <div class="field"><button class="btn" id="rUp">Upload a game log</button><input type="file" id="rFile" accept=".json,application/json" hidden> <span id="rMsg" class="note" style="margin-left:8px"></span></div>
+    <div class="field"><label>Recent games and uploads</label><div id="rList" class="rlist"><p class="note">Loading…</p></div></div>
     <div class="mrow"><button class="btn" id="rBack">Back</button></div>`;
   modal(html,sc=>{
     sc.querySelector('#rBack').onclick=()=>{closeModal();setTimeout(()=>{if(!S||S.over)showSetup();},170);};
@@ -146,6 +169,17 @@ function showReplays(){
         if(NET.available){const r=await fetch('/api/replays',{method:'POST',headers:{'content-type':'application/json'},body:text});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Upload failed ('+r.status+')');id=j.id;}
         openReplay(log,id);}
       catch(err){msg.textContent=err.message;}};
+    // your games: finished local games on this device, and (signed in) your online games
+    const mine=sc.querySelector('#rMine'),loc=myGames();
+    const row=(attr,title,sub)=>`<button ${attr}><b>${esc(title)}</b><span>${esc(sub)}</span></button>`;
+    const showMine=online=>{
+      const items=[...loc.map(L=>({t:L.created,h:row(`data-lid="${esc(L.lid)}"`,L.title||'Game',`on this device · ${L.actions.length} moves · ${new Date(L.created).toLocaleString()}`)})),
+        ...online.map(r=>({t:r.created,h:row(`data-id="${esc(r.id)}"`,r.title||r.players,`online · ${r.actions} moves · ${new Date(r.created).toLocaleString()}`)}))].sort((a,b)=>b.t-a.t);
+      mine.innerHTML=items.length?items.map(x=>x.h).join(''):'<p class="note">No finished games yet. Games you finish here are kept to watch again.</p>';
+      mine.querySelectorAll('button[data-lid]').forEach(b=>b.onclick=()=>{const L=loc.find(x=>x.lid===b.dataset.lid);if(L)openReplay(L,null);});
+      mine.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>loadReplayId(b.dataset.id));};
+    showMine([]);
+    if(NET.available&&NET.user)api('/api/replays?mine=1').then(j=>showMine(j.replays||[])).catch(()=>{});
     const list=sc.querySelector('#rList');
     if(!NET.available){list.innerHTML='<p class="note">Uploading and the shared list need the online server; a file you pick still plays here.</p>';return;}
     fetch('/api/replays').then(r=>r.json()).then(j=>{const rs=j.replays||[];

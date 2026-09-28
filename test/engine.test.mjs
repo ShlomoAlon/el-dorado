@@ -112,4 +112,32 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
   E.applyAction(seat, { t: 'end', keep: [] });
   assert(!P.discard.includes(id) && !P.deck.includes(id) && !P.hand.includes(id), t + ' came back after the turn');
 }
+// game records (log v2): a recorded game with undos, timeouts and a resignation replays to exactly the same final position
+{ let recs = 0;
+  for (let g = 0; g < 12; g++) {
+    const np = 2 + (g % 3), C = E.COURSES[g % E.COURSES.length];
+    const rec = E.recNewGame({ course: C, seed: 1000 + g, fullRace: true, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636'][i] })) });
+    const rnd = E.mulberry32(g + 7), mem = [{}, {}, {}, {}]; let steps = 0, undos = 0;
+    while (!E.S.over && steps++ < 20000) {
+      const S = E.S, me = S.cur;
+      if (steps === 150 && np > 2) { E.recResign(rec, (me + 1) % np); continue; }
+      if (rnd() < .01) { E.recTimeout(rec, me); continue; }
+      const a = E.aiChoose('raleigh', mem[me]);
+      const before = JSON.stringify(S), prevCur = S.cur;
+      const r = E.recAct(rec, me, a); if (!r.ok) { E.recTimeout(rec, me); continue; }
+      // sometimes undo (as the page does: bring back the earlier state), when the action drew nothing and the turn did not pass
+      if (!r.reveal && E.S.cur === prevCur && rnd() < .1) { E.S = JSON.parse(before); undos++; }
+    }
+    if (!E.S.over) continue;
+    const fin = JSON.stringify({ ...E.S, log: [], nact: 0 }), log = JSON.parse(JSON.stringify(E.recFinal(rec)));
+    assert(!E.replayCheck(log), 'record fails replayCheck: ' + E.replayCheck(log));
+    E.replayStart(log);
+    for (let i = 0; i < log.actions.length; i++) { const r = E.replayStep(log, i); assert(r.ok, 'replay step ' + i + ' failed: ' + r.err); }
+    E.setRng(null);
+    assert(JSON.stringify({ ...E.S, log: [], nact: 0 }) === fin, 'replay differs from the recorded game (' + C.id + ', ' + np + ' players, ' + undos + ' undos)');
+    recs++;
+  }
+  assert(recs >= 8, 'too few recorded games finished: ' + recs);
+  console.log(`ok: ${recs} recorded games replay exactly (undo, timeouts, resignations)`);
+}
 console.log(`ok: ${games} games, map ${mapMs.toFixed(2)} ms, slowest action ${maxAct.toFixed(2)} ms`);

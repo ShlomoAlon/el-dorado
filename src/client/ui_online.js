@@ -37,7 +37,7 @@ function hubHTML(){
     <p class="note" id="hErr"></p>
     <div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
   const tabs=`<div class="seg" id="hTabs" style="margin-bottom:16px">${[['play','Play'],['board','Leaderboard'],['me','Profile']].map(([k,t])=>`<button data-k="${k}" class="${hubTab===k?'on':''}">${t}</button>`).join('')}</div>`;
-  const head=`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2>Online</h2><span class="note" style="margin:0"><b style="color:var(--text)">${esc(u.name)}</b> · rating <b style="color:var(--gold2)">${Math.round(u.rating)}</b> · ${plural(u.games,'game')}</span></div>`;
+  const head=`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2>Online</h2><span class="note" style="margin:0"><b style="color:var(--text)">${esc(u.name)}</b> · rating <b style="color:var(--gold2)">${Math.round(u.rating)}</b> · ${plural(u.games,'game')} · <button class="linkbtn" id="hOut2">Sign out</button></span></div>`;
   if(hubTab==='board')return head+tabs+`<div id="lbList"><p class="note">Loading…</p></div><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
   if(hubTab==='me')return head+tabs+`<div class="field"><label>Display name</label><div class="prow"><input id="meName" maxlength="16" value="${esc(u.name)}"><button class="btn" id="meSave">Save</button></div></div>
     <p class="note">${plural(u.wins,'win')} in ${plural(u.games,'game')} (rated). Everyone starts at 1200, the AIs too; ratings move faster during a player's first 10 games. Unrated games don't count.</p>
@@ -85,6 +85,7 @@ function renderHub(){
     return;
   }
   m.querySelectorAll('#hTabs button').forEach(b=>b.onclick=()=>{hubTab=b.dataset.k;renderHub();});
+  q('#hOut2').onclick=signOut;
   if(hubTab==='board'){api('/api/leaderboard').then(r=>{const l=q('#lbList');if(!l)return;
     l.innerHTML=r.players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${r.players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span style="color:var(--muted)">${i+1}</span><span style="display:flex;align-items:center;gap:7px;min-width:0"><b style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</b>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note" style="margin:0">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note" style="margin-top:12px">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';}).catch(e=>{const l=q('#lbList');if(l)l.textContent=e.message;});return;}
   if(hubTab==='me'){q('#meSave').onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};q('#hOut').onclick=signOut;return;}

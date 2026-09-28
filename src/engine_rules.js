@@ -15,22 +15,67 @@ function isActive(p){return !playerDone(p)&&!p.resigned;}
 
 function mapFor(st){return buildCourse(st.course,st.seed);}
 /* ---- game logs (replays) ----
-   {kind:'eldorado-replay', v:1, title, course, seed, rng, fullRace, players:[{name,color,bot}], actions:[[seat,action],…], notes:[…]}
+   {kind:'eldorado-replay', v:1 (training logs) or 2 (game records, below), title, course, seed, rng, fullRace, players:[{name,color,bot}], actions:[[seat,action],…], notes:[…]}
    Every shuffle draws from a generator seeded with log.rng, so re-applying the same actions rebuilds the identical game. */
 const REPLAY_MAX_ACTIONS=20000;
 function replayCheck(log){
-  if(!log||log.kind!=='eldorado-replay'||log.v!==1)return'Not an El Dorado game log.';
+  if(!log||log.kind!=='eldorado-replay'||(log.v!==1&&log.v!==2))return'Not an El Dorado game log.';
   if(!courseById(log.course))return'Unknown course: '+log.course;
   if(!Array.isArray(log.players)||log.players.length<2||log.players.length>4)return'A game log needs 2 to 4 players.';
   if(!Number.isFinite(log.seed)||!Number.isFinite(log.rng))return'The game log is missing its seeds.';
   if(log.gift&&!(CT[log.gift]&&CT[log.gift].cost))return'Unknown gift card: '+log.gift;
   if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
   return null;}
-function replayStart(log){const g=mulberry32(log.rng>>>0);setRng(g);
-  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:COLORS[i%COLORS.length].hex}))});
+function replayStart(log){const v2=log.v===2,g=v2?recRng(log.rng,-1):mulberry32(log.rng>>>0);setRng(g);
+  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:v2&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex}))});
   // training exploration: every player starts with the same extra card, shuffled into the draw pile
   if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(RNG()*(p.deck.length+1)),0,newCard(log.gift));
+  if(v2)setRng(null);
   return g;}
+/* apply action i of a log to S (after replayStart and actions 0…i-1). v2 logs may also hold resign / timeout (see recAct). */
+function replayStep(log,i){
+  const[seat,a]=log.actions[i],v2=log.v===2,r0=RNG;if(v2)setRng(recRng(log.rng,i));
+  try{
+    if(v2&&a.t==='resign')return resign(seat);
+    if(S.over||seat!==S.cur)return{ok:false,err:'not '+(S.players[seat]||{}).name+'’s turn'};
+    return v2&&a.t==='timeout'?forceEnd(seat):applyAction(seat,a);
+  }finally{if(v2)RNG=r0;}
+}
+/* ---- game records (log v2): every game keeps its log, so it can be watched afterwards ----
+   Each action's shuffles come from a generator of its own, seeded from the game's secret number (rec.rng) and the action's
+   index (newGame's: index -1), so re-applying the log rebuilds the same game and nothing needs a generator's state between
+   moves (a server room may sleep). rec.rng would reveal every future shuffle, so the record stays on the server (or in the
+   local save) until the game is over. S.nact counts the recorded actions: an undo brings back an older S, and the next
+   action cuts the record back to it. */
+function recRng(rng,k){return mulberry32(((rng>>>0)+Math.imul(k+2,0x9E3779B1))>>>0);}
+function recNewGame(o){
+  const rng=(Math.random()*4294967296)>>>0,r0=RNG;setRng(recRng(rng,-1));
+  try{newGame(o);}finally{RNG=r0;}
+  S.nact=0;
+  return{kind:'eldorado-replay',v:2,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,
+    players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[]};
+}
+function recDo(rec,seat,a,f){
+  const on=!!rec&&Number.isInteger(S.nact),r0=RNG;if(on)setRng(recRng(rec.rng,S.nact));
+  let r;try{r=f();}finally{RNG=r0;}
+  if(r.ok&&on){rec.actions.length=Math.min(rec.actions.length,S.nact);rec.actions.push([seat,a]);S.nact++;}
+  return r;
+}
+// a player's action, recorded (rec may be null: an old game without a record)
+function recAct(rec,seat,a){return recDo(rec,seat,a,()=>applyAction(seat,a));}
+// a player leaves (any time, in or out of turn)
+function recResign(rec,seat){return recDo(rec,seat,{t:'resign'},()=>resign(seat));}
+// the turn ends without the player (turn timer, or an AI whose choice was not legal)
+function recTimeout(rec,seat){return recDo(rec,seat,{t:'timeout'},()=>forceEnd(seat));}
+function forceEnd(seat){if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;return applyAction(seat,{t:'end',keep:[]});}
+/* the finished log, ready to save and watch: cut to S.nact (undone actions dropped), with a title */
+function recFinal(rec){
+  if(!rec||!Number.isInteger(S.nact))return null;
+  const L={...rec,actions:rec.actions.slice(0,S.nact)};
+  L.title=L.title||S.players.map(p=>p.name).join(', ')+' · '+(courseById(rec.course)||{name:rec.course}).name;
+  L.result={places:S.places||null,rounds:S.round};
+  return L;
+}
 function newGame(o){
 
   const course=o.course||COURSES[0];

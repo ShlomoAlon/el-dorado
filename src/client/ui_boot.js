@@ -16,7 +16,8 @@ function boot(){
     fb.onclick=()=>{try{if(fsOn())(document.exitFullscreen||document.webkitExitFullscreen).call(document);else(fsEl.requestFullscreen||fsEl.webkitRequestFullscreen).call(fsEl,{navigationUI:'hide'});}catch(e){}};
     const sync=()=>{const on=!!fsOn();fb.classList.toggle('full',on);fb.title=fb.ariaLabel=on?'Exit full screen':'Full screen';};
     document.addEventListener('fullscreenchange',sync);document.addEventListener('webkitfullscreenchange',sync);}
-  $('#menuBtn').onclick=()=>{if(REPLAY){exitReplay();return;}if(online()&&!S.over)resignOnline();else if(online()){exitOnline();showHub();}else showSetup();};
+  // Menu: the start screen, without ending the game in progress (it offers Back to game and Resign)
+  $('#menuBtn').onclick=()=>{if(REPLAY){exitReplay();return;}if(online()&&S.over){exitOnline();showHub();}else showSetup();};
   $('#mktBtn').onclick=()=>{if($('#mkt').classList.contains('cramped')){openAll(true);return;}setMkt(!UI.mktOpen);};
   let so=null;try{so=localStorage.getItem('eldorado-mkt');}catch(e){}
   UI.mktOpen=so!=='0';$('#mkt').classList.toggle('hid',!UI.mktOpen);$('#mktBtn').classList.toggle('on',UI.mktOpen);
@@ -30,11 +31,7 @@ function boot(){
     let room=null;try{room=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'')||null;}catch(e){}
     if(room&&NET.available){if(NET.user){joinRoom(room);return;}NET.pendingRoom=room;showHub();return;}
     if(NET.user&&NET.active){showHub();return;}
-    const saved=loadSave();
-    if(saved&&!saved.over){
-      try{aiReset();S=saved;MAP=mapFor(S);buildBoard();UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();requestAnimationFrame(()=>fit());
-        if(!UI.cover)banner(cur().name,'Round '+S.round);return;}catch(e){console.error(e);S=null;}
-    }
+    if(resumeSaved())return;
     showSetup();
   });
 }

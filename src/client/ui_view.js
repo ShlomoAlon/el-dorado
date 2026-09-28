@@ -823,7 +823,8 @@ function renderHeader(){
   $('#roundLbl').textContent='Round '+S.round+(S.endTriggered&&!S.over?' · final':'');
   $('#players').innerHTML=S.players.map((p,i)=>{
     const fin=p.pieces.filter(k=>k==='done').length;
-    const bk=p.blocks.map(b=>`<i style="background:${SYMCOL[S.blockades[b].k]}" title="Blockade #${S.blockades[b].n}"></i>`).join('');
+    // blockades held: one diamond each, then their total value (the numbers on them)
+    const bv=p.blocks.reduce((a,b)=>a+S.blockades[b].n,0),bk=p.blocks.length?p.blocks.map(b=>`<i style="background:${SYMCOL[S.blockades[b].k]}"></i>`).join('')+`<b title="${plural(p.blocks.length,'blockade')}: ${p.blocks.map(b=>'#'+S.blockades[b].n).join(', ')}, total value ${bv}">${bv}</b>`:'';
     const you=online()&&S.owners[i]===myId();const seat=online()&&NET.room&&NET.room.seats?NET.room.seats.find(x=>x.uid===S.owners[i]):null;const off=!!(seat&&!seat.online);
     return`<div class="pchip glass${i===S.cur&&!S.over?' on':''}" style="--pc:${p.color}${off?';opacity:.55':''}" title="${off?'offline':''}"><span class="dot"></span><span class="nm">${esc(p.name)}${you?' <span style="color:var(--muted);font-weight:600">(you)</span>':''}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}<span class="st">${p.deck.length+p.hand.length+p.discard.length+p.play.length} cards</span>${bk?`<span class="bk">${bk}</span>`:''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}</div>`;
   }).join('');
@@ -887,7 +888,7 @@ function render(){
   renderHeader();renderMarket();renderPrompt();feedRender();updateMktH();renderBuySlot();renderCards(); // re-size the market once the buttons exist
   renderBlockades();renderTargets();renderPieces();
   aim.hot=null;if(aimWanted())startAim();else stopAim();
-  renderJournal();save();updateTitle();renderTimer();$('#menuBtn').textContent=REPLAY?'Exit replay':online()&&!S.over?'Leave game':'New game';
+  renderJournal();save();updateTitle();renderTimer();$('#menuBtn').textContent=REPLAY?'Exit replay':'Menu';
   if(REPLAY){replayAfterRender();replayBar();}
   aiKick();
 }
@@ -918,14 +919,16 @@ function showSetup(){
   const saved=loadSave();
   const canResume=saved&&!saved.over&&(saved.v===4||saved.v===5)&&(!S||S.over);
   const routeTxt=()=>MAP&&(!S||S.over)?`<div class="routeInfo">Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random</div>`:'';
-  const html=()=>`<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
+  const inGame=!!(S&&!S.over&&!REPLAY),rs=inGame?resignSeat():-1;
+  const gameRow=()=>inGame?`<div class="ingame"><span><b>Game in progress</b> · round ${S.round}${online()?' · online':''}</span><span class="ig-b">${rs>=0?`<button class="btn" id="sResign">Resign${!online()&&S.players.filter(p=>!p.ai).length>1?' ('+esc(S.players[rs].name)+')':''}</button>`:''}<button class="btn pri" id="sBack">Back to game</button></span></div>`:'';
+  const html=()=>`${gameRow()}<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
     <div class="field"><label>How are you playing?</label><div class="seg" id="sMode"><button data-m="local" class="on">On this device</button><button data-m="online">Online</button></div></div>
     <div class="field"><label>Players</label><div class="seg" id="sN">${[2,3,4].map(n=>`<button data-n="${n}" class="${setup.n===n?'on':''}">${n}</button>`).join('')}</div>${setup.n===2?'<p class="note">Two players each lead two explorers. Both must reach El Dorado.</p>':''}</div>
     <div class="field"><label>Expedition leaders</label>${[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return`<div class="prow seat"><select class="who" id="pt${i}" aria-label="Player ${i+1}: human or AI"><option value="">Human</option><optgroup label="AI players">${AIS.map(a=>`<option value="${a.id}" ${setup.ai[i]===a.id?'selected':''} ${!aiAllowed(setup.course,setup.n)||setup.ai.slice(0,setup.n).some((x,j)=>j!==i&&x===a.id)?'disabled':''}>${a.name} · ${a.tier}</option>`).join('')}</optgroup></select>${A?`<div class="ainm" title="${esc(A.desc)}"><span>${esc(A.desc)}</span></div>`:`<input id="pn${i}" maxlength="14" value="${esc(setup.names[i])}" aria-label="Player ${i+1} name">`}<div class="sws">${COLORS.map(c=>`<button data-p="${i}" data-c="${c.id}" style="--c:${c.hex}" class="${setup.colors[i]===c.id?'on':''}" ${setup.colors.slice(0,setup.n).some((x,j)=>j!==i&&x===c.id)?'disabled':''} aria-label="${c.name}"></button>`).join('')}</div></div>`;}).join('')}${allAI()?'<p class="note" style="color:#f3c98b">Seat at least one human player.</p>':''}</div>
     <div class="field"><label>Course</label>${coursePicker('sC',setup.course)}<div id="rInfo">${routeTxt()}</div>${aiAllowed(setup.course,setup.n)?'':'<div class="aiNote">AI players are available on First Expedition with 3 or 4 players for now.</div>'}</div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><button data-f="1" class="${setup.full?'on':''}">When all but one arrive</button><button data-f="0" class="${setup.full?'':'on'}">At the first arrival (official)</button></div></div>
     <div class="field"><label class="chk"><input type="checkbox" id="sPriv" ${setup.privacy?'checked':''}> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
-    <div class="mrow"><button class="btn" id="sReplays">Replays</button>${canResume?'<button class="btn" id="sResume">Resume saved game</button>':''}${S&&!S.over?'<button class="btn" id="sClose">Back to game</button>':''}<button class="btn pri big" id="sGo">Start expedition</button></div>`;
+    <div class="mrow"><button class="btn" id="sReplays">Replays</button>${canResume?'<button class="btn" id="sResume">Resume saved game</button>':''}<button class="btn pri big" id="sGo">${inGame?'Start a new game':'Start expedition'}</button></div>`;
   const allAI=()=>setup.ai.slice(0,setup.n).every(x=>x);
   const preview=()=>{if(S&&!S.over)return;try{setup.cur=pickCourse(setup.course);MAP=buildCourse(setup.cur,setup.seed);buildBoard();fit();L.pieces.innerHTML='';const ri=document.getElementById('rInfo');if(ri)ri.innerHTML=routeTxt();}catch(e){console.error(e);}};
   const mount=sc=>{
@@ -941,13 +944,14 @@ function showSetup(){
       m.querySelector('#sGo').disabled=allAI();
       m.querySelector('#sPriv').onchange=e=>setup.privacy=e.target.checked;
       m.querySelectorAll('#sFull button').forEach(b=>b.onclick=()=>{setup.full=b.dataset.f==='1';rerender();});
-      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{aiReset();UI.viewer=null;S=saved;MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
-      const cl=m.querySelector('#sClose');if(cl)cl.onclick=closeModal;
+      const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{aiReset();UI.viewer=null;S=saved;REC=loadRec(S);MAP=mapFor(S);buildBoard();UI.mode='idle';UI.piece=Math.max(0,cur().pieces.findIndex(k=>k!=='done'));closeModal();lastPlayer=-1;render();fit();};
+      const cl=m.querySelector('#sBack');if(cl)cl.onclick=closeModal;
+      const rb=m.querySelector('#sResign');if(rb)rb.onclick=()=>{closeModal();setTimeout(()=>online()?resignOnline():resignLocal(),170);};
       m.querySelector('#sReplays').onclick=()=>{closeModal();setTimeout(showReplays,170);};
-      m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];
+      m.querySelector('#sGo').onclick=()=>{sync();undoStack=[];if(online())exitOnline(); // an online game goes on without you (rejoin it from Online)
         for(const[,el]of cardEls)el.remove();cardEls.clear();
         if(allAI())return;aiReset();
-        newGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return{name:A?A.name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex,ai:A?A.id:undefined};})});
+        UI.lastReplay=null;REC=recNewGame({course:setup.cur||pickCourse(setup.course),seed:setup.seed,privacy:setup.privacy,fullRace:setup.full,players:[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return{name:A?A.name:setup.names[i]||('Player '+(i+1)),color:COLORS.find(c=>c.id===setup.colors[i]).hex,ai:A?A.id:undefined};})});
         if(S.players.some(p=>p.ai&&aiUsesNet(p.ai)))aiNetLoad();
         buildBoard();UI.mode='idle';UI.piece=0;UI.viewer=null;UI.cover=S.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;lastPlayer=-1;closeModal();render();fit();
         if(!UI.cover)banner(cur().name,isAI(S.cur)?'AI · Round 1':'Round 1');
@@ -976,10 +980,12 @@ function showGameOver(){
   const w=S.winners||[];const fin=S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i]));
   const res=online()&&NET.room&&NET.room.results;const ord=S.players.map((p,i)=>i).sort((a,b)=>(S.places?S.places[a]-S.places[b]:0));
   const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
-  const rows=ord.map(i=>[S.players[i],i]).map(([p,i])=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:${w.includes(i)?'rgba(233,178,74,.14)':'#0c1512'};border:1px solid ${w.includes(i)?'var(--gold)':'var(--line)'}"><span style="display:flex;align-items:center;gap:8px">${S.places?`<b style="color:var(--gold2);min-width:34px">${ordn(S.places[i])}</b>`:''}<i style="width:12px;height:12px;border-radius:50%;background:${p.color};display:inline-block"></i><b>${esc(p.name)}</b></span><span style="color:var(--muted);font-size:13px">${playerDone(p)?'Reached El Dorado (round '+p.fin+')':p.resigned?'Left the game':'Still in the jungle'} · ${plural(p.blocks.length,'blockade')}${res&&res.deltas?` · <b style="color:${res.deltas[i]>=0?'#8fe3a8':'#ff9c8a'}">${res.deltas[i]>=0?'+':''}${res.deltas[i]}</b> → ${Math.round(res.before[i]+res.deltas[i])}`:''}</span></div>`).join('');
+  const rows=ord.map(i=>[S.players[i],i]).map(([p,i])=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:${w.includes(i)?'rgba(233,178,74,.14)':'#0c1512'};border:1px solid ${w.includes(i)?'var(--gold)':'var(--line)'}"><span style="display:flex;align-items:center;gap:8px">${S.places?`<b style="color:var(--gold2);min-width:34px">${ordn(S.places[i])}</b>`:''}<i style="width:12px;height:12px;border-radius:50%;background:${p.color};display:inline-block"></i><b>${esc(p.name)}</b></span><span style="color:var(--muted);font-size:13px">${playerDone(p)?'Reached El Dorado (round '+p.fin+')':p.resigned?'Left the game':'Still in the jungle'} · ${plural(p.blocks.length,'blockade')}${p.blocks.length?' (value '+p.blocks.reduce((a,b)=>a+S.blockades[b].n,0)+')':''}${res&&res.deltas?` · <b style="color:${res.deltas[i]>=0?'#8fe3a8':'#ff9c8a'}">${res.deltas[i]>=0?'+':''}${res.deltas[i]}</b> → ${Math.round(res.before[i]+res.deltas[i])}`:''}</span></div>`).join('');
+  const rid=res&&res.replay||null;
   const tie=fin.length>1?'<p class="sub" style="margin:10px 0 0">Explorers arriving in the same round are split by blockades held, then the highest-numbered blockade.</p>':'';
-  modal(`<h2>${w.length?w.map(i=>esc(S.players[i].name)).join(' & ')+' win'+(w.length>1?'':'s'):'Expedition over'}</h2><p class="sub">The race ended in round ${S.round}.${res&&res.deltas?' Ratings updated.':res&&res.unrated?' Unrated game: ratings unchanged.':''}</p>${rows}${tie}<div class="mrow"><button class="btn" id="gClose">View board</button><button class="btn pri" id="gNew">New game</button></div>`,
-    sc=>{sc.querySelector('#gClose').onclick=closeModal;sc.querySelector('#gNew').onclick=()=>{closeModal();if(online()){exitOnline();setTimeout(showHub,180);}else setTimeout(showSetup,180);};},true);
+  modal(`<h2>${w.length?w.map(i=>esc(S.players[i].name)).join(' & ')+' win'+(w.length>1?'':'s'):'Expedition over'}</h2><p class="sub">The race ended in round ${S.round}.${res&&res.deltas?' Ratings updated.':res&&res.unrated?' Unrated game: ratings unchanged.':''}</p>${rows}${tie}<div class="mrow">${rid||UI.lastReplay&&!online()?'<button class="btn" id="gRep">Watch replay</button>':''}<button class="btn" id="gClose">View board</button><button class="btn pri" id="gNew">New game</button></div>`,
+    sc=>{sc.querySelector('#gClose').onclick=closeModal;
+      const gr=sc.querySelector('#gRep');if(gr)gr.onclick=()=>{closeModal();if(online()){exitOnline();loadReplayId(rid);}else openReplay(UI.lastReplay,null);};sc.querySelector('#gNew').onclick=()=>{closeModal();if(online()){exitOnline();setTimeout(showHub,180);}else setTimeout(showSetup,180);};},true);
 }
 function showPile(which){
   if(!S||UI.cover)return;const pl=hp();

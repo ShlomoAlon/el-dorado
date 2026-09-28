@@ -34,6 +34,9 @@ async function createSchema(env) {
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS train(run TEXT PRIMARY KEY, updated INTEGER NOT NULL, body TEXT NOT NULL)`),
   ]);
   try { await env.DB.prepare(`ALTER TABLE users ADD COLUMN bot TEXT`).run(); } catch (e) { } // already there
+  // replays of online games (game=1) are kept for good; uids = ',uid1,uid2,' (who played); listed=0: a private room's game
+  for (const c of ['game INTEGER NOT NULL DEFAULT 0', 'uids TEXT', 'listed INTEGER NOT NULL DEFAULT 1'])
+    try { await env.DB.prepare(`ALTER TABLE replays ADD COLUMN ${c}`).run(); } catch (e) { }
   for (const A of E.AIS) { // one rated player per named AI; if a person already has the name, the AI gets "(AI)" after it
     const id = aiUid(A.id);
     if (await env.DB.prepare(`SELECT id FROM users WHERE id=?`).bind(id).first()) continue;
@@ -188,11 +191,17 @@ export default {
         const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
         const title = String(log.title || '').slice(0, 120), players = log.players.map(x => String(x.name || '').slice(0, 24)).join(', ');
         await env.DB.prepare(`INSERT INTO replays(id,created,title,players,actions,body) VALUES(?,?,?,?,?,?)`).bind(id, Date.now(), title, players, log.actions.length, text).run();
-        await env.DB.prepare(`DELETE FROM replays WHERE id NOT IN (SELECT id FROM replays ORDER BY created DESC LIMIT ${REPLAY_KEEP})`).run();
+        await env.DB.prepare(`DELETE FROM replays WHERE game=0 AND id NOT IN (SELECT id FROM replays WHERE game=0 ORDER BY created DESC LIMIT ${REPLAY_KEEP})`).run();
         return json({ id });
       }
       if (p === '/api/replays' && req.method === 'GET') {
-        const r = await env.DB.prepare(`SELECT id,created,title,players,actions FROM replays ORDER BY created DESC LIMIT 50`).all();
+        // ?mine=1: the signed-in player's own online games (private rooms included); otherwise everything listed
+        if (url.searchParams.get('mine')) {
+          const me = await authUser(req, env); if (!me) return bad('Sign in first.', 401);
+          const r = await env.DB.prepare(`SELECT id,created,title,players,actions FROM replays WHERE game=1 AND uids LIKE ? ORDER BY created DESC LIMIT 50`).bind('%,' + me.id + ',%').all();
+          return json({ replays: r.results });
+        }
+        const r = await env.DB.prepare(`SELECT id,created,title,players,actions FROM replays WHERE listed=1 ORDER BY created DESC LIMIT 50`).all();
         return json({ replays: r.results });
       }
       if ((m0 = p.match(/^\/api\/replays\/([a-z0-9]{6,12})$/)) && req.method === 'GET') {
@@ -284,12 +293,14 @@ const PCOLORS = ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636']; // matches COLORS:
 
 export class Room extends DurableObject {
   constructor(ctx, env) {
-    super(ctx, env); this.d = null; this.S = null; this.undo = [];
-    ctx.blockConcurrencyWhile(async () => { this.d = (await ctx.storage.get('d')) || null; this.S = (await ctx.storage.get('S')) || null; this.undo = (await ctx.storage.get('undo')) || [];
+    super(ctx, env); this.d = null; this.S = null; this.undo = []; this.rec = null;
+    // rec: the game's log (engine recNewGame). It holds the secret shuffle seed, so it is never sent out; once the game is over
+    // it is saved as the game's replay.
+    ctx.blockConcurrencyWhile(async () => { this.d = (await ctx.storage.get('d')) || null; this.S = (await ctx.storage.get('S')) || null; this.undo = (await ctx.storage.get('undo')) || []; this.rec = (await ctx.storage.get('rec')) || null;
       if (this.S && !this.S.course) { this.S = null; this.undo = []; if (this.d) this.d.status = 'closed'; } }); // pre-course (v3) games can't be rebuilt
   }
   async persist(parts = 'dSu') {
-    const w = {}; if (parts.includes('d')) w.d = this.d; if (parts.includes('S')) w.S = this.S; if (parts.includes('u')) w.undo = this.undo;
+    const w = {}; if (parts.includes('d')) w.d = this.d; if (parts.includes('S')) { w.S = this.S; if (this.rec) w.rec = this.rec; } if (parts.includes('u')) w.undo = this.undo;
     await this.ctx.storage.put(w);
   }
   engine() { E.S = this.S; E.MAP = mapFor(this.S); return E; }
@@ -379,7 +390,7 @@ export class Room extends DurableObject {
     }
     if (d.status !== 'playing' || !this.S) return;
     const seat = this.S.owners.indexOf(uid);
-    if (m.t === 'resign') { if (seat < 0) return; const eng = this.engine(); const prevCur = this.S.cur; const r = eng.resign(seat); if (!r.ok) return; if (this.S.cur !== prevCur) { this.undo = []; await this.nextTurn(); } await this.afterChange(r.ev); return; }
+    if (m.t === 'resign') { if (seat < 0) return; const eng = this.engine(); const prevCur = this.S.cur; const r = eng.recResign(this.rec, seat); if (!r.ok) return; this.undo = []; if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn(); await this.afterChange(r.ev); return; }
     if (m.t === 'undo') {
       if (seat !== this.S.cur || !this.undo.length) return err('Nothing to undo.');
       this.S = JSON.parse(this.undo.pop()); await this.persist('Su'); this.sendAll([{ e: 'undo' }]); return;
@@ -387,7 +398,8 @@ export class Room extends DurableObject {
     if (m.t === 'act') {
       if (seat < 0) return err('You are watching this game.');
       const eng = this.engine(); const before = JSON.stringify(this.S); const prevCur = this.S.cur;
-      const r = eng.applyAction(seat, m.a);
+      if (!m.a || typeof m.a !== 'object') return err('Bad action.');
+      const r = eng.recAct(this.rec, seat, m.a);
       if (!r.ok) { this.S = JSON.parse(before); return err(r.err); }
       this.S = E.S; d.timeouts[seat] = 0;
       if (r.reveal || this.S.cur !== prevCur) this.undo = []; else { this.undo.push(before); if (this.undo.length > 6) this.undo.shift(); }
@@ -403,7 +415,7 @@ export class Room extends DurableObject {
   }
   async startGame() {
     const d = this.d;
-    E.newGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
+    this.rec = E.recNewGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
     this.S = E.S; this.S.owners = d.seats.map(s => s.uid); this.S.room = d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
     d.status = 'playing'; d.timeouts = {}; this.undo = [];
     await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll([{ e: 'start' }]);
@@ -430,7 +442,7 @@ export class Room extends DurableObject {
     this.aiMem = this.aiMem || {};
     do {
       const seat = this.S.cur, mem = this.aiMem[seat] || (this.aiMem[seat] = {});
-      const r = eng.aiStep(this.S.players[seat].ai, mem); this.S = E.S; ev.push(...r.ev);
+      const r = eng.aiStep(this.S.players[seat].ai, mem, this.rec); this.S = E.S; ev.push(...r.ev);
     } while (fast && this.aiToMove() && Date.now() - t0 < 300);
     this.undo = [];
     if (!this.S.over) { if (this.aiToMove()) await this.scheduleAI(700); else await this.startTurnTimer(); }
@@ -443,22 +455,34 @@ export class Room extends DurableObject {
     const eng = this.engine(); const seat = this.S.cur; const ev = [{ e: 'timeout', pl: seat }];
     d.timeouts[seat] = (d.timeouts[seat] || 0) + 1;
     this.S.log.push({ p: seat, t: 'ran out of time.' });
-    if (d.timeouts[seat] >= 3) { const r = eng.resign(seat); ev.push(...r.ev); this.S.log.push({ p: seat, t: 'missed 3 turns in a row and forfeits.' }); }
-    else {
-      if (this.S.turn.pending) eng.applyAction(seat, { t: 'trash', cards: [] });
-      this.S.turn.active = null;
-      const r = eng.applyAction(seat, { t: 'end', keep: [] }); ev.push(...r.ev);
-    }
+    if (d.timeouts[seat] >= 3) { const r = eng.recResign(this.rec, seat); ev.push(...r.ev); this.S.log.push({ p: seat, t: 'missed 3 turns in a row and forfeits.' }); }
+    else { const r = eng.recTimeout(this.rec, seat); ev.push(...r.ev); }
     this.S = E.S; this.undo = [];
     if (!this.S.over) await this.nextTurn();
     await this.afterChange(ev);
   }
+  /* the finished game's log becomes its replay (/?replay=<id>): kept for good, listed publicly unless the room was private.
+     Returns the replay's id, or null (a game started before games were recorded, or the database failed). */
+  async saveReplay() {
+    const d = this.d; if (d.replay !== undefined) return d.replay;
+    d.replay = null; E.S = this.S; E.MAP = mapFor(this.S);
+    const log = E.recFinal(this.rec); if (!log) return null;
+    const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+    const text = JSON.stringify(log); if (text.length > REPLAY_MAX_BYTES) return null;
+    try {
+      await this.env.DB.prepare(`INSERT INTO replays(id,created,title,players,actions,body,game,uids,listed) VALUES(?,?,?,?,?,?,1,?,?)`)
+        .bind(id, Date.now(), log.title.slice(0, 120), log.players.map(x => x.name).join(', '), log.actions.length, text, ',' + this.S.owners.join(',') + ',', d.opts.pub === false ? 0 : 1).run();
+      d.replay = id;
+    } catch (e) { }
+    return d.replay;
+  }
   async finish() {
     const d = this.d; d.status = 'over'; d.deadline = null;
     await this.ctx.storage.deleteAlarm();
+    const replay = await this.saveReplay();
     if (!d.rated && d.opts.rated === false) { // unrated room: the result is kept, ratings don't move
-      d.rated = true; d.results = { places: this.S.places, unrated: true };
-      try { await this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: this.S.owners, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), places: this.S.places, rated: false, rounds: this.S.round })).run(); } catch (e) { }
+      d.rated = true; d.results = { places: this.S.places, unrated: true, replay };
+      try { await this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: this.S.owners, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), places: this.S.places, rated: false, rounds: this.S.round, replay })).run(); } catch (e) { }
     }
     if (!d.rated) {
       d.rated = true;
@@ -469,10 +493,10 @@ export class Room extends DurableObject {
         const ratings = uids.map(u => (by[u] ? by[u].rating : 1200)), games = uids.map(u => (by[u] ? by[u].games : 0));
         const deltas = E.eloDeltas(ratings, this.S.places, games);
         const stmts = uids.map((u, i) => this.env.DB.prepare(`UPDATE users SET rating=rating+?, games=games+1, wins=wins+? WHERE id=?`).bind(deltas[i], this.S.places[i] === 1 ? 1 : 0, u));
-        stmts.push(this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: uids, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), rated: true, places: this.S.places, before: ratings, deltas, rounds: this.S.round })));
+        stmts.push(this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: uids, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), rated: true, places: this.S.places, before: ratings, deltas, rounds: this.S.round, replay })));
         await this.env.DB.batch(stmts);
-        d.results = { places: this.S.places, before: ratings, deltas };
-      } catch (e) { d.results = { places: this.S.places, error: String(e && e.message || e) }; }
+        d.results = { places: this.S.places, before: ratings, deltas, replay };
+      } catch (e) { d.results = { places: this.S.places, error: String(e && e.message || e), replay }; }
     }
     this.tellLobby();
   }

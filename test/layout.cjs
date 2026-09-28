@@ -50,7 +50,13 @@ const CHECK = () => {
 
 (async () => {
   const b = await chromium.launch(); let fails = 0, checks = 0;
-  const url = 'file://' + path.join(__dirname, '..', 'public/index.html');
+  // served over http (as on the site), so the page can fetch the AI network (/ai/first.bin) for the replay's evaluation
+  const pub = path.join(__dirname, '..', 'public'), srv = require('http').createServer((q, r) => {
+    const f = path.join(pub, decodeURIComponent(q.url.split('?')[0]).replace(/^\/$/, '/index.html'));
+    if (!f.startsWith(pub) || !fs.existsSync(f)) { r.writeHead(404); r.end(); return; }
+    r.writeHead(200, { 'content-type': f.endsWith('.html') ? 'text/html' : f.endsWith('.woff2') ? 'font/woff2' : 'application/octet-stream' }); r.end(fs.readFileSync(f)); });
+  await new Promise(res => srv.listen(0, '127.0.0.1', res));
+  const url = `http://127.0.0.1:${srv.address().port}/`;
   for (const [w, h] of SIZES) {
     const p = await b.newPage({ viewport: { width: w, height: h } }); const errs = [];
     p.on('pageerror', e => errs.push(e.message));
@@ -81,7 +87,7 @@ const CHECK = () => {
     if (errs.length) { fails++; console.log(`FAIL ${w}×${h} page errors: ${errs.join('; ')}`); }
     await p.close();
   }
-  await b.close();
+  await b.close(); srv.close();
   console.log(fails ? `layout: ${fails} failing of ${checks} checks` : `layout ok: ${checks} checks at ${SIZES.length} sizes`);
   process.exit(fails ? 1 : 0);
 })();

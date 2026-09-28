@@ -58,9 +58,9 @@ function aiFinishGuard(a){
   }
   return a;
 }
-/* apply the AI's decision; if it is somehow illegal, end the turn instead. Returns applyAction's result. */
-function aiStep(id,mem){
-  const me=S.cur,a=aiChoose(id,mem);let r=applyAction(me,a);
-  if(!r.ok){if(S.turn.pending)applyAction(me,{t:'trash',cards:[]});S.turn.active=null;r=applyAction(me,{t:'end',keep:[]});}
+/* apply the AI's decision (recorded in rec, the game's log; may be null); if it is somehow illegal, end the turn instead. Returns applyAction's result. */
+function aiStep(id,mem,rec){
+  const me=S.cur,a=aiChoose(id,mem);let r=recAct(rec,me,a);
+  if(!r.ok)r=recTimeout(rec,me);
   return r;
 }
