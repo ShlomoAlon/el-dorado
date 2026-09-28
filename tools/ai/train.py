@@ -90,8 +90,8 @@ with torch.no_grad():
 # model-quality checks: warnings go to the log; a halt stops the training loop until someone finds the cause
 warn, halt = [], None
 for name, d, H in (('layer 1', dead1, H1), ('layer 2', dead2, H2)):
-    if d > .10 * H: halt = f'{name}: {d}/{H} hidden units dead'
-    elif d > .03 * H: warn.append(f'{name}: {d}/{H} hidden units dead')
+    if d > .30 * H: halt = f'{name}: {d}/{H} hidden units dead'  # owner: stop only above 30%
+    elif d > .10 * H: warn.append(f'{name}: {d}/{H} hidden units dead')
 if not finite: halt = 'non-finite weights'
 if sat > .05: warn.append(f'{sat:.0%} of predictions saturated (<1% or >99%)')
 if abs(bias) > .05: warn.append(f'predictions off by {bias:+.3f} on average (calibration)')

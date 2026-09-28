@@ -55,7 +55,7 @@ td.bad{color:var(--danger)}td.good{color:var(--ok)}
   <div class="grid">
     <div class="card"><h2>Wins vs the heuristic (1.0 = fair share)</h2><div id="vs"></div><div class="legend" id="vsLeg"></div><div class="note">The round cap goes up once it reaches 1.15 (dashed) in two tests in a row.</div></div>
     <div class="card"><h2>Arrival round (lower is better)</h2><div id="arr"></div><div class="legend" id="arrLeg"></div><div class="note">Dashed: the four-map network before this run. Each test is ~40 games per map, so points wobble by about ±0.3.</div></div>
-    <div class="card"><h2>Dead hidden units</h2><div id="dead"></div><div class="legend"><span><i style="background:var(--c1)"></i>layer 1 (of 256)</span><span><i style="background:var(--c2)"></i>layer 2 (of 128)</span></div><div class="note">The run stops itself above 10% (26 / 13 units).</div></div>
+    <div class="card"><h2>Dead hidden units</h2><div id="dead"></div><div class="legend"><span><i style="background:var(--c1)"></i>layer 1 (of 256)</span><span><i style="background:var(--c2)"></i>layer 2 (of 128)</span></div><div class="note">Warning above 10%; the run stops itself above 30% (77 / 38 units).</div></div>
     <div class="card"><h2>Single-use cards bought (% of all buys)</h2><div id="buys"></div><div class="legend"><span><i style="background:var(--c1)"></i>Giant Machete</span><span><i style="background:var(--c2)"></i>Prop Plane</span><span><i style="background:var(--c4)"></i>Treasure Chest</span></div></div>
     <div class="card"><h2>Minutes per iteration</h2><div id="time"></div><div class="legend"><span><i style="background:var(--c1)"></i>self-play</span><span><i style="background:var(--c4)"></i>training</span><span><i style="background:var(--c3)"></i>test</span></div></div>
   </div>
@@ -106,7 +106,7 @@ function render(){
   $('#vs').innerHTML=chart([{color:'var(--gold)',pts:vs.map(x=>[x.it,x.vsFair])}],{yMin:0,refs:[{y:1.15,color:'var(--ok)'},{y:1,color:'var(--faint)'}],fmt:v=>v.toFixed(2)});
   const lastVs=vs[vs.length-1];$('#vsLeg').innerHTML=lastVs?`<span>latest <b style="color:var(--text)">${lastVs.vsFair.toFixed(2)}×</b> at a ${lastVs.horizon||'?'}-round cap</span>`:'';
   const tr=it.filter(x=>x.dead1);
-  $('#dead').innerHTML=chart([{color:'var(--c1)',pts:tr.map(x=>[x.it,frac(x.dead1)])},{color:'var(--c2)',pts:tr.map(x=>[x.it,frac(x.dead2)])}],{yMin:0,refs:[{y:26,color:'var(--danger)'}],fmt:v=>Math.round(v)});
+  $('#dead').innerHTML=chart([{color:'var(--c1)',pts:tr.map(x=>[x.it,frac(x.dead1)])},{color:'var(--c2)',pts:tr.map(x=>[x.it,frac(x.dead2)])}],{yMin:0,refs:[{y:77,color:'var(--danger)'},{y:26,color:'var(--gold)'}],fmt:v=>Math.round(v)});
   const bu=it.filter(x=>x.buys);
   $('#buys').innerHTML=chart([['giant','var(--c1)'],['plane','var(--c2)'],['chest','var(--c4)']].map(([k,c])=>({color:c,pts:bu.map(x=>[x.it,x.buys[k]])})),{yMin:0,fmt:v=>v.toFixed(1)+'%'});
   const done=it.filter(x=>x.end);
