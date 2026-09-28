@@ -99,3 +99,7 @@ RUN=shared after 8 iterations (from first-shared-start, AdamW lr 3e-4). Trained 
 ## first-reuse-7 (frozen 2026-09-28 06:52 UTC)
 
 first-shared-8 after 7 iterations at a 15-round cap (BatchNorm, leak 0.03, exploration 1.0, lr 1e-3) under the fixed rules. Tests against the heuristic: 0.06 then 0 wins; dead units rose to 25/256, 21/128 on the full-game probe. Superseded by RUN=r20 (review fixes).
+
+## first-r20-9 (frozen 2026-09-28 07:58 UTC)
+
+RUN=r20 after 9 iterations (four maps, cap 20, review fixes; bootstrapped cut-off scoring until iteration 7). Tests vs heuristic flat (wins 0-0.08, place 0.01-0.04, arrival ~25); dead units rising to 25/256, 30/128. Superseded: owner switched to one map.
