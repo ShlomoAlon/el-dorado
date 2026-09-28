@@ -1,6 +1,6 @@
 // Packs a trained network (tools/ai/models/*.json, ~1.6 MB of JSON) into the compact binary the game ships:
 //   node tools/ai/pack.mjs [tools/ai/models/first-qmax.json] [src/ai/first.bin]
-// Format: uint32 LE header length, UTF-8 JSON header {course,nf,unsettled,name,parts:[[key,length],…]}, padding to an even
+// Format: uint32 LE header length, UTF-8 JSON header {course,nf,unsettled,leak,name,parts:[[key,length],…]}, padding to an even
 // offset, then every array as IEEE half floats (little endian) in header order. Decoded by aiNetDecode (src/engine_ai.js).
 // Half floats keep ~3 significant digits; the network's outputs move by about 1e-3 (checked by test/engine.test.mjs).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -19,7 +19,7 @@ function toHalf(v) { // round to nearest even
   if (rem > 0x1000 || (rem === 0x1000 && (r & 1))) r++;
   return sign | r;
 }
-const header = JSON.stringify({ name: basename(src, '.json'), course: N.course, nf: N.nf, unsettled: !!N.unsettled, parts: keys.map(k => [k, N[k].length]) });
+const header = JSON.stringify({ name: basename(src, '.json'), course: N.course, nf: N.nf, unsettled: !!N.unsettled, leak: N.leak ?? 0.01, parts: keys.map(k => [k, N[k].length]) });
 const hb = new TextEncoder().encode(header), off = 4 + hb.length + ((4 + hb.length) & 1);
 const total = keys.reduce((a, k) => a + N[k].length, 0), buf = new Uint8Array(off + total * 2), dv = new DataView(buf.buffer);
 dv.setUint32(0, hb.length, true); buf.set(hb, 4);

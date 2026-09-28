@@ -1024,10 +1024,16 @@ const AIS=[
 const aiById=id=>AIS.find(a=>a.id===id)||null;
 const aiUsesNet=id=>{const a=aiById(id);return!!(a&&a.opts.mode==='net');};
 /* the shipped network: see tools/ai/pack.mjs for the format (half floats) */
+/* courses the AI players are offered on (the network is trained for First Expedition only; elsewhere they would fall back to
+   the planner). Used by the setup screen, the online room and the server (worker.js addAI, start). */
+const AI_COURSES=['first'];
+function aiCourseOK(id){return AI_COURSES.includes(id);}
+// and only in 3- and 4-player games: the network was never trained on 2-player games (different rules)
+function aiAllowed(id,n){return aiCourseOK(id)&&n>=3;}
 function aiNetDecode(bin){
   const u8=bin instanceof Uint8Array?bin:new Uint8Array(bin),dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
   const hl=dv.getUint32(0,true),H=JSON.parse(new TextDecoder().decode(u8.subarray(4,4+hl)));
-  let o=4+hl+((4+hl)&1);const N={course:H.course,nf:H.nf,unsettled:H.unsettled,name:H.name};
+  let o=4+hl+((4+hl)&1);const N={course:H.course,nf:H.nf,unsettled:H.unsettled,name:H.name,leak:H.leak??.01}; // leak: the network's leaky-ReLU slope (older files: 0.01)
   const half=h=>{const s=h&0x8000?-1:1,e=(h>>10)&31,m=h&1023;return e===0?s*m*2**-24:e===31?(m?NaN:s*Infinity):s*(1+m/1024)*2**(e-15);};
   const tab=new Float32Array(65536);for(let i=0;i<65536;i++)tab[i]=half(i);
   for(const[k,n]of H.parts){const a=new Float32Array(n);for(let i=0;i<n;i++,o+=2)a[i]=tab[dv.getUint16(o,true)];N[k]=a;}
@@ -1069,4 +1075,4 @@ function aiStep(id,mem){
   return r;
 }
 
-export const E={AIS,aiById,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botActionValue,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
+export const E={AIS,aiById,aiCourseOK,aiAllowed,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botActionValue,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,resign,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};

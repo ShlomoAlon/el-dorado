@@ -355,6 +355,7 @@ export class Room extends DurableObject {
       else if (m.t === 'addAI') { // host seats a named AI (each at most once per room); it plays server-side
         if (d.opts.auto || uid !== d.host) return err('Only the host can add AI players.');
         const A = E.aiById(m.ai); if (!A) return err('Unknown AI.');
+        if (!E.aiCourseOK(d.opts.course) || d.opts.max < 3) return err('AI players only play First Expedition with 3 or 4 players for now.');
         if (d.seats.length >= d.opts.max) return err('This room is full.');
         if (d.seats.some(s => s.ai === A.id)) return;
         const used = d.seats.map(s => s.color); const row = await this.env.DB.prepare(`SELECT name FROM users WHERE id=?`).bind(aiUid(A.id)).first().catch(() => null);
@@ -371,6 +372,7 @@ export class Room extends DurableObject {
         if (d.opts.auto) return;
         if (uid !== d.host) return err('Only the host can start.');
         if (d.seats.length < 2) return err('You need at least 2 players.');
+        if (d.seats.some(s => s.ai) && !E.aiAllowed(d.opts.course, d.seats.length)) return err('AI players need 3 or 4 players (and First Expedition) for now.');
         await this.startGame();
       }
       return;
