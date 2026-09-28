@@ -123,7 +123,10 @@ function buildBoard(){
   steps.forEach(([w,hh],i)=>{sv('rect',{x:-w/2,y:y-hh,width:w,height:hh,rx:1.5,fill:i%2?'#e9b440':'#f8d36c',stroke:'#8a5c10','stroke-width':1},cg);y-=hh;});
   sv('rect',{x:-6,y:y-11,width:12,height:11,fill:'#fbe08a',stroke:'#8a5c10','stroke-width':1},cg);
   sv('rect',{x:-2,y:y-7,width:4,height:7,fill:'#8a5c10'},cg);
-  const ct=sv('text',{x:0,y:44,'text-anchor':'middle','font-family':'Young Serif, Georgia, serif','font-size':15,fill:'#f8dc97'},cg);ct.textContent='El Dorado';
+  // the name goes beside the pyramid, across the line from the finishing spaces (C.d points away from them) to where
+  // arrived explorers stand: never on either
+  let px=-C.dy,py=C.dx;if(px<0||(Math.abs(px)<.35&&py<0)){px=-px;py=-py;}
+  const side=px>.35,ct=sv('text',{x:side?px*40+2:0,y:side?py*40+5:44,'text-anchor':side?'start':'middle','font-family':'Young Serif, Georgia, serif','font-size':15,fill:'#f8dc97'},cg);ct.textContent='El Dorado';
   svgTextToHTML(svg,$('#blabels'));
   const st=$('#stage');st.onclick=onBoardClick;
   st.onpointerover=onBoardHover;
