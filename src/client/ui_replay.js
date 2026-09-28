@@ -151,42 +151,6 @@ function replayBar(){
     el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(o.to)){UI.targets=new Map([[o.to,{kind:'move'}]]);renderTargets();}};
     el.onpointerleave=()=>{computeTargets();replayDecorate();renderTargets();};});
 }
-/* replays list: upload a log file, or open a recent one */
-function showReplays(){
-  const html=`<h2>Replays</h2><p class="sub">Every finished game can be watched again move by move. You can also upload a game log (.json) to get a link you can share.</p>
-    <div class="field"><label>Your games</label><div id="rMine" class="rlist"><p class="note">Loading…</p></div></div>
-    <div class="field"><button class="btn" id="rUp">Upload a game log</button><input type="file" id="rFile" accept=".json,application/json" hidden> <span id="rMsg" class="note" style="margin-left:8px"></span></div>
-    <div class="field"><label>Recent games and uploads</label><div id="rList" class="rlist"><p class="note">Loading…</p></div></div>
-    <div class="mrow"><button class="btn" id="rBack">Back</button></div>`;
-  menuModal('replays',acctBar()+html,sc=>{wireAcct(sc,showReplays);
-    sc.querySelector('#rBack').onclick=()=>showSetup();
-    const msg=sc.querySelector('#rMsg');
-    sc.querySelector('#rUp').onclick=()=>sc.querySelector('#rFile').click();
-    sc.querySelector('#rFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;msg.textContent='Uploading…';
-      try{const text=await f.text();let log;try{log=JSON.parse(text);}catch(_){throw new Error('That file is not valid JSON.');}
-        const err=replayCheck(log);if(err)throw new Error(err);
-        let id=null;
-        if(NET.available){const r=await fetch('/api/replays',{method:'POST',headers:{'content-type':'application/json'},body:text});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Upload failed ('+r.status+')');id=j.id;}
-        openReplay(log,id);}
-      catch(err){msg.textContent=err.message;}};
-    // your games: finished local games on this device, and (signed in) your online games
-    const mine=sc.querySelector('#rMine'),loc=myGames();
-    const row=(attr,title,sub)=>`<button ${attr}><b>${esc(title)}</b><span>${esc(sub)}</span></button>`;
-    const showMine=online=>{
-      const items=[...loc.map(L=>({t:L.created,h:row(`data-lid="${esc(L.lid)}"`,L.title||'Game',`on this device · ${L.actions.length} moves · ${new Date(L.created).toLocaleString()}`)})),
-        ...online.map(r=>({t:r.created,h:row(`data-id="${esc(r.id)}"`,r.title||'Game',`online · ${r.actions} moves · ${new Date(r.created).toLocaleString()}`)}))].sort((a,b)=>b.t-a.t);
-      mine.innerHTML=items.length?items.map(x=>x.h).join(''):'<p class="note">No finished games yet. Games you finish here are kept to watch again.</p>';
-      mine.querySelectorAll('button[data-lid]').forEach(b=>b.onclick=()=>{const L=loc.find(x=>x.lid===b.dataset.lid);if(L)openReplay(L,null);});
-      mine.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>loadReplayId(b.dataset.id));};
-    showMine([]);
-    if(NET.available&&NET.user)api('/api/users/'+encodeURIComponent(myId())).then(j=>showMine(j.games||[])).catch(()=>{});
-    const list=sc.querySelector('#rList');
-    if(!NET.available){list.innerHTML='<p class="note">Uploading and the shared list need the online server; a file you pick still plays here.</p>';return;}
-    fetch('/api/replays').then(r=>r.json()).then(j=>{const rs=j.replays||[];
-      list.innerHTML=rs.length?rs.map(r=>`<button data-id="${esc(r.id)}"><b>${esc(r.title||r.players)}</b><span>${esc(r.players)} · ${r.actions} moves · ${new Date(r.created).toLocaleString()}</span></button>`).join(''):'<p class="note">No replays yet.</p>';
-      list.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>loadReplayId(b.dataset.id));}).catch(()=>{list.innerHTML='<p class="note">Could not load the list.</p>';});
-  },true);
-}
 function openReplay(log,id){
   try{const u=new URL(location.href);u.searchParams.delete('room');if(id)u.searchParams.set('replay',id);else u.searchParams.delete('replay');history.replaceState(null,'',u);}catch(e){}
   startReplay(log,id);
@@ -195,7 +159,7 @@ async function loadReplayId(id){
   try{const r=await fetch('/api/replays/'+encodeURIComponent(id));const j=await r.json();if(!r.ok)throw new Error(j.error||'not found');openReplay(j,id);}
   catch(e){toast('Could not load replay '+id+': '+e.message,3500);showSetup();}
 }
-function replayKeys(e){if(!REPLAY||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||document.querySelector('#overlay .modal'))return false;
+function replayKeys(e){if(!REPLAY||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||document.querySelector('#overlay .modal')||MENU.dlg.open)return false;
   const R=REPLAY,k=e.key;
   if(k==='ArrowRight'){replayStop();replayGo(R.i+1,true);}else if(k==='ArrowLeft'){replayStop();replayGo(R.i-1);}
   else if(k==='ArrowDown')replayTurn(1);else if(k==='ArrowUp')replayTurn(-1);

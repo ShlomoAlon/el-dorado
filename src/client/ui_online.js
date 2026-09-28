@@ -30,116 +30,10 @@ let gsiLoading=null;
 function loadGsi(){if(window.google&&google.accounts)return Promise.resolve();if(!gsiLoading)gsiLoading=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=res;s.onerror=rej;document.head.appendChild(s);});return gsiLoading;}
 function wsUrl(path){return(location.protocol==='https:'?'wss://':'ws://')+location.host+path+(path.includes('?')?'&':'?')+'t='+encodeURIComponent(NET.token);}
 
-/* ---------- the account bar: at the top of every menu screen ---------- */
-function acctBar(){
-  if(!NET.available)return'';
-  const u=NET.user;
-  if(!u)return`<div class="acct"><span class="m">Not signed in</span>${NET.cfg&&NET.cfg.google?'<div id="gsiTop" class="gsiSm gsi"></div>':''}</div>`;
-  return`<div class="acct"><span class="av">${esc(u.name.slice(0,1).toUpperCase())}</span><span><b>${esc(u.name)}</b> · <b class="rt">${Math.round(u.rating)}</b> · ${plural(u.games,'game')} · ${plural(u.wins,'win')}</span><span class="acb"><button class="linkbtn" id="acProfile">Profile</button><button class="linkbtn" id="acOut">Sign out</button></span></div>`;
-}
-// rerender: redraw the current screen after signing in or out
-function wireAcct(root,rerender){
-  const g=root.querySelector('#gsiTop');if(g)gsiMount(g,t=>toast(t,3000),rerender,'medium');
-  const o=root.querySelector('#acOut');if(o)o.onclick=()=>signOut(rerender);
-  const p=root.querySelector('#acProfile');if(p)p.onclick=()=>{hubTab='me';NET.viewUser=null;showHub();};
-}
-/* how you're playing: the same switch at the top of the start screen and the Online screen */
-const modeSeg=on=>`<div class="seg modes" id="sMode"><button data-m="local" class="${on==='local'?'on':''}">On this device</button><button data-m="online" class="${on==='online'?'on':''}">Online</button></div>`;
-/* ---------- hub ---------- */
-let hubTab='play';
-function hubHTML(){
-  const u=NET.user;
-  if(!NET.available)return modeSeg('online')+`<h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
-  if(!u)return acctBar()+modeSeg('online')+`<h2>Play online</h2><p class="sub">Sign in (top of this screen) so your rating follows you. Rated games move your Elo rating, and you can play against people, the AIs, or both.</p>
-    ${NET.cfg.google?'':'<p class="note" style="color:#f3c98b">Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>'}
-    ${NET.cfg.dev?'<div class="field" style="margin-top:16px"><label>Developer sign-in (local testing only)</label><div class="prow"><input id="devName" maxlength="16" placeholder="Name"><button class="btn" id="devGo">Sign in</button></div></div>':''}
-    <p class="note" id="hErr"></p>
-    <div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
-  const tabs=`<div class="seg" id="hTabs" style="margin-bottom:16px">${[['play','Play'],['board','Leaderboard'],['me','Profile']].map(([k,t])=>`<button data-k="${k}" class="${hubTab===k?'on':''}">${t}</button>`).join('')}</div>`;
-  const head=acctBar()+modeSeg('online')+`<h2>Online</h2>`;
-  if(hubTab==='board')return head+tabs+`<div id="lbList">${HUB.lb?lbHTML(HUB.lb):'<p class="note">Loading…</p>'}</div><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
-  if(hubTab==='me'){const own=!NET.viewUser||NET.viewUser===u.id,pc=PROFILES[NET.viewUser||u.id];
-    return head+tabs+`${own?'':'<button class="linkbtn" id="pfBack" style="margin-bottom:10px">‹ Leaderboard</button>'}<div id="pf">${pc?profileHTML(pc):'<p class="note">Loading…</p>'}</div>
-    ${own?`<div class="field"><label>Display name</label><div class="prow"><input id="meName" maxlength="16" value="${esc(u.name)}"><button class="btn" id="meSave">Save</button></div></div>`:''}
-    <div class="mrow"><button class="btn" id="hBack">Back</button></div>`;}
-  const rooms=NET.rooms.filter(r=>r.status==='lobby');const live=NET.rooms.filter(r=>r.status==='playing');
-  const rrow=r=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line)"><span>${r.auto?'<b>Quick match</b>':`<b>${esc(r.host)}</b>’s room`} <span class="note" style="margin:0">· ${r.count}/${r.max}${r.ai?` (${r.ai} AI)`:''} · ${r.turn}s turns · ${r.rated===false?'unrated':'rated'} · ${esc(courseName(r.course))}</span></span>${r.status==='lobby'&&r.count<r.max?`<button class="btn" data-join="${r.code}">Join</button>`:'<span class="note" style="margin:0">in progress</span>'}</div>`;
-  return head+tabs+`
-    ${NET.active?`<div class="prow" style="padding:10px 12px;border-radius:10px;border:1px solid var(--gold);background:rgba(233,178,74,.1);justify-content:space-between"><span>You have a game in progress.</span><button class="btn pri" data-join="${NET.active}">Rejoin</button></div>`:''}
-    <div class="field"><label>Quick match</label>
-      <div class="prow" style="justify-content:space-between;padding:10px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line)"><span class="note" style="margin:0">Join the next public game. It starts as soon as 3 players are in (90 s added per turn, unused time carries over, rated).</span><button class="btn pri" id="qGo">Quick match</button></div></div>
-    <div class="field"><label>Create a room</label>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <div class="seg" id="cPub"><button data-v="1" class="${setup.oPub?'on':''}">Public</button><button data-v="0" class="${setup.oPub?'':'on'}">Private</button></div>
-        <div class="seg" id="cMax">${[2,3,4].map(n=>`<button data-v="${n}" class="${setup.oMax===n?'on':''}">${n} players</button>`).join('')}</div>
-        <div class="seg" id="cRated"><button data-v="1" class="${setup.oRated?'on':''}">Rated</button><button data-v="0" class="${setup.oRated?'':'on'}">Unrated</button></div>
-        <div class="seg" id="cTurn">${[60,90,120,180].map(n=>`<button data-v="${n}" class="${setup.oTurn===n?'on':''}">${n<120?n+'s':(n/60)+' min'}</button>`).join('')}</div>
-      </div>
-      <div style="margin-top:10px">${coursePicker('cCourse',setup.oCourse)}</div>
-      <p class="note">${setup.oPub?'Public rooms are listed below for anyone to join.':'Private rooms are not listed; share the code or link.'} ${setup.oRated?'Rated: the result changes everyone’s rating, AIs included.':'Unrated: a friendly game, ratings stay as they are.'} You can add AI players in the room. Clock: each turn adds the chosen time to your clock, and time you don't use carries over to your next turns. When it runs out the turn ends automatically; missing 3 turns in a row forfeits.</p>
-      <div style="margin-top:10px"><button class="btn pri big" id="cGo">Create room</button></div></div>
-    <div class="field"><label>Join with a code</label><div class="prow"><input id="jCode" maxlength="5" placeholder="e.g. K7Q2M" style="text-transform:uppercase;letter-spacing:.15em;font-weight:700" autocomplete="off"><button class="btn" id="jGo">Join</button></div></div>
-    <div class="field"><label>Open rooms</label>${rooms.map(rrow).join('')||'<p class="note">No open rooms right now. Create one and share the code.</p>'}</div>
-    ${live.length?`<div class="field"><label>Games in progress</label>${live.map(rrow).join('')}</div>`:''}
-    <p class="note" id="hErr" style="color:#f3c98b"></p>
-    <div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
-}
-function showHub(){
-  if(NET.user)openLobbyWs(); // also right after signing in, when the hub is already open
-  if(document.querySelector('#overlay .modal.hub')){renderHub();return;}
-  menuModal('hub','',sc=>{sc.querySelector('.modal').classList.add('hub');renderHub();},false);
-}
-/* data the Online screen shows: fetched at most every few seconds, kept, and the screen redrawn (morphed) when it arrives */
-const PROFILES={},HUB={lb:null},FETCHED={};
-function fresh(key,load){const t=FETCHED[key];if(t&&(t.busy||Date.now()-t.at<5000))return;FETCHED[key]={busy:true,at:0};
-  load().then(()=>{FETCHED[key]={at:Date.now()};renderHub();}).catch(()=>{FETCHED[key]={at:Date.now()};});}
-function loadProfile(id){return api('/api/users/'+encodeURIComponent(id)).then(r=>{PROFILES[id]=r;});}
-const lbHTML=players=>players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span style="color:var(--muted)">${i+1}</span><span style="display:flex;align-items:center;gap:7px;min-width:0"><button class="lbn" data-uid="${esc(p.id)}" style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</button>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note" style="margin:0">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note" style="margin-top:12px">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';
-/* a player's profile: stats, then their latest online games, each opening its replay */
-const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
-function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
-  const stat=(v,l)=>`<div class="pst"><b>${v}</b><span>${l}</span></div>`;
-  return`<div class="pfh"><span class="av big">${esc(u.name.slice(0,1).toUpperCase())}</span><div><h3>${esc(u.name)}${A?' <span class="aitag">AI</span>':''}</h3>${A?`<span class="note" style="margin:0">${esc(A.tier)} · ${esc(A.desc)}</span>`:''}</div></div>
-  <div class="pstats">${stat(Math.round(u.rating),'rating')}${stat('#'+u.rank,'rank')}${stat(u.games,'rated games')}${stat(u.wins,'wins')}${stat(u.games?Math.round(100*u.wins/u.games)+'%':'–','win rate')}</div>
-  <div class="field"><label>Recent games</label><div class="rlist">${r.games.length?r.games.map(g=>`<button data-rid="${esc(g.id)}"><b>${g.place?`<span class="plc p${g.place}">${ordn(g.place)}</span> `:''}${esc(g.title||'Game')}</b><span>${new Date(g.created).toLocaleString()} · ${g.actions} moves · watch replay</span></button>`).join(''):'<p class="note">No recorded games yet.</p>'}</div></div>`;}
-function renderHub(){
-  const m=document.querySelector('#overlay .modal.hub');if(!m)return;
-  morphInto(m,hubHTML());
-  const q=s=>m.querySelector(s);const err=t=>{const e=q('#hErr');if(e)e.textContent=t;};
-  q('#hBack').onclick=()=>{closeLobbyWs();showSetup();};
-  const ml=q('#sMode button[data-m=local]');if(ml)ml.onclick=()=>{closeLobbyWs();showSetup();};
-  if(!NET.available)return;
-  if(!NET.user){
-    wireAcct(m,renderHub);
-    const dg=q('#devGo');if(dg)dg.onclick=async()=>{try{signedIn(await api('/api/auth/dev',{method:'POST',body:JSON.stringify({name:q('#devName').value||'Tester'})}));}catch(e){err(e.message);}};
-    return;
-  }
-  m.querySelectorAll('#hTabs button').forEach(b=>b.onclick=()=>{hubTab=b.dataset.k;renderHub();});
-  wireAcct(m,renderHub);
-  // leaderboard and profiles are data (fetched, cached); the screen is drawn from them, so a refresh only patches changes
-  if(hubTab==='board'){fresh('lb',()=>api('/api/leaderboard').then(r=>{HUB.lb=r.players;}));
-    m.querySelectorAll('.lbn').forEach(b=>b.onclick=()=>{NET.viewUser=b.dataset.uid;hubTab='me';renderHub();});return;}
-  if(hubTab==='me'){
-    const ms=q('#meSave');if(ms)ms.onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};
-    const pb=q('#pfBack');if(pb)pb.onclick=()=>{NET.viewUser=null;hubTab='board';renderHub();};
-    const id=NET.viewUser||myId();fresh('pf:'+id,()=>api('/api/users/'+encodeURIComponent(id)).then(r=>{PROFILES[id]=r;}));
-    m.querySelectorAll('[data-rid]').forEach(b=>b.onclick=()=>{closeLobbyWs();loadReplayId(b.dataset.rid);});
-    return;}
-  const seg=(id,key)=>m.querySelectorAll(id+' button').forEach(b=>b.onclick=()=>{setup[key]=+b.dataset.v;renderHub();});
-  seg('#cMax','oMax');seg('#cTurn','oTurn');
-  m.querySelectorAll('#cPub button').forEach(b=>b.onclick=()=>{setup.oPub=b.dataset.v==='1';renderHub();});
-  m.querySelectorAll('#cRated button').forEach(b=>b.onclick=()=>{setup.oRated=b.dataset.v==='1';renderHub();});
-  q('#qGo').onclick=async()=>{try{const r=await api('/api/match',{method:'POST',body:'{}'});joinRoom(r.code);}catch(e){err(e.message);}};
-  m.querySelectorAll('#cCourse button').forEach(b=>b.onclick=()=>{setup.oCourse=b.dataset.c;renderHub();});
-  q('#cGo').onclick=async()=>{try{const r=await api('/api/rooms',{method:'POST',body:JSON.stringify({max:setup.oMax,turn:setup.oTurn,course:setup.oCourse,pub:setup.oPub,rated:setup.oRated})});joinRoom(r.code);}catch(e){err(e.message);}};
-  const jc=q('#jCode');q('#jGo').onclick=()=>{const c=(jc.value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length<4){err('Enter the 5-letter room code.');return;}joinRoom(c);};
-  jc.onkeydown=e=>{if(e.key==='Enter')q('#jGo').click();};
-  m.querySelectorAll('[data-join]').forEach(b=>b.onclick=()=>joinRoom(b.dataset.join));
-}
 function openLobbyWs(){
   if(NET.lobbyWs||!NET.user)return;
   const ws=new WebSocket(wsUrl('/api/lobby/ws'));NET.lobbyWs=ws;
-  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(_){return;}if(m.t==='rooms'){NET.rooms=m.rooms;const me=myId();renderHub();}};
+  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(_){return;}if(m.t==='rooms'){NET.rooms=m.rooms;roomsRender();}};
   ws.onclose=()=>{if(NET.lobbyWs===ws)NET.lobbyWs=null;};
 }
 function closeLobbyWs(){if(NET.lobbyWs){try{NET.lobbyWs.close();}catch(e){}NET.lobbyWs=null;}}
@@ -190,39 +84,6 @@ function resignOnline(){
     sc.querySelector('#rsNo').onclick=closeModal;sc.querySelector('#rsYes').onclick=()=>{netSend({t:'act',a:{t:'resign'}});closeModal();};},true);
 }
 function exitOnline(){NET.code=null;leaveRoomSocket();S=null;try{history.replaceState(null,'',location.pathname);}catch(e){}for(const[,el]of cardEls)el.remove();cardEls.clear();}
-
-/* ---------- pre-game room lobby ---------- */
-function roomLobbyHTML(){
-  const r=NET.room||{};const host=r.host===myId();const link=location.origin+location.pathname+'?room='+NET.code;
-  const seats=(r.seats||[]).map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="prow" style="justify-content:space-between;padding:0 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);min-height:48px;box-sizing:border-box"><span style="display:flex;align-items:center;gap:9px;min-width:0"><i style="width:13px;height:13px;border-radius:50%;background:${s.color};display:inline-block;flex:none"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note" style="margin:0">(you)</span>':''}</span>${A?`<span style="display:flex;align-items:center;gap:10px"><span class="note" style="margin:0">${esc(A.tier)}</span>${host&&r.status==='lobby'?`<button class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note" style="margin:0">${s.now?'wants to start · ':''}${s.uid===r.host&&!(r.opts&&r.opts.auto)?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('');
-  const auto=!!(r.opts&&r.opts.auto),room=(r.seats||[]).length<(r.opts?r.opts.max:4),rated=!(r.opts&&r.opts.rated===false);
-  const aiOK=!!(r.opts&&aiCourseOK(r.opts.course)&&r.opts.max>=3);
-  const addAI=host&&!auto&&r.status==='lobby'?`<div class="field"><label>Add an AI player</label>${!aiOK?'<div class="aiNote">AI players are available on First Expedition with 3 or 4 players for now.</div>':room?`<div class="clist ailist">${AIS.map(a=>{return`<button data-addai="${a.id}"><b>${esc(a.name)} <span class="aitag">AI</span></b><span>${esc(a.tier)} · ${esc(a.desc)}</span></button>`;}).join('')}</div>`:'<p class="note">The room is full. Remove an AI to add another.</p>'}<p class="note">AI players move on the server${rated?' and gain or lose rating like everyone else':''}.</p></div>`:'';
-  const ratedCtl=host&&!auto&&r.status==='lobby'?`<div class="field"><label>Rating</label><div class="seg" id="rlRated"><button data-v="1" class="${rated?'on':''}">Rated</button><button data-v="0" class="${rated?'':'on'}">Unrated</button></div></div>`:'';
-  const mine=(r.seats||[]).find(s=>s.uid===myId());
-  const PC=COLORS.map(c=>c.hex);
-  return`<h2>Room ${esc(NET.code||'')}</h2>
-  <p class="sub">${r.opts&&r.opts.auto?`Quick match: the game starts as soon as ${r.opts.max} players are here, or earlier if everyone here presses “Start now”.`:host?'Share the code or link. Start when everyone is here.':'Waiting for the host to start.'} ${r.opts?`${esc(courseName(r.opts.course))} · ${r.opts.auto?'':(r.opts.pub===false?'private · ':'public · ')+r.opts.max+' players max · '}${r.opts.turn}s per turn · ${r.opts.rated===false?'unrated':'rated'}`:''}</p>
-  <div class="prow"><input id="lkIn" readonly value="${esc(link)}"><button class="btn" id="lkCopy">Copy link</button></div>
-  <div class="field" style="margin-top:14px"><label>Players ${(r.seats||[]).length}/${r.opts?r.opts.max:4}</label>${seats||'<p class="note">Connecting…</p>'}</div>
-  ${addAI}${ratedCtl}
-  ${mine?`<div class="field"><label>Your colour</label><div class="sws">${PC.map(c=>`<button data-col="${c}" style="--c:${c}" class="${mine.color===c?'on':''}" ${(r.seats||[]).some(s=>s!==mine&&s.color===c)?'disabled':''}></button>`).join('')}</div></div>`:(r.status==='lobby'&&r.seats?'<p class="note">This room is full.</p>':'')}
-  ${NET.status?`<p class="note" style="color:#f3c98b">${esc(NET.status)}</p>`:''}
-  <div class="mrow"><button class="btn" id="rlLeave">${host&&!(r.opts&&r.opts.auto)?'Close room':'Leave'}</button>${r.opts&&r.opts.auto&&mine?`<button class="btn${mine.now?'':' pri'} big" id="rlNow" ${(r.seats||[]).length<2?'disabled':''}>${mine.now?'Waiting for the others… (cancel)':'Start now'}</button>`:host&&!(r.opts&&r.opts.auto)?`<button class="btn pri big" id="rlStart" ${(r.seats||[]).length<2?'disabled':''}>Start game</button>`:''}</div>`;
-}
-function showRoomLobby(){menuModal('room','',sc=>{sc.querySelector('.modal').classList.add('roomlobby');renderRoomLobby();},false);}
-function renderRoomLobby(){
-  const m=document.querySelector('#overlay .modal.roomlobby');if(!m)return;
-  morphInto(m,acctBar()+roomLobbyHTML());wireAcct(m,renderRoomLobby);
-  m.querySelector('#lkCopy').onclick=()=>{const i=m.querySelector('#lkIn');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value).then(()=>toast('Link copied')).catch(()=>{});};
-  m.querySelectorAll('[data-col]').forEach(b=>b.onclick=()=>netSend({t:'color',color:b.dataset.col}));
-  m.querySelector('#rlLeave').onclick=()=>{netSend({t:'leave'});NET.code=null;leaveRoomSocket();try{history.replaceState(null,'',location.pathname);}catch(e){}showHub();};
-  const st=m.querySelector('#rlStart');if(st)st.onclick=()=>netSend({t:'start'});
-  const nw=m.querySelector('#rlNow');if(nw)nw.onclick=()=>netSend({t:'now'});
-  m.querySelectorAll('[data-addai]').forEach(b=>b.onclick=()=>netSend({t:'addAI',ai:b.dataset.addai}));
-  m.querySelectorAll('[data-rmai]').forEach(b=>b.onclick=()=>netSend({t:'removeAI',uid:b.dataset.rmai}));
-  m.querySelectorAll('#rlRated button').forEach(b=>b.onclick=()=>netSend({t:'rated',v:b.dataset.v==='1'}));
-}
 
 /* ---------- turn timer (shown in the prompt bar) ---------- */
 function timeLeft(){if(!online()||!NET.deadline||S.over)return null;return Math.max(0,Math.round((NET.deadline-(Date.now()+NET.skew))/1000));}

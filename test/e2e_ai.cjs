@@ -12,13 +12,13 @@ const fail = m => { console.log('FAIL: ' + m); process.exitCode = 1; };
   const mk = async (name, w = 1280, h = 800) => { const c = await b.newContext({ viewport: { width: w, height: h } }); const p = await c.newPage();
     p.on('pageerror', e => errs.push(name + ': ' + e.message)); p.on('console', m => { if (m.type() === 'error' && !/fonts|ERR_TUNNEL|ERR_CERT|gsi/.test(m.text())) errs.push(name + ' console: ' + m.text()); }); return p; };
   const A = await mk('A');
-  await A.goto(BASE); await A.waitForTimeout(800); await A.click('#sMode button[data-m="online"]'); await A.waitForTimeout(400);
+  await A.goto(BASE); await A.waitForTimeout(800); await A.click('#sMode label[data-v="online"]'); await A.waitForTimeout(400);
   await A.fill('#devName', 'Ada' + Date.now() % 10000); await A.click('#devGo'); await A.waitForTimeout(800);
   const board = () => A.evaluate(async () => Object.fromEntries((await (await fetch('/api/leaderboard')).json()).players.map(p => [p.id, { r: p.rating, g: p.games, bot: p.bot }])));
   const lb0 = await board();
   for (const id of ['ai-humboldt', 'ai-raleigh']) if (!lb0[id] || !lb0[id].bot) fail('AI player missing from the leaderboard: ' + id);
   // hub: rated / unrated choice exists
-  if (!(await A.$('#cRated'))) fail('no rated/unrated choice in the hub');
+  if (!(await A.$('input[name=rated]'))) fail('no rated/unrated choice in the hub');
   const mkRoom = rated => A.evaluate(async rated => { const r = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + __ED.NET.token }, body: JSON.stringify({ max: 3, turn: 10, course: 'first', rated }) }); const j = await r.json(); __ED.joinRoom(j.code); return j.code; }, rated);
   // ---- 1. rated room with two AIs
   const code = await mkRoom(true); await A.waitForTimeout(1200);

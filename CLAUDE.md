@@ -59,6 +59,11 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
   board text is HTML (#blabels*), wheel deltas normalised as d3-zoom, Safari pinch via gesture events.
   The brief blur while zooming in, before the bake, is accepted by the owner — don't trade smoothness for it.
 - Respect `prefers-reduced-motion`. Keep it working at 390 px wide (phone) and 1440 px.
+- Menus (start screen, Online, room lobby, Replays) are one native `<dialog id="menu">` in shell.html: every screen is
+  written there once and shown with `hidden`; choices are native radios/selects/checkboxes (the browser keeps their state,
+  tabs are CSS `:has()`); ui_menu.js only reads them and fills data boxes (via setHTML, which skips unchanged content).
+  Never rebuild a screen's HTML on a click, and never put `backdrop-filter` behind it (owner: no flicker, a click changes
+  only what it's about).
 - Layout: page = CSS grid (`#shell`): the game cell (`#gamecell` > `#app`) plus replay dock/side cells. Never float new UI over
   other controls; give it its own cell or its own clearance variable (`--mktFoot`, `--zoomFoot`). Game-area breakpoints are
   `@container game (…)` queries (the game area can be narrower than the window); only things outside `#app` use `@media`.

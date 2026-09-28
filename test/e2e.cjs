@@ -4,7 +4,7 @@ const BASE=process.env.BASE||'http://127.0.0.1:8787/'; // run against `npm run d
   const b=await chromium.launch();const errs=[];
   const mk=async(name)=>{const c=await b.newContext({viewport:{width:1280,height:800}});const p=await c.newPage();p.on('pageerror',e=>errs.push(name+': '+e.message+'\n'+e.stack));p.on('console',m=>{if(m.type()==='error'&&!/fonts|ERR_TUNNEL|gsi/.test(m.text()))errs.push(name+' console: '+m.text())});return p;};
   const A=await mk('A'),B=await mk('B'),C=await mk('C');
-  const signin=async(P,name)=>{await P.goto(BASE);await P.waitForTimeout(800);await P.click('#sMode button[data-m="online"]');await P.waitForTimeout(400);await P.fill('#devName',name);await P.click('#devGo');await P.waitForTimeout(800);};
+  const signin=async(P,name)=>{await P.goto(BASE);await P.waitForTimeout(800);await P.click('#sMode label[data-v="online"]');await P.waitForTimeout(400);await P.fill('#devName',name);await P.click('#devGo');await P.waitForTimeout(800);};
   await signin(A,'Alice');await signin(B,'Bob');await signin(C,'Cara');
   await A.screenshot({path:'/tmp/e_hub.png'});
   // create a room with 3 players and a short dev timer via API from page context

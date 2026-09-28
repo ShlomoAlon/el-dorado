@@ -2,7 +2,7 @@
    BOOT
    ========================================================= */
 function boot(){
-  setupPanZoom();
+  setupPanZoom();menuInit();
   const pick=e=>{if(!S||UI.cover||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;
     const inAll=!!e.target.closest('#allc');pickFromMarket(s.dataset.src,+s.dataset.i);if(inAll&&UI.mode==='pay')openAll(false);};
   for(const c of['#market','#allMarket','#reserve']){$(c).addEventListener('click',e=>{if(mdragJustEnded){mdragJustEnded=false;return;}pick(e);});$(c).addEventListener('pointerdown',marketDown);}
@@ -23,7 +23,7 @@ function boot(){
   UI.mktOpen=so!=='0';$('#mkt').classList.toggle('hid',!UI.mktOpen);$('#mktBtn').classList.toggle('on',UI.mktOpen);
   window.addEventListener('keydown',e=>{if(replayKeys(e))return;if(e.target.tagName==='INPUT')return;
     if(e.key==='Escape'&&UI.allOpen){openAll(false);return;}
-    if(e.key==='Escape'){const mo=document.querySelector('#overlay .modal');if(mo&&S&&!S.over&&!mo.classList.contains('roomlobby')&&!mo.classList.contains('hub')){closeModal();return;}if(S&&!mo)cancelMode();}
+    if(e.key==='Escape'){const mo=document.querySelector('#overlay .modal');if(mo&&S&&!S.over){closeModal();return;}if(S&&!mo&&!MENU.dlg.open)cancelMode();}
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo();}});
   netInit().then(()=>{
     let rid=null;try{rid=(new URLSearchParams(location.search).get('replay')||'').replace(/[^a-z0-9]/g,'')||null;}catch(e){}

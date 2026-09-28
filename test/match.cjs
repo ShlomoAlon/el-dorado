@@ -7,7 +7,7 @@ const assert = (c, m) => { if (!c) { console.error('FAIL:', m); process.exit(1);
 (async () => {
   const b = await chromium.launch(); const errs = [];
   const mk = async name => { const c = await b.newContext({ viewport: { width: 1280, height: 800 } }); const p = await c.newPage(); p.on('pageerror', e => errs.push(name + ': ' + e.message)); return p; };
-  const signin = async (P, name) => { await P.goto(BASE); await P.waitForTimeout(800); await P.click('#sMode button[data-m="online"]'); await P.waitForTimeout(400); await P.fill('#devName', name); await P.click('#devGo'); await P.waitForTimeout(800); };
+  const signin = async (P, name) => { await P.goto(BASE); await P.waitForTimeout(800); await P.click('#sMode label[data-v="online"]'); await P.waitForTimeout(400); await P.fill('#devName', name); await P.click('#devGo'); await P.waitForTimeout(800); };
   const tag = 'm' + Date.now() % 100000;
   const [A, B, C, D] = await Promise.all(['A', 'B', 'C', 'D'].map(mk));
   await signin(A, tag + 'a'); await signin(B, tag + 'b'); await signin(C, tag + 'c'); await signin(D, tag + 'd');
