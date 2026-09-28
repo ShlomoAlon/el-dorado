@@ -710,7 +710,38 @@ function botBlockSize(id){if(BOT_BLOCK[id]!=null)return BOT_BLOCK[id];const C=co
   const m=MAP&&MAP.course===id?MAP:buildCourse(C,1),keys=[...m.hexes.keys()].filter(k=>m.hexes.get(k).type!=='m');return BOT_BLOCK[id]=keys.length*4+m.conns.length*8;}
 const botMulti=()=>!!(BOT_NET&&BOT_NET.courses);
 // net.onehot: one input per course (1 = the current course) right after the rule switches, so the network can shift its whole evaluation per map
-function botNetNF(){if(botMulti())return BOT_NF+BOT_FLAGS+(BOT_NET.onehot?BOT_NET.courses.length:0)+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(id),0);return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8;}
+/* optional extra input groups (net.extra = ['cards', 'patch']), appended after everything above in that order:
+   cards: universal card properties summed per pile (cost, strength by colour, coins, draws, removals, single-use, …) so a
+          card's value can be inferred from what it is, not only from its name; patch: the 37 spaces within 3 steps of my
+          explorer (terrain, strength, occupied, closer to / farther from El Dorado), the same on every course */
+const BOT_XF={cards:9*12,patch:37*12},botExtra=()=>(BOT_NET&&BOT_NET.extra)||[],botExtraNF=()=>botExtra().reduce((a,g)=>a+BOT_XF[g],0);
+function botNetNF(){if(botMulti())return BOT_NF+BOT_FLAGS+(BOT_NET.onehot?BOT_NET.courses.length:0)+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(id),0)+botExtraNF();return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8+botExtraNF();}
+const BOT_CP={},BOT_CPS=[1/10,1/20,1/10,1/10,1/10,1/10,1/10,1/5,1/5,1/5,1/5];
+// per card type, the 11 properties already scaled (count, cost, green, blue, yellow, joker strength, coins, draws, removals, single-use, action)
+function botCardProps(t){if(BOT_CP[t])return BOT_CP[t];const d=CT[t]||{},col=d.c;
+  const v=[1,d.cost||0,col==='g'?d.p:0,col==='b'?d.p:0,col==='y'?d.p:0,col==='x'?d.p:0,col==='y'||col==='x'?d.p:.5,
+    ({cartographer:2,compass:3,scientist:1,travellog:2})[t]||0,({scientist:1,travellog:2})[t]||0,d.once?1:0,col==='p'?1:0];
+  return BOT_CP[t]=Float64Array.from(v,(x,i)=>x*BOT_CPS[i]);}
+function botAddIds(f,o,ids){for(let n=0;n<ids.length;n++){const c=botCardProps(S.cards[ids[n]]);for(let i=0;i<11;i++)f[o+i]+=c[i];}}
+function botMeanCost(f,o){f[o+11]=f[o]?f[o+1]*10/f[o]/5*0.5:0;} // mean cost per card /5 (count is /10, cost /20)
+// per map: for every space, its 37 neighbours within 3 steps (fixed order) with their static values precomputed
+function botPatchOf(k){const m=MAP._pt||(MAP._pt=new Map());let r=m.get(k);if(r)return r;const h0=hexAt(k);r=[];
+  for(let dq=-3;dq<=3;dq++)for(let dr=-3;dr<=3;dr++){if(Math.abs(dq+dr)>3)continue;const K=key(h0.q+dq,h0.r+dr),h=MAP.hexes.get(K);r.push(h?{K,t:'mjwvrcgs'.indexOf(h.type),v:(h.val||0)/4}:null);}
+  m.set(k,r);return r;}
+function botExtraFeatures(me,f,o){const P=S.players[me],n=S.players.length;
+  for(const g of botExtra()){
+    if(g==='cards'){const endView=S._endView===me,myTurn=S.cur===me&&!S.over&&!endView;
+      botAddIds(f,o,P.deck);botAddIds(f,o,P.hand);botAddIds(f,o,P.discard);botAddIds(f,o,P.play);botMeanCost(f,o);
+      if(myTurn||endView){botAddIds(f,o+12,P.hand);botMeanCost(f,o+12);}
+      botAddIds(f,o+24,P.deck);botMeanCost(f,o+24);botAddIds(f,o+36,P.discard);botMeanCost(f,o+36);
+      for(let k=1;k<=3;k++){const p=k<n?S.players[(me+k)%n]:null;if(!p)continue;const b=o+36+12*k;botAddIds(f,b,p.deck);botAddIds(f,b,p.hand);botAddIds(f,b,p.discard);botAddIds(f,b,p.play);botMeanCost(f,b);}
+      for(const[L,b]of[[S.market,o+84],[S.reserve,o+96]]){for(const x of L){if(x.n<=0)continue;const c=botCardProps(x.t);for(let i=0;i<11;i++)f[b+i]+=c[i]*x.n;}botMeanCost(f,b);}}
+    else if(g==='patch'){const k0=P.pieces.find(k=>k!=='done');
+      if(k0){const bd=botDist(),s0=bd.steps.get(k0)??48,nb=botPatchOf(k0);
+        for(let i=0;i<nb.length;i++){const c=nb[i];if(!c)continue;const b=o+i*12;f[b]=1;if(c.t>=0)f[b+1+c.t]=1;f[b+9]=c.v;
+          const st=bd.steps.get(c.K);f[b+11]=st==null?1:Math.max(-1,Math.min(1,(st-s0)/6));}
+        S.players.forEach((p,j)=>{if(j===me)return;for(const k of p.pieces){if(k==='done')continue;const x=nb.findIndex(c=>c&&c.K===k);if(x>=0)f[o+x*12+10]=1;}});}}
+    o+=BOT_XF[g];}}
 let BOT_FBUF=null;
 function botNetFeatures(me,scratch){ // scratch: reuse one buffer (only for values used at once, never for stored training samples)
   const{keys,idx}=botMapOrder(),n=S.players.length,nf=botNetNF();let f;
@@ -720,6 +751,7 @@ function botNetFeatures(me,scratch){ // scratch: reuse one buffer (only for valu
   S.players.forEach((p,j)=>{const rel=(j-me+n)%n;if(rel>3)return;for(const k of p.pieces){if(k==='done')continue;const x=idx.get(k);if(x!=null)f[o+x*4+rel]=1;}});
   o+=keys.length*4;
   S.blockades.forEach(B=>{const c=o+B.conn*8;const t='jwvr'.indexOf(B.k);if(t>=0)f[c+t]=1;f[c+4]=B.v/2;f[c+5]=B.owner===null?1:0;f[c+6]=B.owner===me?1:0;f[c+7]=B.owner!==null&&B.owner!==me?1:0;});
+  if(botExtra().length)botExtraFeatures(me,f,nf-botExtraNF());
   return f;
 }
 /* network: {course, nf, w1T (input-major, nf×h1), b1, w2 (h2×h1), b2, w3 (h2), b3, leak}; leaky-ReLU (negative slope `leak`,

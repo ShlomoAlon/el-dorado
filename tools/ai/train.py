@@ -41,7 +41,7 @@ LEAK = float(os.environ.get('TRAIN_LEAK') or J.get('leak', 0.01))
 BN = os.environ.get('TRAIN_BN', '1') == '1'  # TRAIN_BN=0: no batch normalisation (the original recipe)
 net = Net(LEAK, BN)
 if J:
-    keep = {k: J[k] for k in ('courses', 'from', 'onehot') if k in J}
+    keep = {k: J[k] for k in ('courses', 'from', 'onehot', 'extra') if k in J}
     if J.get('nf') == nf and (J.get('course') == course or 'courses' in J):
         with torch.no_grad():
             net.l1.weight.copy_(torch.tensor(J['w1T']).view(nf, H1).T); net.l1.bias.copy_(torch.tensor(J['b1']))
