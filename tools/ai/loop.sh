@@ -10,7 +10,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 C=${1:-first}; N=${2:-60}; D=tools/ai/data; P=$C${RUN:+-$RUN}; NET=$D/$P.net.json; LOG=$D/$P.log; mkdir -p $D
-HS=(${HORIZONS:-3 5 8 12 16 25})   # round caps of the curriculum (HORIZONS="10 13 16 20 25 30" to override); the last one is the full game
+HZ=${HORIZONS:-3,5,8,12,16,25}; HS=(${HZ//,/ })   # round caps of the curriculum (HORIZONS=10,13,16,20,25,30; default 3,5,8,12,16,25); the last one is the full game
 # exploration level per curriculum stage (1 = most exploration); scales every exploration rate in gen.mjs
 EX=(1.0 0.85 0.7 0.5 0.35 0.2)
 log(){ echo "[$(date +%H:%M:%S)] $*" | tee -a $LOG; }
