@@ -1184,17 +1184,18 @@ function botNetFeatures(me,scratch){ // scratch: reuse one buffer (only for valu
   S.blockades.forEach(B=>{const c=o+B.conn*8;const t='jwvr'.indexOf(B.k);if(t>=0)f[c+t]=1;f[c+4]=B.v/2;f[c+5]=B.owner===null?1:0;f[c+6]=B.owner===me?1:0;f[c+7]=B.owner!==null&&B.owner!==me?1:0;});
   return f;
 }
-/* network: {course, nf, w1T (input-major, nf×h1), b1, w2 (h2×h1), b2, w3 (h2), b3}; leaky-ReLU, sigmoid out.
+/* network: {course, nf, w1T (input-major, nf×h1), b1, w2 (h2×h1), b2, w3 (h2), b3, leak}; leaky-ReLU (negative slope `leak`,
+   0.01 for older networks), sigmoid out. Batch normalisation is used in training only and folded into the weights on export.
    The first layer only touches non-zero inputs (most board slots are empty), so it stays fast in the browser. */
 let BOT_NET=null;
 let BOT_EVALS=0;
 // weights as typed arrays, made once per network (same double precision as the JSON numbers, so results are bit-identical)
-function botNetPrep(N){if(N._p&&N._p.src===N.w1T)return N._p;const p={src:N.w1T,w1:Float64Array.from(N.w1T),b1:Float32Array.from(N.b1),w2:Float64Array.from(N.w2),b2:Float64Array.from(N.b2),w3:Float64Array.from(N.w3),h1:new Float32Array(N.b1.length)};
+function botNetPrep(N){if(N._p&&N._p.src===N.w1T)return N._p;const p={src:N.w1T,w1:Float64Array.from(N.w1T),b1:Float32Array.from(N.b1),w2:Float64Array.from(N.w2),b2:Float64Array.from(N.b2),w3:Float64Array.from(N.w3),h1:new Float32Array(N.b1.length),leak:N.leak??.01};
   Object.defineProperty(N,'_p',{value:p,writable:true,enumerable:false,configurable:true});return p;}
-function botNetValue(f){BOT_EVALS++;const N=BOT_NET,P=botNetPrep(N),H1=P.b1.length,H2=P.b2.length,h1=P.h1,w=P.w1,w2=P.w2,b2=P.b2,w3=P.w3;h1.set(P.b1);
+function botNetValue(f){BOT_EVALS++;const N=BOT_NET,P=botNetPrep(N),H1=P.b1.length,H2=P.b2.length,h1=P.h1,w=P.w1,w2=P.w2,b2=P.b2,w3=P.w3,lk=P.leak;h1.set(P.b1);
   for(let k=0;k<f.length;k++){const x=f[k];if(x===0)continue;const r=k*H1;for(let j=0;j<H1;j++)h1[j]+=w[r+j]*x;}
-  for(let j=0;j<H1;j++)if(h1[j]<0)h1[j]*=.01;
-  let s=N.b3[0];for(let j=0;j<H2;j++){let a=b2[j];const r=j*H1;for(let k=0;k<H1;k++)a+=w2[r+k]*h1[k];s+=w3[j]*(a>0?a:.01*a);}
+  for(let j=0;j<H1;j++)if(h1[j]<0)h1[j]*=lk;
+  let s=N.b3[0];for(let j=0;j<H2;j++){let a=b2[j];const r=j*H1;for(let k=0;k<H1;k++)a+=w2[r+k]*h1[k];s+=w3[j]*(a>0?a:lk*a);}
   return 1/(1+Math.exp(-s));}
 const botNetReady=()=>!!(BOT_NET&&MAP&&(botMulti()?BOT_NET.courses.includes(MAP.course):BOT_NET.course===MAP.course)&&BOT_NET.nf===botNetNF());
 /* what a finishing place is worth: 1st = 1, 2nd = 1/BOT_FIRST_RATIO, each further place half the one above, last = 0

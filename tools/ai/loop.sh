@@ -10,7 +10,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 C=${1:-first}; N=${2:-60}; D=tools/ai/data; P=$C${RUN:+-$RUN}; NET=$D/$P.net.json; LOG=$D/$P.log; mkdir -p $D
-HS=(3 5 8 12 16 25)   # 25 = full game: nobody should still be racing by round 25
+HS=(${HORIZONS:-3 5 8 12 16 25})   # round caps of the curriculum (HORIZONS="10 13 16 20 25 30" to override); the last one is the full game
 # exploration level per curriculum stage (1 = most exploration); scales every exploration rate in gen.mjs
 EX=(1.0 0.85 0.7 0.5 0.35 0.2)
 log(){ echo "[$(date +%H:%M:%S)] $*" | tee -a $LOG; }
@@ -24,7 +24,7 @@ fi
 bestH=-1; stall=0; beat=0
 for i in $(seq 1 $N); do
   H=${HCAP:-${HS[$hi]}}; it=$(( $( (ls $D/$P.it*.json 2>/dev/null || true) | wc -l) + 1 ))
-  X=${EXPLORE_LEVEL:-${EX[$hi]}}   # EXPLORE_LEVEL: override the curriculum's exploration level
+  X=${EXPLORE_LEVEL:-${EX[$(( hi < ${#EX[@]} ? hi : ${#EX[@]}-1 ))]}}   # EXPLORE_LEVEL: override the curriculum's exploration level
   log "STAGE iter $it · horizon $H rounds · exploration level $X · 600 self-play games${SEARCH_BEAM:+ · nets play through the whole-turn planner (beam $SEARCH_BEAM)}"
   out=$(HORIZON=$H EXPLORE=$X node tools/ai/gen.mjs self 600 $D/$P.it$it $NET $C) || { log "ERROR gen failed"; exit 1; }
   log "GEN $out"
@@ -43,8 +43,8 @@ for i in $(seq 1 $N); do
   cp $NET $D/$P.h$H.json
   if python3 -c "import sys;sys.exit(0 if $wr>$bestH+0.05 else 1)"; then bestH=$wr; stall=0; else stall=$((stall+1)); fi
   if python3 -c "import sys;sys.exit(0 if $wr>=1.15 else 1)"; then beat=$((beat+1)); else beat=0; fi
-  # next horizon once it beats the heuristic in 2 tests in a row (≥1.15× its fair share), or has plateaued at ≥1.0
-  if { (( beat >= 2 )) || { (( stall >= 3 )) && python3 -c "import sys;sys.exit(0 if $bestH>=1.0 else 1)"; }; } && (( hi < ${#HS[@]}-1 )); then
+  # next horizon once it beats the heuristic at this cap in 2 tests in a row (≥1.15× its fair share of wins)
+  if (( beat >= 2 )) && (( hi < ${#HS[@]}-1 )); then
     hi=$((hi+1)); echo $hi > $D/$P.hi; bestH=-1; stall=0; beat=0; log "HORIZON up to ${HS[$hi]} rounds"
   fi
 done
