@@ -15,7 +15,7 @@ const MAXBACK = process.env.MAXBACK === '1';
 const EVAL_SELF = process.env.EVAL_SELF === '1';
 const HEUR_P = +(process.env.HEUR_P ?? .25); // share of self-play seats played by the heuristic (0 = the network in every seat) // tests: the network plays itself (all seats); the tracked number is the arrival round per course
 const TREESTRAP = +(process.env.TREESTRAP || 0);
-const DISTILL = process.env.DISTILL === '1';
+const DISTILL = process.env.DISTILL === '1', DISTILL_P = +(process.env.DISTILL_P ?? 1), DISTILL_BEAM = +(process.env.DISTILL_BEAM || 3);
 // HEUR_SAMPLES=1: also learn from the heuristic seats' positions (off: heuristic players are opponents only)
 const HEUR_SAMPLES = process.env.HEUR_SAMPLES === '1';
 // TRUNC=1: a player still racing when the round cap stops the game is scored by the network's own estimate of its last
@@ -96,8 +96,11 @@ if (!isMainThread) {
         const explored = c.why === 'explore' || c.why === 'random';
         if (lp && traj[me].length === lp.idx + 1 && trajB[me][lp.idx] == null && ((lp.round === S.round && !lp.ended) || (explored && (lotemp || ANNEAL)))) {
           // DISTILL=1: the target is the whole-turn planner's best completion from here (search distilled into the network)
-          const cb = c.best != null && !(turnState && turnState.noBuy) ? c : DISTILL ? null : E.botChoose({ mode: 'net', rnd });
-          const b = DISTILL ? E.botChoose({ mode: 'net', rnd, search: { kind: 'plan', beam: 3 } }).v
+          // DISTILL_P: share of these targets that use the planner (the rest: the one-step target below); DISTILL_BEAM: its beam
+          // width — together they set how much extra compute distillation costs
+          const useD = DISTILL && (DISTILL_P >= 1 || rnd() < DISTILL_P);
+          const cb = c.best != null && !(turnState && turnState.noBuy) ? c : useD ? null : E.botChoose({ mode: 'net', rnd });
+          const b = useD ? E.botChoose({ mode: 'net', rnd, search: { kind: 'plan', beam: DISTILL_BEAM } }).v
             : PREV && cb.bestA ? (E.setNet(PREV), ((x) => (E.setNet(net), x))(E.botActionValue(me, cb.bestA, 'net', rnd, 4))) // Double-Q style
             : cb.best;
           trajB[me][lp.idx] = b; st.maxback = (st.maxback || 0) + 1; } }
