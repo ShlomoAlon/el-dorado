@@ -27,7 +27,7 @@ for (let g = 0; g < 60; g++) {
   let turns = 0;
   while (!E.S.over && turns < 3000) {
     turns++; const S = E.S, seat = S.cur, P = S.players[seat];
-    if (turns > 300) { E.resign(seat); continue; }
+    if (turns > 300) { E.applyAction(seat, { t: 'resign' }); continue; }
     for (let guard = 0; guard < 20; guard++) {
       let did = false;
       for (const pi of P.pieces.keys()) {
@@ -52,7 +52,7 @@ for (let g = 0; g < 60; g++) {
     const tot = P.hand.reduce((a, id) => a + (['y', 'x'].includes(E.CT[S2.cards[id]].c) ? E.CT[S2.cards[id]].p : .5), 0);
     const opts = S2.market.map((s, i) => [i, s]).filter(([i, s]) => s.n > 0 && E.CT[s.t].cost <= tot && E.CT[s.t].c !== 'p');
     if (opts.length && !S2.turn.bought) { const [i] = opts[Math.floor(Math.random() * opts.length)]; assert(E.applyAction(seat, { t: 'buy', type: S2.market[i].t, cards: P.hand.slice() }).ok, 'buy failed'); }
-    if (Math.random() < .01 && S2.players.filter(p => !p.resigned).length > 2) { E.resign(seat); continue; }
+    if (Math.random() < .01 && S2.players.filter(p => !p.resigned).length > 2) { E.applyAction(seat, { t: 'resign' }); continue; }
     const r = E.applyAction(seat, { t: 'end', keep: [] }); assert(r.ok, r.err);
   }
   const S = E.S; games++;
@@ -120,11 +120,11 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
     const rnd = E.mulberry32(g + 7), mem = [{}, {}, {}, {}]; let steps = 0, undos = 0;
     while (!E.S.over && steps++ < 20000) {
       const S = E.S, me = S.cur;
-      if (steps === 150 && np > 2) { E.recResign(rec, (me + 1) % np); continue; }
-      if (rnd() < .01) { E.recTimeout(rec, me); continue; }
+      if (steps === 150 && np > 2) { E.recApply(rec, (me + 1) % np, { t: 'resign' }); continue; }
+      if (rnd() < .01) { E.recApply(rec, me, { t: 'timeout' }); continue; }
       const a = E.aiChoose('raleigh', mem[me]);
       const before = JSON.stringify(S), prevCur = S.cur;
-      const r = E.recAct(rec, me, a); if (!r.ok) { E.recTimeout(rec, me); continue; }
+      const r = E.recApply(rec, me, a); if (!r.ok) { E.recApply(rec, me, { t: 'timeout' }); continue; }
       // sometimes undo (as the page does: bring back the earlier state), when the action drew nothing and the turn did not pass
       if (!r.reveal && E.S.cur === prevCur && rnd() < .1) { E.S = JSON.parse(before); undos++; }
     }

@@ -413,7 +413,6 @@ export class Room extends DurableObject {
     }
     if (d.status !== 'playing' || !this.S) return;
     const seat = this.S.owners.indexOf(uid);
-    if (m.t === 'resign') { if (seat < 0) return; const eng = this.engine(); const prevCur = this.S.cur; const r = eng.recResign(this.rec, seat); if (!r.ok) return; this.undo = []; if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn(); await this.afterChange(r.ev); return; }
     if (m.t === 'undo') {
       if (seat !== this.S.cur || !this.undo.length) return err('Nothing to undo.');
       this.S = JSON.parse(this.undo.pop()); await this.persist('Su'); this.sendAll([{ e: 'undo' }]); return;
@@ -424,10 +423,10 @@ export class Room extends DurableObject {
       if (!m.a || typeof m.a !== 'object') return err('Bad action.');
       const recN = this.rec ? this.rec.actions.length : 0; let r;
       // an engine exception must never leave the game half-changed: put the state and the record back
-      try { r = eng.recAct(this.rec, seat, m.a); } catch (e) { r = { ok: false, err: 'Bad action.' }; if (this.rec) this.rec.actions.length = recN; }
+      try { r = eng.recApply(this.rec, seat, m.a); } catch (e) { r = { ok: false, err: 'Bad action.' }; if (this.rec) this.rec.actions.length = recN; }
       if (!r.ok) { this.S = JSON.parse(before); return err(r.err); }
       this.S = E.S; d.timeouts[seat] = 0;
-      if (r.reveal || this.S.cur !== prevCur) this.undo = []; else { this.undo.push(before); if (this.undo.length > 6) this.undo.shift(); }
+      if (r.reveal || m.a.t === 'resign' || this.S.cur !== prevCur) this.undo = []; else { this.undo.push(before); if (this.undo.length > 6) this.undo.shift(); }
       if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn();
       await this.afterChange(r.ev); return;
     }
@@ -487,8 +486,8 @@ export class Room extends DurableObject {
     const eng = this.engine(); const seat = this.S.cur; const ev = [{ e: 'timeout', pl: seat }];
     d.timeouts[seat] = (d.timeouts[seat] || 0) + 1;
     this.S.log.push({ p: seat, t: 'ran out of time.' });
-    if (d.timeouts[seat] >= 3) { const r = eng.recResign(this.rec, seat); ev.push(...r.ev); this.S.log.push({ p: seat, t: 'missed 3 turns in a row and forfeits.' }); }
-    else { const r = eng.recTimeout(this.rec, seat); ev.push(...r.ev); }
+    if (d.timeouts[seat] >= 3) { const r = eng.recApply(this.rec, seat, { t: 'resign' }); ev.push(...r.ev); this.S.log.push({ p: seat, t: 'missed 3 turns in a row and forfeits.' }); }
+    else { const r = eng.recApply(this.rec, seat, { t: 'timeout' }); ev.push(...r.ev); }
     this.S = E.S; this.undo = [];
     if (!this.S.over) await this.nextTurn();
     await this.afterChange(ev);

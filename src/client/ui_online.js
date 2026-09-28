@@ -185,7 +185,7 @@ function applyServerState(S2,ev){
 }
 function resignOnline(){
   modal(`<h2>Leave this game?</h2><p class="sub">${NET.room&&NET.room.opts&&NET.room.opts.rated===false?'Leaving counts as finishing last among the players still racing (this game is unrated).':'Leaving a rated game counts as finishing last among the players still racing. Your rating will drop.'}</p><div class="mrow"><button class="btn" id="rsNo">Stay</button><button class="btn pri" id="rsYes">Leave game</button></div>`,sc=>{
-    sc.querySelector('#rsNo').onclick=closeModal;sc.querySelector('#rsYes').onclick=()=>{netSend({t:'resign'});closeModal();};},true);
+    sc.querySelector('#rsNo').onclick=closeModal;sc.querySelector('#rsYes').onclick=()=>{netSend({t:'act',a:{t:'resign'}});closeModal();};},true);
 }
 function exitOnline(){NET.code=null;leaveRoomSocket();S=null;try{history.replaceState(null,'',location.pathname);}catch(e){}for(const[,el]of cardEls)el.remove();cardEls.clear();}
 

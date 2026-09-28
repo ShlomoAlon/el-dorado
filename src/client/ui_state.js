@@ -37,7 +37,7 @@ function resignLocal(){const seat=resignSeat();if(seat<0)return;
   modal(`<h2>Resign?</h2><p class="sub">${esc(S.players[seat].name)} leaves the expedition and finishes last among the players still racing. ${humans?'The others play on.':'The AIs finish the race.'}</p><div class="mrow"><button class="btn" id="rsNo">Keep playing</button><button class="btn pri" id="rsYes">Resign</button></div>`,sc=>{
     sc.querySelector('#rsNo').onclick=closeModal;
     sc.querySelector('#rsYes').onclick=()=>{closeModal();if(!S||S.over||online())return;const prevCur=S.cur,prevRound=S.round;
-      const r=recResign(REC,seat);if(!r.ok)return;undoStack=[];playEvents(r.ev);afterLocalChange(S.cur!==prevCur||S.round!==prevRound);};},true);}
+      const r=recApply(REC,seat,{t:'resign'});if(!r.ok)return;undoStack=[];playEvents(r.ev);afterLocalChange(S.cur!==prevCur||S.round!==prevRound);};},true);}
 const humanRacing=()=>S.players.some(p=>!p.ai&&isActive(p));
 /* finished local games are kept on this device (newest first, up to 20) to watch again from Replays */
 const MYGAMES='eldorado-games-v1';
@@ -106,7 +106,7 @@ function act(a){
   if(online()){NET.busy=true;netSend({t:'act',a});render();return;}
   const prevCur=S.cur,prevRound=S.round;
   snapshot();
-  const r=recAct(REC,S.cur,a);
+  const r=recApply(REC,S.cur,a);
   if(!r.ok){undoStack.pop();sfx('error');toast(r.err);render();return;}
   if(r.reveal||S.cur!==prevCur)undoStack=[];
   playEvents(r.ev);

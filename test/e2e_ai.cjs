@@ -43,7 +43,7 @@ const fail = m => { console.log('FAIL: ' + m); process.exitCode = 1; };
   s = await st(); console.log('after 3 turns', s);
   if (!aiTurnSeen || s.round < 3) fail('AIs did not take turns');
   // the person leaves: the AIs race to the end by themselves (fast: nobody is racing with the page open)
-  await A.evaluate(() => __ED.netSend({ t: 'resign' }));
+  await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
   const t0 = Date.now(); for (let i = 0; i < 240 && !(s = await st()).over; i++) await A.waitForTimeout(500);
   console.log('over', s.over, 'round', s.round, 'in', Math.round((Date.now() - t0) / 1000) + 's', await A.evaluate(() => ({ places: __ED.S.places, res: __ED.NET.room.results })));
   if (!s.over) fail('the AI game did not finish');
@@ -61,7 +61,7 @@ const fail = m => { console.log('FAIL: ' + m); process.exitCode = 1; };
   const code2 = await mkRoom(false); await A.waitForTimeout(1200);
   await A.click('[data-addai="orellana"]'); await A.waitForTimeout(600);
   await A.click('#rlStart'); await A.waitForTimeout(1500);
-  await A.evaluate(() => __ED.netSend({ t: 'resign' })); await A.waitForTimeout(1500);
+  await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } })); await A.waitForTimeout(1500);
   const r2 = await A.evaluate(() => ({ over: __ED.S.over, res: __ED.NET.room.results, code: __ED.NET.code }));
   const lb2 = await board();
   console.log('unrated', code2, r2);

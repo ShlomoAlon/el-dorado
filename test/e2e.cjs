@@ -39,8 +39,8 @@ const BASE=process.env.BASE||'http://127.0.0.1:8787/'; // run against `npm run d
   const after=await A.evaluate(()=>({cur:__ED.S.cur,log:__ED.S.log.slice(-3).map(l=>l.t)}));
   console.log('timer: cur',before,'->',after.cur,after.log);
   // resign two players -> game ends
-  await B.evaluate(()=>__ED.netSend({t:'resign'}));await B.waitForTimeout(800);
-  await C.evaluate(()=>__ED.netSend({t:'resign'}));await C.waitForTimeout(1500);
+  await B.evaluate(()=>__ED.netSend({t:'act',a:{t:'resign'}}));await B.waitForTimeout(800);
+  await C.evaluate(()=>__ED.netSend({t:'act',a:{t:'resign'}}));await C.waitForTimeout(1500);
   console.log('over',await A.evaluate(()=>({over:__ED.S.over,places:__ED.S.places,res:__ED.NET.room.results})));
   await A.screenshot({path:'/tmp/e_over.png'});
   const lb=await A.evaluate(async()=>(await (await fetch('/api/leaderboard')).json()).players.map(p=>p.name+':'+p.rating+':'+p.games));

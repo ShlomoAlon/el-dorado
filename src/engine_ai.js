@@ -60,7 +60,7 @@ function aiFinishGuard(a){
 }
 /* apply the AI's decision (recorded in rec, the game's log; may be null); if it is somehow illegal, end the turn instead. Returns applyAction's result. */
 function aiStep(id,mem,rec){
-  const me=S.cur,a=aiChoose(id,mem);let r=recAct(rec,me,a);
-  if(!r.ok)r=recTimeout(rec,me);
+  const me=S.cur,a=aiChoose(id,mem);let r=recApply(rec,me,a);
+  if(!r.ok)r=recApply(rec,me,{t:'timeout'});
   return r;
 }

@@ -34,13 +34,11 @@ function replayStart(log){const v2=log.v===2,g=v2?recRng(log.rng,-1):mulberry32(
   if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(RNG()*(p.deck.length+1)),0,newCard(log.gift));
   if(v2)setRng(null);
   return g;}
-/* apply action i of a log to S (after replayStart and actions 0…i-1). v2 logs may also hold resign / timeout (see recAct). */
+/* apply action i of a log to S (after replayStart and actions 0…i-1) */
 function replayStep(log,i){
   const[seat,a]=log.actions[i],v2=log.v===2,r0=RNG;if(v2)setRng(recRng(log.rng,i));
   try{
-    if(v2&&a.t==='resign')return resign(seat);
-    if(S.over||seat!==S.cur)return{ok:false,err:'not '+(S.players[seat]||{}).name+'’s turn'};
-    return v2&&a.t==='timeout'?forceEnd(seat):applyAction(seat,a);
+    return applyAction(seat,a);
   }finally{if(v2)RNG=r0;}
 }
 /* ---- game records (log v2): every game keeps its log, so it can be watched afterwards ----
@@ -58,19 +56,13 @@ function recNewGame(o){
   return{kind:'eldorado-replay',v:2,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,
     players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[]};
 }
-function recDo(rec,seat,a,f){
+/* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
+function recApply(rec,seat,a){
   const on=!!rec&&Number.isInteger(S.nact),r0=RNG;if(on)setRng(recRng(rec.rng,S.nact));
-  let r;try{r=f();}finally{RNG=r0;}
+  let r;try{r=applyAction(seat,a);}finally{RNG=r0;}
   if(r.ok&&on){rec.actions.length=Math.min(rec.actions.length,S.nact);rec.actions.push([seat,a]);S.nact++;}
   return r;
 }
-// a player's action, recorded (rec may be null: an old game without a record)
-function recAct(rec,seat,a){return recDo(rec,seat,a,()=>applyAction(seat,a));}
-// a player leaves (any time, in or out of turn)
-function recResign(rec,seat){return recDo(rec,seat,{t:'resign'},()=>resign(seat));}
-// the turn ends without the player (turn timer, or an AI whose choice was not legal)
-function recTimeout(rec,seat){return recDo(rec,seat,{t:'timeout'},()=>forceEnd(seat));}
-function forceEnd(seat){if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;return applyAction(seat,{t:'end',keep:[]});}
 /* the finished log, ready to save and watch: cut to S.nact (undone actions dropped), with a title */
 function recFinal(rec){
   if(!rec||!Number.isInteger(S.nact))return null;
@@ -159,21 +151,25 @@ function payTargets(pl,pi){
 /* =========================================================
    APPLY AN ACTION. Returns {ok, err?, ev:[events], reveal}
    reveal = new information came out (cards drawn), so undo stops here.
-   Actions (acting player = S.cur):
+   Actions (acting player = S.cur, except resign):
      {t:'move', card, pi, to}        movement card (or a card with leftover strength)
      {t:'native', card, pi, to}
      {t:'pay', pi, to, cards}        rubble / base camp / grey blockade
      {t:'action', card}              Cartographer, Compass, Scientist, Travel Log
      {t:'trash', cards}              finish Scientist / Travel Log
-     {t:'transmit', card, src, idx}
-     {t:'buy', src, idx, cards}
+     {t:'transmit', card, type}      Transmitter: take one card of this type
+     {t:'buy', type, cards}          buy one card of this type, paying with these hand cards
      {t:'end', keep}                 end the turn, keeping these hand cards
+     {t:'timeout'}                   the turn ends without the player (turn clock, or an AI's illegal choice)
+     {t:'resign'}                    the player leaves the game (any time, in or out of turn)
    ========================================================= */
 function applyAction(seat,a){
   const fail=err=>({ok:false,err,ev:[]});
   if(!S||S.over)return fail('The game is over.');
-  if(seat!==S.cur)return fail('It is not your turn.');
   if(!a||typeof a!=='object')return fail('Bad action.');
+  if(a.t==='resign')return resign(seat);
+  if(seat!==S.cur)return fail('It is not your turn.');
+  if(a.t==='timeout'){if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;return applyAction(seat,{t:'end',keep:[]});}
   const P=S.players[seat],T=S.turn,ev=[];let reveal=false;
   const inHand=id=>typeof id==='string'&&P.hand.includes(id);
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
@@ -301,8 +297,7 @@ function advance(){
 }
 /* A player leaves a game for good (online): placed below everyone still racing. */
 function resign(seat){
-  if(!S||S.over)return{ok:false,ev:[]};
-  const P=S.players[seat];if(P.resigned||playerDone(P))return{ok:false,ev:[]};
+  const P=S.players[seat];if(!P||P.resigned||playerDone(P))return{ok:false,err:'You are not racing.',ev:[]};
   P.resigned=++S.resigns;log(seat,'leaves the expedition.');
   const ev=[{e:'resign',pl:seat}];
   const others=S.players.filter((p,i)=>i!==seat&&!p.resigned);
