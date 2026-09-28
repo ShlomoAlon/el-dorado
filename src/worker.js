@@ -217,7 +217,7 @@ export default {
       }
       if (p === '/api/leaderboard') {
         const r = await env.DB.prepare(`SELECT id,name,rating,games,wins,bot FROM users WHERE games>0 OR bot IS NOT NULL ORDER BY rating DESC LIMIT 100`).all();
-        return json({ players: r.results });
+        return json({ players: r.results.filter(p => !p.bot || E.aiById(p.bot)) }); // retired AIs leave the list
       }
       const user = await authUser(req, env);
       if (!user) return bad('Please sign in.', 401);
@@ -393,14 +393,16 @@ export class Room extends DurableObject {
         const A = E.aiById(m.ai); if (!A) return err('Unknown AI.');
         if (!E.aiCourseOK(d.opts.course) || d.opts.max < 3) return err('AI players only play First Expedition with 3 or 4 players for now.');
         if (d.seats.length >= d.opts.max) return err('This room is full.');
-        if (d.seats.some(s => s.ai === A.id)) return;
-        const used = d.seats.map(s => s.color); const row = await this.env.DB.prepare(`SELECT name FROM users WHERE id=?`).bind(aiUid(A.id)).first().catch(() => null);
-        d.seats.push({ uid: aiUid(A.id), name: row ? row.name : A.name, color: PCOLORS.find(c => !used.includes(c)), ai: A.id });
+        // the same AI may take several seats (named Humboldt, Humboldt 2, …; they share its rating)
+        const row = await this.env.DB.prepare(`SELECT name FROM users WHERE id=?`).bind(aiUid(A.id)).first().catch(() => null);
+        if (d.status !== 'lobby' || d.seats.length >= d.opts.max) return err('This room is full.'); // checked again: other messages ran during the await
+        const used = d.seats.map(s => s.color), base = row ? row.name : A.name, k = d.seats.filter(s => s.ai === A.id).length;
+        d.seats.push({ uid: aiUid(A.id), name: k ? base + ' ' + (k + 1) : base, color: PCOLORS.find(c => !used.includes(c)), ai: A.id });
         await this.persist(); this.tellLobby(); this.sendAll();
       }
       else if (m.t === 'removeAI') {
         if (uid !== d.host) return err('Only the host can remove AI players.');
-        d.seats = d.seats.filter(s => !(s.ai && s.uid === m.uid)); await this.persist(); this.tellLobby(); this.sendAll();
+        const i = d.seats.map(s => !!s.ai && s.uid === m.uid).lastIndexOf(true); if (i >= 0) d.seats.splice(i, 1); await this.persist(); this.tellLobby(); this.sendAll();
       }
       else if (m.t === 'rated' && uid === d.host && !d.opts.auto) { d.opts.rated = !!m.v; await this.persist(); this.tellLobby(); this.sendAll(); }
       else if (m.t === 'now' && seat && d.opts.auto) { seat.now = !seat.now; if (await this.seatsChanged()) return; await this.persist(); this.sendAll(); }

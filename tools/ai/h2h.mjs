@@ -1,57 +1,38 @@
-// Head-to-head: policy A vs policy B, 3- and 4-player games (1 A vs rest B, and 2v2 in 4p), seats rotated, fixed seeds.
-//   node tools/ai/h2h.mjs <A> <B> [games=240] [workers=2]
-//   A/B: plan | heur | net (tools/ai/data/first.net.json) | net+turn | net+roll | any planner candidate named in PLANS
-//   net+planN = net with the whole-turn planner, beam N (e.g. net+plan3, net+plan10)
-//   net+turn = net with turn search (SEARCH_W, SEARCH_D); net+roll = net with rollouts on close calls (ROLL_C, ROLL_M, ROLL_MARGIN)
-//   PLANS='{"planB":{"safeTrash":1}}' defines candidate planner settings (see BOT_PLAN_DEF in src/engine_bot.js).
-//   Games stop at round 25; anyone who hasn't arrived by then counts as a loss.
+// Head-to-head of two AI settings on First Expedition (the shipped network), for choosing the site's AI levels.
+//   node tools/ai/h2h.mjs '<A json>' '<B json>' [games=200] [workers=3]
+//   A, B: bot options as in AIS[].opts, e.g. '{"mode":"net","search":{"kind":"plan","beam":3}}'
+// Games alternate 3 and 4 players with A and B seated as evenly as possible, seats rotated. Reported: wins, mean place,
+// and each setting's thinking time per turn (ms, on this machine) and network evaluations per turn.
 import { E } from '../../src/engine.gen.js';
-import { readFileSync, existsSync, appendFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-const env = process.env;
-const optsFor = pol => /^net\+plan\d+$/.test(pol) ? { mode: 'net', search: { kind: 'plan', beam: +pol.slice(8) } }
-  : pol === 'net+turn' ? { mode: 'net', search: { kind: 'turn', width: +(env.SEARCH_W || 3), depth: +(env.SEARCH_D || 4) } }
-  : pol === 'net+roll' ? { mode: 'net', search: { kind: 'rollout', cands: +(env.ROLL_C || 3), sims: +(env.ROLL_M || 6), margin: +(env.ROLL_MARGIN || .03) } }
-  : { mode: pol };
-const setup = () => {
-  for (const [k, o] of Object.entries(JSON.parse(process.env.PLANS || '{}'))) E.setPlan(k, o);
-};
 if (!isMainThread) {
-  setup();
-  const { A, B, from, to } = workerData;
-  if ([A, B].some(x => x.startsWith('net')) && existsSync('tools/ai/data/first.net.json')) E.setNet(JSON.parse(readFileSync('tools/ai/data/first.net.json', 'utf8')));
-  const r = { wA: 0, expA: 0, seatsA: 0, arrA: [], arrB: [], capA: 0, capB: 0, pvA: 0, pvB: 0, seatsB: 0, evA: 0, evB: 0, cpuA: 0, cpuB: 0, decA: 0, decB: 0 };
+  const { from, to, A, B, seed0 } = workerData;
+  E.aiSetNet(E.aiNetDecode(readFileSync(new URL('../../src/ai/first.bin', import.meta.url))));
+  E.AIS.push({ id: 'hA', name: 'A', opts: A }, { id: 'hB', name: 'B', opts: B });
   for (let g = from; g < to; g++) {
-    const n = g % 2 ? 4 : 3, nA = n === 4 && g % 4 === 3 ? 2 : 1;
-    const base = [...Array(nA).fill(A), ...Array(n - nA).fill(B)], rot = Math.floor(g / 2) % n, pols = base.map((_, i) => base[(i + rot) % n]);
-    E.newGame({ course: E.COURSES[0], seed: 20000 + g, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
-    let acts = 0, capped = false; const g0 = { evA: r.evA, evB: r.evB, cpuA: r.cpuA, cpuB: r.cpuB, decA: r.decA, decB: r.decB };
-    while (!E.S.over) { E.S.log.length = 0; if (E.S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
-      const me = E.S.cur, e0 = E.BOT_EVALS, t0 = process.cpuUsage(), ch = E.botChoose(optsFor(pols[me])), u = process.cpuUsage(t0), sd = pols[me] === A ? 'A' : 'B';
-      r['ev' + sd] += E.BOT_EVALS - e0; r['cpu' + sd] += (u.user + u.system) / 1000; r['dec' + sd]++; const res = E.applyAction(me, ch.a); if (!res.ok) E.applyAction(me, { t: 'end', keep: [] }); }
-    E.S.players.forEach((p, i) => { const isA = pols[i] === A;
-      const pv = capped && !p.fin ? 0 : E.botPlaceValue(E.S.places[i], n); if (isA) r.pvA += pv; else { r.pvB += pv; r.seatsB++; }
-      if (isA) { r.seatsA++; r.expA += 1 / n; if (E.S.places[i] === 1 && !(capped && !p.fin)) r.wA++; }
-      if (p.fin) (isA ? r.arrA : r.arrB).push(p.fin); else if (capped) r[isA ? 'capA' : 'capB']++; });
-    // one line per finished game for the live report (LOGJSONL=path)
-    if (process.env.LOGJSONL) appendFileSync(process.env.LOGJSONL, JSON.stringify({ time: new Date().toISOString(), A, B, g, n, capped, rounds: E.S.round,
-      players: pols.map((pol, i) => ({ pol, place: E.S.places[i], arrived: E.S.players[i].fin || null })),
-      cost: Object.fromEntries(['evA', 'evB', 'cpuA', 'cpuB', 'decA', 'decB'].map(k => [k, +(r[k] - g0[k]).toFixed(1)])) }) + '\n');
+    const n = g % 2 ? 4 : 3, base = n === 4 ? ['hA', 'hB', 'hA', 'hB'] : (g >> 1) % 2 ? ['hA', 'hB', 'hB'] : ['hA', 'hA', 'hB'];
+    const r = (g >> 2) % n, ids = base.map((_, i) => base[(i + r) % n]);
+    E.newGame({ course: E.courseById('first'), seed: seed0 + g, fullRace: true, players: ids.map((id, i) => ({ name: 'P' + i, color: '#fff', ai: id })) });
+    const mem = ids.map(() => ({})), t = { hA: [0, 0, 0], hB: [0, 0, 0] }; let steps = 0, turnKey = '', capped = false;
+    while (!E.S.over) {
+      if (E.S.round > 25 || steps++ > 30000) { capped = true; E.endGame(); break; }
+      const me = E.S.cur, k = me + ':' + E.S.round, id = ids[me], e0 = E.BOT_EVALS, t0 = performance.now();
+      E.aiStep(id, mem[me], null); E.S.log.length = 0;
+      t[id][0] += performance.now() - t0; t[id][1] += E.BOT_EVALS - e0; if (k !== turnKey) { t[id][2]++; turnKey = k; }
+    }
+    parentPort.postMessage({ n, seats: ids.map((id, i) => ({ id, place: capped && !E.S.players[i].fin ? n : E.S.places[i] })), t });
   }
-  parentPort.postMessage(r);
+  parentPort.postMessage({ done: true });
 } else {
-  const [, , A = 'plan', B = 'heur', G = '240', W = '2'] = process.argv, t0 = Date.now();
-  const per = Math.ceil(+G / +W);
-  const parts = await Promise.all([...Array(+W)].map((_, w) => new Promise((ok, bad) => {
-    const wk = new Worker(new URL(import.meta.url), { workerData: { A, B, from: w * per, to: Math.min(+G, (w + 1) * per) } });
-    wk.on('message', ok); wk.on('error', bad);
-  })));
-  const T = { wA: 0, expA: 0, seatsA: 0, arrA: [], arrB: [], capA: 0, capB: 0, pvA: 0, pvB: 0, seatsB: 0, evA: 0, evB: 0, cpuA: 0, cpuB: 0, decA: 0, decB: 0 };
-  for (const p of parts) for (const k in T) T[k] = Array.isArray(T[k]) ? T[k].concat(p[k]) : T[k] + p[k];
-  const avg = a => (a.reduce((x, y) => x + y, 0) / (a.length || 1)).toFixed(2);
-  const fair = T.wA / T.expA;
-  console.log(`${A} vs ${B}: ${G} games (3p/4p): ${A} wins ${T.wA}/${T.seatsA} seats = ${fair.toFixed(2)}× its fair share · arrival round ${A} ${avg(T.arrA)} vs ${B} ${avg(T.arrB)} · not arrived by 25: ${A} ${T.capA}, ${B} ${T.capB} · ${((Date.now() - t0) / 1000).toFixed(0)}s`);
-  const se = Math.sqrt(T.expA * (1 - T.expA / T.seatsA)) / T.expA; // rough standard error of the fair-share ratio
-  console.log(`  ± ${(1.96 * se).toFixed(2)} (95%) · avg place value ${A} ${(T.pvA / T.seatsA).toFixed(3)} vs ${B} ${(T.pvB / T.seatsB).toFixed(3)} · cost per move: ${A} ${(T.evA / T.decA).toFixed(0)} evals, ${(T.cpuA / T.decA).toFixed(1)} ms · ${B} ${(T.evB / T.decB).toFixed(0)} evals, ${(T.cpuB / T.decB).toFixed(1)} ms → ${((T.cpuA / T.decA) / (T.cpuB / T.decB)).toFixed(1)}× CPU`);
-  console.log(JSON.stringify({ A, B, games: +G, fair: +fair.toFixed(3), arrA: +avg(T.arrA), arrB: +avg(T.arrB), capA: T.capA, capB: T.capB }));
+  const [, , a, b, G = '200', W = '3'] = process.argv, A = JSON.parse(a), B = JSON.parse(b), N = +G, per = Math.ceil(N / +W), seed0 = 700000 + Math.floor(Math.random() * 1e5) * 10;
+  const tally = { hA: { w: 0, s: 0, pl: 0, ms: 0, ev: 0, turns: 0 }, hB: { w: 0, s: 0, pl: 0, ms: 0, ev: 0, turns: 0 } }, t0 = Date.now();
+  await Promise.all([...Array(+W)].map((_, w) => new Promise((ok, bad) => {
+    const wk = new Worker(new URL(import.meta.url), { workerData: { from: w * per, to: Math.min(N, (w + 1) * per), A, B, seed0 } });
+    wk.on('message', m => { if (m.done) return ok();
+      for (const s of m.seats) { const T = tally[s.id]; T.s++; T.pl += (s.place - 1) / (m.n - 1); if (s.place === 1) T.w++; }
+      for (const id of ['hA', 'hB']) { tally[id].ms += m.t[id][0]; tally[id].ev += m.t[id][1]; tally[id].turns += m.t[id][2]; } });
+    wk.on('error', bad); })));
+  const f = id => { const T = tally[id]; return `${id === 'hA' ? 'A' : 'B'}: wins ${T.w}/${T.s} (${(100 * T.w / T.s).toFixed(1)}% of seats), mean place ${(T.pl / T.s).toFixed(3)} (0 best, 1 last), ${Math.round(T.ms / T.turns)} ms and ${Math.round(T.ev / T.turns)} evals per turn`; };
+  console.log(`${N} games in ${((Date.now() - t0) / 1000).toFixed(0)} s\n${f('hA')}\n${f('hB')}`);
 }

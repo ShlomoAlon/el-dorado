@@ -1065,7 +1065,6 @@ function botRandomCourse(seed,nMid){
    the server applies it once (worker.js ensureSchema). */
 const AIS=[
   {id:'humboldt',name:'Humboldt',tier:'Master',rating:1530,desc:'Neural network that plans each whole turn',opts:{mode:'net',search:{kind:'plan',beam:3}}},
-  {id:'orellana',name:'Orellana',tier:'Strong',rating:1483,desc:'Neural network, one move at a time',opts:{mode:'net'}},
   {id:'raleigh',name:'Raleigh',tier:'Steady',rating:1200,desc:'Hand-written route planner',opts:{mode:'plan'}},
 ];
 const aiById=id=>AIS.find(a=>a.id===id)||null;

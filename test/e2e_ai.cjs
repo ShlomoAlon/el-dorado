@@ -1,7 +1,7 @@
 // Online AI seats (run against `wrangler dev` with DEV_AUTH=1, like test/e2e.cjs):
 //  1. rated room: one person + Humboldt + Raleigh, added from the room lobby. The AIs move on the server during the game;
 //     after a few turns the person leaves, the two AIs race to the end on their own, and every rating (AIs included) moves.
-//  2. unrated room: person + Orellana; nobody's rating moves.
+//  2. unrated room: person + two Raleighs; nobody's rating moves.
 //   NODE_PATH=$(npm root -g) node test/e2e_ai.cjs [--shots dir]
 const { chromium } = require('playwright');
 const BASE = process.env.BASE || 'http://127.0.0.1:8787/';
@@ -16,7 +16,7 @@ const fail = m => { console.log('FAIL: ' + m); process.exitCode = 1; };
   await A.fill('#devName', 'Ada' + Date.now() % 10000); await A.click('#devGo'); await A.waitForTimeout(800);
   const board = () => A.evaluate(async () => Object.fromEntries((await (await fetch('/api/leaderboard')).json()).players.map(p => [p.id, { r: p.rating, g: p.games, bot: p.bot }])));
   const lb0 = await board();
-  for (const id of ['ai-humboldt', 'ai-orellana', 'ai-raleigh']) if (!lb0[id] || !lb0[id].bot) fail('AI player missing from the leaderboard: ' + id);
+  for (const id of ['ai-humboldt', 'ai-raleigh']) if (!lb0[id] || !lb0[id].bot) fail('AI player missing from the leaderboard: ' + id);
   // hub: rated / unrated choice exists
   if (!(await A.$('#cRated'))) fail('no rated/unrated choice in the hub');
   const mkRoom = rated => A.evaluate(async rated => { const r = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + __ED.NET.token }, body: JSON.stringify({ max: 3, turn: 10, course: 'first', rated }) }); const j = await r.json(); __ED.joinRoom(j.code); return j.code; }, rated);
@@ -54,19 +54,19 @@ const fail = m => { console.log('FAIL: ' + m); process.exitCode = 1; };
   const res = await A.evaluate(() => __ED.NET.room.results);
   if (!res || !res.deltas || res.deltas.every(x => x === 0)) fail('no rating changes');
   ['ai-humboldt', 'ai-raleigh'].forEach((id, k) => { if (Math.abs(lb1[id].r - lb0[id].r - res.deltas[k + 1]) > .01) fail('rating of ' + id + ' does not match its delta'); });
-  console.log('ratings', ['ai-humboldt', 'ai-raleigh', 'ai-orellana'].map(id => id + ' ' + lb0[id].r + ' → ' + lb1[id].r).join(', '));
+  console.log('ratings', ['ai-humboldt', 'ai-raleigh'].map(id => id + ' ' + lb0[id].r + ' → ' + lb1[id].r).join(', '));
   // ---- 2. unrated room: nothing moves
   await A.evaluate(() => { document.querySelector('#gClose')?.click(); });
   const me = await A.evaluate(() => __ED.NET.user.id);
   const code2 = await mkRoom(false); await A.waitForTimeout(1200);
-  await A.click('[data-addai="orellana"]'); await A.waitForTimeout(600);
+  await A.click('[data-addai="raleigh"]'); await A.waitForTimeout(400); await A.click('[data-addai="raleigh"]'); await A.waitForTimeout(600); // AI needs 3+ players; the same AI can sit twice
   await A.click('#rlStart'); await A.waitForTimeout(1500);
   await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } })); await A.waitForTimeout(1500);
   const r2 = await A.evaluate(() => ({ over: __ED.S.over, res: __ED.NET.room.results, code: __ED.NET.code }));
   const lb2 = await board();
   console.log('unrated', code2, r2);
   if (!r2.over || !r2.res || !r2.res.unrated) fail('unrated game did not end as unrated');
-  if (lb2['ai-orellana'].g !== lb1['ai-orellana'].g || lb2['ai-orellana'].r !== lb1['ai-orellana'].r || (lb2[me] && lb1[me] && lb2[me].r !== lb1[me].r)) fail('an unrated game changed ratings');
+  if (lb2['ai-raleigh'].g !== lb1['ai-raleigh'].g || lb2['ai-raleigh'].r !== lb1['ai-raleigh'].r || (lb2[me] && lb1[me] && lb2[me].r !== lb1[me].r)) fail('an unrated game changed ratings');
   // leaderboard shows the AIs, marked
   await A.evaluate(() => { document.querySelector('#gClose')?.click(); });
   if (errs.length) fail('page errors: ' + errs.slice(0, 5).join(' | '));
