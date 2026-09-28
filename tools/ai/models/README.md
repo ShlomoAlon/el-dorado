@@ -107,3 +107,7 @@ RUN=r20 after 9 iterations (four maps, cap 20, review fixes; bootstrapped cut-of
 ## first-first1-27 (frozen 2026-09-28 09:06 UTC)
 
 First Expedition only, from first-distill-35 under the fixed rules: 27 iterations (400 games each, cap 20 scored by how far players got, exploration 0.3, BatchNorm + leak 0.03, lr 1e-3, max backup with Double-Q, no heuristic-seat samples). Paired full-game test vs the heuristic planner (168 games): wins 1.23x fair share, place value 0.436 (heuristic 0.34), arrival round 19.0 (heuristic 19.25). Before training: 0.08x, 0.041, 23.7. Dead units 14/128, 11/64.
+
+## first-first1-31 (frozen 2026-09-28 09:19 UTC)
+
+first1 after 31 iterations, just before its dead units (10/128, 11/64) were revived in the main run (BatchNorm scale of dead units had collapsed to ~0.02 vs 0.34 for live ones).
