@@ -131,3 +131,7 @@ Ladder vs the iteration-74 best (256 games): wins it190+search 92/224, it190 61/
 ## first-first1-ck198 (frozen 2026-09-28 16:26 UTC)
 
 Checkpoint for the feature trial (tools/ai/featexp.sh): control vs card-property inputs vs local-patch inputs, 12 iterations each.
+
+## first-first1-L0 (frozen 2026-09-28 19:08 UTC)
+
+first1 at iteration 198 + 12 iterations (the feature trial's control branch fx-ctl). Feature trial result: card-property inputs tied the control on the ladder (plain 105 vs 103 wins /448, with search 163 vs 150) at +11-16% cost per move; the local-patch inputs lost (plain 83 vs 124, search 148 vs 161). Neither adopted. Start of distillation level 1.
