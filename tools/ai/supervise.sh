@@ -12,7 +12,9 @@ while true; do
   env_line=$(cat "$CFG" 2>/dev/null); run=$(echo "$env_line" | grep -o 'RUN=[^ ]*' | cut -d= -f2)
   if [ -n "$run" ]; then
     rlog=tools/ai/data/first-$run.log
-    if ! pgrep -f 'tools/ai/loop\.sh' >/dev/null; then
+    if [ -f tools/ai/data/first-$run.halt ]; then  # the loop stopped itself on a model-quality problem: don't restart it
+      [ "$halted" = "$run" ] || { say "HALT: $(cat tools/ai/data/first-$run.halt) — not restarting first-$run"; halted=$run; }
+    elif ! pgrep -f 'tools/ai/loop\.sh' >/dev/null; then
       say "starting loop: $env_line"; (env $env_line setsid nohup tools/ai/loop.sh first 300 >> /tmp/claude-0/loop-$run.out 2>&1 < /dev/null &)
     elif [ -f "$rlog" ] && [ $(( $(date +%s) - $(stat -c %Y "$rlog") )) -gt $(( STALL * 60 )) ]; then
       say "STALL: $rlog unchanged for over $STALL min — restarting the loop"; echo "[$(date +%H:%M:%S)] STALL watchdog restarted the loop (log unchanged for over $STALL min)" >> "$rlog"

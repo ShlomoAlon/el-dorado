@@ -47,10 +47,22 @@ net.eval()
 with torch.no_grad():  # dead hidden units: never positive on (up to 4000) held-out positions
     xs = dense(vi[:4000]); p1 = net[0](xs); p2 = net[2](net[1](p1))
     dead1, dead2 = int((p1.max(0).values <= 0).sum()), int((p2.max(0).values <= 0).sum())
+    ps = torch.sigmoid(net[4](net[3](p2))); sat = float(((ps < .01) | (ps > .99)).float().mean()); bias = float(ps.mean() - Y[vi[:4000]].mean())
+    wmax = max(float(t.abs().max()) for t in net.parameters()); finite = all(bool(torch.isfinite(t).all()) for t in net.parameters())
 with torch.no_grad():
     pv = torch.sigmoid(net(dense(vi))); rmse = float(((pv - Y[vi]) ** 2).mean().sqrt()); base = float(((Y[vi] - Y[ti].mean()) ** 2).mean().sqrt())
+# model-quality checks: warnings go to the log; a halt stops the training loop until someone finds the cause
+warn, halt = [], None
+for name, d, H in (('layer 1', dead1, H1), ('layer 2', dead2, H2)):
+    if d > .10 * H: halt = f'{name}: {d}/{H} hidden units dead'
+    elif d > .03 * H: warn.append(f'{name}: {d}/{H} hidden units dead')
+if not finite: halt = 'non-finite weights'
+if sat > .05: warn.append(f'{sat:.0%} of predictions saturated (<1% or >99%)')
+if abs(bias) > .05: warn.append(f'predictions off by {bias:+.3f} on average (calibration)')
+if rmse > .9 * base: warn.append(f'barely better than predicting the average (rmse {rmse:.3f} vs {base:.3f})')
+if wmax > 10: warn.append(f'largest weight {wmax:.1f}')
 r = lambda t: [round(float(x), 6) for x in t.detach().flatten()]
 J = {**keep, 'course': 'multi' if 'courses' in keep else course, 'nf': nf, 'w1T': r(net[0].weight.T.contiguous()), 'b1': r(net[0].bias), 'w2': r(net[2].weight), 'b2': r(net[2].bias), 'w3': r(net[4].weight), 'b3': r(net[4].bias)}
 if unsettled: J['unsettled'] = True  # trained on arrived-but-not-settled positions: play may ask the network about them (botValue)
 json.dump(J, open(out, 'w'))
-print(json.dumps({'samples': len(Y), 'val_rmse': round(rmse, 4), 'predict_mean_rmse': round(base, 4), 'dead1': f'{dead1}/{H1}', 'dead2': f'{dead2}/{H2}', 'secs': round(time.time() - t0, 1)}))
+print(json.dumps({'samples': len(Y), 'val_rmse': round(rmse, 4), 'predict_mean_rmse': round(base, 4), 'dead1': f'{dead1}/{H1}', 'dead2': f'{dead2}/{H2}', 'saturated': round(sat, 4), 'bias': round(bias, 4), 'wmax': round(wmax, 2), 'warn': warn, 'halt': halt, 'secs': round(time.time() - t0, 1)}))

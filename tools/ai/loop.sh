@@ -30,10 +30,12 @@ for i in $(seq 1 $N); do
   log "GEN $out"
   prev=$( (grep -l "\"horizon\":$H," $D/$P.it*.json 2>/dev/null || true) | xargs -r ls -t | head -${REPLAY:-3} | sed 's/\.json$//' | tr '\n' ' ')
   tr=$(python3 tools/ai/train.py $NET $C 3 $prev 2>/dev/null); log "TRAIN $tr"
-  # alarm: if over 10% of the first hidden layer is dead after training, revive those units (tools/ai/revive.mjs)
-  if [ "$(echo "$tr" | python3 -c "import json,sys;a,b=json.load(sys.stdin)['dead1'].split('/');print(int(int(a)>0.1*int(b)))" 2>/dev/null)" = 1 ]; then
-    log "REVIVE $(node tools/ai/revive.mjs $NET $NET.rev 10 2>&1 | tail -1)"; [ -s $NET.rev ] && mv $NET.rev $NET
-  fi
+  [ -z "$tr" ] && { log "HALT training failed (train.py printed nothing)"; echo "training failed" > $D/$P.halt; exit 2; }
+  # model-quality checks (train.py): log the warnings; on a halt (dead units, broken weights) stop until the cause is found —
+  # the watchdog (supervise.sh) does not restart a run with a .halt file
+  echo "$tr" | python3 -c "import json,sys;[print(w) for w in json.load(sys.stdin).get('warn',[])]" 2>/dev/null | while read -r w; do log "WARN $w"; done
+  h=$(echo "$tr" | python3 -c "import json,sys;print(json.load(sys.stdin).get('halt') or '')" 2>/dev/null)
+  if [ -n "$h" ]; then log "HALT $h — training stopped; find the cause, then delete $D/$P.halt"; echo "$h" > $D/$P.halt; exit 2; fi
   # keep the disk bounded: only the newest ${KEEP_BATCHES:-8} self-play batches keep their sample files (summaries stay)
   ( ls -t $D/$P.it*.json 2>/dev/null | tail -n +$(( ${KEEP_BATCHES:-8} + 1 )) | sed 's/\.json$//' | while read b; do rm -f $b.*.bin; done ) || true
   ev=$(HORIZON=$H node tools/ai/gen.mjs eval 160 - $NET $C); log "EVAL $ev"
