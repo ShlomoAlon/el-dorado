@@ -43,18 +43,20 @@ function wireAcct(root,rerender){
   const o=root.querySelector('#acOut');if(o)o.onclick=()=>signOut(rerender);
   const p=root.querySelector('#acProfile');if(p)p.onclick=()=>{hubTab='me';NET.viewUser=null;showHub();};
 }
+/* how you're playing: the same switch at the top of the start screen and the Online screen */
+const modeSeg=on=>`<div class="seg modes" id="sMode"><button data-m="local" class="${on==='local'?'on':''}">On this device</button><button data-m="online" class="${on==='online'?'on':''}">Online</button></div>`;
 /* ---------- hub ---------- */
 let hubTab='play';
 function hubHTML(){
   const u=NET.user;
-  if(!NET.available)return`<h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
-  if(!u)return acctBar()+`<h2>Play online</h2><p class="sub">Sign in (top of this screen) so your rating follows you. Rated games move your Elo rating, and you can play against people, the AIs, or both.</p>
+  if(!NET.available)return modeSeg('online')+`<h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
+  if(!u)return acctBar()+modeSeg('online')+`<h2>Play online</h2><p class="sub">Sign in (top of this screen) so your rating follows you. Rated games move your Elo rating, and you can play against people, the AIs, or both.</p>
     ${NET.cfg.google?'':'<p class="note" style="color:#f3c98b">Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>'}
     ${NET.cfg.dev?'<div class="field" style="margin-top:16px"><label>Developer sign-in (local testing only)</label><div class="prow"><input id="devName" maxlength="16" placeholder="Name"><button class="btn" id="devGo">Sign in</button></div></div>':''}
     <p class="note" id="hErr"></p>
     <div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
   const tabs=`<div class="seg" id="hTabs" style="margin-bottom:16px">${[['play','Play'],['board','Leaderboard'],['me','Profile']].map(([k,t])=>`<button data-k="${k}" class="${hubTab===k?'on':''}">${t}</button>`).join('')}</div>`;
-  const head=acctBar()+`<h2>Online</h2>`;
+  const head=acctBar()+modeSeg('online')+`<h2>Online</h2>`;
   if(hubTab==='board')return head+tabs+`<div id="lbList"><p class="note">Loading…</p></div><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
   if(hubTab==='me'){const own=!NET.viewUser||NET.viewUser===u.id,pc=PROFILES[NET.viewUser||u.id];
     return head+tabs+`${own?'':'<button class="linkbtn" id="pfBack" style="margin-bottom:10px">‹ Leaderboard</button>'}<div id="pf">${pc?profileHTML(pc):'<p class="note">Loading…</p>'}</div>
@@ -105,6 +107,7 @@ function renderHub(){
   if(focus&&m.querySelector('#'+focus))m.querySelector('#'+focus).focus();
   const q=s=>m.querySelector(s);const err=t=>{const e=q('#hErr');if(e)e.textContent=t;};
   q('#hBack').onclick=()=>{closeLobbyWs();showSetup();};
+  const ml=q('#sMode button[data-m=local]');if(ml)ml.onclick=()=>{closeLobbyWs();showSetup();};
   if(!NET.available)return;
   if(!NET.user){
     wireAcct(m,renderHub);
