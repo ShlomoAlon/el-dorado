@@ -2986,8 +2986,9 @@ function renderPrompt(){
       btns=[undoBtn,{t:act?'Done':'Cancel',id:'bCan',fn:cancelMode},{t:'End turn',id:'bEnd',pri:1,big:1,fn:startEndTurn}];break;}
     case 'pay':{
       const c=CT[UI.buy.t].cost,t=payTotal();
-      txt=who+`Buying <b>${esc(CT[UI.buy.t].n)}</b>: <b>${fmt(t)}</b> of ${c} paid. <span class="m">Drag or tap cards to pay. Coin cards and jokers pay their value, others ½.</span>`;
-      btns=[{t:'Cancel',id:'bCan',fn:cancelMode},{t:'Buy',id:'bBuy',pri:1,big:1,dis:t<c,fn:confirmBuy}];break;}
+      // no Buy button: the card is bought as soon as the cards paid in cover its price (payProgress)
+      txt=who+`Buying <b>${esc(CT[UI.buy.t].n)}</b>: <b>${fmt(t)}</b> of ${c} paid. <span class="m">Drag or tap cards to pay; it's bought as soon as they cover the price. Coin cards and jokers pay their value, others ½.</span>`;
+      btns=[{t:'Cancel',id:'bCan',fn:cancelMode}];break;}
     case 'discardFor':{
       const P2=UI.pending;const verb=P2.kind==='camp'?'remove from the game':'discard';const left=P2.need-UI.picks.length;
       txt=who+`${P2.kind==='camp'?'Base camp':P2.kind==='blr'?'Blockade':'Rubble'}: <b>${UI.picks.length} of ${P2.need}</b> cards to ${verb}. `+(left?`<span class="m">Drag ${left} more card${left>1?'s':''} onto it, or tap cards.</span>`:'');
