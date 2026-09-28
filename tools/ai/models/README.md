@@ -115,3 +115,7 @@ first1 after 31 iterations, just before its dead units (10/128, 11/64) were revi
 ## first-first1-best (frozen 2026-09-28 09:55 UTC, iteration ~47)
 
 first1 after the 09:19 revive of its dead units: paired full-game test vs the heuristic planner (168 games) wins 2.31x fair share, place value 0.708 (heuristic 0.238), arrival round 16.9. Dead units 11/128, 4/64.
+
+## first-first1-best updated (2026-09-28 10:27 UTC, iteration 60)
+
+Paired full-game tests vs the heuristic planner at iterations 51-60: 2.69x, 2.75x, 2.71x, 2.65x the fair share of wins; place value 0.79-0.81 (heuristic ~0.20); arrival round ~16.5. Dead units 9/128, 1/64.
