@@ -23,7 +23,9 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
    - rules: `src/engine_data.js` (cards, boards, map generation), `src/engine_rules.js` (state, actions, turn order, end of game, Elo, redaction), `src/engine_ai.js` (named AI players; `engine_bot.js` belongs to the AI training code)
    - page: `src/client/shell.html` (markup + CSS), `src/client/ui_state.js` (UI state + `act()`), `src/client/ui_view.js` (board, cards, drag/aim, HUD, modals), `src/client/ui_online.js` (sign-in, hub, rooms, sockets, timer), `src/client/ui_boot.js`
    - server: `src/worker.js`
-2. `node build.mjs` → regenerates `public/index.html`, `src/engine.gen.js`, `build/artifact.html` (all committed; never hand-edit them).
+2. `node build.mjs` → regenerates `public/index.html`, `public/app.<hash>.js/.css`, `src/engine.gen.js`, `build/artifact.html` (all committed; never hand-edit them).
+   The site's `index.html` must stay under ~14 KB compressed (one TCP round trip): the start screen's markup + CSS only
+   (shell.html's first `<style>`); game CSS goes in the `<style data-late>` block, which becomes the cached app.css.
 3. `node test/engine.test.mjs` → must print `ok: 60 games …`.
    Also `npx wrangler deploy --dry-run --outdir /tmp/wdry` — Cloudflare's bundler (esbuild) rejects some things Node accepts
    (e.g. assigning to a `const`); a failed bundle means the push never deploys.

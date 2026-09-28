@@ -54,7 +54,7 @@ const CHECK = () => {
   const pub = path.join(__dirname, '..', 'public'), srv = require('http').createServer((q, r) => {
     const f = path.join(pub, decodeURIComponent(q.url.split('?')[0]).replace(/^\/$/, '/index.html'));
     if (!f.startsWith(pub) || !fs.existsSync(f)) { r.writeHead(404); r.end(); return; }
-    r.writeHead(200, { 'content-type': f.endsWith('.html') ? 'text/html' : f.endsWith('.woff2') ? 'font/woff2' : 'application/octet-stream' }); r.end(fs.readFileSync(f)); });
+    r.writeHead(200, { 'content-type': f.endsWith('.html') ? 'text/html' : f.endsWith('.css') ? 'text/css' : f.endsWith('.js') ? 'text/javascript' : f.endsWith('.woff2') ? 'font/woff2' : 'application/octet-stream' }); r.end(fs.readFileSync(f)); });
   await new Promise(res => srv.listen(0, '127.0.0.1', res));
   const url = `http://127.0.0.1:${srv.address().port}/`;
   for (const [w, h] of SIZES) {

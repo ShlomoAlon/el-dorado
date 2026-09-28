@@ -16,18 +16,10 @@ const SETUP={seed:(Math.random()*1e9)|0,id:null,cur:null,map:null};
 
 function menuInit(){
   MENU.dlg=$('#menu');MENU.f=$('#mform');
-  const card=(name,id,b,sub,sel)=>`<label data-v="${id}"><input type="radio" name="${name}" value="${id}"${sel?' checked':''}><b>${b}</b><span>${esc(sub)}</span></label>`;
-  const courses=(name,sel)=>COURSES.map(c=>card(name,c.id,esc(c.name)+(c.diff?` <i class="dtag d-${esc(c.diff.toLowerCase())}">${esc(c.diff)}</i>`:''),'Boards '+c.p.map(x=>x[0]).join(' · '),c.id===sel)).join('')
-    +(COURSES.length>1?card(name,'random','Random course','Any course from this list',false):'');
-  mq('#sC').innerHTML=courses('course','first');mq('#cCourse').innerHTML=courses('ocourse','first');
-  // four seats (the player count shows 2-4 of them); AI seats and names are remembered on this device
+  // (courses, seats, AI and colour choices are written into the page by build.mjs: the start screen needs no script)
+  // AI seats chosen before are remembered on this device
   let ai=[];try{ai=JSON.parse(localStorage.getItem('eldorado-seats')||'[]');}catch(e){}
-  const NAMES=['Ana','Ben','Cleo','Dev'],COLS=['crimson','ivory','violet','orange'];
-  mq('#seats').innerHTML=NAMES.map((nm,i)=>`<div class="prow seat" data-i="${i}"><select class="who" name="who${i}" aria-label="Player ${i+1}: human or AI"><option value="">Human</option><optgroup label="AI players">${AIS.map(a=>`<option value="${a.id}"${ai[i]===a.id?' selected':''}>${esc(a.name)} · ${esc(a.tier)}</option>`).join('')}</optgroup></select>`
-    +`<input name="nm${i}" maxlength="14" value="${nm}" aria-label="Player ${i+1} name"><div class="ainm" hidden><span></span></div>`
-    +`<div class="sws">${COLORS.map(c=>`<label style="--c:${c.hex}" title="${c.name}"><input type="radio" name="col${i}" value="${c.id}"${c.id===COLS[i]?' checked':''} aria-label="${c.name}"></label>`).join('')}</div></div>`).join('');
-  mq('#rlAIList').innerHTML=AIS.map(a=>`<button type="button" data-addai="${a.id}"><b>${esc(a.name)} <span class="aitag">AI</span></b><span>${esc(a.tier)} · ${esc(a.desc)}</span></button>`).join('');
-  mq('#rlCols').innerHTML=COLORS.map(c=>`<label style="--c:${c.hex}" title="${c.name}"><input type="radio" name="rlcol" value="${c.hex}" aria-label="${c.name}"></label>`).join('');
+  mqa('#seats select').forEach((s,i)=>{if(aiById(ai[i]))s.value=ai[i];});
   MENU.f.addEventListener('submit',e=>e.preventDefault());
   MENU.f.addEventListener('change',menuChange);
   MENU.f.addEventListener('click',menuClick);
@@ -48,10 +40,13 @@ function menuOpen(screen){
   acctRender();
   setRadio('mode',screen==='online'||screen==='room'?'online':'local');
   if(MENU.screen!==screen){for(const s of mqa('section[data-screen]'))s.hidden=s.dataset.screen!==screen;MENU.screen=screen;MENU.f.scrollTop=0;}
-  clearTimeout(MENU.closeT);d.classList.remove('closing');
-  if(!d.open){d.showModal();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});}
+  clearTimeout(MENU.closeT);d.classList.remove('closing');document.documentElement.classList.remove('resume');
+  // the page opens the dialog as plain HTML (before any script); the first time, it becomes a modal dialog (focus, Esc),
+  // looking exactly the same (no fade: it is already on screen)
+  if(d.open&&!d.matches(':modal')){d.style.animation='none';d.close();d.showModal();requestAnimationFrame(()=>d.style.animation='');MENU.f.focus({preventScroll:true});}
+  else if(!d.open){d.showModal();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});}
 }
-function menuClose(){const d=MENU.dlg;if(!d||!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
+function menuClose(){const d=MENU.dlg;document.documentElement.classList.remove('resume');if(!d||!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
 // after signing in or out: the account bar and whatever depends on it
 function menuRefresh(){acctRender();if(MENU.screen==='online')onlineRender();}
 
@@ -83,7 +78,7 @@ function menuClick(e){
     case'sResign':menuClose();online()?resignOnline():resignLocal();return;
     case'sReplays':showReplays();return;
     case'sResume':menuClose();resumeSaved();return;
-    case'sGo':startLocal();return;
+    case'sGo':delete b.dataset.q;startLocal();return;
     case'acProfile':NET.viewUser=null;setRadio('otab','me');showHub();return;
     case'acOut':signOut(menuRefresh);return;
     case'devGo':run(async()=>signedIn(await api('/api/auth/dev',{method:'POST',body:JSON.stringify({name:mq('#devName').value||'Tester'})}),menuRefresh));return;

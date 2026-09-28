@@ -32,7 +32,8 @@ function boot(){
     if(room&&NET.available){if(NET.user){joinRoom(room);return;}NET.pendingRoom=room;showHub();return;}
     if(NET.user&&NET.active){showHub();return;}
     if(resumeSaved())return;
-    showSetup();
+    if(radio('mode')==='online'){showHub();return;} // picked before the script had loaded
+    showSetup();if($('#sGo').dataset.q){delete $('#sGo').dataset.q;startLocal();} // Start pressed before the script had loaded
   });
 }
 window.__ED={NET,UI,act,playEvents,openReplay,applyAction,render,get S(){return S},get MAP(){return MAP},showCourse(C,seed){MAP=buildCourse(typeof C==="string"?courseById(C):C,seed||1);buildBoard();fit();return MAP;},joinRoom,netSend,onHandCard,doMove,pickFromMarket,confirmBuy,startEndTurn,finishTurn,confirmDiscardFor,confirmTrash,cancelMode,reach,myId,canAct,view};

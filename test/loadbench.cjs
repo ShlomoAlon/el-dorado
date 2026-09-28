@@ -23,6 +23,9 @@ async function once(browser, P, warm) {
   await page.waitForSelector('#sGo', { state: 'visible', timeout: 60000 });
   const tStart = await page.evaluate(() => performance.now());
   const paint = await page.evaluate(() => (performance.getEntriesByName('first-contentful-paint')[0] || {}).startTime || null);
+  // the script has run (the game can start at once from here)
+  await page.waitForFunction(() => !!window.__ED, null, { timeout: 60000, polling: 50 });
+  const tReady = await page.evaluate(() => performance.now());
   await page.waitForTimeout(READ_MS);
   const tClick = await page.evaluate(() => performance.now());
   await page.click('#sGo');
@@ -31,14 +34,14 @@ async function once(browser, P, warm) {
   await page.waitForFunction(() => document.querySelectorAll('#board *').length > 50 && document.querySelectorAll('.card').length >= 4, null, { timeout: 60000, polling: 'raf' });
   const tPlay = await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(performance.now())))));
   await ctx.close();
-  return { paint, start: tStart, click: tPlay - tClick, total: tPlay - READ_MS, errs };
+  return { paint, start: tStart, ready: tReady, click: tPlay - tClick, total: tPlay - READ_MS, errs };
 }
 (async () => {
   const browser = await chromium.launch();
   for (const P of PROFILES) for (const warm of [false, true]) {
     const R = []; for (let i = 0; i < RUNS; i++) R.push(await once(browser, P, warm));
     const e = R.flatMap(r => r.errs);
-    console.log(`${P.name.padEnd(7)} ${warm ? 'repeat' : 'first '} visit: first paint ${Math.round(med(R.map(r => r.paint || 0)))} · start screen ${Math.round(med(R.map(r => r.start)))} · click→playing ${Math.round(med(R.map(r => r.click)))} · open→playing (minus reading) ${Math.round(med(R.map(r => r.total)))} ms${e.length ? ' · errors: ' + e[0] : ''}`);
+    console.log(`${P.name.padEnd(7)} ${warm ? 'repeat' : 'first '} visit: first paint ${Math.round(med(R.map(r => r.paint || 0)))} · start screen ${Math.round(med(R.map(r => r.start)))} · script ready ${Math.round(med(R.map(r => r.ready)))} · click→playing ${Math.round(med(R.map(r => r.click)))} · open→playing (minus reading) ${Math.round(med(R.map(r => r.total)))} ms${e.length ? ' · errors: ' + e[0] : ''}`);
   }
   await browser.close();
 })();
