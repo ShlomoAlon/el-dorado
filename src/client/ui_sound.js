@@ -91,6 +91,9 @@ function setSound(on){
     if(tg.closest('#cards .card')||tg.closest('#market [data-src],#reserve [data-src],#allMarket [data-src]'))sfx('pick');
   };
   document.addEventListener('pointerdown',down,true);
+  // set the audio up while the page is idle (the context starts suspended); the first tap then only resumes it, so the
+  // tap on Start doesn't pay ~100 ms for creating it
+  (window.requestIdleCallback||(f=>setTimeout(f,300)))(()=>{if(!SND.ctx)sndInit();},{timeout:2000});
   document.addEventListener('keydown',()=>sndInit(),true);
   const b=document.getElementById('sndBtn');
   if(b){setSound(!SND.muted);b.onclick=()=>{setSound(SND.muted);if(!SND.muted)sfx('tap');};}

@@ -53,6 +53,11 @@ const ICOL={j:'#f4fff6',w:'#f2f9ff',v:'#5a3d07',g:'#5a3c05',r:'#f5f5f2',c:'#fff4
 const CHIP={j:'rgba(10,40,22,.42)',w:'rgba(8,34,64,.42)',v:'rgba(255,248,225,.5)',r:'rgba(30,32,31,.45)',c:'rgba(70,16,8,.45)',g:'rgba(255,250,230,.55)'};
 let L={};
 function buildBoard(){
+  // the same course with the same blockades is already drawn (the start screen's preview of this deal): keep it — starting a
+  // game then costs no redraw (the labels' layout reads alone take ~100 ms); only the pieces go
+  const sig=MAP.course+'|'+MAP.blockDefs.map(b=>b.n+':'+b.conn).join(',');
+  if(buildBoard.sig===sig&&$('#board').childElementCount&&L.pieces){L.pieces.innerHTML='';pieceEls={};return;}
+  buildBoard.sig=sig;
   // two stacked SVGs (the static board, then the live layers: targets, blockades, pieces, aim) with the text in HTML label
   // layers between/above them: Chrome re-lays out SVG text whenever an ancestor's scale changes; HTML text it doesn't
   const svg=$('#board'),svg2=$('#board2');svg.innerHTML='';svg2.innerHTML='';$('#blabels').innerHTML='';$('#blabels2').innerHTML='';
