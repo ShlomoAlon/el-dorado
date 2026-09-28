@@ -310,6 +310,39 @@ html,body{overflow:clip;overscroll-behavior:none}
 .acct{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--muted)}
 .acct b{color:var(--text)}.acct .rt{color:var(--gold2)}.acct .linkbtn{margin-left:auto}
 .acct .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(233,178,74,.18);color:var(--gold2);font-weight:800;flex:none}
+/* start screen, short top: mode tiles, players, Start; the rest behind "More options" */
+.mtiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 20px}
+.mtile{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:14px 16px;border-radius:14px;background:#0c1512;border:1px solid var(--line2);color:var(--text);font:inherit;text-align:left;cursor:pointer;transition:border-color .15s,background .15s}
+.mtile b{font-size:16px;font-weight:800;display:flex;align-items:center;gap:4px}
+.mtile span{font-size:13px;color:var(--muted);line-height:1.3}
+.mtile:hover{border-color:var(--gold)}
+.mtile.on{border-color:var(--gold);background:rgba(233,178,74,.1);box-shadow:inset 0 0 0 1px var(--gold)}
+.mtile:focus-visible,.more summary:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.qwho{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:13.5px;font-weight:600;color:var(--text)}
+.qwho .wn{display:inline-flex;align-items:center;gap:6px}
+.qwho .wn i{width:10px;height:10px;border-radius:50%}
+.qwho .wc{color:var(--muted);font-weight:500;white-space:nowrap}
+.qwho .wc::before{content:'·';margin-right:14px;color:var(--faint)}
+.gorow{display:flex;align-items:center;gap:10px 14px;margin:4px 0 6px;flex-wrap:wrap}
+.more{margin-top:14px;border-top:1px solid var(--line)}
+.more summary{list-style:none;display:flex;align-items:baseline;gap:10px;padding:14px 2px 4px;cursor:pointer;color:var(--text)}
+.more summary::-webkit-details-marker{display:none}
+.more summary .chev{align-self:center;color:var(--gold2);transition:transform .2s var(--ease);flex:none}
+.more[open] summary .chev{transform:rotate(90deg)}
+.more summary b{font-size:15px;font-weight:800}
+.more summary span{font-size:13px;color:var(--muted)}
+.more summary:hover b{color:var(--gold2)}
+.more-in{padding-top:16px}
+.flinks{display:flex;justify-content:center;gap:24px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.flinks .linkbtn{color:var(--muted);text-decoration:none;font-weight:600;font-size:14px;padding:6px 2px}
+.flinks .linkbtn:hover{color:var(--gold2)}
+.clist.thumbs button{padding-top:8px}
+.cthumb{display:block;width:100%;height:auto;aspect-ratio:160/64;margin:0 0 6px;border-radius:6px;background:rgba(0,0,0,.25)}
+@media (max-width:520px){
+  .mtiles{gap:8px}.mtile{padding:12px}.mtile b{font-size:15px}
+  .gorow .btn{flex:1}.qwho{flex-basis:100%}
+  .more summary span{display:none}
+}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--gold2);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 #rside .revl{display:grid;gap:6px;margin-bottom:10px}
 #rside .rev{display:grid;grid-template-columns:10px minmax(0,7em) 1fr 40px;gap:8px;align-items:center;padding:3px 6px;border-radius:8px;color:#cfd8d2}

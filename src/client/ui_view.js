@@ -911,10 +911,21 @@ function closeModal(){const o=$('#overlay');const sc=o.firstChild;if(!sc)return;
 /* course list: official routes first; 'random' picks one of them */
 function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:(courseById(id)||COURSES[0]);}
 function courseName(id){return id==='random'&&COURSES.length>1?'Random course':(courseById(id)||COURSES[0]).name;}
-function coursePicker(gid,sel){
+function coursePicker(gid,sel,thumbs){
   const opts=COURSES.map(c=>[c.id,c.name,'Boards '+c.p.map(x=>x[0]).join(' · '),c.diff]);
   if(COURSES.length>1)opts.push(['random','Random course','Any course from this list']);
-  return `<div class="clist" id="${gid}">${opts.map(([id,n,d,df])=>`<button data-c="${id}" class="${sel===id?'on':''}"><b>${esc(n)}${df?` <i class="dtag d-${esc(df.toLowerCase())}">${esc(df)}</i>`:''}</b><span>${esc(d)}</span></button>`).join('')}</div>`;
+  return `<div class="clist${thumbs?' thumbs':''}" id="${gid}">${opts.map(([id,n,d,df])=>`<button data-c="${id}" class="${sel===id?'on':''}">${thumbs?courseThumb(id):''}<b>${esc(n)}${df?` <i class="dtag d-${esc(df.toLowerCase())}">${esc(df)}</i>`:''}</b><span>${esc(d)}</span></button>`).join('')}</div>`;
+}
+/* a small picture of a course: every space as a dot in its terrain colour (built once per course) */
+const thumbCache={};
+function courseThumb(id){
+  if(thumbCache[id])return thumbCache[id];
+  if(id==='random')return thumbCache[id]='<svg class="cthumb" viewBox="0 0 160 64" aria-hidden="true"><text x="80" y="44" text-anchor="middle" font-family="Young Serif, Georgia, serif" font-size="34" fill="rgba(248,220,151,.55)">?</text></svg>';
+  let M;try{M=buildCourse(courseById(id),1);}catch(e){return'';}
+  const hs=[...M.hexes.values()];let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const h of hs){x0=Math.min(x0,h.x);y0=Math.min(y0,h.y);x1=Math.max(x1,h.x);y1=Math.max(y1,h.y);}
+  const k=Math.min(148/(x1-x0+2*R),56/(y1-y0+2*R)),ox=80-(x0+x1)/2*k,oy=32-(y0+y1)/2*k,r=(R*k*.92).toFixed(2);
+  const col=h=>{const t=h.type==='g'?'g':h.type;return(TSHADE[t]?TSHADE[t][Math.min(3,Math.max(0,(h.val||1)-1))][0]:TFILL[t]?TFILL[t][0]:'#777');};
+  return thumbCache[id]=`<svg class="cthumb" viewBox="0 0 160 64" aria-hidden="true">${hs.map(h=>`<circle cx="${(h.x*k+ox).toFixed(1)}" cy="${(h.y*k+oy).toFixed(1)}" r="${r}" fill="${col(h)}"/>`).join('')}</svg>`;
 }
 let setup={mode:'local',full:true,oMax:3,oPub:true,oRated:true,oTurn:90,oCourse:'first',n:3,names:['Ana','Ben','Cleo','Dev'],ai:['','','',''],colors:['crimson','ivory','violet','orange'],course:'first',privacy:false,seed:(Math.random()*1e9)|0};
 function showSetup(){
@@ -926,14 +937,18 @@ function showSetup(){
   const gameRow=()=>inGame?`<div class="ingame"><span><b>Game in progress</b> · round ${S.round}${online()?' · online':''}</span><span class="ig-b">${rs>=0?`<button class="btn" id="sResign">Resign${!online()&&S.players.filter(p=>!p.ai).length>1?' ('+esc(S.players[rs].name)+')':''}</button>`:''}<button class="btn pri" id="sBack">Back to game</button></span></div>`:'';
   // who is signed in (the site only: online play needs the server)
   const acct=()=>!NET.available?'':NET.user?`<div class="acct"><span class="av">${esc(NET.user.name.slice(0,1).toUpperCase())}</span><span><b>${esc(NET.user.name)}</b> · rating <b class="rt">${Math.round(NET.user.rating)}</b></span><button class="linkbtn" id="sOut">Sign out</button></div>`:`<div class="acct"><span class="m">Not signed in</span>${NET.cfg&&NET.cfg.google?'<div id="gsiBtn" class="gsiSm"></div>':'<button class="linkbtn" id="sIn">Sign in</button>'}</div>`;
-  const html=()=>`${acct()}${gameRow()}<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
-    <div class="field"><label>How are you playing?</label><div class="seg" id="sMode"><button data-m="local" class="on">On this device</button><button data-m="online">Online</button></div></div>
+  const who=()=>{const ns=[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);const c=COLORS.find(x=>x.id===setup.colors[i]);return`<span class="wn"><i style="background:${c?c.hex:'#888'}"></i>${esc(A?A.name:setup.names[i]||'Player '+(i+1))}${A?' <span class="aitag">AI</span>':''}</span>`;});return ns.join('')+`<span class="wc">${esc(courseName(setup.course))}</span>`;};
+  const html=()=>`${acct()}${gameRow()}<h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city.</p>
+    <div class="mtiles" id="sMode"><button data-m="local" class="mtile on"><b>On this device</b><span>Pass and play, or against AIs</span></button><button data-m="online" class="mtile"><b>Online <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5l5 5-5 5"/></svg></b><span>Rated games with an account</span></button></div>
     <div class="field"><label>Players</label><div class="seg" id="sN">${[2,3,4].map(n=>`<button data-n="${n}" class="${setup.n===n?'on':''}">${n}</button>`).join('')}</div>${setup.n===2?'<p class="note">Two players each lead two explorers. Both must reach El Dorado.</p>':''}</div>
+    <div class="gorow"><div class="qwho">${who()}</div>${canResume?'<button class="btn big" id="sResume">Continue saved game</button>':''}<button class="btn${inGame?'':' pri'} big" id="sGo">${inGame?'Start a new game':'Start expedition'}</button></div>
+    <details class="more" id="sMoreD"${setup.more?' open':''}><summary id="sMore"><svg class="chev" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5l5 5-5 5"/></svg><b>More options</b><span>Leaders and colours, course, end of game, privacy</span></summary><div class="more-in">
     <div class="field"><label>Expedition leaders</label>${[...Array(setup.n)].map((_,i)=>{const A=aiById(setup.ai[i]);return`<div class="prow seat"><select class="who" id="pt${i}" aria-label="Player ${i+1}: human or AI"><option value="">Human</option><optgroup label="AI players">${AIS.map(a=>`<option value="${a.id}" ${setup.ai[i]===a.id?'selected':''} ${!aiAllowed(setup.course,setup.n)||setup.ai.slice(0,setup.n).some((x,j)=>j!==i&&x===a.id)?'disabled':''}>${a.name} · ${a.tier}</option>`).join('')}</optgroup></select>${A?`<div class="ainm" title="${esc(A.desc)}"><span>${esc(A.desc)}</span></div>`:`<input id="pn${i}" maxlength="14" value="${esc(setup.names[i])}" aria-label="Player ${i+1} name">`}<div class="sws">${COLORS.map(c=>`<button data-p="${i}" data-c="${c.id}" style="--c:${c.hex}" class="${setup.colors[i]===c.id?'on':''}" ${setup.colors.slice(0,setup.n).some((x,j)=>j!==i&&x===c.id)?'disabled':''} aria-label="${c.name}"></button>`).join('')}</div></div>`;}).join('')}${allAI()?'<p class="note" style="color:#f3c98b">Seat at least one human player.</p>':''}</div>
-    <div class="field"><label>Course</label>${coursePicker('sC',setup.course)}<div id="rInfo">${routeTxt()}</div>${aiAllowed(setup.course,setup.n)?'':'<div class="aiNote">AI players are available on First Expedition with 3 or 4 players for now.</div>'}</div>
+    <div class="field"><label>Course</label>${coursePicker('sC',setup.course,1)}<div id="rInfo">${routeTxt()}</div>${aiAllowed(setup.course,setup.n)?'':'<div class="aiNote">AI players are available on First Expedition with 3 or 4 players for now.</div>'}</div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><button data-f="1" class="${setup.full?'on':''}">When all but one arrive</button><button data-f="0" class="${setup.full?'':'on'}">At the first arrival (official)</button></div></div>
     <div class="field"><label class="chk"><input type="checkbox" id="sPriv" ${setup.privacy?'checked':''}> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
-    <div class="mrow"><button class="btn" id="sReplays">Replays</button>${canResume?'<button class="btn" id="sResume">Resume saved game</button>':''}<button class="btn pri big" id="sGo">${inGame?'Start a new game':'Start expedition'}</button></div>`;
+    </div></details>
+    <div class="flinks"><button class="linkbtn" id="sReplays">Replays</button><button class="linkbtn" id="sRules">Rules</button></div>`;
   const allAI=()=>setup.ai.slice(0,setup.n).every(x=>x);
   const preview=()=>{if(S&&!S.over)return;try{setup.cur=pickCourse(setup.course);MAP=buildCourse(setup.cur,setup.seed);buildBoard();fit();L.pieces.innerHTML='';const ri=document.getElementById('rInfo');if(ri)ri.innerHTML=routeTxt();}catch(e){console.error(e);}};
   const mount=sc=>{
@@ -942,6 +957,8 @@ function showSetup(){
     const rerender=()=>{sync();m.innerHTML=html();wire();};
     const wire=()=>{
       m.querySelectorAll('#sMode button').forEach(b=>b.onclick=()=>{if(b.dataset.m==='online')showHub();});
+      const md=m.querySelector('#sMoreD');if(md)md.ontoggle=()=>{setup.more=md.open;};
+      const ru=m.querySelector('#sRules');if(ru)ru.onclick=()=>{showRules();const c=document.querySelector('#rClose');if(c)c.onclick=()=>{if(S&&!S.over)closeModal();else showSetup();};};
       m.querySelectorAll('#sN button').forEach(b=>b.onclick=()=>{setup.n=+b.dataset.n;if(!aiAllowed(setup.course,setup.n))setup.ai=setup.ai.map(()=>'');rerender();});
       m.querySelectorAll('#sC button').forEach(b=>b.onclick=()=>{setup.course=b.dataset.c;if(!aiAllowed(setup.course,setup.n))setup.ai=setup.ai.map(()=>'');preview();rerender();}); // AI seats only on AI courses
       m.querySelectorAll('.sws button').forEach(b=>b.onclick=()=>{setup.colors[+b.dataset.p]=b.dataset.c;rerender();});
