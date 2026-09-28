@@ -101,4 +101,11 @@ r = lambda t: [round(float(x), 6) for x in t.detach().flatten()]
 J = {**keep, 'course': 'multi' if 'courses' in keep else course, 'nf': nf, 'leak': LEAK, 'w1T': r(W1.T.contiguous()), 'b1': r(B1), 'w2': r(W2), 'b2': r(B2), 'w3': r(W3), 'b3': r(B3)}
 if unsettled: J['unsettled'] = True  # trained on arrived-but-not-settled positions: play may ask the network about them (botValue)
 json.dump(J, open(out, 'w'))
+if os.environ.get('DEBUG_BN'):  # why did units die: their batch-norm scale (gamma) and shift (beta) vs the live ones
+    with torch.no_grad():
+        xs = probe_x if probe_x is not None else dense(vi[:4000]); q1 = xs @ W1.T + B1; q2 = act(q1) @ W2.T + B2
+        for nm, q, bn in (('layer 1', q1, net.bn1), ('layer 2', q2, net.bn2)):
+            d = q.max(0).values <= 0; g, b_ = bn.weight, bn.bias
+            f = lambda m: f'gamma {float(g[m].abs().mean()):.3f}, beta {float(b_[m].mean()):+.3f}, beta/|gamma| {float((b_[m] / g[m].abs()).mean()):+.2f}' if m.any() else '-'
+            sys.stderr.write(f'{nm}: dead {int(d.sum())} — {f(d)}  |  alive — {f(~d)}\n')
 print(json.dumps({'samples': len(Y), 'val_rmse': round(rmse, 4), 'predict_mean_rmse': round(base, 4), 'dead1': f'{dead1}/{H1}', 'dead2': f'{dead2}/{H2}', 'dead_on': 'full-game probe' if probe_x is not None else 'this batch', 'saturated': round(sat, 4), 'bias': round(bias, 4), 'wmax': round(wmax, 2), 'warn': warn, 'halt': halt, 'secs': round(time.time() - t0, 1)}))
