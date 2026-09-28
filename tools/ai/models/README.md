@@ -127,3 +127,7 @@ Ladder vs the iteration-60 best (256 games; each with and without search): wins 
 ## first-first1-best updated (2026-09-28 15:57 UTC, iteration 190)
 
 Ladder vs the iteration-74 best (256 games): wins it190+search 92/224, it190 61/224, it74+search 62/224, it74 42/224. Tests vs the heuristic stay ~2.6-2.9x (place ~0.8, arrival ~16.5); dead units 11/128, 7/64.
+
+## first-first1-ck198 (frozen 2026-09-28 16:26 UTC)
+
+Checkpoint for the feature trial (tools/ai/featexp.sh): control vs card-property inputs vs local-patch inputs, 12 iterations each.

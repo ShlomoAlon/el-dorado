@@ -11,7 +11,7 @@
 # Each iteration: GAMES (600) self-play games (3- and 4-player) → train on this horizon's last 3 batches → test vs heuristic bots (160 games, half 3-player, half 4-player).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
-C=${1:-first}; N=${2:-60}; D=tools/ai/data; P=$C${RUN:+-$RUN}; NET=$D/$P.net.json; LOG=$D/$P.log; mkdir -p $D
+C=${1:-first}; N=${ITERS:-${2:-60}};   # ITERS: stop after this many iterations (then the run is marked finished, see the end) D=tools/ai/data; P=$C${RUN:+-$RUN}; NET=$D/$P.net.json; LOG=$D/$P.log; mkdir -p $D
 HZ=${HORIZONS:-3,5,8,12,16,25}; HS=(${HZ//,/ })   # round caps of the curriculum (HORIZONS=10,13,16,20,25,30; default 3,5,8,12,16,25); the last one is the full game
 # exploration level per curriculum stage (1 = most exploration); scales every exploration rate in gen.mjs
 EX=(1.0 0.85 0.7 0.5 0.35 0.2)
@@ -56,3 +56,5 @@ for i in $(seq 1 $N); do
   fi
 done
 log "STAGE done"
+# a run with a fixed length (ITERS) marks itself finished so the watchdog does not start it again
+[ -n "${ITERS:-}" ] && echo "finished $N iterations" > $D/$P.halt

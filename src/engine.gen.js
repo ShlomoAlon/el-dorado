@@ -738,7 +738,7 @@ function botExtraFeatures(me,f,o){const P=S.players[me],n=S.players.length;
       for(const[L,b]of[[S.market,o+84],[S.reserve,o+96]]){for(const x of L){if(x.n<=0)continue;const c=botCardProps(x.t);for(let i=0;i<11;i++)f[b+i]+=c[i]*x.n;}botMeanCost(f,b);}}
     else if(g==='patch'){const k0=P.pieces.find(k=>k!=='done');
       if(k0){const bd=botDist(),s0=bd.steps.get(k0)??48,nb=botPatchOf(k0);
-        for(let i=0;i<nb.length;i++){const c=nb[i];if(!c)continue;const b=o+i*12;f[b]=1;if(c.t>=0)f[b+1+c.t]=1;f[b+9]=c.v;
+        for(let i=0;i<nb.length;i++){const c=nb[i];if(!c)continue;const b=o+i*12;if(c.t>=0)f[b+1+c.t]=1;f[b+9]=c.v; // slot b+0 unused (terrain implies the space exists)
           const st=bd.steps.get(c.K);f[b+11]=st==null?1:Math.max(-1,Math.min(1,(st-s0)/6));}
         S.players.forEach((p,j)=>{if(j===me)return;for(const k of p.pieces){if(k==='done')continue;const x=nb.findIndex(c=>c&&c.K===k);if(x>=0)f[o+x*12+10]=1;}});}}
     o+=BOT_XF[g];}}
