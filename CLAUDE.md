@@ -14,6 +14,9 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
 - He writes quickly and informally; infer intent generously, but ask when a decision is really his (rules variants,
   anything costing money, accounts).
 - Keep replies short. Say plainly what you verified and what you could not.
+- **His questions come first.** When he asks a question, stop whatever you are doing and answer it right away (from what
+  you already know, or with the one quick check needed); only then resume the work. Never make him wait behind a long
+  command, a build, or a test run.
 
 ## Change loop (every time)
 1. Edit **sources only**:
