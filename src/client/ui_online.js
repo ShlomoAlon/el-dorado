@@ -57,7 +57,7 @@ function hubHTML(){
     <div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
   const tabs=`<div class="seg" id="hTabs" style="margin-bottom:16px">${[['play','Play'],['board','Leaderboard'],['me','Profile']].map(([k,t])=>`<button data-k="${k}" class="${hubTab===k?'on':''}">${t}</button>`).join('')}</div>`;
   const head=acctBar()+modeSeg('online')+`<h2>Online</h2>`;
-  if(hubTab==='board')return head+tabs+`<div id="lbList"><p class="note">Loading…</p></div><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
+  if(hubTab==='board')return head+tabs+`<div id="lbList">${HUB.lb?lbHTML(HUB.lb):'<p class="note">Loading…</p>'}</div><div class="mrow"><button class="btn" id="hBack">Back</button></div>`;
   if(hubTab==='me'){const own=!NET.viewUser||NET.viewUser===u.id,pc=PROFILES[NET.viewUser||u.id];
     return head+tabs+`${own?'':'<button class="linkbtn" id="pfBack" style="margin-bottom:10px">‹ Leaderboard</button>'}<div id="pf">${pc?profileHTML(pc):'<p class="note">Loading…</p>'}</div>
     ${own?`<div class="field"><label>Display name</label><div class="prow"><input id="meName" maxlength="16" value="${esc(u.name)}"><button class="btn" id="meSave">Save</button></div></div>`:''}
@@ -87,11 +87,14 @@ function hubHTML(){
 function showHub(){
   if(NET.user)openLobbyWs(); // also right after signing in, when the hub is already open
   if(document.querySelector('#overlay .modal.hub')){renderHub();return;}
-  menuModal('',sc=>{sc.querySelector('.modal').classList.add('hub');renderHub();},false);
+  menuModal('hub','',sc=>{sc.querySelector('.modal').classList.add('hub');renderHub();},false);
 }
-/* profiles are cached (and your own is fetched as soon as you're signed in), so opening one never flashes "Loading" */
-const PROFILES={};
-function loadProfile(id){return api('/api/users/'+encodeURIComponent(id)).then(r=>{const same=JSON.stringify(PROFILES[id])===JSON.stringify(r);PROFILES[id]=r;return same?null:r;});}
+/* data the Online screen shows: fetched at most every few seconds, kept, and the screen redrawn (morphed) when it arrives */
+const PROFILES={},HUB={lb:null},FETCHED={};
+function fresh(key,load){const t=FETCHED[key];if(t&&(t.busy||Date.now()-t.at<5000))return;FETCHED[key]={busy:true,at:0};
+  load().then(()=>{FETCHED[key]={at:Date.now()};renderHub();}).catch(()=>{FETCHED[key]={at:Date.now()};});}
+function loadProfile(id){return api('/api/users/'+encodeURIComponent(id)).then(r=>{PROFILES[id]=r;});}
+const lbHTML=players=>players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span style="color:var(--muted)">${i+1}</span><span style="display:flex;align-items:center;gap:7px;min-width:0"><button class="lbn" data-uid="${esc(p.id)}" style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</button>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note" style="margin:0">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note" style="margin-top:12px">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';
 /* a player's profile: stats, then their latest online games, each opening its replay */
 const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
 function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
@@ -101,10 +104,7 @@ function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
   <div class="field"><label>Recent games</label><div class="rlist">${r.games.length?r.games.map(g=>`<button data-rid="${esc(g.id)}"><b>${g.place?`<span class="plc p${g.place}">${ordn(g.place)}</span> `:''}${esc(g.title||'Game')}</b><span>${new Date(g.created).toLocaleString()} · ${g.actions} moves · watch replay</span></button>`).join(''):'<p class="note">No recorded games yet.</p>'}</div></div>`;}
 function renderHub(){
   const m=document.querySelector('#overlay .modal.hub');if(!m)return;
-  const focus=document.activeElement&&document.activeElement.id;const jv=m.querySelector('#jCode')?.value;
-  m.innerHTML=hubHTML();
-  if(jv&&m.querySelector('#jCode'))m.querySelector('#jCode').value=jv;
-  if(focus&&m.querySelector('#'+focus))m.querySelector('#'+focus).focus();
+  morphInto(m,hubHTML());
   const q=s=>m.querySelector(s);const err=t=>{const e=q('#hErr');if(e)e.textContent=t;};
   q('#hBack').onclick=()=>{closeLobbyWs();showSetup();};
   const ml=q('#sMode button[data-m=local]');if(ml)ml.onclick=()=>{closeLobbyWs();showSetup();};
@@ -116,15 +116,14 @@ function renderHub(){
   }
   m.querySelectorAll('#hTabs button').forEach(b=>b.onclick=()=>{hubTab=b.dataset.k;renderHub();});
   wireAcct(m,renderHub);
-  if(hubTab==='board'){api('/api/leaderboard').then(r=>{const l=q('#lbList');if(!l)return;
-    l.innerHTML=r.players.length?`<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums">${r.players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span style="color:var(--muted)">${i+1}</span><span style="display:flex;align-items:center;gap:7px;min-width:0"><button class="lbn" data-uid="${esc(p.id)}" style="${p.id===myId()?'color:var(--gold2)':''}">${esc(p.name)}</button>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note" style="margin:0">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span style="color:var(--muted)">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note" style="margin-top:12px">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';l.querySelectorAll('.lbn').forEach(b=>b.onclick=()=>{NET.viewUser=b.dataset.uid;hubTab='me';renderHub();});}).catch(e=>{const l=q('#lbList');if(l)l.textContent=e.message;});return;}
+  // leaderboard and profiles are data (fetched, cached); the screen is drawn from them, so a refresh only patches changes
+  if(hubTab==='board'){fresh('lb',()=>api('/api/leaderboard').then(r=>{HUB.lb=r.players;}));
+    m.querySelectorAll('.lbn').forEach(b=>b.onclick=()=>{NET.viewUser=b.dataset.uid;hubTab='me';renderHub();});return;}
   if(hubTab==='me'){
     const ms=q('#meSave');if(ms)ms.onclick=async()=>{try{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:q('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);renderHub();}catch(e){toast(e.message);}};
     const pb=q('#pfBack');if(pb)pb.onclick=()=>{NET.viewUser=null;hubTab='board';renderHub();};
-    const id=NET.viewUser||myId();
-    const show=r=>{const el=q('#pf');if(!el)return;el.innerHTML=profileHTML(r);el.querySelectorAll('[data-rid]').forEach(b=>b.onclick=()=>{closeLobbyWs();loadReplayId(b.dataset.rid);});};
-    if(PROFILES[id])show(PROFILES[id]); // shown at once from the cache, refreshed below
-    loadProfile(id).then(r=>{if(r)show(r);}).catch(e=>{const el=q('#pf');if(el&&!PROFILES[id])el.textContent=e.message;});
+    const id=NET.viewUser||myId();fresh('pf:'+id,()=>api('/api/users/'+encodeURIComponent(id)).then(r=>{PROFILES[id]=r;}));
+    m.querySelectorAll('[data-rid]').forEach(b=>b.onclick=()=>{closeLobbyWs();loadReplayId(b.dataset.rid);});
     return;}
   const seg=(id,key)=>m.querySelectorAll(id+' button').forEach(b=>b.onclick=()=>{setup[key]=+b.dataset.v;renderHub();});
   seg('#cMax','oMax');seg('#cTurn','oTurn');
@@ -211,10 +210,10 @@ function roomLobbyHTML(){
   ${NET.status?`<p class="note" style="color:#f3c98b">${esc(NET.status)}</p>`:''}
   <div class="mrow"><button class="btn" id="rlLeave">${host&&!(r.opts&&r.opts.auto)?'Close room':'Leave'}</button>${r.opts&&r.opts.auto&&mine?`<button class="btn${mine.now?'':' pri'} big" id="rlNow" ${(r.seats||[]).length<2?'disabled':''}>${mine.now?'Waiting for the others… (cancel)':'Start now'}</button>`:host&&!(r.opts&&r.opts.auto)?`<button class="btn pri big" id="rlStart" ${(r.seats||[]).length<2?'disabled':''}>Start game</button>`:''}</div>`;
 }
-function showRoomLobby(){menuModal('',sc=>{sc.querySelector('.modal').classList.add('roomlobby');renderRoomLobby();},false);}
+function showRoomLobby(){menuModal('room','',sc=>{sc.querySelector('.modal').classList.add('roomlobby');renderRoomLobby();},false);}
 function renderRoomLobby(){
   const m=document.querySelector('#overlay .modal.roomlobby');if(!m)return;
-  m.innerHTML=acctBar()+roomLobbyHTML();wireAcct(m,renderRoomLobby);
+  morphInto(m,acctBar()+roomLobbyHTML());wireAcct(m,renderRoomLobby);
   m.querySelector('#lkCopy').onclick=()=>{const i=m.querySelector('#lkIn');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value).then(()=>toast('Link copied')).catch(()=>{});};
   m.querySelectorAll('[data-col]').forEach(b=>b.onclick=()=>netSend({t:'color',color:b.dataset.col}));
   m.querySelector('#rlLeave').onclick=()=>{netSend({t:'leave'});NET.code=null;leaveRoomSocket();try{history.replaceState(null,'',location.pathname);}catch(e){}showHub();};

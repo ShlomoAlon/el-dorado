@@ -158,7 +158,7 @@ function showReplays(){
     <div class="field"><button class="btn" id="rUp">Upload a game log</button><input type="file" id="rFile" accept=".json,application/json" hidden> <span id="rMsg" class="note" style="margin-left:8px"></span></div>
     <div class="field"><label>Recent games and uploads</label><div id="rList" class="rlist"><p class="note">Loading…</p></div></div>
     <div class="mrow"><button class="btn" id="rBack">Back</button></div>`;
-  menuModal(acctBar()+html,sc=>{wireAcct(sc,showReplays);
+  menuModal('replays',acctBar()+html,sc=>{wireAcct(sc,showReplays);
     sc.querySelector('#rBack').onclick=()=>showSetup();
     const msg=sc.querySelector('#rMsg');
     sc.querySelector('#rUp').onclick=()=>sc.querySelector('#rFile').click();

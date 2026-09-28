@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 const r = f => readFileSync(new URL(f, import.meta.url), 'utf8');
 const engine = r('./src/engine_data.js') + '\n' + r('./src/engine_rules.js') + '\n' + r('./src/engine_bot.js') + '\n' + r('./src/engine_ai.js');
-const ui = ['ui_state.js', 'ui_sound.js', 'ui_art.js', 'ui_meeple.js', 'ui_view.js', 'ui_online.js', 'ui_replay.js', 'ui_boot.js'].map(f => r('./src/client/' + f)).join('\n');
+const ui = r('./src/vendor/morphdom.js') + '\n' + ['ui_state.js', 'ui_sound.js', 'ui_art.js', 'ui_meeple.js', 'ui_view.js', 'ui_online.js', 'ui_replay.js', 'ui_boot.js'].map(f => r('./src/client/' + f)).join('\n');
 const shell = r('./src/client/shell.html');
 // the AI's neural network (tools/ai/pack.mjs): the site loads it from /ai/first.bin only when an AI needs it;
 // the artifact (no network access there) carries it inline

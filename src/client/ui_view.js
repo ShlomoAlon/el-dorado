@@ -905,19 +905,29 @@ function banner(t,s){const b=$('#banner');b.querySelector('.t').textContent=t;b.
   b.getAnimations().forEach(a=>a.cancel());
   b.animate([{opacity:0,transform:'translate(-50%,-44%) scale(.96)'},{opacity:1,transform:'translate(-50%,-50%) scale(1)',offset:.18},{opacity:1,transform:'translate(-50%,-50%) scale(1)',offset:.75},{opacity:0,transform:'translate(-50%,-56%) scale(1)'}],{duration:1400,easing:'ease-out'});}
 let toastT=0;function toast(t,ms){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),ms||1700);}
+/* Menu screens are rendered as HTML and morphed into their panel: only what differs is touched, so re-rendering after a
+   click or a lobby update never rebuilds the panel (hovered buttons, focus, typed text, scroll position and Google's
+   sign-in frame all stay as they are). Every menu render goes through here. */
+function morphInto(el,html){
+  morphdom(el,'<div>'+html+'</div>',{childrenOnly:true,onBeforeElUpdated:(a,b)=>{
+    if(a.classList.contains('gsi')&&a.childElementCount)return false; // Google's button: drawn into it once, kept
+    if(a===document.activeElement&&(a.tagName==='INPUT'||a.tagName==='SELECT'))return false; // what you're typing
+    return !a.isEqualNode(b);}});
+}
 /* one overlay at a time. Opening a screen while another is up swaps it in place (no fade out and in again: menu screens
    feel like one screen); only the first one fades in over the game. */
 function modal(html,onMount,dismiss){const o=$('#overlay'),old=o.firstChild;
   // a menu screen replacing another menu screen: same panel, only its contents change (nothing moves or fades)
   // (the same scrim element stays: a new one would replay its fade-in and re-blur the board: a visible flicker)
-  if(old&&!old.classList.contains('closing')&&old.dataset.menu&&MENU_NEXT){const m=old.querySelector('.modal');m.className='modal menu';m.innerHTML=html;m.scrollTop=0;
+  if(old&&!old.classList.contains('closing')&&old.dataset.menu&&MENU_NEXT){const m=old.querySelector('.modal');m.className='modal menu';
+    if(m.dataset.screen!==MENU_NEXT){m.dataset.screen=MENU_NEXT;m.scrollTop=0;}if(html)morphInto(m,html);
     MENU_NEXT=false;old.onclick=dismiss?e=>{if(e.target===old)closeModal();}:null;onMount&&onMount(old);return;}
   const swap=!!old&&!old.classList.contains('closing');
   o.innerHTML=`<div class="scrim${swap?' swap':''}${swap&&old.classList.contains('plain')?' plain':''}"><div class="modal">${html}</div></div>`;const sc=o.firstChild;
-  if(MENU_NEXT){sc.dataset.menu='1';sc.firstChild.classList.add('menu');MENU_NEXT=false;}
+  if(MENU_NEXT){sc.dataset.menu='1';sc.firstChild.classList.add('menu');sc.firstChild.dataset.screen=MENU_NEXT;MENU_NEXT=false;}
   if(dismiss)sc.onclick=e=>{if(e.target===sc)closeModal();};onMount&&onMount(sc);}
-/* menu screens (start screen, Online, Replays, room lobby) share one fixed-size panel: call menuModal(...) like modal(...) */
-let MENU_NEXT=false;function menuModal(html,onMount,dismiss){MENU_NEXT=true;modal(html,onMount,dismiss);}
+/* menu screens (start screen, Online, Replays, room lobby) share one fixed-size panel: menuModal(screen name, then as modal) */
+let MENU_NEXT=false;function menuModal(screen,html,onMount,dismiss){MENU_NEXT=screen;modal(html,onMount,dismiss);}
 function closeModal(){const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');const mo=sc.querySelector('.modal');if(mo)mo.className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
 
 /* course list: official routes first; 'random' picks one of them */
@@ -950,18 +960,18 @@ function showSetup(){
   const mount=sc=>{
     const m=sc.querySelector('.modal');
     const sync=()=>{for(let i=0;i<setup.n;i++){const e=m.querySelector('#pn'+i);if(e)setup.names[i]=e.value.trim()||('Player '+(i+1));}const jc=m.querySelector('#jCode');if(jc)setup.code=jc.value.trim().toUpperCase();};
-    const rerender=()=>{sync();m.innerHTML=html();wire();};
+    const rerender=()=>{sync();morphInto(m,html());wire();};
     const wire=()=>{
       m.querySelectorAll('#sMode button').forEach(b=>b.onclick=()=>{if(b.dataset.m==='online')showHub();});
       m.querySelectorAll('#sN button').forEach(b=>b.onclick=()=>{setup.n=+b.dataset.n;if(!aiAllowed(setup.course,setup.n))setup.ai=setup.ai.map(()=>'');rerender();});
       m.querySelectorAll('#sC button').forEach(b=>b.onclick=()=>{setup.course=b.dataset.c;if(!aiAllowed(setup.course,setup.n))setup.ai=setup.ai.map(()=>'');preview();rerender();}); // AI seats only on AI courses
       m.querySelectorAll('.sws button').forEach(b=>b.onclick=()=>{setup.colors[+b.dataset.p]=b.dataset.c;rerender();});
-      m.querySelectorAll('select.who').forEach(e=>e.onchange=()=>{sync();setup.ai[+e.id.slice(2)]=e.value;try{localStorage.setItem('eldorado-seats',JSON.stringify(setup.ai));}catch(_){}m.innerHTML=html();wire();});
+      m.querySelectorAll('select.who').forEach(e=>e.onchange=()=>{sync();setup.ai[+e.id.slice(2)]=e.value;try{localStorage.setItem('eldorado-seats',JSON.stringify(setup.ai));}catch(_){}morphInto(m,html());wire();});
       m.querySelector('#sGo').disabled=allAI();
       m.querySelector('#sPriv').onchange=e=>setup.privacy=e.target.checked;
       m.querySelectorAll('#sFull button').forEach(b=>b.onclick=()=>{setup.full=b.dataset.f==='1';rerender();});
       const rs=m.querySelector('#sResume');if(rs)rs.onclick=()=>{closeModal();resumeSaved();};
-      wireAcct(m,()=>{m.innerHTML=html();wire();});
+      wireAcct(m,()=>{morphInto(m,html());wire();});
       const cl=m.querySelector('#sBack');if(cl)cl.onclick=closeModal;
       const rb=m.querySelector('#sResign');if(rb)rb.onclick=()=>online()?resignOnline():resignLocal();
       m.querySelector('#sReplays').onclick=()=>showReplays();
@@ -974,11 +984,11 @@ function showSetup(){
         if(!UI.cover)banner(cur().name,isAI(S.cur)?'AI · Round 1':'Round 1');
         setup.seed=(Math.random()*1e9)|0;};
     };
-    m.innerHTML=html();wire();
+    morphInto(m,html());wire();
   };
   for(let i=0;i<setup.n;i++){if(setup.colors.slice(0,i).includes(setup.colors[i]))setup.colors[i]=COLORS.find(c=>!setup.colors.slice(0,setup.n).includes(c.id)).id;}
   if(!S||S.over)preview();
-  menuModal('',mount,!!(S&&!S.over));
+  menuModal('setup','',mount,!!(S&&!S.over));
 }
 function showRules(){
   modal(`<h2>How to play</h2><div class="rules">
