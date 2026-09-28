@@ -111,3 +111,7 @@ First Expedition only, from first-distill-35 under the fixed rules: 27 iteration
 ## first-first1-31 (frozen 2026-09-28 09:19 UTC)
 
 first1 after 31 iterations, just before its dead units (10/128, 11/64) were revived in the main run (BatchNorm scale of dead units had collapsed to ~0.02 vs 0.34 for live ones).
+
+## first-first1-best (frozen 2026-09-28 09:55 UTC, iteration ~47)
+
+first1 after the 09:19 revive of its dead units: paired full-game test vs the heuristic planner (168 games) wins 2.31x fair share, place value 0.708 (heuristic 0.238), arrival round 16.9. Dead units 11/128, 4/64.
