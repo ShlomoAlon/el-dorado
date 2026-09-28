@@ -119,3 +119,11 @@ first1 after the 09:19 revive of its dead units: paired full-game test vs the he
 ## first-first1-best updated (2026-09-28 10:27 UTC, iteration 60)
 
 Paired full-game tests vs the heuristic planner at iterations 51-60: 2.69x, 2.75x, 2.71x, 2.65x the fair share of wins; place value 0.79-0.81 (heuristic ~0.20); arrival round ~16.5. Dead units 9/128, 1/64.
+
+## first-first1-best updated (2026-09-28 11:32 UTC, iteration 74)
+
+Ladder vs the iteration-60 best (256 games; each with and without search): wins it74+search 104/224, it74 71/224, it60+search 63/224, it60 23/224 — clearly stronger although tests vs the heuristic had levelled off (~2.6-2.9x).
+
+## first-first1-best updated (2026-09-28 15:57 UTC, iteration 190)
+
+Ladder vs the iteration-74 best (256 games): wins it190+search 92/224, it190 61/224, it74+search 62/224, it74 42/224. Tests vs the heuristic stay ~2.6-2.9x (place ~0.8, arrival ~16.5); dead units 11/128, 7/64.
