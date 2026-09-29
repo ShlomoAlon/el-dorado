@@ -8,20 +8,20 @@ import { UI, NET, G, cur, isAI, online, myId, inGame, loadSave, save, myGames } 
 import { GAME_READY } from './ready.js';
 import { toast, banner } from './dialogs.js';
 import { showGame, resumeSaved, resignSeat, resignLocal, endLocal } from './actions.js';
-import { aiReset, aiKick, aiNetLoad } from './ai.js';
+import { aiKick, aiNetLoad } from './ai.js';
 import { api, gsiMount, signOut, signedIn, joinRoom, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, exitOnline, resignOnline } from './online.js';
 import { loadReplayId, openReplay } from './replay.js';
 /* course list: official routes first; 'random' picks one of them */
-export function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:(courseById(id)||COURSES[0]);}
-export function courseName(id){return id==='random'&&COURSES.length>1?'Random course':(courseById(id)||COURSES[0]).name;}
-export const MENU={dlg:null,f:null,screen:null,acct:null,closeT:0};
+export function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:courseById(id);}
+// (a room's course, as the server sends it: one this page doesn't know yet, from a newer version, shows as the first)
+export function courseName(id){return id==='random'?'Random course':(courseById(id)||COURSES[0]).name;}
+export const MENU={dlg:$('#menu'),f:$('#mform'),screen:null,acct:null,closeT:0};
 const mq=s=>MENU.f.querySelector(s),mqa=s=>MENU.f.querySelectorAll(s);
 export const radio=n=>{const e=MENU.f.querySelector(`input[name="${n}"]:checked`);return e?e.value:null;};
-const setRadio=(n,v)=>{const e=MENU.f.querySelector(`input[name="${n}"][value="${v}"]`);if(e)e.checked=true;};
+const setRadio=(n,v)=>{MENU.f.querySelector(`input[name="${n}"][value="${v}"]`).checked=true;};
 const SETUP={seed:(Math.random()*1e9)|0,id:null,cur:null,map:null};
 
 export function menuInit(){
-  MENU.dlg=$('#menu');MENU.f=$('#mform');
   // (courses, seats, AI and colour choices are written into the page by build.mjs: the start screen needs no script)
   // AI seats chosen before are remembered on this device
   let ai=[];try{ai=JSON.parse(localStorage.getItem('eldorado-seats')||'[]');}catch(e){}
@@ -61,7 +61,7 @@ export function menuOpen(screen){
   if(d.open&&!d.matches(':modal')){d.style.animation='none';d.close();d.showModal();requestAnimationFrame(()=>d.style.animation='');MENU.f.focus({preventScroll:true});}
   else if(!d.open){d.showModal();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});}
 }
-export function menuClose(){const d=MENU.dlg;document.documentElement.classList.remove('resume');if(!d||!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
+export function menuClose(){const d=MENU.dlg;document.documentElement.classList.remove('resume');if(!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
 // after signing in or out: the account bar and whatever depends on it
 export function menuRefresh(){acctRender();if(MENU.screen==='online'){if(NET.user)openLobbyWs();onlineRender();}} // (signed in on the Online screen: its room list goes live at once)
 
@@ -69,7 +69,7 @@ export function menuRefresh(){acctRender();if(MENU.screen==='online'){if(NET.use
 export function acctRender(){
   const el=mq('#acct'),u=NET.user,key=!NET.available?'-':u?[u.id,u.name,Math.round(u.rating),u.games,u.wins].join('|'):'out';
   if(MENU.acct===key)return;MENU.acct=key;el.hidden=!NET.available;if(!NET.available)return;
-  if(!u){el.innerHTML=`<span class="m">Not signed in</span>${NET.cfg&&NET.cfg.google?'<div id="gsiTop" class="gsiSm gsi"></div>':''}`;gsiMount(el.querySelector('#gsiTop'),t=>toast(t,3000),menuRefresh,'medium');return;}
+  if(!u){const g=NET.cfg.google;el.innerHTML=`<span class="m">Not signed in</span>${g?'<div id="gsiTop" class="gsiSm gsi"></div>':''}`;if(g)gsiMount(el.querySelector('#gsiTop'),t=>toast(t,3000),menuRefresh,'medium');return;}
   el.innerHTML=`<span class="av">${esc(u.name.slice(0,1).toUpperCase())}</span><span><b>${esc(u.name)}</b> · <b class="rt">${Math.round(u.rating)}</b> · ${plural(u.games,'game')} · ${plural(u.wins,'win')}</span><span class="acb"><button type="button" class="linkbtn" id="acProfile">Profile</button><button type="button" class="linkbtn" id="acOut">Sign out</button></span>`;
 }
 
@@ -99,7 +99,7 @@ export function menuClick(e){
     case'devGo':run(async()=>signedIn(await api('/api/auth/dev',{method:'POST',body:JSON.stringify({name:mq('#devName').value||'Tester'})}),menuRefresh));return;
     case'qGo':run(async()=>joinRoom((await api('/api/match',{method:'POST',body:'{}'})).code));return;
     case'cGo':run(async()=>joinRoom((await api('/api/rooms',{method:'POST',body:JSON.stringify({max:+radio('max'),turn:+radio('turn'),course:radio('ocourse'),pub:radio('pub')==='1',rated:radio('rated')==='1'})})).code));return;
-    case'jGo':{const c=(mq('#jCode').value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length<4){err('Enter the 5-letter room code.');return;}joinRoom(c);return;}
+    case'jGo':{const c=mq('#jCode').value.toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length<4){err('Enter the 5-letter room code.');return;}joinRoom(c);return;}
     case'rejoinGo':joinRoom(NET.active);return;
     case'pfBack':NET.viewUser=null;setRadio('otab','board');onlineTab();return;
     case'meSave':run(async()=>{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:mq('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);acctRender();});return;
@@ -128,7 +128,7 @@ export function setupSync(){
     for(const o of sel.querySelectorAll('optgroup option'))o.disabled=!aiOK;if(!aiOK&&sel.value)sel.value='';
     const A=aiById(sel.value);r.querySelector('input[name^=nm]').hidden=!!A;const nm=r.querySelector('.ainm');nm.hidden=!A;
     if(A){nm.title=A.desc;nm.firstChild.textContent=A.desc;}
-    if(i<n&&rows.slice(0,i).some(q=>col(q)===col(r))){const free=COLORS.find(c=>!rows.slice(0,n).some(q=>q!==r&&col(q)===c.id));if(free)r.querySelector(`.sws input[value="${free.id}"]`).checked=true;}});
+    if(i<n&&rows.slice(0,i).some(q=>col(q)===col(r))){const free=COLORS.find(c=>!rows.slice(0,n).some(q=>q!==r&&col(q)===c.id));r.querySelector(`.sws input[value="${free.id}"]`).checked=true;}}); // (4 colours, at most 4 seats: one is free)
   rows.forEach((r,i)=>{for(const x of r.querySelectorAll('.sws input'))x.disabled=rows.slice(0,n).some((q,j)=>j!==i&&col(q)===x.value);});
   const allAI=rows.slice(0,n).every(r=>r.querySelector('select').value);mq('#allAI').hidden=!allAI;mq('#sGo').disabled=allAI;
 }
@@ -146,7 +146,7 @@ export function setupOpts(){
 export function prepareGame(force){
   if(inGame()&&!force)return;
   if(online())exitOnline(); // a finished online game: its room is left (rejoin a running one from Online)
-  aiReset();G.rec=recNewGame(setupOpts());UI.preview=true;UI.lastReplay=null;
+  G.rec=recNewGame(setupOpts());UI.preview=true;UI.lastReplay=null;
   UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.piece=0;UI.viewer=null;
   UI.cover=S.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;showGame();
   setHTML(mq('#rInfo'),`Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random`);
@@ -202,9 +202,9 @@ export function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
 /* ---- the room lobby: drawn from the room the server sends; each part changes only when its data does ---- */
 export function showRoomLobby(){renderRoomLobby();menuOpen('room');}
 export function renderRoomLobby(){
-  if(!MENU.f)return;const r=NET.room||{},o=r.opts,seats=r.seats||[],host=r.host===myId(),auto=!!(o&&o.auto),lobby=r.status==='lobby';
+  const r=NET.room,o=r.opts,seats=r.seats,host=r.host===myId(),auto=!!(o&&o.auto),lobby=r.status==='lobby';
   const max=o?o.max:4,room=seats.length<max,rated=!(o&&o.rated===false),mine=seats.find(s=>s.uid===myId());
-  mq('#rlTitle').textContent='Room '+(NET.code||'');
+  mq('#rlTitle').textContent='Room '+NET.code;
   mq('#rlSub').textContent=(auto?`Quick match: the game starts as soon as ${o.max} players are here, or earlier if everyone here presses “Start now”.`:host?'Share the code or link. Start when everyone is here.':'Waiting for the host to start.')
     +(o?` ${courseName(o.course)} · ${auto?'':(o.pub===false?'private · ':'public · ')+o.max+' players max · '}${o.turn}s per turn · ${rated?'rated':'unrated'}`:'');
   mq('#lkIn').value=location.origin+location.pathname+'?room='+NET.code;
@@ -216,7 +216,7 @@ export function renderRoomLobby(){
   mq('#rlRatedBox').hidden=!ctl;setRadio('rlrated',rated?'1':'0');
   mq('#rlColBox').hidden=!mine;
   if(mine)for(const x of mqa('#rlCols input')){x.checked=x.value===mine.color;x.disabled=seats.some(s=>s!==mine&&s.color===x.value);}
-  mq('#rlNoSeat').hidden=!!mine||!lobby||!r.seats;
+  mq('#rlNoSeat').hidden=!!mine||!lobby;
   const st=mq('#rlStatus');st.hidden=!NET.status;st.textContent=NET.status||'';
   mq('#rlLeave').textContent=host&&!auto?'Close room':'Leave';
   const nw=mq('#rlNow');nw.hidden=!(auto&&mine);if(mine){nw.textContent=mine.now?'Waiting for the others… (cancel)':'Start now';nw.classList.toggle('pri',!mine.now);nw.disabled=seats.length<2;}
@@ -226,7 +226,7 @@ export function renderRoomLobby(){
 /* ---- replays ---- */
 export function showReplays(){
   const mine=mq('#rMine'),loc=myGames(),row=(attr,title,sub)=>`<button type="button" ${attr}><b>${esc(title)}</b><span>${esc(sub)}</span></button>`;
-  const showMine=online=>{const items=[...loc.map(L=>({t:L.created,h:row(`data-lid="${esc(L.lid)}"`,L.title||'Game',`on this device · ${L.actions.length} moves · ${new Date(L.created).toLocaleString()}`)})),
+  const showMine=online=>{const items=[...loc.map(L=>({t:L.created,h:row(`data-lid="${esc(L.lid)}"`,L.title,`on this device · ${L.actions.length} moves · ${new Date(L.created).toLocaleString()}`)})),
       ...online.map(g=>({t:g.created,h:row(`data-id="${esc(g.id)}"`,g.title||'Game',`online · ${g.actions} moves · ${new Date(g.created).toLocaleString()}`)}))].sort((a,b)=>b.t-a.t);
     setHTML(mine,items.length?items.map(x=>x.h).join(''):'<p class="note">No finished games yet. Games you finish here are kept to watch again.</p>');};
   showMine([]);

@@ -1,6 +1,7 @@
 import { S } from '../engine.gen.js';
 import { UI, NET, canAct, online } from './state.js';
 import { STEP } from './board/pieces.js';
+import { reduceMotion } from './dom.js';
 /* =========================================================
    SOUND: tiny synthesized UI effects (Web Audio, no files).
    sfx(name[,n]) plays one; everything is short, soft and low-passed.
@@ -8,7 +9,6 @@ import { STEP } from './board/pieces.js';
    ========================================================= */
 export const SND={ctx:null,out:null,noise:null,muted:false,last:{},prevCur:null,moveEnd:0};
 try{SND.muted=localStorage.getItem('eldorado-sound')==='0';}catch(e){}
-const sndStill=(()=>{try{return matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){return false;}})();
 function sndInit(){
   if(SND.ctx){if(SND.ctx.state==='suspended')SND.ctx.resume().catch(()=>{});return;}
   try{
@@ -58,7 +58,7 @@ export function sfx(name,n){
     const now=performance.now();if(now-(SND.last[name]||0)<40)return;SND.last[name]=now;
     const t0=c.currentTime+.005,rnd=()=>1+(Math.random()*2-1)*(SND_TUNED[name]?.01:.03);
     if(name==='move'){ // one soft knock as the explorer lands on each space (board/pieces.js: STEP ms per space)
-      const k=sndStill?1:Math.min(n||1,8),st=STEP/1000;for(let i=0;i<k;i++)SFX.step(t0+(sndStill?0:.035+i*st+st*.85),rnd());return;} // (the walk starts two frames after the move: board/pieces.js)
+      const k=reduceMotion?1:Math.min(n||1,8),st=STEP/1000;for(let i=0;i<k;i++)SFX.step(t0+(reduceMotion?0:.035+i*st+st*.85),rnd());return;} // (the walk starts two frames after the move: board/pieces.js)
     if(name==='draw'){const k=Math.min(n||1,5);for(let i=0;i<k;i++)SFX.tick(t0+i*.055,rnd());return;}
     SFX[name](t0,rnd());
   }catch(e){}
@@ -66,9 +66,9 @@ export function sfx(name,n){
 /* engine events → sounds (called from playEvents) */
 export function sfxEvent(e,viewer){
   const mine=pl=>!online()||pl===NET.seat;
-  if(e.e==='move'){sfx('move',e.path.length-1);SND.moveEnd=performance.now()+(sndStill?0:e.path.length*STEP);}
+  if(e.e==='move'){sfx('move',e.path.length-1);SND.moveEnd=performance.now()+(reduceMotion?0:e.path.length*STEP);}
   else if(e.e==='block')sfx('block');
-  else if(e.e==='arrive')setTimeout(()=>sfx('arrive'),Math.max(0,(SND.moveEnd||0)-performance.now()));
+  else if(e.e==='arrive')setTimeout(()=>sfx('arrive'),Math.max(0,SND.moveEnd-performance.now()));
   else if(e.e==='gain')sfx('buy');
   else if(e.e==='draw'&&(viewer===undefined||viewer===e.pl))sfx('draw',e.n);
   else if(e.e==='over')setTimeout(()=>sfx('win'),350);
@@ -82,13 +82,13 @@ export function sfxEvent(e,viewer){
 }
 export function setSound(on){
   SND.muted=!on;try{localStorage.setItem('eldorado-sound',on?'1':'0');}catch(e){}
-  const b=document.getElementById('sndBtn');if(b){b.classList.toggle('off',!on);b.title=b.ariaLabel=on?'Mute sounds':'Unmute sounds';}
+  const b=document.getElementById('sndBtn');b.classList.toggle('off',!on);b.title=b.ariaLabel=on?'Mute sounds':'Unmute sounds';
 }
 export function soundInit(){
   // first gesture unlocks audio; then a soft tick for every button, a paper swish for picking a card
   const down=e=>{
     sndInit();
-    const tg=e.target&&e.target.closest?e.target:null;if(!tg)return;
+    const tg=e.target;
     if(tg.closest('button:not(:disabled)')){if(!tg.closest('#sndBtn'))sfx('tap');return;}
     if(!S||S.over||UI.cover||UI.anim||!canAct())return;
     if(tg.closest('#cards .card')||tg.closest('#market [data-src],#reserve [data-src],#allMarket [data-src]'))sfx('pick');
@@ -99,5 +99,5 @@ export function soundInit(){
   (window.requestIdleCallback||(f=>setTimeout(f,300)))(()=>{if(!SND.ctx)sndInit();},{timeout:2000});
   document.addEventListener('keydown',()=>sndInit(),true);
   const b=document.getElementById('sndBtn');
-  if(b){setSound(!SND.muted);b.onclick=()=>{setSound(SND.muted);if(!SND.muted)sfx('tap');};}
+  setSound(!SND.muted);b.onclick=()=>{setSound(SND.muted);if(!SND.muted)sfx('tap');};
 }

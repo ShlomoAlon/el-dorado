@@ -76,7 +76,8 @@ export const buySlotPart = { name: 'buySlot', update(){const bs=$('#buySlot'),on
   const c=CT[UI.buy.t].cost,t=payTotal();setText($('#bsPaid'),fmt(t));setText($('#bsCost'),c);bs.classList.toggle('paid',t>=c);bs.hidden=false;}};
 
 /* where a card of the market is on screen now (a bought card flies from there): its slot, or the button that opens it */
-export function marketRectOf(t){const s=stackOf(t);return marketRect(s.src,s.i);} // (every card type has its stack)
+// (none: its sold-out slot has since been taken by a reserve card, e.g. in a batch of an AI's moves from the server)
+export function marketRectOf(t){const s=stackOf(t);return s?marketRect(s.src,s.i):null;}
 function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpen?`#market [data-i="${idx}"] .mcard`:'#mktBtn'):(UI.allOpen?`#reserve [data-i="${idx}"] .mcard`:(UI.mktOpen?'#allTile':'#mktBtn')));if(!e)return null;const r=e.getBoundingClientRect();
   if(src==='r'){const cw=86;return{left:r.left+r.width/2-cw/2,top:r.top-cw*.7+r.height/2,width:cw,height:cw*1.4};}return r;}
 
