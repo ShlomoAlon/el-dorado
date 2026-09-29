@@ -96,7 +96,7 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .gsi{color-scheme:light}
 @media (max-width:500px){.pstats{grid-template-columns:repeat(3,1fr)}
 }
-.linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--gold2);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.linkbtn{display:inline-flex;align-items:center;gap:2px;background:none;border:0;padding:0;font:inherit;color:var(--gold2);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .prow{display:flex;gap:10px;align-items:center;margin-bottom:8px}
 .prow input{flex:1;min-width:0;height:38px;box-sizing:border-box;background:#0c1512;border:1px solid var(--line2);border-radius:9px;padding:0 12px;font:inherit;font-size:14px;color:var(--text);outline:none;user-select:text;-webkit-user-select:text}
 .prow input:focus{border-color:var(--gold)}
@@ -197,9 +197,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .tbtn.ico svg{display:block}
 #histBtn{display:inline-flex;align-items:center;gap:6px}#histBtn svg{flex:none;color:var(--gold2)}
 #fsBtn .fs-out,#fsBtn.full .fs-in{display:none}
-#fsBtn.full .fs-out{display:inline}
+#fsBtn.full .fs-out{display:block}
 #sndBtn .snd-off,#sndBtn.off .snd-on{display:none}
-#sndBtn.off .snd-off{display:inline}
+#sndBtn.off .snd-off{display:block}
 #sndBtn.off{opacity:.7}
 
 /* centred in the space left of the market column (--mktFoot = how far the market reaches in from the right edge) */
@@ -534,6 +534,15 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @keyframes bsIn{from{transform:translateY(-14px) scale(.9);opacity:0}}
 #shell,#overlay,#banner{--display:'Young Serif', Georgia, 'Times New Roman', serif;--ui:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;font-family:var(--ui)}
 html.gameready.boardready #shell{visibility:visible} /* once the game's fonts are in (ui_boot.js) and its board is fitted (fit): no text swaps fonts, no board jumps */
+
+/* UI icons (icons.js): inline SVG, the text colour */
+.ic{display:block;flex:none}
+#rdock .rgrp button{display:inline-grid;place-items:center}
+.fg .farr{display:grid;place-items:center;margin:0 2px}.fg .farr .ic{width:max(12px,calc(var(--fw)*.28));height:auto;stroke-width:2.5}
+.pchip .fin .ic{fill:currentColor}
+.pchip .fin{display:inline-flex;align-items:center;gap:3px}
+.rcmp .ic{display:inline-block;vertical-align:-2px;color:var(--gold2)}
+.bs-x .ic,.sclose .ic{display:block}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -559,7 +568,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div id="players"></div>
     <div class="hbtns">
       <button class="tbtn glass" id="mktBtn">Market</button>
-      <button class="tbtn glass" id="histBtn" title="History: every turn, newest first" aria-label="History" aria-pressed="true"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M3.6 10a6.4 6.4 0 1 0 1.9-4.55"/><path d="M3.3 3.4v2.9h2.9"/><path d="M10 6.6V10l2.3 1.5"/></svg><span>History</span></button>
+      <button class="tbtn glass" id="histBtn" title="History: every turn, newest first" aria-label="History" aria-pressed="true"><!--I:history:15--><span>History</span></button>
       <button class="tbtn glass" id="rulesBtn">Rules</button>
       <button class="tbtn glass" id="menuBtn">Menu</button>
     </div>
@@ -567,23 +576,23 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
   <div id="prompt" class="glass"><div id="ptxt"></div></div>
   <section id="hist" class="glass" hidden aria-label="History">
     <div id="histList" aria-live="polite"></div>
-    <div class="hbar" title="Drag to move"><button class="hbtn" id="histX" title="Hide (the History button brings it back)" aria-label="Hide the history"><svg viewBox="0 0 20 20" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button><button class="hbtn" id="histHome" title="Put it back under the prompt, one turn tall" aria-label="Put the history back" hidden><svg viewBox="0 0 20 20" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5a6 6 0 1 0 1.8-4.3"/><path d="M4 3.5v3h3"/></svg></button><span class="hgrip" aria-hidden="true"><svg viewBox="0 0 8 12" width="8" height="12"><g fill="currentColor"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></g></svg></span><div class="hsize" id="histSize" title="Drag to resize" aria-hidden="true"><svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M9 3L3 9M9 6.5L6.5 9"/></svg></div></div>
+    <div class="hbar" title="Drag to move"><button class="hbtn" id="histX" title="Hide (the History button brings it back)" aria-label="Hide the history"><!--I:close:13--></button><button class="hbtn" id="histHome" title="Put it back under the prompt, one turn tall" aria-label="Put the history back" hidden><!--I:home:13--></button><span class="hgrip" aria-hidden="true"><!--I:grip:14--></span><div class="hsize" id="histSize" title="Drag to resize" aria-hidden="true"><!--I:resize:11--></div></div>
   </section>
   <div id="mkt"><div id="market"></div></div>
   <div id="allc" hidden>
-    <button class="sclose" id="allClose" aria-label="Close">✕</button>
+    <button class="sclose" id="allClose" aria-label="Close"><!--I:close--></button>
     <div class="allc-in">
       <div class="allc-head"><h2>All cards <span id="buyState"></span></h2></div>
       <div class="allc-sect"><h3>Market</h3><div id="allMarket" class="agrid"></div></div>
       <div class="allc-sect"><h3>Reserve <span id="resState"></span></h3><p class="note" id="resNote" style="margin:-6px 0 14px"></p><div id="reserve" class="agrid"></div></div>
     </div>
   </div>
-  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button><button class="glass" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button></div>
+  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in"><!--I:plus--></button><button class="glass" id="zout" aria-label="Zoom out"><!--I:minus--></button><button class="glass" id="zfit" aria-label="Fit board" title="Fit the board"><!--I:fit--></button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><span class="fs-in"><!--I:full--></span><span class="fs-out"><!--I:unfull--></span></button><button class="glass" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><span class="snd-on"><!--I:sound--></span><span class="snd-off"><!--I:mute--></span></button></div>
   <div class="pile" id="deckPile" title="Draw pile — click to view"><div class="pstack" id="deckStack"></div><div class="lbl glass">Deck <b id="deckN">0</b></div></div>
   <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
   <div id="actBtns"></div>
   <div id="playLbl">In play</div>
-  <div id="buySlot" hidden><div class="bs-card"></div><div class="bs-ring"><b id="bsPaid">0</b><span>/</span><span id="bsCost">0</span></div><button class="bs-x" id="bsCancel" aria-label="Cancel purchase">✕</button></div>
+  <div id="buySlot" hidden><div class="bs-card"></div><div class="bs-ring"><b id="bsPaid">0</b><span>/</span><span id="bsCost">0</span></div><button class="bs-x" id="bsCancel" aria-label="Cancel purchase"><!--I:close:13--></button></div>
   <div id="cards"></div>
   <svg id="arrow"></svg>
 </div>
@@ -637,7 +646,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
         </div>
       </div>
       <div class="tab" data-tab="board"><div id="lbList"><p class="note">Loading…</p></div></div>
-      <div class="tab" data-tab="me"><button type="button" class="linkbtn" id="pfBack" hidden>‹ Leaderboard</button><div id="pf"><p class="note">Loading…</p></div>
+      <div class="tab" data-tab="me"><button type="button" class="linkbtn" id="pfBack" hidden><!--I:prev:14-->Leaderboard</button><div id="pf"><p class="note">Loading…</p></div>
         <div class="field" id="meNameBox"><label>Display name</label><div class="prow"><input id="meName" maxlength="16"><button type="button" class="btn" id="meSave">Save</button></div></div></div>
     </div>
     <p class="note warn" id="hErr"></p>

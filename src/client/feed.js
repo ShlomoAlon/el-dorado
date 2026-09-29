@@ -7,6 +7,7 @@
    While another player takes their turn (an AI here, anyone else online) it follows live: their cards fly out of their
    player chip, a bought card flies out of the market, and their moves leave a dotted trail on the board until you act.
    Your own turn is added once you end it. */
+import { ico } from './icons.js';
 import { S, CT, MAP, SYMNAME, plural, fmt, assert } from '../engine.gen.js';
 import { $, esc, setHTML, setText, setStyle, reduceMotion, EASE } from './dom.js';
 import { toast } from './dialogs.js';
@@ -139,7 +140,7 @@ const cardSig=g=>g.k+'|'+(g.ts||[]).join()+'|'+(g.got||'');
 function stepHTML(g){
   if(PILL[g.k])return`<div class="fg fend f-${g.k}" data-c="${cardSig(g)}"><div class="fpill">${PILL[g.k]}</div><div class="fcap">${stepCap(g)}</div></div>`;
   const mini=(t,got)=>`<div class="fc${got?' got':''}" data-t="${t}"><div class="mcard">${cardHTML(t)}</div></div>`; // (the step's words are its tooltip: stepWords)
-  return`<div class="fg f-${g.k}" data-c="${cardSig(g)}"><div class="frc"><div class="fcs">${(g.ts||[]).map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap">${stepCap(g)}</div></div>`;
+  return`<div class="fg f-${g.k}" data-c="${cardSig(g)}"><div class="frc"><div class="fcs">${(g.ts||[]).map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">${ico('arrow',18)}</span>${mini(g.got,1)}`:''}</div><div class="fcap">${stepCap(g)}</div></div>`;
 }
 function turnHead(t,now){
   const p=S.players[t.p];if(!p)return'';const you=online()&&t.p===NET.seat;
