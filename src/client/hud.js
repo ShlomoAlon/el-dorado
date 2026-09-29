@@ -1,6 +1,6 @@
 /* The heads-up display: the top bar (round, one chip per player), the prompt (what to do now, the online turn clock)
    and the turn buttons. Each piece is rewritten only when its text changes. */
-import { S, CT, SYMNAME, SYMCOL, typeOf, def, fmt, plural, playerDone } from '../engine.gen.js';
+import { S, CT, SYMNAME, SYMCOL, typeOf, def, fmt, plural } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle } from './dom.js';
 import { UI, NET, G, cur, canAct, online, isAI } from './state.js';
 import { onGeo, geo } from './geometry.js';
@@ -15,7 +15,7 @@ import { undo, canUndo, cancelMode, startEndTurn, finishTurn, confirmDiscardFor,
 /* ---------- the top bar: round, and one chip per player (cards, blockades held, arrived) ---------- */
 function updateHeader(){
   const mb=$('#menuBtn');setText(mb,G.replay?'Exit replay':'Menu');
-  try{const t=(online()&&canAct()&&!S.over?'● Your turn · ':'')+'El Dorado Expedition';if(document.title!==t)document.title=t;}catch(e){}
+  const t=(online()&&canAct()&&!S.over?'● Your turn · ':'')+'El Dorado Expedition';if(document.title!==t)document.title=t;
   const box=$('#players');
   if(!S){setHTML(box,'');return;}
   setText($('#roundLbl'),'Round '+S.round+(S.endTriggered&&!S.over?' · final':''));
@@ -40,7 +40,7 @@ function updatePrompt(){
   let txt='',btns=[];
   if(G.replay){setHTML(P,replayPromptHTML());btnWire(B,[]);return;}
   const tm=online()&&!S.over?'<span id="turnTimer" class="timer" hidden></span>':'';
-  if(S.over){setHTML(P,'The expedition is over.');btnWire(B,[{t:'Results',id:'bRes',fn:()=>showGameOver(S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i])))},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
+  if(S.over){setHTML(P,'The expedition is over.');btnWire(B,[{t:'Results',id:'bRes',fn:showGameOver},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
   if(!canAct()){setHTML(P,tm+who+(online()&&S.cur===NET.seat?'<span class="m">Reconnecting…</span>':(isAI(S.cur)?'is playing…':'is taking their turn…'))+(NET.status?` <span class="m">${esc(NET.status)}</span>`:''));btnWire(B,[]);renderTimer();return;}
   if(UI.cover){setHTML(P,who+'is up next. Pass the device, then reveal the hand.');btnWire(B,[{t:'Reveal hand',id:'bRev',pri:1,big:1,fn:()=>{UI.cover=false;render();banner(cur().name,'Round '+S.round);}}]);return;}
   const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};
@@ -84,7 +84,7 @@ function btnWire(B,btns){
   const sig=btns.map(b=>b.id+(b.dis?'d':'')+b.t).join('|');
   const h=b=>`<button class="btn${b.pri?' pri':''}${b.big?' big':''}" id="${b.id}"${b.dis?' disabled':''}>${b.t}</button>`;
   if(B.dataset.sig!==sig){B.innerHTML=main.map(h).join('')+(rest.length?`<div class="brow">${rest.map(h).join('')}</div>`:'');B.dataset.sig=sig;}
-  btns.forEach(b=>{const e=document.getElementById(b.id);if(e)e.onclick=b.fn;});
+  btns.forEach(b=>{document.getElementById(b.id).onclick=b.fn;});
 }
 
 /* ---------- the online turn clock (in the prompt) ---------- */
@@ -97,7 +97,7 @@ export function renderTimer(){
 }
 export const hudPart = { name: 'hud', update(){updateHeader();updatePrompt();}};
 export function hudInit(){
-  setInterval(()=>{if(S&&online())renderTimer();},500);
+  setInterval(()=>{if(online())renderTimer();},500);
   // how far the turn buttons reach in from the right (short screens keep the prompt clear of them)
   onGeo(()=>setStyle($('#prompt'),'--actFoot',(geo.actW?geo.actW+26:16)+'px'));
 }

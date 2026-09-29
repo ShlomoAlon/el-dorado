@@ -1,7 +1,7 @@
 /* The aiming arrow: shown while a movement card is selected (by a tap or a drag). With a mouse it follows the pointer and
    snaps onto reachable spaces; on touch it points at the explorer that will move until you drag. Chevrons flow along the
    curve. It runs a frame loop only while it is on screen. */
-import { S, R, hexAt, typeOf } from '../engine.gen.js';
+import { S, R, hexAt, typeOf, assert } from '../engine.gen.js';
 import { $, sv } from './dom.js';
 import { UI, cur } from './state.js';
 import { geo } from './geometry.js';
@@ -9,13 +9,13 @@ import { cardEls, drag } from './hand.js';
 import { targetAt, setHot, blPos } from './board/overlays.js';
 import { boardToApp } from './board/camera.js';
 const aim = { raf: 0, mx: null, my: null, touch: false, pool: null };
-function aimWanted() { return S && !S.over && !UI.cover && UI.mode === 'card' && UI.card && cardEls.has(UI.card) && typeOf(UI.card) !== 'transmitter'; }
+function aimWanted() { return S && !S.over && !UI.cover && UI.mode === 'card' && cardEls.has(UI.card) && typeOf(UI.card) !== 'transmitter'; }
 export function startAim() { if (!aim.raf && aimWanted()) aim.raf = requestAnimationFrame(loop); }
 function stopAim() { if (aim.raf) cancelAnimationFrame(aim.raf); aim.raf = 0; setHot(null); if (aim.pool) aim.pool.root.style.display = 'none'; }
 function loop(ts) {
   aim.raf = 0; if (!aimWanted()) { stopAim(); return; }
   // where the card sits (its layout position: no measuring), the top middle of it
-  const t = cardEls.get(UI.card).__t; if (!t) return;
+  const t = cardEls.get(UI.card).__t;
   const cw = geo.cw, ch = cw * 1.4, sx = t.x + cw / 2, sy = t.y + ch / 2 - ch * t.sc / 2 + Math.min(16, ch * t.sc * .1);
   const dragging = drag && drag.started && drag.kind === 'aim';
   let tx = null, ty = null, free = false;
@@ -26,7 +26,7 @@ function loop(ts) {
   if (hot) { const p = hot[0] === 'B' ? blPos[+hot.slice(1)] : [hexAt(hot).x, hexAt(hot).y];[ex, ey] = boardToApp(p[0], p[1]); }
   else if (free) { ex = tx; ey = ty; }
   else { const pi = S.turn.active && S.turn.active.id === UI.card ? S.turn.active.pi : UI.piece, pk = cur().pieces[pi];
-    if (!pk || pk === 'done') { stopAim(); return; } const h = hexAt(pk);[ex, ey] = boardToApp(h.x, h.y - R * .9); }
+    assert(pk && pk !== 'done', 'aim: the explorer to move is on the board'); const h = hexAt(pk);[ex, ey] = boardToApp(h.x, h.y - R * .9); }
   // hidden while the pointer is still down in the hand; the loop then rests until the pointer moves
   const show = Math.hypot(ex - sx, ey - sy) > 50 && ey < sy - 10;
   draw(sx, sy, ex, ey, !!hot, show, (ts / 1100) % 1);

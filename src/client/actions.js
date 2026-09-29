@@ -1,7 +1,7 @@
 /* Turning what the player does into engine actions. Every rules change goes through act(): locally it runs the shared
    engine (and is recorded: G.rec); online it is sent to the server, which runs the same engine and sends back the new
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
-import { S, CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, setS, setMAP } from '../engine.gen.js';
+import { S, CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, setS, setMAP, assert } from '../engine.gen.js';
 import { esc } from './dom.js';
 import { UI, NET, G, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave } from './state.js';
 import { replayDecorate } from './replay.js';
@@ -19,12 +19,12 @@ import { aiKick, aiReset } from './ai.js';
 import { netAct, reconnect } from './online.js';
 import { diag } from './debug.js';
 
-/* a different game is on show (a new deal, a loaded save, a replay, an online game): draw its board, drop the old one's
-   elements, fit it */
-export function showGame(){buildBoard();resetView();fitSoon();}
+/* a different game is on show (a new deal, a loaded save, a replay, an online game): the old one's AI moves are off, its
+   board and elements go, the new board is drawn and fitted */
+export function showGame(){aiReset();buildBoard();resetView();fitSoon();}
 /* continue the saved local game (first visit, or back from a replay). Returns false if there is none in progress. */
 export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
-  aiReset();UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();aiKick();
+  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();aiKick();
   if(!UI.cover)banner(cur().name,'Round '+S.round);return true;}
 /* after a bug (boundary.js): the game on show again from its source, with nothing selected. Online: a new connection
    brings the server's state. A local game: rebuilt from its record (the action that failed was never recorded) */
@@ -36,28 +36,27 @@ export function resync(){
 }
 
 export function computeTargets(){
-  const T=new Map();UI.targets=T;if(!S||S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
+  const T=new Map();UI.targets=T;if(S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
   const src=UI.mode==='card'?cardTargets(S.cur,UI.piece,UI.card):UI.mode==='idle'?payTargets(S.cur,UI.piece):null;
   if(src)for(const[k,v]of src)T.set(k,v);
-  else if(UI.mode==='discardFor'&&UI.pending)T.set(UI.pending.tk,UI.pending);
+  else if(UI.mode==='discardFor')T.set(UI.pending.tk,UI.pending);
 }
 /* the card can do something now: an action card (played from the hand), or somewhere on the board to put it */
-export function cardUsable(id){const d=def(id);return!!d&&((d.c==='p'&&typeOf(id)!=='native')||cardTargets(S.cur,UI.piece,id).size>0);}
-export const isTargeted=id=>{const d=def(id);return d&&(d.c!=='p'||typeOf(id)==='native');};
+export function cardUsable(id){return(def(id).c==='p'&&typeOf(id)!=='native')||cardTargets(S.cur,UI.piece,id).size>0;}
+export const isTargeted=id=>def(id).c!=='p'||typeOf(id)==='native';
 export function firstPiece(){return Math.max(0,cur().pieces.findIndex(k=>k!=='done'));}
 /* after the state changed, put the UI into the matching mode */
 export function syncMode(turnChanged){
-  if(!S)return;
   if(turnChanged||!canAct()){UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;}
   if(S.turn.pending){UI.mode='trashPick';UI.max=S.turn.pending.max;if(turnChanged)UI.picks=[];}
   else if(UI.mode==='trashPick'){UI.mode='idle';UI.picks=[];}
   if(S.turn.active&&canAct()){UI.mode='card';UI.card=S.turn.active.id;UI.piece=S.turn.active.pi;}
-  else if(UI.mode==='card'&&(!UI.card||!cur().hand.includes(UI.card))){UI.mode='idle';UI.card=null;}
+  else if(UI.mode==='card'&&!cur().hand.includes(UI.card)){UI.mode='idle';UI.card=null;}
   if(turnChanged||cur().pieces[UI.piece]==='done'||UI.piece>=cur().pieces.length)UI.piece=firstPiece();
 }
 /* animations and messages for engine events; call BEFORE render so the market DOM is still the old one */
 export function playEvents(ev,viewer){
-  for(const e of ev||[]){
+  for(const e of ev){
     sfxEvent(e,viewer);
     const watched=feedWatch(e.pl); // another player's turn: shown in the row under the prompt (ui_view.js)
     if(e.e==='play'&&!watched)feedClear(); // I (or a pass-and-play human here) act: the last recap goes
@@ -71,7 +70,7 @@ export function playEvents(ev,viewer){
   }
 }
 export function act(a){
-  if(!S||!canAct()){if(online()&&!S.over&&S.cur===NET.seat)toast('Reconnecting… your move wasn’t sent.');return;}
+  if(!canAct()){if(online()&&!S.over&&S.cur===NET.seat)toast('Reconnecting… your move wasn’t sent.');return;}
   diag('act '+a.t);
   if(online()){netAct({t:'act',a});render();return;}
   const prevCur=S.cur,prevRound=S.round;
@@ -90,7 +89,7 @@ export function afterLocalChange(turnChanged){
     render();
     if(!UI.cover&&!S.over){banner(cur().name,isAI(S.cur)?'AI · Round '+S.round:'Round '+S.round);ensureVisible();}
   }
-  if(S.over){UI.lastReplay=keepLocalReplay();setTimeout(()=>showGameOver(),600);}
+  if(S.over){UI.lastReplay=keepLocalReplay();setTimeout(()=>{if(S&&S.over)showGameOver();},600);} // (unless another game is on show by then)
   save();aiKick();
 }
 
@@ -98,7 +97,7 @@ export function afterLocalChange(turnChanged){
 export function doMove(tk){
   if(UI.mode==='discardFor')return; // the pending space itself: cards are dragged or tapped in
   const tg=UI.targets.get(tk);if(!tg)return;
-  if(isDisc(tg)){startDiscard(tk,UI.card&&cur().hand.includes(UI.card)?UI.card:null);return;}
+  if(isDisc(tg)){startDiscard(tk,cur().hand.includes(UI.card)?UI.card:null);return;}
   if(tg.kind==='native'||tg.kind==='nativebl')act({t:'native',card:UI.card,pi:tg.pi,to:tk});
   else act({t:'move',card:UI.card,pi:tg.pi,to:tk});
 }
@@ -106,17 +105,17 @@ export const isDisc=tg=>!!tg&&(tg.kind==='rubble'||tg.kind==='camp'||tg.kind==='
 /* Rubble / base camp / rubble blockade: each card dragged (or tapped) onto the space counts toward its cost.
    The move happens as soon as enough cards are in. */
 export function startDiscard(tk,firstId){
-  const tg=UI.targets.get(tk);if(!isDisc(tg))return;
+  const tg=UI.targets.get(tk);assert(isDisc(tg),'startDiscard: a space paid for with cards');
   UI.mode='discardFor';UI.pending={tk,...tg};UI.card=null;UI.picks=[];
   if(firstId)addDiscard(firstId);else render();
 }
 export function addDiscard(id){
-  const P=UI.pending;if(!P||!cur().hand.includes(id))return;sfx('discard');
+  const P=UI.pending;if(!cur().hand.includes(id))return;sfx('discard'); // (online, the turn can end under a drag: a new hand)
   if(!UI.picks.includes(id)&&UI.picks.length<P.need)UI.picks.push(id);
   if(UI.picks.length>=P.need){confirmDiscardFor();return;}
   render();pulseDiscard();
 }
-export function confirmDiscardFor(){const P=UI.pending;if(!P||UI.picks.length!==P.need)return;sfx(P.kind==='camp'?'trash':'discard');act({t:'pay',pi:P.pi,to:P.tk,cards:UI.picks.slice()});}
+export function confirmDiscardFor(){const P=UI.pending;sfx(P.kind==='camp'?'trash':'discard');act({t:'pay',pi:P.pi,to:P.tk,cards:UI.picks.slice()});}
 export function playAction(id){
   const t=typeOf(id);
   if(t==='native'){UI.mode='card';UI.card=id;render();return;}
@@ -135,16 +134,15 @@ export function pickFromMarket(src,idx){
 }
 export function payTotal(){return UI.picks.reduce((a,id)=>a+coinVal(id),0);}
 let buyFrom=null;const takeBuyFrom=()=>{const r=buyFrom;buyFrom=null;return r&&Date.now()-r.at<3000?r:null;};
-export function confirmBuy(){const B=UI.buy;if(!B||payTotal()<CT[B.t].cost)return;{const e=document.querySelector('#buySlot .mcard');if(e){const r=e.getBoundingClientRect();buyFrom={left:r.left,top:r.top,width:r.width,height:r.height,at:Date.now()};}}act({t:'buy',type:B.t,cards:UI.picks.slice()});}
+export function confirmBuy(){const r=document.querySelector('#buySlot .mcard').getBoundingClientRect();buyFrom={left:r.left,top:r.top,width:r.width,height:r.height,at:Date.now()};act({t:'buy',type:UI.buy.t,cards:UI.picks.slice()});}
 /* drop the selection. A removal still to choose (Scientist, Travel Log) stays asked: nothing else can happen before it */
 export function cancelMode(){
-  if(!S)return;
   UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.mode=S.turn.pending?'trashPick':'idle';render();
 }
 /* what the player to act could buy right now with the cards in hand ([{src, i, t}]: the engine's rule) */
-export function affordable(){return !S||UI.cover||!canAct()?[]:buyOptions(S.cur);}
+export function affordable(){return UI.cover||!canAct()?[]:buyOptions(S.cur);}
 export function startEndTurn(){
-  if(!canAct()||S.turn.pending)return;
+  if(!canAct())return; // (online, the turn can pass before the tap arrives)
   if(UI.mode!=='buyWarn'&&affordable().length){UI.mode='buyWarn';UI.card=null;UI.picks=[];UI.buy=null;render();return;} // nudge before skipping a purchase
   if(cur().hand.length){UI.mode='endTurn';UI.picks=[];UI.card=null;render();}
   else finishTurn();
@@ -161,7 +159,7 @@ export function undo(){
 export const canUndo=()=>online()?NET.canUndo:recCanUndo(G.rec);
 
 export function onHandCard(id){
-  if(!S||S.over||UI.cover||UI.anim||!canAct())return;
+  if(S.over||UI.cover||UI.anim||!canAct())return;
   switch(UI.mode){
     case 'pay':case 'endTurn':{togglePick(id);return;}
     case 'discardFor':{if(UI.picks.includes(id))rm(UI.picks,id);else if(UI.picks.length<UI.pending.need)UI.picks.push(id);render();return;}
@@ -174,7 +172,7 @@ export function onHandCard(id){
 }
 export function togglePick(id){const add=!UI.picks.includes(id);if(add)UI.picks.push(id);else rm(UI.picks,id);render();if(add&&UI.mode==='pay')payProgress();}
 /* after a card goes into the spending tray: finish the purchase once the coins cover it */
-export function payProgress(){if(UI.mode!=='pay'||!UI.buy)return;const c=CT[UI.buy.t].cost;if(payTotal()<c)return;
+export function payProgress(){const c=CT[UI.buy.t].cost;if(payTotal()<c)return;
   const b=UI.buy;setTimeout(()=>{if(UI.mode==='pay'&&UI.buy===b&&payTotal()>=c)confirmBuy();},300);}
 export function onPlayCard(id){
   if(S.turn.active&&S.turn.active.id===id){
@@ -204,7 +202,7 @@ export function resignLocal(){const seat=resignSeat();if(seat<0)return;
 export function endLocal(){if(!S||S.over||online()||G.replay)return;
   modal(`<h2>End the game?</h2><p class="sub">The race stops now for everyone. Places go by who has arrived, then who is closest to El Dorado.</p><div class="mrow"><button class="btn" id="egNo">Keep playing</button><button class="btn pri" id="egYes">End game</button></div>`,sc=>{
     sc.querySelector('#egNo').onclick=closeModal;
-    sc.querySelector('#egYes').onclick=()=>{closeModal();if(!S||S.over)return;const r=recApply(G.rec,S.cur,{t:'endgame'});if(!r.ok)return;playEvents(r.ev);afterLocalChange(true);};},true);}
+    sc.querySelector('#egYes').onclick=()=>{closeModal();if(!S||S.over)return;const r=recApply(G.rec,S.cur,{t:'endgame'});assert(r.ok,'endgame is accepted');playEvents(r.ev);afterLocalChange(true);};},true);}
 
 /* the first view part of every frame: what the selection allows now (the targets), before anything is drawn */
 export const derivePart = { name: 'derive', update(){if(!S)return;if(!online()&&!G.replay&&!isAI(S.cur))UI.viewer=S.cur;computeTargets();if(G.replay)replayDecorate();}};

@@ -14,11 +14,11 @@ export const G = { rec: null, replay: null };
 export const cur = () => S.players[S.cur];
 export const myId = () => NET.user ? NET.user.id : null;
 export const online = () => !!S && S === NET.S;
-export const isAI = i => !!(S && S.players[i] && S.players[i].ai);
+export const isAI = i => !!S.players[i].ai;
 export const canAct = () => !G.replay && (!S || (online() ? S.cur === NET.seat && NET.connected && !S.over : !isAI(S.cur)));
 // local games with AI seats: while an AI moves, the table shows the hand of the human who played last
 export const viewIdx = () => {
-  if (!online()) { if (!isAI(S.cur) || G.replay) return S.cur; const h = isAI(UI.viewer) || UI.viewer == null || UI.viewer >= S.players.length ? S.players.findIndex(p => !p.ai) : UI.viewer; return h < 0 ? S.cur : h; }
+  if (!online()) { if (!isAI(S.cur) || G.replay) return S.cur; const v = UI.viewer, h = v != null && v < S.players.length && !isAI(v) ? v : S.players.findIndex(p => !p.ai); return h < 0 ? S.cur : h; }
   return NET.seat < 0 ? S.cur : NET.seat; // (a watcher follows the player to move)
 };
 export const hp = () => S.players[viewIdx()];

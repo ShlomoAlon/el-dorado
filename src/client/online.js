@@ -98,7 +98,7 @@ export function applyServerState(S2,ev){
   UI.picks=[];UI.buy=null;UI.pending=null;if(['pay','discardFor','transmit','endTurn'].includes(UI.mode)){UI.mode='idle';UI.card=null;}
   syncMode(turnChanged);
   render();
-  if(S.over&&(fresh||!old.over)){setTimeout(()=>showGameOver(),700);return;}
+  if(S.over&&(fresh||!old.over)){setTimeout(()=>{if(S&&S.over)showGameOver();},700);return;} // (unless another game is on show by then)
   if(turnChanged&&!S.over){banner(canAct()?'Your turn':cur().name,canAct()?'Round '+S.round:'Round '+S.round);ensureVisible();}
 }
 export function resignOnline(){
