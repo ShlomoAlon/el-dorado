@@ -30,6 +30,8 @@ The rules engine (`src/engine_*.js`) is imported from `src/engine.gen.js`, which
 | module | owns |
 |---|---|
 | `main.js` | boot, keyboard, debug hooks (`window.__ED`) |
+| `boundary.js` | the page's boundary for bugs: logs, reports (`/api/bugs`) and recovers after a failed assertion (docs/ASSERTIONS.md) |
+| `debug.js` | the diagnostics log (always kept; shown with `?debug`) |
 | `state.js` | `UI`, `NET`, `G` (record, replay), selectors (`cur`, `canAct`, …), local save |
 | `frame.js` | `render()`, `flush()`, `after()`, view parts |
 | `geometry.js` | cached sizes of the game area, piles, prompt, market |
