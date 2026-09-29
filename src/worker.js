@@ -308,6 +308,7 @@ export default {
       let m;
       if ((m = p.match(/^\/api\/rooms\/([A-Z0-9]{4,6})\/ws$/))) {
         if (req.headers.get('upgrade') !== 'websocket') return bad('Expected a WebSocket', 426);
+        if (await limited(env.RL_WRITE, 'u:' + user.id)) return tooMany(); // joining a room counts like opening one
         const room = env.ROOMS.get(env.ROOMS.idFromName(m[1]));
         const busy = await (await lobby.fetch('https://lobby/find?busy=1&uid=' + encodeURIComponent(user.id))).json();
         const h = new Headers(req.headers); h.set('x-uid', user.id); h.set('x-name', user.name); h.set('x-busy', busy.code || '');

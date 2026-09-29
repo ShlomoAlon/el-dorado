@@ -19,7 +19,7 @@
   // namespace_id only has to be unique within the Cloudflare account.
   "ratelimits": [
     { "name": "RL_API", "namespace_id": "7301", "simple": { "limit": 120, "period": 60 } },   // every /api request, per IP
-    { "name": "RL_WRITE", "namespace_id": "7302", "simple": { "limit": 20, "period": 60 } },  // sign-ins (per IP), rooms / matches / name changes (per player)
+    { "name": "RL_WRITE", "namespace_id": "7302", "simple": { "limit": 20, "period": 60 } },  // sign-ins (per IP); opening or joining rooms, matches, name changes (per player)
     { "name": "RL_UPLOAD", "namespace_id": "7303", "simple": { "limit": 5, "period": 60 } }   // replay uploads, per IP
   ],
   // Google OAuth Web client ID (public; the browser sees it via /api/config anyway).
