@@ -176,9 +176,9 @@ in (`r`). The engine keeps the last 120; the page writes the sentences (`dialogs
 
 | function | result |
 |---|---|
-| `reach(seat, pi, syms, budget)` | `Map<key or 'B'+i, {kind: 'move'\|'bl', cost, sym, path: [key…], pi, bl?}>`: the cheapest route to each space (Dijkstra per symbol, first symbol wins ties). A route may pass blockades of its symbol by paying their cost; it can't enter occupied spaces, and it stops at El Dorado. |
-| `nativeTargets(seat, pi)` | `Map<key or 'B'+i, {kind: 'native'\|'nativebl', path, cost: 0, pi, bl}>` |
-| `payTargets(seat, pi)` | `Map<key or 'B'+i, {kind: 'rubble'\|'camp'\|'blr', need, path?, pi, bl?}>` (only those the hand can pay) |
+| `reach(seat, pi, syms, budget)` | `Map<key or 'B'+i, {t: 'move', kind: 'move'\|'bl', cost, sym, path: [key…], pi, bl?}>`: the cheapest route to each space (Dijkstra per symbol, first symbol wins ties). A route may pass blockades of its symbol by paying their cost; it can't enter occupied spaces, and it stops at El Dorado. |
+| `nativeTargets(seat, pi)` | `Map<key or 'B'+i, {t: 'native', kind: 'native'\|'nativebl', path, cost: 0, pi, bl}>` |
+| `payTargets(seat, pi)` | `Map<key or 'B'+i, {t: 'pay', kind: 'rubble'\|'camp'\|'blr', need, path?, pi, bl?}>` (only those the hand can pay) |
 | `cardTargets(seat, pi, id)` | Where that card can go now: a movement card's reach plus the rubble / camps / rubble blockades it could be given up for; the card in play: its leftover strength's reach; the Native: `nativeTargets`. The page's targets and "card usable" come from it. |
 | `blocksOf(seat)` | the blockades that player has taken (indexes; each blockade's `owner` is the one record of it) |
 | `stackOf(type)` | `{src: 'm'\|'r', i, s}` or `null` |
@@ -190,6 +190,8 @@ in (`r`). The engine keeps the last 120; the page writes the sentences (`dialogs
 | `eloDeltas(ratings, places, games)` | Multiplayer Elo. For every pair of players, K = (48 in a player's first 10 games, else 32) / (n−1); rounded to 0.1. |
 | `redact(state, seat)` | A copy safe to send to `seat`: the other players' hands and decks become placeholder ids (`h1_0`, `d2_3`); the seat's own deck is sorted by type (its order stays hidden); `cards` lists only the ids the seat may see. |
 | `mulberry32(seed)` | The engine's 32-bit generator. Anything reproducible depends on it. |
+
+Every target's `t` is the action that goes there (`move`, `native`, or `pay` with the cards the player then picks).
 
 ### 1.8 Game records and logs
 

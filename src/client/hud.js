@@ -46,7 +46,7 @@ function updatePrompt(){
   const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};
   switch(UI.mode){
     case 'idle':{
-      const hasDisc=[...UI.targets.values()].some(t=>t.kind==='rubble'||t.kind==='camp'||t.kind==='blr');
+      const hasDisc=[...UI.targets.values()].some(t=>t.t==='pay');
       txt=who+'Drag a card onto the board, or tap it'+(S.turn.bought?'.':', or buy from the market.')+(hasDisc?' <span class="m">Dashed spaces cost cards from your hand.</span>':'');
       if(pl.pieces.length>1&&pl.pieces.every(k=>k!=='done'))txt+=' <span class="m">Tap a pawn to switch.</span>';
       btns=[undoBtn,{t:'End turn',id:'bEnd',pri:1,big:1,fn:startEndTurn}];break;}

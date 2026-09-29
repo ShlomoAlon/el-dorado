@@ -104,11 +104,10 @@ export function afterChange(turnChanged,ended){
 export function doMove(tk){
   if(UI.mode==='discardFor')return; // the pending space itself: cards are dragged or tapped in
   const tg=UI.targets.get(tk);if(!tg)return;
-  if(isDisc(tg)){startDiscard(tk,cur().hand.includes(UI.card)?UI.card:null);return;}
-  if(tg.kind==='native'||tg.kind==='nativebl')act({t:'native',card:UI.card,pi:tg.pi,to:tk});
-  else act({t:'move',card:UI.card,pi:tg.pi,to:tk});
+  if(isDisc(tg))startDiscard(tk,cur().hand.includes(UI.card)?UI.card:null);
+  else act({t:tg.t,card:UI.card,pi:tg.pi,to:tk}); // a move, or the Native
 }
-export const isDisc=tg=>!!tg&&(tg.kind==='rubble'||tg.kind==='camp'||tg.kind==='blr');
+export const isDisc=tg=>!!tg&&tg.t==='pay'; // paid for with cards from the hand
 /* Rubble / base camp / rubble blockade: each card dragged (or tapped) onto the space counts toward its cost.
    The move happens as soon as enough cards are in. */
 export function startDiscard(tk,firstId){

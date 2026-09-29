@@ -149,20 +149,20 @@ function reach(pl,pi,syms,budget){
       }
     }
     const pathTo=k=>{const p=[];let x=k;while(x!==from){p.unshift(x);x=prev.get(x);}return p;};
-    for(const[k,d]of dist){if(k===from)continue;const o=out.get(k);if(!o||d<o.cost)out.set(k,{kind:'move',cost:d,sym,path:pathTo(k),pi});}
+    for(const[k,d]of dist){if(k===from)continue;const o=out.get(k);if(!o||d<o.cost)out.set(k,{t:'move',kind:'move',cost:d,sym,path:pathTo(k),pi});}
     for(const[k,d]of dist){
       if(hexAt(k).type==='g')continue;
       for(const n of neighbors(k)){const b=blockAt(k,n);if(b===null)continue;const B=S.blockades[b];
         if(B.k!==sym||d+B.v>budget)continue;const K='B'+b;const o=out.get(K);
-        if(!o||d+B.v<o.cost)out.set(K,{kind:'bl',bl:b,cost:d+B.v,sym,path:k===from?[]:pathTo(k),pi});}
+        if(!o||d+B.v<o.cost)out.set(K,{t:'move',kind:'bl',bl:b,cost:d+B.v,sym,path:k===from?[]:pathTo(k),pi});}
     }
   }
   return out;
 }
 function nativeTargets(pl,pi){
   const T=new Map(),pk=S.players[pl].pieces[pi];assert(pk&&pk!=='done','nativeTargets: the explorer is on the board');
-  for(const n of neighbors(pk)){const h=hexAt(n);if(h.type==='m'||h.type==='s'||occupied(n))continue;T.set(n,{kind:'native',path:[n],cost:0,pi,bl:blockAt(pk,n)});}
-  for(const n of neighbors(pk)){const b=blockAt(pk,n);if(b!==null&&!T.has('B'+b))T.set('B'+b,{kind:'nativebl',bl:b,path:[],cost:0,pi});}
+  for(const n of neighbors(pk)){const h=hexAt(n);if(h.type==='m'||h.type==='s'||occupied(n))continue;T.set(n,{t:'native',kind:'native',path:[n],cost:0,pi,bl:blockAt(pk,n)});}
+  for(const n of neighbors(pk)){const b=blockAt(pk,n);if(b!==null&&!T.has('B'+b))T.set('B'+b,{t:'native',kind:'nativebl',bl:b,path:[],cost:0,pi});}
   return T;
 }
 /* where seat can play card id with explorer pi now: Map<key or 'B'+i, target>. A movement card from the hand: the spaces its
@@ -182,8 +182,8 @@ function cardTargets(seat,pi,id){
 function payTargets(pl,pi){
   const T=new Map(),P=S.players[pl],pk=P.pieces[pi],hn=P.hand.length;assert(pk&&pk!=='done','payTargets: the explorer is on the board');
   for(const n of neighbors(pk)){const h=hexAt(n);
-    if((h.type==='r'||h.type==='c')&&!occupied(n)&&blockAt(pk,n)===null&&hn>=h.val)T.set(n,{kind:h.type==='r'?'rubble':'camp',need:h.val,path:[n],pi});
-    const b=blockAt(pk,n);if(b!==null&&S.blockades[b].k==='r'&&hn>=S.blockades[b].v&&!T.has('B'+b))T.set('B'+b,{kind:'blr',bl:b,need:S.blockades[b].v,pi});
+    if((h.type==='r'||h.type==='c')&&!occupied(n)&&blockAt(pk,n)===null&&hn>=h.val)T.set(n,{t:'pay',kind:h.type==='r'?'rubble':'camp',need:h.val,path:[n],pi});
+    const b=blockAt(pk,n);if(b!==null&&S.blockades[b].k==='r'&&hn>=S.blockades[b].v&&!T.has('B'+b))T.set('B'+b,{t:'pay',kind:'blr',bl:b,need:S.blockades[b].v,pi});
   }
   return T;
 }
