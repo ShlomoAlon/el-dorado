@@ -293,6 +293,15 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .alltile.can{border-color:#8fe3a8}
 .alltile.can small{color:#8fe3a8}
 #mktBtn.canbuy{box-shadow:0 0 0 1.5px #8fe3a8}
+/* shapes as well as colours (design option D6-B, WCAG 1.4.1): a coin marks what you can buy, a lock what is locked */
+:root{--coinIcon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='8.8' fill='%23f2c14e' stroke='%233a2807' stroke-width='1.6'/%3E%3Ccircle cx='10' cy='10' r='5' fill='none' stroke='%233a2807' stroke-width='1.4'/%3E%3C/svg%3E");--lockIcon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect x='3.5' y='8.5' width='13' height='10' rx='2'/%3E%3Cpath d='M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5' fill='none' stroke='black' stroke-width='2.2'/%3E%3C/svg%3E")}
+.mslot.can::after{padding-left:19px;background:#8fe3a8 var(--coinIcon) 4px 50%/12px no-repeat}
+#mktBtn{position:relative}
+#mktBtn.canbuy::after{content:"";position:absolute;top:-6px;right:-6px;width:15px;height:15px;background:var(--coinIcon) center/contain no-repeat;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+.lock{display:inline-block;width:.95em;height:.95em;margin-right:.3em;vertical-align:-.1em;background:currentColor;-webkit-mask:var(--lockIcon) center/contain no-repeat;mask:var(--lockIcon) center/contain no-repeat}
+.alltile:not(.open) small::before,#resState.locked::before{content:"";display:inline-block;width:1em;height:1em;margin-right:.3em;vertical-align:-.12em;background:currentColor;-webkit-mask:var(--lockIcon) center/contain no-repeat;mask:var(--lockIcon) center/contain no-repeat}
+#reserve.locked .mslot::before{content:"";position:absolute;left:50%;top:31%;z-index:5;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:rgba(8,14,12,.82) var(--lockIcon) center/0 no-repeat;box-shadow:0 0 0 1.5px var(--line2),0 4px 10px rgba(0,0,0,.5);pointer-events:none}
+#reserve.locked .mslot::after{content:"";position:absolute;left:50%;top:31%;z-index:6;width:16px;height:16px;margin:-8px 0 0 -8px;background:#cfd8d2;-webkit-mask:var(--lockIcon) center/contain no-repeat;mask:var(--lockIcon) center/contain no-repeat;pointer-events:none}
 .mcard{--cw:86px;position:relative;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1)}
 .cnt{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;border-radius:11px;background:#0a1210;border:1px solid var(--line2);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;font-variant-numeric:tabular-nums;z-index:4}
 #allc{position:absolute;inset:0;z-index:40;background:rgba(4,9,7,.86);overflow-y:auto;overscroll-behavior:contain;animation:fade .2s}
@@ -516,7 +525,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   #app{--row2:58px}
   #market{gap:7px}
   #mkt .mslot:hover{transform:none}
-  .mslot.can::after{content:'';width:8px;height:8px;padding:0;bottom:-4px}
+  .mslot.can::after{content:'';width:13px;height:13px;padding:0;bottom:-6px;border-radius:50%;background:var(--coinIcon) center/contain no-repeat;box-shadow:0 1px 3px rgba(0,0,0,.6)}
   .alltile{font-size:9px;gap:2px;padding:2px}
   .alltile svg{width:16px;height:16px}
   .alltile small{font-size:8px}

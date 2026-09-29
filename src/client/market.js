@@ -65,7 +65,7 @@ function update(){
   patchSlots($('#reserve'),S.reserve.map((s,i)=>spec('r',s,i)));
   $('#resNote').textContent=tr?'Transmitter: take any card for free.':openSlot?'A market slot is empty, so you may buy from the reserve.':'Opens once a market slot sells out.';
   $('#buyState').textContent=S.turn.bought?'bought this turn':'1 purchase per turn';
-  $('#resState').textContent=openSlot?'open':'locked';
+  $('#resState').textContent=openSlot?'open':'locked';$('#resState').classList.toggle('locked',!openSlot&&!tr);$('#reserve').classList.toggle('locked',!openSlot&&!tr);
 }
 export const marketPart = { name: 'market', update};
 
