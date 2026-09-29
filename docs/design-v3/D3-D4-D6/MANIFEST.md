@@ -57,10 +57,10 @@ States: `hand` (the hand in place, with four fixed cards: Scout, Giant Machete, 
 
 | state | before | A | B |
 |---|---|---|---|
-| hand | `D4-before-hand-1440@2x.png` | `D4-A-hand-1440@2x.png` | |
-| hand cards, flat | `D4-before-handcards-1440@2x.png` | `D4-A-handcards-1440@2x.png` | |
-| market close-up | `D4-before-market-1440@2x.png`, `D4-before-market-390@2x.png` | `D4-A-market-1440@2x.png`, `D4-A-market-390@2x.png` | |
-| All cards | `D4-before-allcards-1440.png`, `D4-before-allcards-390.png` | `D4-A-allcards-1440.png`, `D4-A-allcards-390.png` | |
+| hand | `D4-before-hand-1440@2x.png` | `D4-A-hand-1440@2x.png` | `D4-B-hand-1440@2x.png` |
+| hand cards, flat | `D4-before-handcards-1440@2x.png` | `D4-A-handcards-1440@2x.png` | `D4-B-handcards-1440@2x.png` |
+| market close-up | `D4-before-market-1440@2x.png`, `D4-before-market-390@2x.png` | `D4-A-market-1440@2x.png`, `D4-A-market-390@2x.png` | `D4-B-market-1440@2x.png`, `D4-B-market-390@2x.png` |
+| All cards | `D4-before-allcards-1440.png`, `D4-before-allcards-390.png` | `D4-A-allcards-1440.png`, `D4-A-allcards-390.png` | `D4-B-allcards-1440.png`, `D4-B-allcards-390.png` |
 
 ### Option A: price tag, quiet count, bookmark — branch `design/v3-D4-A`
 - **What changed:** strength stays the round badge top-left. The cost is a parchment price tag (notched, with a string
@@ -71,3 +71,15 @@ States: `hand` (the hand in place, with four fixed cards: Scout, Giant Machete, 
 - **Trade-offs:** strength and cost can no longer be mixed up, and the market is calmer. On the lightest art (coin cards)
   the parchment tag has less contrast; the bookmark needs learning once (its tooltip says "Single use"). The repeated
   suit icons stay (that is option B's change).
+
+### Option B: no repeated icons, the name in the body — branch `design/v3-D4-B`
+- **What changed:** the row of suit icons in the body is gone (the strength badge already says "2" with its symbol).
+  The name leaves its floating dark band and becomes the body's heading in the display serif, about 1.4× larger
+  (smaller for names over 10 letters, which wrap to two lines), with one quiet line under it ("2 machetes", or the
+  action's text). The art is a little shorter (50% of the card instead of 55%). Cost coin, count badge and the
+  SINGLE USE pill are unchanged.
+- **Effort / risk:** small (cards.js markup, a few CSS rules). `layout ok` at 5 sizes. Risk: low; long action texts
+  (Scientist, Travel Log, Native) are tight in 72 px market cards.
+- **Trade-offs:** the name is the most legible thing on the card, and the suit shows twice instead of three times; but
+  the two round badges (strength and cost) stay, so the confusion D4 started from remains, and the cards lose the
+  "count the machetes" look of the physical game.
