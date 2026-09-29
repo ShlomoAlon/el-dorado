@@ -135,6 +135,10 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #acct{min-height:32px} /* its line is there before the script fills it: nothing below moves */
 #shell{isolation:isolate} /* nothing in the game can stack above the menu, whatever its z-index */
 #shell{visibility:hidden} /* the game shows once its CSS (the late block) has arrived */
+
+/* D7-A: player colours are magenta, white, teal and black; every colour mark has a light outline (black needs it on this dark page) */
+.sws label{box-shadow:0 0 0 1px rgba(255,255,255,.35) inset}
+.seatrow i{box-shadow:0 0 0 1.5px rgba(255,255,255,.55)}
 </style>
 <style data-late>
 /* the game's CSS: a separate cached file on the site (build.mjs), inline in the artifact */
@@ -534,6 +538,10 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @keyframes bsIn{from{transform:translateY(-14px) scale(.9);opacity:0}}
 #shell,#overlay,#banner{--display:'Young Serif', Georgia, 'Times New Roman', serif;--ui:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;font-family:var(--ui)}
 html.gameready.boardready #shell{visibility:visible} /* once the game's fonts are in (ui_boot.js) and its board is fitted (fit): no text swaps fonts, no board jumps */
+
+/* D7-A: colour marks outlined (a black player's dot is visible on the dark chrome) */
+.pchip .dot{box-shadow:0 0 0 1.5px rgba(255,255,255,.6)}
+#prompt .who i,.hwho i,#rbTxt .who i,#rside .rev i{box-shadow:0 0 0 1.5px rgba(255,255,255,.6)}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">

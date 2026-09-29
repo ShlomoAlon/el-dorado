@@ -39,7 +39,7 @@ const MARKET0=['scout','trailblazer','jack','photographer','chest','transmitter'
 const RESERVE0=['pioneer','giant','captain','journalist','millionaire','adventurer','plane','cartographer','scientist','compass','travellog','native'];
 const SYMNAME={j:'machete',w:'paddle',v:'coin'};
 const SYMCOL={j:'#3f9a5c',w:'#3a8ad0',v:'#e7b54d',r:'#a3a8a4'};
-const COLORS=[{id:'crimson',hex:'#e5484d',name:'Crimson'},{id:'ivory',hex:'#efe9dc',name:'Ivory'},{id:'violet',hex:'#9d7df7',name:'Violet'},{id:'orange',hex:'#ff9636',name:'Orange'}]; // one explorer figure per colour
+const COLORS=[{id:'magenta',hex:'#e8479b',name:'Magenta'},{id:'white',hex:'#f6f6f3',name:'White'},{id:'teal',hex:'#2dcfbd',name:'Teal'},{id:'black',hex:'#23262b',name:'Black'}]; // (D7-A: chosen away from the terrain and suit hues: no red, gold, green, blue or purple) // one explorer figure per colour
 /* Official base-game blockades are numbered 1–6: jungle, village, rubble, water, jungle, rubble.
    They are placed along the route in number order; the number also breaks ties. */
 const BLOCKADES=[{n:1,k:'j',v:1},{n:2,k:'v',v:1},{n:3,k:'r',v:1},{n:4,k:'w',v:1},{n:5,k:'j',v:2},{n:6,k:'r',v:2}];

@@ -1,5 +1,5 @@
 /* =========================================================
-   MEEPLES — four explorer figures, one per player colour (crimson, ivory, violet, orange):
+   MEEPLES — four explorer figures, one per player colour (magenta, white, teal, black):
    0 man in a pith helmet, 1 woman in a wide-brim hat, 2 bearded man in a fedora,
    3 woman in a headscarf with a lantern. A faceted low-poly carved figure (meepleCarved) in the board's gradient + shine +
    dark-rim language, on a hex plinth (meepleBoardStyle).
@@ -14,6 +14,8 @@ function meepleMix(hex,to,t){
   const ch=s=>{const a=(n>>s)&255,b=(m>>s)&255;return Math.round(a+(b-a)*t);};
   return'#'+((1<<24)|(ch(16)<<16)|(ch(8)<<8)|ch(0)).toString(16).slice(1);
 }
+// a dark player colour (black): outlined in light grey, or it vanishes into the board's shadows
+const meepleDark=hex=>{const n=parseInt(hex.slice(1),16);return((n>>16&255)*.3+(n>>8&255)*.59+(n&255)*.11)<70;};
 const mpE=(tag,a)=>'<'+tag+Object.entries(a).map(([k,v])=>` ${k}="${v}"`).join('')+'/>';
 // polygon / path with a crisp mitred outline (sw 0 = no outline)
 const mpG=(pts,fill,sw=1.2,x={})=>mpE('polygon',{points:pts,fill,stroke:sw?MEEPLE_INK:'none','stroke-width':sw,'stroke-linejoin':'miter','stroke-miterlimit':6,...x});
@@ -100,7 +102,7 @@ function meepleDefsD(id,c){
     +`<radialGradient id="${id}s" cx=".35" cy=".25" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>`;
 }
 function meepleBoardStyle(v,K,c){
-  const id='mpd'+c.slice(1)+'-',u=k=>`url(#${id}${k})`,rim=meepleMix(c,MEEPLE_INK,.8),H=MEEPLE_PLINTH;
+  const id='mpd'+c.slice(1)+'-',u=k=>`url(#${id}${k})`,rim=meepleDark(c)?'#d9e0dc':meepleMix(c,MEEPLE_INK,.8),H=MEEPLE_PLINTH;
   let b=meepleDefsD(id,c);
   b+=mpG(H.all,rim,2.2);
   b+=mpG(H.left,'@d1',0)+mpG(H.right,'@d2',0);
@@ -115,7 +117,7 @@ function meepleBoardStyle(v,K,c){
 // figure is made of its colour (like a miniature cast in one resin). Roles: l2 l1 c d1 d2 d3.
 export function meepleSVG(c,num){
   const v=COLORS.findIndex(x=>x.hex===c);assert(v>=0,'meepleSVG: a player colour'); // one explorer figure per colour
-  const P={m1:meepleMix(c,'#000000',.18),l2:meepleMix(c,'#ffffff',.55),l1:meepleMix(c,'#ffffff',.28),c,d1:meepleMix(c,'#000000',.3),d2:meepleMix(c,'#000000',.5),d3:meepleMix(c,'#000000',.68)};
+  const dk=meepleDark(c),P={m1:meepleMix(c,'#000000',.18),l2:meepleMix(c,'#ffffff',dk?.3:.55),l1:meepleMix(c,'#ffffff',dk?.14:.28),c,d1:meepleMix(c,'#000000',.3),d2:meepleMix(c,'#000000',.5),d3:meepleMix(c,'#000000',.68)};
   const K={c:'@c',num,lt:'@l1',dk:'@d1',dk2:'@d2',skin:'@l2',skinDk:'@l1',hair:'@d2'};
   return meepleBoardStyle(v,K,c).replace(/@(m1|l2|l1|c|d1|d2|d3)\b/g,(_,k)=>P[k]);
 }
