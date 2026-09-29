@@ -52,3 +52,15 @@ The rules engine (`src/engine_*.js`) is imported from `src/engine.gen.js`, which
 |---|---|---|
 | `node test/run.mjs` | build, engine quick tier, UI checks (layout at 5 sizes, local game flows, animation frames) | about 1 min |
 | `node test/run.mjs --full` | adds engine full tier (60 games, AI games), layout at 11 sizes, render, e2e (needs `wrangler dev`) | several min |
+
+## Menu workflows (menu.js; tested by test/menus.cjs and test/online.cjs)
+
+- Three tabs: **This device** (setup), **Online** (hub: play, leaderboard, profile), **Replays**. No Back buttons: the tabs are
+  the navigation, and Esc or the backdrop closes the menu when a game is on.
+- `showMenu()` (the Menu button) opens what fits: an online game in progress → Online, with only the game bar (Back to game,
+  Resign) and a note instead of create/join/quick match, and no tabs (one game at a time); a finished online game → its room
+  is left, Online; otherwise the start screen (with the game bar over a local game).
+- The room lobby has no tabs and no Profile link: **Leave** (or Close room, for the host) is the way out, so nobody wanders
+  off while still seated. Signing out leaves any room (`leaveRoom()`).
+- A replay returns to the menu screen it was opened from (Replays, Online) when closed; a local game in progress comes back
+  behind it. Replays can't be opened during an online game in progress (it would leave it).

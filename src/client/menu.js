@@ -38,6 +38,10 @@ export function menuInit(){
   else if(d.open){d.style.animation='none';d.close();d.showModal();requestAnimationFrame(()=>d.style.animation='');MENU.f.focus({preventScroll:true});}
 }
 const menuDismissible=()=>inGame()&&MENU.screen!=='room';
+const onlineGame=()=>inGame()&&online(); // an online game in progress: one game at a time, so the menu only offers going back to it
+const MODE={setup:'local',online:'online',room:'online',replays:'replays'};
+/* the menu for where the player is: an online game (in progress, or just finished: its room is left) → Online; else the start screen */
+export function showMenu(){if(online()&&S.over){exitOnline();showHub();}else if(onlineGame())showHub();else showSetup();}
 
 /* show a screen (opening the dialog if it isn't open) */
 export function menuOpen(screen){
@@ -48,7 +52,8 @@ export function menuOpen(screen){
     r.textContent='Resign'+(rs>=0&&!online()&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');mq('#sEnd').hidden=online();}
   if(screen==='setup'){const saved=loadSave();mq('#sResume').hidden=!(saved&&!saved.S.over&&!ig);setText(mq('#sGo'),ig?'Start a new game':'Start expedition');}
   acctRender();
-  setRadio('mode',screen==='online'||screen==='room'?'online':'local');
+  setRadio('mode',MODE[screen]);mq('#sMode').hidden=screen==='room'||onlineGame(); // in a room, Leave is the way out; in an online game, Back to game
+  mq('#acct').classList.toggle('inroom',screen==='room');
   if(MENU.screen!==screen){for(const s of mqa('section[data-screen]'))s.hidden=s.dataset.screen!==screen;MENU.screen=screen;MENU.f.scrollTop=0;}
   clearTimeout(MENU.closeT);d.classList.remove('closing');document.documentElement.classList.remove('resume');
   // the page opens the dialog as plain HTML (before any script); the first time, it becomes a modal dialog (focus, Esc),
@@ -71,13 +76,13 @@ export function acctRender(){
 /* ---- every choice ---- */
 export function menuChange(e){
   const n=e.target.name||e.target.id;
-  if(n==='mode'){if(e.target.value==='online')showHub();else showSetup();return;}
+  if(n==='mode'){({local:showSetup,online:showHub,replays:showReplays})[e.target.value]();return;}
   if(n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){setupSync();prepareGame();
     if(/^who\d$/.test(n))try{localStorage.setItem('eldorado-seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value)));}catch(_){} return;}
   if(n==='otab'){onlineTab();return;}
   if(n==='rlrated'){netSend({t:'rated',v:e.target.value==='1'});return;}
   if(n==='rlcol'){netSend({t:'color',color:e.target.value});return;}
-  if(n==='rFile')uploadReplay(e.target.files[0]);
+  if(n==='rFile'){uploadReplay(e.target.files[0]);e.target.value='';} // (so picking the same file again works too)
 }
 export function menuClick(e){
   const b=e.target.closest('button');if(!b||b.disabled)return;
@@ -87,11 +92,10 @@ export function menuClick(e){
     case'sBack':menuClose();return;
     case'sResign':menuClose();online()?resignOnline():resignLocal();return;
     case'sEnd':menuClose();endLocal();return;
-    case'sReplays':showReplays();return;
     case'sResume':menuClose();resumeSaved();return;
     case'sGo':delete b.dataset.q;startLocal();return;
     case'acProfile':NET.viewUser=null;setRadio('otab','me');showHub();return;
-    case'acOut':signOut(menuRefresh);return;
+    case'acOut':{const was=MENU.screen;leaveRoom();if(online())exitOnline();signOut(was==='room'||was==='online'?showHub:menuRefresh);return;} // signed out: out of any room
     case'devGo':run(async()=>signedIn(await api('/api/auth/dev',{method:'POST',body:JSON.stringify({name:mq('#devName').value||'Tester'})}),menuRefresh));return;
     case'qGo':run(async()=>joinRoom((await api('/api/match',{method:'POST',body:'{}'})).code));return;
     case'cGo':run(async()=>joinRoom((await api('/api/rooms',{method:'POST',body:JSON.stringify({max:+radio('max'),turn:+radio('turn'),course:radio('ocourse'),pub:radio('pub')==='1',rated:radio('rated')==='1'})})).code));return;
@@ -100,15 +104,14 @@ export function menuClick(e){
     case'pfBack':NET.viewUser=null;setRadio('otab','board');onlineTab();return;
     case'meSave':run(async()=>{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:mq('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);acctRender();});return;
     case'lkCopy':{const i=mq('#lkIn');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value).then(()=>toast('Link copied')).catch(()=>{});return;}
-    case'rlLeave':netSend({t:'leave'});NET.code=null;leaveRoomSocket();try{history.replaceState(null,'',location.pathname);}catch(_){}showHub();return;
+    case'rlLeave':leaveRoom();showHub();return;
     case'rlStart':netSend({t:'start'});return;
     case'rlNow':netSend({t:'now'});return;
     case'rUp':mq('#rFile').click();return;
   }
-  if(b.dataset.go==='setup'){showSetup();return;}
   if(b.dataset.join){joinRoom(b.dataset.join);return;}
   if(b.dataset.uid){NET.viewUser=b.dataset.uid;setRadio('otab','me');onlineTab();return;}
-  if(b.dataset.rid||b.dataset.id){closeLobbyWs();loadReplayId(b.dataset.rid||b.dataset.id);return;}
+  if(b.dataset.rid||b.dataset.id){if(onlineGame()){toast('Your game is still on: watch replays once it’s over.');return;}closeLobbyWs();loadReplayId(b.dataset.rid||b.dataset.id);return;}
   if(b.dataset.lid){const L=myGames().find(x=>x.lid===b.dataset.lid);if(L)openReplay(L,null);return;}
   if(b.dataset.addai){netSend({t:'addAI',ai:b.dataset.addai});return;}
   if(b.dataset.rmai){netSend({t:'removeAI',uid:b.dataset.rmai});return;}
@@ -159,12 +162,14 @@ export function startLocal(){
 }
 
 /* ---- Online ---- */
+/* leave the room this page is in (before its game starts: afterwards the server ignores it and the socket just closes) */
+export function leaveRoom(){if(!NET.code)return;if(NET.connected)netSend({t:'leave'});NET.code=null;leaveRoomSocket();try{history.replaceState(null,'',location.pathname);}catch(_){}}
 export function showHub(){if(NET.user)openLobbyWs();onlineRender();menuOpen('online');}
 export function onlineRender(){
   const u=NET.user;mq('#oOff').hidden=NET.available;mq('#oOut').hidden=!NET.available||!!u;mq('#oIn').hidden=!NET.available||!u;
   if(!NET.available)return;
   if(!u){mq('#oNoG').hidden=!!NET.cfg.google;mq('#oDev').hidden=!NET.cfg.dev;return;}
-  mq('#rejoin').hidden=!NET.active;roomsRender();onlineTab();
+  const busy=onlineGame();mq('#oBusy').hidden=!busy;mq('#oPlay').hidden=busy;mq('#rejoin').hidden=busy||!NET.active;roomsRender();onlineTab();
 }
 export function roomsRender(){
   const rrow=r=>`<div class="rrow"><span>${r.auto?'<b>Quick match</b>':`<b>${esc(r.host)}</b>’s room`} <span class="note">· ${r.count}/${r.max}${r.ai?` (${r.ai} AI)`:''} · ${r.turn}s turns · ${r.rated===false?'unrated':'rated'} · ${esc(courseName(r.course))}</span></span>${r.status==='lobby'&&r.count<r.max?`<button type="button" class="btn" data-join="${r.code}">Join</button>`:'<span class="note">in progress</span>'}</div>`;
