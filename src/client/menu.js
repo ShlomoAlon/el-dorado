@@ -112,7 +112,7 @@ export function menuClick(e){
   if(b.dataset.join){joinRoom(b.dataset.join);return;}
   if(b.dataset.uid){NET.viewUser=b.dataset.uid;setRadio('otab','me');onlineTab();return;}
   if(b.dataset.rid||b.dataset.id){if(onlineGame()){toast('Your game is still on: watch replays once it’s over.');return;}closeLobbyWs();loadReplayId(b.dataset.rid||b.dataset.id);return;}
-  if(b.dataset.lid){const L=myGames().find(x=>x.lid===b.dataset.lid);if(L)openReplay(L,null);return;}
+  if(b.dataset.lid){const L=myGames().find(x=>String(x.created)===b.dataset.lid);if(L)openReplay(L,null);return;}
   if(b.dataset.addai){netSend({t:'addAI',ai:b.dataset.addai});return;}
   if(b.dataset.rmai){netSend({t:'removeAI',uid:b.dataset.rmai});return;}
 }
@@ -226,7 +226,7 @@ export function renderRoomLobby(){
 /* ---- replays ---- */
 export function showReplays(){
   const mine=mq('#rMine'),loc=myGames(),row=(attr,title,sub)=>`<button type="button" ${attr}><b>${esc(title)}</b><span>${esc(sub)}</span></button>`;
-  const showMine=online=>{const items=[...loc.map(L=>({t:L.created,h:row(`data-lid="${esc(L.lid)}"`,L.title,`on this device · ${L.actions.length} moves · ${new Date(L.created).toLocaleString()}`)})),
+  const showMine=online=>{const items=[...loc.map(L=>({t:L.created,h:row(`data-lid="${L.created}"`,L.title,`on this device · ${L.actions.length} moves · ${new Date(L.created).toLocaleString()}`)})),
       ...online.map(g=>({t:g.created,h:row(`data-id="${esc(g.id)}"`,g.title||'Game',`online · ${g.actions} moves · ${new Date(g.created).toLocaleString()}`)}))].sort((a,b)=>b.t-a.t);
     setHTML(mine,items.length?items.map(x=>x.h).join(''):'<p class="note">No finished games yet. Games you finish here are kept to watch again.</p>');};
   showMine([]);
