@@ -1,13 +1,11 @@
 /* ONLINE — talks to the game server (Cloudflare Worker).
    Sign in with Google → hub (profile, rooms, leaderboard) → room lobby → game. */
 import { S, mapFor, setS, setMAP } from '../engine.gen.js';
-import { UI, NET, canAct, cur, online } from './state.js';
+import { UI, NET, online, viewIdx } from './state.js';
 import { render, resetView } from './frame.js';
-import { toast, banner, modal, closeModal, showGameOver } from './dialogs.js';
+import { toast, modal, closeModal } from './dialogs.js';
 import { showHub, showRoomLobby, renderRoomLobby, roomsRender, loadProfile } from './menu.js';
-import { showGame, playEvents, syncMode } from './actions.js';
-import { ensureVisible } from './board/camera.js';
-import { viewIdx } from './state.js';
+import { showGame, playEvents, afterChange } from './actions.js';
 import { sfx } from './sound.js';
 import { diag } from './debug.js';
 export async function api(path,opts={}){
@@ -94,12 +92,7 @@ export function applyServerState(S2,ev){
   if(fresh){setMAP(mapFor(S));closeModal();UI.cover=false;showGame();}
   const turnChanged=fresh||old.cur!==S.cur||old.round!==S.round;
   if(!fresh)playEvents(ev,viewIdx());
-  // the only thing that changes the game during my turn is me, so any new state closes pick modes
-  UI.picks=[];UI.buy=null;UI.pending=null;if(['pay','discardFor','transmit','endTurn'].includes(UI.mode)){UI.mode='idle';UI.card=null;}
-  syncMode(turnChanged);
-  render();
-  if(S.over&&(fresh||!old.over)){setTimeout(()=>{if(S&&S.over)showGameOver();},700);return;} // (unless another game is on show by then)
-  if(turnChanged&&!S.over){banner(canAct()?'Your turn':cur().name,canAct()?'Round '+S.round:'Round '+S.round);ensureVisible();}
+  afterChange(turnChanged,S.over&&(fresh||!old.over));
 }
 export function resignOnline(){
   modal(`<h2>Leave this game?</h2><p class="sub">${NET.room.opts.rated===false?'Leaving counts as finishing last among the players still racing (this game is unrated).':'Leaving a rated game counts as finishing last among the players still racing. Your rating will drop.'}</p><div class="mrow"><button class="btn" id="rsNo">Stay</button><button class="btn pri" id="rsYes">Leave game</button></div>`,sc=>{

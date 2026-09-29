@@ -73,24 +73,31 @@ export function act(a){
   if(!canAct()){if(online()&&!S.over&&S.cur===NET.seat)toast('Reconnecting… your move wasn’t sent.');return;}
   diag('act '+a.t);
   if(online()){netAct({t:'act',a});render();return;}
-  const prevCur=S.cur,prevRound=S.round;
-  const r=recApply(G.rec,S.cur,a);
-  if(!r.ok){sfx('error');toast(r.err);render();return;}
-  playEvents(r.ev);
-  afterLocalChange(S.cur!==prevCur||S.round!==prevRound);
+  const r=applyLocal(S.cur,a);
+  if(!r.ok){sfx('error');toast(r.err);render();}
 }
-export function afterLocalChange(turnChanged){
+/* one change to the local game (a player's action, an AI's, a resignation, the end of the game): the engine applies it and
+   it is recorded (G.rec), then shown. viewer: whose view the events play for (an AI's purchase doesn't fly into the
+   watching human's discard pile) */
+export function applyLocal(seat,a,viewer){
+  const prev=S.cur,round=S.round,r=recApply(G.rec,seat,a);
+  if(r.ok){playEvents(r.ev,viewer);afterLocalChange(S.over||S.cur!==prev||S.round!==round);}
+  return r;
+}
+function afterLocalChange(turnChanged){
+  if(S.over)UI.lastReplay=keepLocalReplay();
+  afterChange(turnChanged,S.over);save();aiKick();
+}
+/* after the game changed (a local change, or a new state from the server): the pick modes close (during my turn only I
+   change the game), the selection follows the turn, and a new turn or the end is announced. ended: the game just ended */
+export function afterChange(turnChanged,ended){
   UI.picks=[];UI.buy=null;UI.pending=null;if(['pay','discardFor','transmit','endTurn'].includes(UI.mode)){UI.mode='idle';UI.card=null;}
-  if(!turnChanged){syncMode(false);render();}
-  else{
-    syncMode(true);
-    // hide the hand between human players only (pass-and-play); AI turns never need it
-    if(G.rec.privacy&&!S.over&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
-    render();
-    if(!UI.cover&&!S.over){banner(cur().name,isAI(S.cur)?'AI · Round '+S.round:'Round '+S.round);ensureVisible();}
-  }
-  if(S.over){UI.lastReplay=keepLocalReplay();setTimeout(()=>{if(S&&S.over)showGameOver();},600);} // (unless another game is on show by then)
-  save();aiKick();
+  syncMode(turnChanged);
+  // pass-and-play: the hand is hidden between human players only (AI turns never need it)
+  if(turnChanged&&!S.over&&!online()&&G.rec.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
+  render();
+  if(ended)setTimeout(()=>{if(S&&S.over)showGameOver();},600); // (unless another game is on show by then)
+  else if(turnChanged&&!UI.cover&&!S.over){banner(online()&&canAct()?'Your turn':cur().name,(isAI(S.cur)?'AI · ':'')+'Round '+S.round);ensureVisible();}
 }
 
 /* ---------- UI actions (build an action from the current selection) ---------- */
@@ -196,13 +203,12 @@ export function resignLocal(){const seat=resignSeat();if(seat<0)return;
   const humans=S.players.filter((p,j)=>j!==seat&&!p.ai&&isActive(p)).length;
   modal(`<h2>Resign?</h2><p class="sub">${esc(S.players[seat].name)} leaves the expedition and finishes last among the players still racing. ${humans?'The others play on.':'The AIs finish the race.'}</p><div class="mrow"><button class="btn" id="rsNo">Keep playing</button><button class="btn pri" id="rsYes">Resign</button></div>`,sc=>{
     sc.querySelector('#rsNo').onclick=closeModal;
-    sc.querySelector('#rsYes').onclick=()=>{closeModal();if(!S||S.over||online())return;const prevCur=S.cur,prevRound=S.round;
-      const r=recApply(G.rec,seat,{t:'resign'});if(!r.ok)return;playEvents(r.ev);afterLocalChange(S.cur!==prevCur||S.round!==prevRound);};},true);}
+    sc.querySelector('#rsYes').onclick=()=>{closeModal();if(!S||S.over||online())return;assert(applyLocal(seat,{t:'resign'}).ok,'resign is accepted');};},true);}
 /* End game (local play): the game ends now for everyone; places as they stand (arrivals first, then who is closest) */
 export function endLocal(){if(!S||S.over||online()||G.replay)return;
   modal(`<h2>End the game?</h2><p class="sub">The race stops now for everyone. Places go by who has arrived, then who is closest to El Dorado.</p><div class="mrow"><button class="btn" id="egNo">Keep playing</button><button class="btn pri" id="egYes">End game</button></div>`,sc=>{
     sc.querySelector('#egNo').onclick=closeModal;
-    sc.querySelector('#egYes').onclick=()=>{closeModal();if(!S||S.over)return;const r=recApply(G.rec,S.cur,{t:'endgame'});assert(r.ok,'endgame is accepted');playEvents(r.ev);afterLocalChange(true);};},true);}
+    sc.querySelector('#egYes').onclick=()=>{closeModal();if(!S||S.over)return;assert(applyLocal(S.cur,{t:'endgame'}).ok,'endgame is accepted');};},true);}
 
 /* the first view part of every frame: what the selection allows now (the targets), before anything is drawn */
 export const derivePart = { name: 'derive', update(){if(!S)return;if(!online()&&!G.replay&&!isAI(S.cur))UI.viewer=S.cur;computeTargets();if(G.replay)replayDecorate();}};

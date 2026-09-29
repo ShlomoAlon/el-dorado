@@ -1,10 +1,10 @@
 /* Local AI seats (engine_ai.js). The AI decides with the shared engine in this page and plays through the same
    applyAction as everyone else, one action at a time with a short pause so the table can follow. */
-import { S, aiUsesNet, aiNetDecode, aiSetNet, aiStep } from '../engine.gen.js';
+import { S, aiUsesNet, aiNetDecode, aiSetNet, aiChoose, assert } from '../engine.gen.js';
 import { UI, G, online, isAI, viewIdx, humanRacing } from './state.js';
 import { reduceMotion } from './dom.js';
 import { toast } from './dialogs.js';
-import { playEvents, afterLocalChange } from './actions.js';
+import { applyLocal } from './actions.js';
 // gen: which game is on show (aiReset: showGame); a move scheduled for an earlier one is dropped
 export const AIX={timer:0,mem:{},net:null,loading:null,failed:false,gen:0};
 export function aiNetLoad(){ // the neural network (~340 KB) is only fetched once a network AI is about to play
@@ -31,11 +31,9 @@ export function aiKick(){
     if(gen!==AIX.gen)return;
     if(S.over||S.cur!==seat){AIX.timer=0;return;}
     aiSetNet(AIX.net);
-    const prevCur=S.cur,prevRound=S.round,mem=AIX.mem[seat]||(AIX.mem[seat]={});
-    const r=aiStep(id,mem,G.rec);
-    AIX.timer=0;
-    playEvents(r.ev,viewIdx()); // the AI's purchases don't fly into the human's discard pile
-    afterLocalChange(S.cur!==prevCur||S.round!==prevRound);
+    const a=aiChoose(id,AIX.mem[seat]||(AIX.mem[seat]={}));
+    AIX.timer=0; // (before applying: the change schedules the next AI move)
+    assert(applyLocal(seat,a,viewIdx()).ok,'the AI chooses a legal action');
   };
   AIX.timer=setTimeout(go,!humanRacing()?60:reduceMotion?250:first?1000:750); // paced so the table can follow each card (no one left to follow: quick)
 }
