@@ -39,6 +39,8 @@ const seedScript = () => { let a = 20260929; Math.random = () => { a |= 0; a = a
       await idle();
     }
     await p.evaluate(() => { const E = window.__ED; E.cancelMode && E.UI.mode !== 'idle' && E.cancelMode(); document.querySelectorAll('#hist,.hist').forEach(() => { }); E.render(); });
+    // the market on show (an option may start it closed on phones)
+    await p.evaluate(() => { if (!window.__ED.UI.mktOpen) document.querySelector('#mktBtn').click(); });
     await p.mouse.move(vw / 2, 5); await idle();
     return { p, ctx, idle };
   }
