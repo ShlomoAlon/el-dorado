@@ -7,7 +7,7 @@
    While another player takes their turn (an AI here, anyone else online) it follows live: their cards fly out of their
    player chip, a bought card flies out of the market, and their moves leave a dotted trail on the board until you act.
    Your own turn is added once you end it. */
-import { S, CT, MAP, SYMNAME, plural, fmt, assert } from '../engine.gen.js';
+import { hatSVG, S, CT, MAP, SYMNAME, plural, fmt, assert } from '../engine.gen.js';
 import { $, esc, setHTML, setText, setStyle, reduceMotion, EASE } from './dom.js';
 import { toast } from './dialogs.js';
 import { UI, NET, G, online, isAI } from './state.js';
@@ -143,7 +143,7 @@ function stepHTML(g){
 }
 function turnHead(t,now){
   const p=S.players[t.p];if(!p)return'';const you=online()&&t.p===NET.seat;
-  return`<i style="background:${p.color}"></i><b>${esc(p.name)}</b>${you?'<span>(you)</span>':''}<span class="hr">Round ${t.r}</span>${now?'<span class="hnow">playing…</span>':''}`;
+  return`${hatSVG(p.color)}<b>${esc(p.name)}</b>${you?'<span>(you)</span>':''}<span class="hr">Round ${t.r}</span>${now?'<span class="hnow">playing…</span>':''}`;
 }
 const NONE='<p class="hnone">Nothing played yet. Each turn shows here, newest first.</p>';
 let firstObs=null,shownBtn=null,mktWas=null,replayOpen=null;

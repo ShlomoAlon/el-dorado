@@ -1,7 +1,7 @@
 /* REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
    The log holds the seeds and every action; the engine rebuilds each position (replayStart), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
-import { S, CT, LOG_MAX, hexAt, mapFor, setS, setMAP, replayCheck, replayStart, replayStep, applyAction, botRemaining, botCost, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
+import { hatSVG, S, CT, LOG_MAX, hexAt, mapFor, setS, setMAP, replayCheck, replayStart, replayStep, applyAction, botRemaining, botCost, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
 import { $, esc, setHTML } from './dom.js';
 import { UI, G, online, clearSelection } from './state.js';
 import { render, resetView } from './frame.js';
@@ -117,7 +117,7 @@ export function replayPromptHTML(){
   if(!a)return`<b>End of the replay.</b> ${S.over?'The game is over.':'The log stops here'+(R.log.result&&R.log.result.capped?' (it hit the 25-round cap).':'.')}`;
   const pl=S.players[a[0]],st=JSON.parse(R.states[R.i]);
   const r0=R.rem[R.i][a[0]];
-  return`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>${describeAction(a[1],st)} <span class="m">· now ${fmtR(r0)} left</span>`;
+  return`<span class="who">${hatSVG(pl.color)}${esc(pl.name)}</span>${describeAction(a[1],st)} <span class="m">· now ${fmtR(r0)} left</span>`;
 }
 const fmtR=x=>Math.round(x*10)/10;
 /* Replay UI lives in its own grid cells (#rdock under the game, #rside beside it or under it on narrow screens),
@@ -150,7 +150,7 @@ function replayBar(){
   const ev=replayEval(),pc=v=>v==null?'–':Math.round(v*100)+'%';
   let h=`<div class="rwh">Evaluation <span class="m">· estimated winning chances</span></div>`;
   if(!ev)h+=`<p class="m">Loading the network…</p>`;
-  else h+=`<div class="revl">${S.players.map((p,j)=>`<div class="rev${j===S.cur&&!S.over?' now':''}"><i style="background:${p.color}"></i><span class="n">${esc(p.name)}</span><span class="bar"><span style="transform:scaleX(${ev.share[j]==null?0:Math.max(0,Math.min(1,ev.share[j]))})"></span></span><b>${p.resigned?'left':pc(ev.share[j])}</b></div>`).join('')}</div>`;
+  else h+=`<div class="revl">${S.players.map((p,j)=>`<div class="rev${j===S.cur&&!S.over?' now':''}">${hatSVG(p.color)}<span class="n">${esc(p.name)}</span><span class="bar"><span style="transform:scaleX(${ev.share[j]==null?0:Math.max(0,Math.min(1,ev.share[j]))})"></span></span><b>${p.resigned?'left':pc(ev.share[j])}</b></div>`).join('')}</div>`;
   const nx=replayNext(),A=aiById(ADVISOR),who=esc(S.players[S.cur].name);let steps=null;
   if(ev&&!S.over){
     h+=`<div class="rwh radv">${esc(A.name)}’s turn for ${who} <span class="m">· the strongest AI’s plan from here</span></div>`;

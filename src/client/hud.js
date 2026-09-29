@@ -1,6 +1,6 @@
 /* The heads-up display: the top bar (round, one chip per player), the prompt (what to do now, the online turn clock)
    and the turn buttons. Each piece is rewritten only when its text changes. */
-import { S, CT, SYMNAME, SYMCOL, typeOf, def, fmt, plural, blocksOf } from '../engine.gen.js';
+import { hatSVG, S, CT, SYMNAME, SYMCOL, typeOf, def, fmt, plural, blocksOf } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle } from './dom.js';
 import { UI, NET, G, cur, canAct, online, isAI } from './state.js';
 import { onGeo, geo } from './geometry.js';
@@ -28,7 +28,7 @@ function updateHeader(){
     const you=online()&&i===NET.seat,off=online()&&!NET.room.seats[i].online; // (the room's seats are in the game's seat order)
     const cls='pchip glass'+(i===S.cur&&!S.over?' on':'');if(c.className!==cls)c.className=cls;
     setStyle(c,'--pc',p.color);setStyle(c,'opacity',off?.55:1);c.title=off?'offline':'';
-    setHTML(c,`<span class="dot"></span><span class="nm">${esc(p.name)}${you?' <span style="color:var(--muted);font-weight:600">(you)</span>':''}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}<span class="st">${p.deck.length+p.hand.length+p.discard.length+p.play.length} cards</span>${bk?`<span class="bk">${bk}</span>`:''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}`);
+    setHTML(c,`${hatSVG(p.color,'dot hat')}<span class="nm">${esc(p.name)}${you?' <span style="color:var(--muted);font-weight:600">(you)</span>':''}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}<span class="st">${p.deck.length+p.hand.length+p.discard.length+p.play.length} cards</span>${bk?`<span class="bk">${bk}</span>`:''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}`);
   });
 }
 
@@ -36,7 +36,7 @@ function updateHeader(){
 function updatePrompt(){
   if(!S){setHTML($('#ptxt'),'');btnWire($('#actBtns'),[]);return;}
   const pl=cur();const P=$('#ptxt'),B=$('#actBtns');
-  const who=`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>`;
+  const who=`<span class="who">${hatSVG(pl.color)}${esc(pl.name)}</span>`;
   let txt='',btns=[];
   if(G.replay){setHTML(P,replayPromptHTML());btnWire(B,[]);return;}
   const tm=online()&&!S.over?'<span id="turnTimer" class="timer" hidden></span>':'';

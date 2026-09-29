@@ -135,6 +135,13 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #acct{min-height:32px} /* its line is there before the script fills it: nothing below moves */
 #shell{isolation:isolate} /* nothing in the game can stack above the menu, whatever its z-index */
 #shell{visibility:hidden} /* the game shows once its CSS (the late block) has arrived */
+
+/* D7-B: every colour mark is the player's hat (the one their explorer wears), drawn in their colour */
+.sws label{width:34px;height:26px;border-radius:7px;background:rgba(255,255,255,.04);display:grid;place-items:center}
+.sws label .hat{width:26px;height:18px;display:block}
+.sws{gap:3px}
+.sws label:has(input:checked){border-color:var(--c);background:rgba(255,255,255,.1);transform:none}
+.seatrow .hat{width:22px;height:15px;flex:none}
 </style>
 <style data-late>
 /* the game's CSS: a separate cached file on the site (build.mjs), inline in the artifact */
@@ -534,6 +541,14 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @keyframes bsIn{from{transform:translateY(-14px) scale(.9);opacity:0}}
 #shell,#overlay,#banner{--display:'Young Serif', Georgia, 'Times New Roman', serif;--ui:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;font-family:var(--ui)}
 html.gameready.boardready #shell{visibility:visible} /* once the game's fonts are in (ui_boot.js) and its board is fitted (fit): no text swaps fonts, no board jumps */
+
+/* D7-B: the hat is the colour mark (chips, prompt, history, replay) */
+.hat{display:block;flex:none;overflow:visible}
+.pchip .dot.hat{width:24px;height:16px;background:none;box-shadow:none;border-radius:0}
+#prompt .who .hat,#rbTxt .who .hat{width:20px;height:14px}
+.hwho .hat{width:17px;height:12px}
+#rside .rev .hat{width:14px;height:10px}
+#rside .rev{grid-template-columns:14px minmax(0,7em) 1fr 40px}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">

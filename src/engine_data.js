@@ -39,7 +39,11 @@ const MARKET0=['scout','trailblazer','jack','photographer','chest','transmitter'
 const RESERVE0=['pioneer','giant','captain','journalist','millionaire','adventurer','plane','cartographer','scientist','compass','travellog','native'];
 const SYMNAME={j:'machete',w:'paddle',v:'coin'};
 const SYMCOL={j:'#3f9a5c',w:'#3a8ad0',v:'#e7b54d',r:'#a3a8a4'};
-const COLORS=[{id:'crimson',hex:'#e5484d',name:'Crimson'},{id:'ivory',hex:'#efe9dc',name:'Ivory'},{id:'violet',hex:'#9d7df7',name:'Violet'},{id:'orange',hex:'#ff9636',name:'Orange'}]; // one explorer figure per colour
+const COLORS=[{id:'crimson',hex:'#e5484d',name:'Crimson'},{id:'ivory',hex:'#efe9dc',name:'Ivory'},{id:'violet',hex:'#9d7df7',name:'Violet'},{id:'orange',hex:'#ff9636',name:'Orange'}];
+// D7-B: each colour's explorer wears its own hat; the hat's silhouette (viewBox 0 0 24 16) marks the player wherever its colour does
+// (pith helmet, wide-brim hat, fedora, headscarf), so colour is never the only cue
+const HATS=['M4 11.5C4 5 7.4 2 12 2s8 3 8 9.5ZM1 11.5h22l-2.4 3H3.4Z','M7.5 10.5 8.6 4.2Q12 3 15.4 4.2l1.1 6.3ZM.5 10.5h23l-3.6 3.6H4.1Z','M5.5 10.8 6.6 4.6 10.4 3.2 12 4.8l1.6-1.6 3.8 1.4 1.1 6.2ZM1.5 9.6Q12 13 22.5 9.6l-2.6 4.4H4.1Z','M4.2 13.6Q3.2 3.2 12 2.4q7.6.2 7.6 7.8l3.6 3.6-4.6-.6-.6 1.4Z'];
+const hatSVG=(hex,cls='hat')=>{const i=COLORS.findIndex(c=>c.hex===hex);return`<svg class="${cls}" viewBox="0 0 24 16" aria-hidden="true"><path d="${HATS[i<0?0:i]}" fill="${hex}" stroke="#0b0f0d" stroke-width="1.3" stroke-linejoin="round"/></svg>`;}; // one explorer figure per colour
 /* Official base-game blockades are numbered 1–6: jungle, village, rubble, water, jungle, rubble.
    They are placed along the route in number order; the number also breaks ties. */
 const BLOCKADES=[{n:1,k:'j',v:1},{n:2,k:'v',v:1},{n:3,k:'r',v:1},{n:4,k:'w',v:1},{n:5,k:'j',v:2},{n:6,k:'r',v:2}];
