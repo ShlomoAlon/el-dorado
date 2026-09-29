@@ -15,7 +15,7 @@ function cardArt(t){
   const d=CT[t];let emb;
   if(d.c==='p')emb=`<g transform="translate(50 35) scale(2.1)">${GLYPH[t]}</g>`;
   else{const sym=d.s==='*'?'x':d.s;const col={j:'#f2fff5',w:'#f2f9ff',v:'#ffe08a',x:'#8a6a1f'}[sym];
-    emb=`<g transform="translate(50 36)"><ellipse cx="0" cy="22" rx="18" ry="3.5" fill="rgba(0,0,0,.25)"/><g filter="none" style="color:${col}"><use href="#i-${sym}" x="-19" y="-19" width="38" height="38" style="color:rgba(0,0,0,.35)" transform="translate(1.5 2)"/><use href="#i-${sym}" x="-19" y="-19" width="38" height="38"/></g></g>`;}
+    emb=`<g transform="translate(50 36)"><ellipse cx="0" cy="22" rx="18" ry="3.5" fill="rgba(0,0,0,.25)"/><g filter="none" color="${col}"><use href="#i-${sym}" x="-19" y="-19" width="38" height="38" color="rgba(0,0,0,.35)" transform="translate(1.5 2)"/><use href="#i-${sym}" x="-19" y="-19" width="38" height="38"/></g></g>`;}
   return `<svg viewBox="0 0 100 70" preserveAspectRatio="xMidYMid slice">${cardBg(t)}${emb}</svg>`;
 }
 export function cardHTML(t){

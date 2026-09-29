@@ -38,6 +38,10 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
 5. Commit (clear message + the attribution lines your environment asks for) and `git push origin main`.
 6. Tell him in 1–3 sentences what changed and that it's deploying.
 
+## Design tokens
+- UI values (colours, type sizes, radii, space, control heights) come from the tokens in `shell.html` `:root`; read
+  `docs/DESIGN.md` (the tokens and a short "never" list: no raw hex, no px font sizes, no inline styles, no Unicode icons) before adding UI.
+
 ## Libraries (owner's rule)
 - Use a library when it solves a genuinely difficult problem (e.g. robust pan/zoom across wheel, trackpad and touch)
   and has a strong reputation / wide use for exactly that job. Its size doesn't matter (smaller is better).

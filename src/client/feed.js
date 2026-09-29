@@ -143,7 +143,7 @@ function stepHTML(g){
 }
 function turnHead(t,now){
   const p=S.players[t.p];if(!p)return'';const you=online()&&t.p===NET.seat;
-  return`<i style="background:${p.color}"></i><b>${esc(p.name)}</b>${you?'<span>(you)</span>':''}<span class="hr">Round ${t.r}</span>${now?'<span class="hnow">playing…</span>':''}`;
+  return`<i class="pdot" style="--pc:${p.color}"></i><b>${esc(p.name)}</b>${you?'<span>(you)</span>':''}<span class="hr">Round ${t.r}</span>${now?'<span class="hnow">playing…</span>':''}`;
 }
 const NONE='<p class="hnone">Nothing played yet. Each turn shows here, newest first.</p>';
 let firstObs=null,shownBtn=null,mktWas=null,replayOpen=null;
