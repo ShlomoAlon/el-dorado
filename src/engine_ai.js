@@ -40,8 +40,8 @@ function aiChoose(id,mem){
   let opts=A.opts;if(opts.mode==='net'&&(!botNetReady()||S.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
   const me=S.cur,tk=me+':'+S.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
   if(++mem.n>60)return S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
-  const r0=RNG;setRng(null);BOT_PLAN_CACHE=mem.plan||null;
-  let a;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;RNG=r0;}
+  BOT_PLAN_CACHE=mem.plan||null;
+  let a;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;}
   return aiFinishGuard(a);
 }
 /* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
@@ -68,8 +68,8 @@ function aiFinishGuard(a){
   return a;
 }
 /* apply the AI's decision (recorded in rec, the game's log; may be null). Returns applyAction's result. */
-function aiStep(id,mem,rec){
-  const r=recApply(rec,S.cur,aiChoose(id,mem));
+function aiStep(id,mem,rec,rnd){ // rnd: the game's shuffles when there is no record (tools)
+  const r=recApply(rec,S.cur,aiChoose(id,mem),rnd);
   assert(r.ok,'aiStep: the AI chooses a legal action');
   return r;
 }

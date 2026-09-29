@@ -22,12 +22,12 @@ The engine works on three module-level variables:
 |---|---|
 | `S` | the game on show (§1.4); `null` before a game |
 | `MAP` | the board built from `S.course` and `S.seed` (§1.3) |
-| `RNG` | the random source every shuffle uses; `setRng(f)` sets it, `setRng(null)` restores `Math.random` |
 
 - **Access from outside:** consumers read and replace them through `E.S`, `E.MAP` (getters and setters), or through the named live
   exports with `setS(v)` and `setMAP(v)`.
-- **Determinism:** the same `RNG` sequence plus the same actions always give the same game. The AIs decide with `Math.random`
-  (look-ahead shuffles), so the same seeded game between AIs doesn't repeat move for move.
+- **Randomness is always passed in** (`rnd: () => [0, 1)`): `newGame(o, rnd)` and `applyAction(seat, a, rnd)` shuffle with the
+  generator they are given (default `Math.random`). A record gives each action its own (§1.8), so the same record always
+  gives the same game. The AIs' look-ahead shuffles with its own `rnd`, never the game's.
 
 ### 1.2 Data
 
@@ -112,7 +112,7 @@ P = { name, color, ai?: AI id, pieces: [key|'done'], deck: [id], hand: [id], dis
 - **`turn.pending`:** a Scientist or Travel Log is waiting for its `trash` action.
 - **Online:** the server never writes into `S` (who plays each seat is the room's `seats`, in seat order); it keeps only the last 120 log lines.
 
-### 1.5 Actions — `applyAction(seat, a)` → `{ok, err?, ev: [event], reveal?}`
+### 1.5 Actions — `applyAction(seat, a, rnd = Math.random)` → `{ok, err?, ev: [event], reveal?}`
 
 The acting seat must be `S.cur`, except for `resign`. A refused action returns `{ok: false, err: text}` and changes nothing.
 
@@ -206,13 +206,13 @@ A game is its setup plus its list of actions; any position is rebuilt by replayi
 | function | |
 |---|---|
 | `recNewGame(opts)` → rec | Starts a game (`opts` as for `newGame`; `rng` comes from `crypto.getRandomValues`, or `Math.random` where there is none). Sets `S` and `MAP`. |
-| `recApply(rec, seat, a)` | `applyAction` with the action's generator. On success the action is recorded (`rec` may be `null`: not recorded). `mark` moves up when an action reveals cards, passes the turn, resigns or ends the game. |
+| `recApply(rec, seat, a, rnd?)` | `applyAction` with the action's generator (`rnd` only for a game without a record). On success the action is recorded (`rec` may be `null`: not recorded). `mark` moves up when an action reveals cards, passes the turn, resigns or ends the game. |
 | `recCanUndo(rec)` | `actions.length > mark` |
 | `recUndo(rec)` | Drops the last action and rebuilds `S` and `MAP`. |
 | `recState(rec)` → `{S, MAP}` | The position a record leads to (the module's `S` and `MAP` are left as they were). |
 | `recFinal(rec)` | The finished log, with `title` and `result` (`{places, rounds}`, read from the game on show, `S`), and without `mark`. |
 | `replayCheck(log)` | `null`, or why the log can't be played. Records before v3 were played under older rules (the turn went on after the last explorer arrived) and are refused; the server deleted its stored ones once (settings `logs_v3`), rooms with one close, and the page dropped its old saves (keys `-v1`). |
-| `replayStart(log)`, `replayStep(log, i)` | Rebuild step by step; `replayStep` returns `applyAction`'s result. |
+| `replayStart(log)` → `g`, `replayStep(log, i, g)` | Rebuild step by step; `replayStep` returns `applyAction`'s result. `g` is the generator a training log's actions share (records ignore it: each action has its own). |
 
 **Training logs** (`v: 1`, tools only) use one generator for the whole game, `mulberry32(rng)`, consumed only by the recorded actions.
 They may give every player one extra card (`gift`) shuffled into the deck. `replayStart` leaves their generator installed for the
@@ -236,7 +236,7 @@ Each entry also has `rating` (its calibrated starting rating), `desc` and `opts`
 | `aiById(id)`, `aiUsesNet(id)` | |
 | `aiAllowed(course, n)` | AIs are offered on First Expedition with 3–4 players (`aiCourseOK(course)` checks the course alone). |
 | `aiChoose(id, mem)` → action | One decision for `S.cur`. `mem` is `{}` per game and seat; it keeps the turn planner's cache. An unknown id, a 2-player game, or no fitting network: the route planner. After 60 decisions in one turn it ends the turn. It never removes its last card that can enter El Dorado, never thins its deck below 4 cards, and buys such a card before ending a turn without one. |
-| `aiStep(id, mem, rec)` | `recApply` of `aiChoose`; if the action is refused, a `timeout` instead. |
+| `aiStep(id, mem, rec, rnd?)` | `recApply` of `aiChoose` (the AI's choice is always legal: asserted). |
 | `aiPlan(id, rnd)` → `[action]` or null | The whole turn that AI would play from here for `S.cur` (its planner's best line; a draw card ends the line). null unless the AI plans whole turns with a loaded network. The replay shows Fawcett's. |
 | `aiNetDecode(bytes)`, `aiSetNet(net)`, `aiNetFits()` | Load and select the network; `aiNetFits()` says whether it was trained for this course. |
 
@@ -442,14 +442,13 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 The tools import `E`. Their common loop:
 
 ```
-E.newGame({course, seed, fullRace: true, players})        // or E.replayStart(log) to record a replayable game
+const gen = E.replayStart(log)        // or E.newGame({course, seed, fullRace: true, players}, gen) for a game not recorded
 while (!E.S.over) { const me = E.S.cur; E.setNet(netFor(me));
-  const a = E.botChoose(opts).a; if (!E.applyAction(me, a).ok) E.applyAction(me, {t: 'end', keep: []}); }
+  const a = E.botChoose(opts).a; if (!E.applyAction(me, a, gen).ok) E.applyAction(me, {t: 'end', keep: []}, gen); }
 ```
 
 - A round cap ends a game with `E.endGame()`.
-- To record a game, install the game's generator only around each recorded `applyAction` (`setRng(gen)` … `setRng(null)`), so the
-  bots' look-ahead never consumes it.
+- The game's generator goes only to the game's own `applyAction` calls, so the bots' look-ahead never consumes it.
 - `tools/ai/golden.mjs` checks the feature contract (§1.10).
 - `h2h.mjs` plays AI settings against each other.
 - `calibrate_ais.mjs` measures the AIs' starting ratings (the deals are seeded; the AIs' choices are not, see §1.1).

@@ -1,7 +1,7 @@
 /* REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
    The log holds the seeds and every action; the engine rebuilds each position (replayStart), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
-import { S, MAP, CT, RNG, hexAt, mapFor, setS, setMAP, setRng, replayCheck, replayStart, replayStep, applyAction, botRemaining, botCost, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
+import { S, MAP, CT, hexAt, mapFor, setS, setMAP, replayCheck, replayStart, replayStep, applyAction, botRemaining, botCost, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
 import { $, esc, setHTML } from './dom.js';
 import { UI, G, online } from './state.js';
 import { render, resetView } from './frame.js';
@@ -13,18 +13,16 @@ import { showSetup, showHub, showReplays, MENU } from './menu.js';
 const TERR={j:'jungle',w:'water',v:'village',r:'rubble',c:'base camp',g:'El Dorado',s:'start'};
 function buildReplay(log,id){
   const err=replayCheck(log);if(err)throw new Error(err);
-  replayStart(log);
+  const g=replayStart(log);
   const states=[],lines=[],evs=[null],rem=[],fails=[];
   const snap=()=>{const L0=S.log;S.log=[];states.push(JSON.stringify(S));S.log=L0;rem.push(S.players.map((_,j)=>botRemaining(j)));};
-  try{
-    lines.push(S.log.slice());snap();
-    for(let i=0;i<log.actions.length;i++){
-      S.log=[];
-      let r=replayStep(log,i);
-      if(!r.ok){fails.push(i+1);r=applyAction(S.cur,{t:'end',keep:[]});}
-      lines.push(S.log.slice());evs.push(r.ev||null);snap();
-    }
-  }finally{setRng(null);}
+  lines.push(S.log.slice());snap();
+  for(let i=0;i<log.actions.length;i++){
+    S.log=[];
+    let r=replayStep(log,i,g);
+    if(!r.ok){fails.push(i+1);r=applyAction(S.cur,{t:'end',keep:[]},g);} // (an uploaded log can hold moves that don't fit)
+    lines.push(S.log.slice());evs.push(r.ev||null);snap();
+  }
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
   let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}
   return{log,id,states,lines,evs,rem,fails,i:0,timer:0,speed:sp,side,ev:{},adv:{}};
@@ -42,11 +40,11 @@ const ADVISOR='fawcett';
 /* the advisor's whole turn from the position on screen: [{a, html, key}] (each step described in the position it is played
    from), or null. Worked out once per position, with a random stream of its own so it is the same each visit. */
 function replayAdvice(){const R=G.replay;if(R.i in R.adv)return R.adv[R.i];if(!replayNet()||S.over)return null;
-  const root=S,g=mulberry32(R.i*7919+1),r0=RNG;let steps=null;
-  try{setRng(g);const line=aiPlan(ADVISOR,g);
+  const root=S,g=mulberry32(R.i*7919+1);let steps=null;
+  try{const line=aiPlan(ADVISOR,g);
     if(line){steps=[];setS(JSON.parse(R.states[R.i]));
-      for(const a of line){const st=JSON.parse(JSON.stringify(S));steps.push({a,html:describeAction(a,st),key:actionKey(a,st)});const me=S.cur;if(!applyAction(me,a).ok||S.over||S.cur!==me)break;}}}
-  finally{setS(root);setRng(r0);}
+      for(const a of line){const st=JSON.parse(JSON.stringify(S));steps.push({a,html:describeAction(a,st),key:actionKey(a,st)});const me=S.cur;if(!applyAction(me,a,g).ok||S.over||S.cur!==me)break;}}}
+  finally{setS(root);}
   return R.adv[R.i]=steps;}
 /* the same move whichever copy of a card it uses */
 function actionKey(a,st){const ty=id=>st.cards[id]||id,tys=ids=>(ids||[]).map(ty).sort().join('+');

@@ -51,19 +51,14 @@ function replayCheck(log){
   if(log.gift&&!(CT[log.gift]&&CT[log.gift].cost))return'Unknown gift card: '+log.gift;
   if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
   return null;}
-function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry32(log.rng>>>0);setRng(g);
-  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:rec&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:rec?p.bot:undefined}))});
+/* set up the log's game (S, MAP). Returns the generator a training log's actions share (records give each action its own) */
+function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry32(log.rng>>>0);
+  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:rec&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:rec?p.bot:undefined}))},g);
   // training exploration: every player starts with the same extra card, shuffled into the draw pile
-  if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(RNG()*(p.deck.length+1)),0,newCard(log.gift));
-  if(rec)setRng(null);
+  if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(g()*(p.deck.length+1)),0,newCard(log.gift));
   return g;}
-/* apply action i of a log to S (after replayStart and actions 0…i-1) */
-function replayStep(log,i){
-  const[seat,a]=log.actions[i],rec=log.v===3,r0=RNG;if(rec)setRng(recRng(log.rng,i));
-  try{
-    return applyAction(seat,a);
-  }finally{if(rec)RNG=r0;}
-}
+/* apply action i of a log to S (after replayStart and actions 0…i-1); g: the generator replayStart returned */
+function replayStep(log,i,g){const[seat,a]=log.actions[i];return applyAction(seat,a,log.v===3?recRng(log.rng,i):g);}
 /* ---- game records (log v3): a game is its setup and its list of actions; the state is rebuilt from them ----
    Each action's shuffles come from a generator of its own, seeded from the game's secret number (rec.rng) and the action's
    index (newGame's: index -1), so re-applying the log rebuilds the same game and nothing needs a generator's state between
@@ -73,23 +68,22 @@ function replayStep(log,i){
 function recRng(rng,k){return mulberry32(((rng>>>0)+Math.imul(k+2,0x9E3779B1))>>>0);}
 function recNewGame(o){
   // the secret: from the platform's cryptographic generator where there is one (Math.random's state could be guessed)
-  const rng=crypto.getRandomValues(new Uint32Array(1))[0],r0=RNG;setRng(recRng(rng,-1));
-  try{newGame(o);}finally{RNG=r0;}
+  const rng=crypto.getRandomValues(new Uint32Array(1))[0];
+  newGame(o,recRng(rng,-1));
   // (privacy: the page's pass-and-play cover, a setting of the table rather than of the game: kept in the record only)
   return{kind:'eldorado-replay',v:3,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(o.privacy?{privacy:true}:{}),
     players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0};
 }
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
-function recApply(rec,seat,a){
-  const r0=RNG,prev=S.cur;if(rec)setRng(recRng(rec.rng,rec.actions.length));
-  let r;try{r=applyAction(seat,a);}finally{RNG=r0;}
+function recApply(rec,seat,a,rnd=Math.random){ // (rnd: for a game without a record)
+  const prev=S.cur,r=applyAction(seat,a,rec?recRng(rec.rng,rec.actions.length):rnd);
   if(r.ok&&rec){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||S.cur!==prev||S.over)rec.mark=rec.actions.length;}
   return r;
 }
 const recCanUndo=rec=>rec.actions.length>rec.mark;
 /* the state a record leads to, as {S, MAP} (the module's S and MAP are left as they were) */
-function recState(rec){const s0=S,m0=MAP,r0=RNG;
-  try{replayStart(rec);for(let i=0;i<rec.actions.length;i++)replayStep(rec,i);return{S,MAP};}finally{S=s0;MAP=m0;RNG=r0;}}
+function recState(rec){const s0=S,m0=MAP;
+  try{replayStart(rec);for(let i=0;i<rec.actions.length;i++)replayStep(rec,i);return{S,MAP};}finally{S=s0;MAP=m0;}}
 /* take back the last action (S becomes the rebuilt state; callers check recCanUndo first) */
 function recUndo(rec){assert(recCanUndo(rec),'recUndo: an action can be taken back');rec.actions.pop();({S,MAP}=recState(rec));return true;}
 /* the log of the game on show (S), ready to save and watch, with a title. places: null for a game that didn't finish (a
@@ -100,14 +94,14 @@ function recFinal(rec){
   L.result={places:S.places,rounds:S.round};
   return L;
 }
-function newGame(o){
+function newGame(o,rnd=Math.random){
 
   const course=o.course||COURSES[0];
   MAP=buildCourse(course,o.seed);
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
     const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
-    const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck),hand:[],discard:[],play:[],fin:0,resigned:0};
+    const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck,rnd),hand:[],discard:[],play:[],fin:0,resigned:0};
     if(p.ai&&aiById(p.ai))pl.ai=p.ai; // a named AI plays this seat (engine_ai.js)
     return pl;
   });
@@ -117,12 +111,12 @@ function newGame(o){
   S={seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
      blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,round:1,endTriggered:false,over:false,places:null,
      fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[]};
-  players.forEach(p=>drawCards(p,4));
+  players.forEach(p=>drawCards(p,4,rnd));
   log(null,'The expedition sets out: '+players.map(p=>p.name).join(', ')+'. Course: '+MAP.name+' ('+MAP.route.join(' · ')+' · El Dorado).');
   return S;
 }
 function newCard(t){const id='c'+(S.nid++);S.cards[id]=t;return id;}
-function drawCards(p,n){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(!p.discard.length)break;p.deck=shuffle(p.discard);p.discard=[];}const c=p.deck.pop();p.hand.push(c);got.push(c);}return got;}
+function drawCards(p,n,rnd){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(!p.discard.length)break;p.deck=shuffle(p.discard,rnd);p.discard=[];}const c=p.deck.pop();p.hand.push(c);got.push(c);}return got;}
 function log(pi,t){S.log.push({p:pi,t,r:S.round});if(S.log.length>200)S.log.shift();}
 function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
 /* the standing blockade between spaces a and b (its index), or null. Blockade i sits on connection i (buildCourse deals one per connection) */
@@ -192,7 +186,8 @@ function payTargets(pl,pi){
 
 /* =========================================================
    APPLY AN ACTION. Returns {ok, err?, ev:[events], reveal}
-   reveal = new information came out (cards drawn), so undo stops here.
+   reveal = new information came out (cards drawn), so undo stops here. rnd: where any shuffle this action needs comes from
+   (a record passes the action's own generator; look-ahead copies of a game don't care)
    Actions (acting player = S.cur, except resign):
      {t:'move', card, pi, to}        movement card (or a card with leftover strength)
      {t:'native', card, pi, to}
@@ -206,15 +201,15 @@ function payTargets(pl,pi){
      {t:'resign'}                    the player leaves the game (any time, in or out of turn)
      {t:'endgame'}                   (local play) the game ends now for everyone: arrivals first, then who is closest
    ========================================================= */
-function applyAction(seat,a){
+function applyAction(seat,a,rnd=Math.random){
   const fail=err=>({ok:false,err,ev:[]});
   if(S.over)return fail('The game is over.');
   if(!a||typeof a!=='object')return fail('Bad action.');
   if(a.t==='resign')return resign(seat);
   if(seat!==S.cur)return fail('It is not your turn.');
   if(a.t==='endgame'){log(seat,'ends the game.');endGame();return{ok:true,ev:[{e:'over'}]};} // local play only (the server refuses it)
-  if(a.t==='timeout'){log(seat,'ran out of time.');if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;
-    const r=applyAction(seat,{t:'end',keep:[]});return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}
+  if(a.t==='timeout'){log(seat,'ran out of time.');if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]},rnd);S.turn.active=null;
+    const r=applyAction(seat,{t:'end',keep:[]},rnd);return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}
   const P=S.players[seat],T=S.turn,ev=[];let reveal=false;
   const inHand=id=>typeof id==='string'&&P.hand.includes(id);
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
@@ -269,7 +264,7 @@ function applyAction(seat,a){
       const t=inHand(a.card)&&typeOf(a.card);
       const n={cartographer:2,compass:3,scientist:1,travellog:2}[t];if(!n)return fail('That card has no draw effect.');
       T.active=null;rm(P.hand,a.card);if(CT[t].once)S.trash.push(a.card);else P.play.push(a.card);
-      const got=drawCards(P,n);reveal=true;ev.push({e:'play',pl:seat,k:'action',ts:[t],n:got.length});
+      const got=drawCards(P,n,rnd);reveal=true;ev.push({e:'play',pl:seat,k:'action',ts:[t],n:got.length});
       log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');
       if(t==='scientist'||t==='travellog')T.pending={max:t==='scientist'?1:2};
       break;
@@ -310,7 +305,7 @@ function applyAction(seat,a){
       const toDisc=P.hand.filter(id=>!keep.includes(id));ev.push({e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length}); // counts only: the hand is private
       for(const id of toDisc){rm(P.hand,id);P.discard.push(id);}
       P.discard.push(...P.play);P.play=[];
-      drawCards(P,4-P.hand.length);reveal=true;
+      drawCards(P,4-P.hand.length,rnd);reveal=true;
       log(seat,'ends the turn'+(toDisc.length?', discarding '+toDisc.length:'')+(keep.length?(toDisc.length?' and':'')+' keeping '+keep.length:'')+'.');
       passTurn();break;
     }
