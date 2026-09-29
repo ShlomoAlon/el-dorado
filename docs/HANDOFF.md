@@ -146,7 +146,7 @@ test/frames.cjs           phone profile, CPU ÷4: restyle size and composited an
 test/engine.test.mjs      60 random games (--quick: 12): termination, card conservation, placements, zero-sum Elo, no redaction leaks
 ```
 The browser build wraps everything in one IIFE; engine and UI share scope (`S`, `MAP`, helpers are plain globals
-inside it). The server imports `E` from `engine.gen.js` and sets `E.S`/`E.MAP` before each call (safe: DO calls are
+inside it). The server imports the engine as `E` (`import * as E`) and calls `E.setS`/`E.setMAP` before each call (safe: DO calls are
 synchronous around the engine).
 
 ### 6.2 Game state `S` (JSON, v3)

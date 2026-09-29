@@ -1,6 +1,6 @@
 // Find heuristic games where someone hasn't arrived by round 25 and print that player's turns.
 //   node tools/ai/trace.mjs [policy=plan] [maxGames=60] [seed0=20000]
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 const [, , POL = 'plan', MAX = '60', SEED = '20000'] = process.argv;
 const T = id => E.S.cards[id];
 for (let g = 0; g < +MAX; g++) {

@@ -27,7 +27,7 @@ const T = report('online');
     const ids = [await signIn(A, 'Alice'), await signIn(B, 'Bob'), await signIn(C, 'Cara')];
     T.ok('sign in: the account bar shows the name', await A.evaluate(() => document.querySelector('#acct').textContent.includes('Alice')));
     const lb0 = await board(A);
-    const code = await mkRoom(A, { max: 3, turn: 8, course: 'first' }); // (a short turn clock: developer servers allow it)
+    const code = await mkRoom(A, { max: 3, turn: 20, course: 'first' }); // (a short turn clock, so the timeout step doesn't wait long, yet long enough for the steps before it on a busy machine: developer servers allow it)
     await B.fill('#jCode', code); await B.click('#jGo');
     await C.goto(srv.url + '?room=' + code);
     T.ok('room: joined by code and by link', await wait(A, () => __ED.NET.room && __ED.NET.room.seats.length === 3), code);
@@ -84,7 +84,7 @@ const T = report('online');
     T.ok('end turn: the next player moves', await wait(A, c => __ED.S.cur !== c, cur0));
     // the turn clock: nobody acts, the turn ends by itself
     const cur1 = await A.evaluate(() => __ED.S.cur);
-    T.ok('turn clock: the turn passes when time runs out', await wait(A, c => __ED.S.cur !== c && __ED.S.log.some(l => l.e === 'timeout'), cur1, 20000));
+    T.ok('turn clock: the turn passes when time runs out', await wait(A, c => __ED.S.cur !== c && __ED.S.log.some(l => l.e === 'timeout'), cur1, 45000));
     // two resign: the game is over for the third, rated
     await B.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } })); await C.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('game over after two resign', await wait(A, () => __ED.S.over && __ED.NET.room.results));

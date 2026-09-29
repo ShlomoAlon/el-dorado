@@ -8,7 +8,7 @@
    - Bugs: what the page's and the server's boundaries caught, stored as reports (docs/ASSERTIONS.md).
    Tables are created automatically on first use; no migrations to run. */
 import { DurableObject } from 'cloudflare:workers';
-import { E } from './engine.gen.js';
+import * as E from './engine.gen.js';
 import NET_BIN from './ai/first.bin'; // the AI's neural network as half floats (tools/ai/pack.mjs); wrangler imports .bin as an ArrayBuffer
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -420,7 +420,7 @@ export class Room extends DurableObject {
   // who plays each seat: the room's seats, in the game's seat order (fixed once the game starts)
   get owners() { return this.d.seats.map(s => s.uid); }
   async persist() { await this.ctx.storage.put(this.rec ? { d: this.d, rec: this.rec } : { d: this.d }); }
-  engine() { E.S = this.S; E.MAP = mapFor(this.S); return E; }
+  engine() { E.setS(this.S); E.setMAP(mapFor(this.S)); return E; }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.roomInfo()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
   roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid) })), results: d.results || null }; }
@@ -587,7 +587,7 @@ export class Room extends DurableObject {
      Returns the replay's id, or null (the log is too large, or the database failed). */
   async saveReplay() {
     const d = this.d; if (d.replay !== undefined) return d.replay;
-    d.replay = null; E.S = this.S; E.MAP = mapFor(this.S);
+    d.replay = null; E.setS(this.S); E.setMAP(mapFor(this.S));
     const log = E.recFinal(this.rec);
     const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
     const text = JSON.stringify(log); if (text.length > REPLAY_MAX_BYTES) return null;

@@ -1,10 +1,10 @@
 // Does the seat matter? Paired test: the same games (same seeds for map, blockades and shuffles), with policy P in seat S.
 //   node tools/ai/seats.mjs <P=net> <seat 0-2> [games=40] [seed0=40000]     (3 players; the others are planners)
 //   node tools/ai/seats.mjs plan all [games]    control: planner-only games, wins by seat
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 import { readFileSync } from 'node:fs';
 const [, , P = 'net', SEAT = '0', G = '40', SEED = '40000'] = process.argv;
-if (P === 'net') E.setNet(JSON.parse(readFileSync('tools/ai/data/first.net.json', 'utf8')));
+if (P === 'net') E.aiSetNet(JSON.parse(readFileSync('tools/ai/data/first.net.json', 'utf8')));
 const wins = [0, 0, 0], places = [[], [], []], arr = [[], [], []]; let capped = 0;
 for (let g = 0; g < +G; g++) {
   const pols = ['plan', 'plan', 'plan']; if (SEAT !== 'all') pols[+SEAT] = P;

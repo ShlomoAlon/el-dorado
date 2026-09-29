@@ -3,11 +3,11 @@
 // Each network plays 3-player games against two heuristic planners (the fixed benchmark), once plain and once with search.
 // The game runs until the network arrives (or round 30), so its arrival round never depends on the race ending early.
 // Writes tools/ai/data/arrival.jsonl (one line per network and mode) and prints mean / median / 90th percentile.
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 import { readFileSync, appendFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 if (!isMainThread) {
-  const { net, search, from, to } = workerData; E.setNet(net); const out = [];
+  const { net, search, from, to } = workerData; E.aiSetNet(net); const out = [];
   for (let g = from; g < to; g++) {
     const seat = g % 3; E.newGame({ course: E.COURSES[0], seed: 70000 + g, fullRace: true, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) });
     const rnd = E.mulberry32(5000 + g); let fin = null;

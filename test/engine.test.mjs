@@ -3,7 +3,7 @@
 // and redaction never leaks another player's hand or deck order.
 //   node test/engine.test.mjs [--quick]   (--quick: 12 random games, and AI games on First Expedition only)
 const QUICK = process.argv.includes('--quick');
-import { E } from '../src/engine.gen.js';
+import * as E from '../src/engine.gen.js';
 E.setAssertMode({ debug: true }); // a broken invariant fails the run
 const assert = (c, m) => { if (!c) { console.error('FAIL:', m); process.exit(1); } };
 const t0 = performance.now(); for (let i = 0; i < 200; i++) E.buildCourse(E.COURSES[i % E.COURSES.length], i);
@@ -95,11 +95,11 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
   assert(plays > 50, 'no play events');
   assert(diff < 2e-3, 'packed network differs: ' + diff);
   const rc = E.botRandomCourse(7, 3); E.buildCourse(rc, 1);
-  e0 = E.BOT_EVALS; aiGame(rc, ['humboldt', 'raleigh'], () => assert(!E.aiNetFits(), 'network used on a course it was not trained for'));
+  e0 = E.BOT_EVALS; aiGame(rc, ['humboldt', 'raleigh'], () => assert(!E.botNetReady(), 'network used on a course it was not trained for'));
   assert(E.BOT_EVALS === e0, 'network evaluated on another course');
   // every other official course: full 3- and 4-player AI games finish; the network AIs play there as the route planner
   if (!QUICK) for (const C of E.COURSES.filter(c => c.id !== 'first')) for (const ais of [['raleigh', 'humboldt', 'humboldt'], ['humboldt', 'raleigh', 'raleigh', 'humboldt']]) {
-    e0 = E.BOT_EVALS; aiGame(C, ais, () => assert(!E.aiNetFits(), 'network used on ' + C.id));
+    e0 = E.BOT_EVALS; aiGame(C, ais, () => assert(!E.botNetReady(), 'network used on ' + C.id));
     assert(E.BOT_EVALS === e0, 'network evaluated on ' + C.id);
     assert(E.S.players.filter(p => p.fin).length >= ais.length - 1, C.id + ': AIs did not reach El Dorado');
   }

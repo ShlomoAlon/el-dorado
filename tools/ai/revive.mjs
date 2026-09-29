@@ -2,11 +2,11 @@
 // bias set so it is positive on about half of the positions) and zero outgoing weights. The network's output only changes by the
 // tiny leak those units had (leaky ReLU 0.01·x), so it plays essentially the same; training can then use the revived units.
 //   node tools/ai/revive.mjs <in.json> <out.json> [games per course=20]
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 const [, , inp, out, G = '20'] = process.argv;
 const N = JSON.parse(readFileSync(inp, 'utf8')), H1 = N.b1.length, H2 = N.b2.length, courses = N.courses || [N.course];
-E.setNet(N); const pos = [];
+E.aiSetNet(N); const pos = [];
 for (const id of courses) for (let g = 0; g < +G; g++) {
   const n = g % 2 ? 4 : 3; E.newGame({ course: E.courseById(id), seed: 61000 + g, fullRace: true, players: [...Array(n)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
   const rnd = E.mulberry32(g + 3);
@@ -34,5 +34,5 @@ delete N._p; // the engine caches typed copies of the weights; they were changed
 writeFileSync(out, JSON.stringify(N));
 // check: how much did the output change on these positions?
 const O = JSON.parse(readFileSync(inp, 'utf8')); let maxd = 0, sum = 0;
-for (const f of pos.slice(0, 3000)) { E.setNet(O); const a = E.botNetValue(f); E.setNet(N); const b = E.botNetValue(f); maxd = Math.max(maxd, Math.abs(a - b)); sum += Math.abs(a - b); }
+for (const f of pos.slice(0, 3000)) { E.aiSetNet(O); const a = E.botNetValue(f); E.aiSetNet(N); const b = E.botNetValue(f); maxd = Math.max(maxd, Math.abs(a - b)); sum += Math.abs(a - b); }
 console.log(`${inp}: ${pos.length} positions on ${courses.join(', ')} · revived ${d1.length}/${H1} layer-1 and ${d2.length}/${H2} layer-2 units → ${out} · value change: mean ${(sum / Math.min(3000, pos.length)).toExponential(1)}, max ${maxd.toExponential(1)}`);

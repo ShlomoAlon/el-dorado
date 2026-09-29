@@ -5,7 +5,7 @@
 //   node tools/ai/ladder.mjs report      → writes ladder-progress.md (published as LADDER.md)
 // Every game goes to tools/ai/data/ladder.jsonl. Ratings: Elo scale, fitted by maximum likelihood over every pair of players in
 // every game (who finished ahead; ties count half), anchored at first-td2 (plain) = 1500. ± is one standard error.
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 const LOG = 'tools/ai/data/ladder.jsonl';
@@ -17,7 +17,7 @@ if (!isMainThread) {
     E.newGame({ course: E.COURSES[0], seed: seed0 + g, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
     let capped = false, acts = 0; const rnd = E.mulberry32(seed0 * 7 + g);
     while (!E.S.over) { if (E.S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
-      const me = E.S.cur, p = pols[me], s = p.endsWith('+s'); E.setNet(nets[s ? p.slice(0, -2) : p]);
+      const me = E.S.cur, p = pols[me], s = p.endsWith('+s'); E.aiSetNet(nets[s ? p.slice(0, -2) : p]);
       const c = E.botChoose({ mode: 'net', rnd, search: s ? { kind: 'plan', beam: 3 } : undefined });
       if (!E.applyAction(me, c.a).ok) E.applyAction(me, { t: 'end', keep: [] }); }
     // not arriving by the cap counts as last (tied with anyone else who didn't arrive)

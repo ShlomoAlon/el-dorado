@@ -23,8 +23,8 @@ The engine works on three module-level variables:
 | `S` | the game on show (§1.4); `null` before a game |
 | `MAP` | the board built from `S.course` and `S.seed` (§1.3) |
 
-- **Access from outside:** consumers read and replace them through `E.S`, `E.MAP` (getters and setters), or through the named live
-  exports with `setS(v)` and `setMAP(v)`.
+- **Access from outside:** consumers read them through the live exports (`S`, `MAP`, or `E.S` with `import * as E`) and
+  replace them with `setS(v)` and `setMAP(v)`.
 - **Randomness is always passed in** (`rnd: () => [0, 1)`): `newGame(o, rnd)` and `applyAction(seat, a, rnd)` shuffle with the
   generator they are given (default `Math.random`). A record gives each action its own (§1.8), so the same record always
   gives the same game. The AIs' look-ahead shuffles with its own `rnd`, never the game's.
@@ -263,35 +263,31 @@ These functions belong to the training code. `botActions` and `botChoose` act fo
 |---|---|
 | `botActions()` | Every distinct legal action, one per card type. Payments are minimal; end-of-turn keeps are 0–3 cards. |
 | `botChoose(opts)` → `{a, v?, …}` | See the options below. |
-| `botTurn(opts)` → actions | Plays the rest of the turn. |
-| `botScoreActions(me, rnd, K)` → `[{a, v, st}]` | Every action scored by the network. |
 | `botNetFeatures(me)`, `botEndFeatures(me, keep)` | The network's inputs (Float32Array). |
 | `botNetValue(f)`, `botValue(me, mode)`, `botPlaceValue(place, n)` | Scoring. `botPlaceValue` is the training target: 1st = 1, last = 0, otherwise 1 / (`BOT_FIRST_RATIO` · 2^(place−2)). |
 | `botCost(key)`, `botRemaining(seat)` | Route cost to El Dorado. |
 | `botClone(S)` | A copy for look-ahead. |
 | `botRandomCourse(seed, nMid)` | A random legal course (training only). |
 | `BOT_NF`, `BOT_FLAGS`, `BOT_EVALS` | Constants and an evaluation counter. |
-| `setNet(n)`, `setPlan(k, o)`, `BOT_PLANS` | Select the network; define planner variants. |
+| `aiSetNet(n)` (§1.9) | Select the network. |
 
 **`botChoose` options:**
 
 | option | values |
 |---|---|
-| `mode` | `net` (the default when a network is set; without a fitting network it becomes `heur`), `heur`, `heur2`, or `plan…` (the planner, with `BOT_PLANS[mode]`; it returns before any option below is read) |
-| `search` | `{kind: 'plan', beam}`, `{kind: 'deep', beam, cands, depth, budget}`, `{kind: 'rollout', cands, sims, margin}` or `{width, depth}` |
-| exploration | `rnd`, `eps`, `typeEps`, `temp`, `lotemp`, `noise`, `turnState: {noBuy, forceBuy, forceTransmit}` |
-| other | `draws` (K), `explain` |
-
-No caller uses `botTurn`, `setPlan`, `forceBuy`, `draws`, `heur2`, `{kind: 'rollout'}` or `{width, depth}`; they are candidates for removal.
+| `mode` | `net` (the default when a network is set; without a fitting network it becomes `heur`), `heur`, or `plan` (the hand-written planner, the AI Raleigh; it returns before any option below is read) |
+| `search` | `{kind: 'plan', beam}`: the whole-turn planner (Humboldt, Fawcett, and training with `SEARCH_BEAM`) |
+| exploration | `rnd`, `eps`, `typeEps`, `temp`, `lotemp`, `noise`, `turnState: {noBuy, forceTransmit}` |
+| other | `draws`: imagined draws per draw card (default 4; Fawcett uses 8) |
 
 **Contract:** the feature vectors, including the order of `BOT_TYPES`, space keys sorted as strings and connection order, must stay
 bit-for-bit identical for trained networks to keep working. `test/fixtures/features.json` pins them at 348 positions.
 
 ### 1.11 Exports
 
-- `export {…every top-level name}`: live bindings, for the page's modules. `setS(v)` and `setMAP(v)` replace the game.
-- `export const E = {…}`: the curated object the server and the tools use. It holds most functions above (not `stackOf`, `coinVal`,
-  `isActive`), `S` and `MAP` as getters and setters, `MAPX` (the same as `MAP`) and a `BOT_EVALS` getter.
+- Every top-level name is exported (live bindings). The page's modules import names; the server, the tools and the tests
+  import the whole engine as a namespace (`import * as E from './engine.gen.js'`), so `E.S` and `E.BOT_EVALS` are live.
+- `setS(v)` and `setMAP(v)` replace the game (a module's bindings can't be assigned from outside).
 
 ### 1.12 What a port must reproduce exactly
 
@@ -444,11 +440,11 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 
 ## 4. Tools
 
-The tools import `E`. Their common loop:
+The tools import the engine as `E` (`import * as E`). Their common loop:
 
 ```
 const gen = E.replayStart(log)        // or E.newGame({course, seed, fullRace: true, players}, gen) for a game not recorded
-while (!E.S.over) { const me = E.S.cur; E.setNet(netFor(me));
+while (!E.S.over) { const me = E.S.cur; E.aiSetNet(netFor(me));
   const a = E.botChoose(opts).a; if (!E.applyAction(me, a, gen).ok) E.applyAction(me, {t: 'end', keep: []}, gen); }
 ```
 

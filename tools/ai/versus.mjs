@@ -2,7 +2,7 @@
 //   node tools/ai/versus.mjs [games per table size=96] [workers=4]
 //   seats: old+search / old / new+search / new (old = OLD or tools/ai/models/first-td-evaluated.json, new = NEW or tools/ai/data/first-plan.net.json)
 //   4-player games: all four; 3-player games: each set of three in turn. Games stop at round 25 (not arrived = no win).
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 import { readFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 const POLS = ['old+search', 'old', 'new+search', 'new'];
@@ -14,7 +14,7 @@ if (!isMainThread) {
     E.newGame({ course: E.COURSES[0], seed: 90000 + g, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
     let capped = false; const rnd = E.mulberry32(777 + g);
     while (!E.S.over) { if (E.S.round > 25) { capped = true; E.endGame(); break; }
-      const me = E.S.cur, p = pols[me]; E.setNet(p.startsWith('old') ? nets.old : nets.new);
+      const me = E.S.cur, p = pols[me]; E.aiSetNet(p.startsWith('old') ? nets.old : nets.new);
       const c = E.botChoose({ mode: 'net', rnd, search: p.endsWith('+search') ? { kind: 'plan', beam: 3 } : undefined });
       if (!E.applyAction(me, c.a).ok) E.applyAction(me, { t: 'end', keep: [] }); }
     pols.forEach((p, i) => { const t = (r['p' + n] = r['p' + n] || {})[p] = r['p' + n][p] || { seats: 0, wins: 0, arr: 0, arrN: 0 }; const P = E.S.players[i];

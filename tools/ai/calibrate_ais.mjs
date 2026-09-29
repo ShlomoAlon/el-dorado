@@ -11,7 +11,7 @@
 // place counts half), each game weighted 1/(players-1) like eloDeltas' K/(n-1). Also printed: the server's own sequential
 // eloDeltas over the games with no repeated AI (the only tables a real room allows), averaged over 200 shuffled orders.
 // Anchor: Raleigh (the heuristic planner, the weakest) = 1200, the rating every new player starts with. See docs/HANDOFF.md.
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 const IDS = E.AIS.map(a => a.id); // three AIs

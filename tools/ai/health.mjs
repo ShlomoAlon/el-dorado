@@ -1,10 +1,10 @@
 // Health check of a value network on real positions: dead / always-on hidden units, saturation, input coverage and scale,
 // weight statistics, and calibration (predicted value vs the place value actually reached).
 //   node tools/ai/health.mjs <net.json> [course=first] [games=40]
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 import { readFileSync } from 'node:fs';
 const [, , file, course = 'first', G = '40'] = process.argv;
-const N = JSON.parse(readFileSync(file, 'utf8')), H1 = N.b1.length, H2 = N.b2.length; E.setNet(N);
+const N = JSON.parse(readFileSync(file, 'utf8')), H1 = N.b1.length, H2 = N.b2.length; E.aiSetNet(N);
 const pos = []; // {f, me, g}
 const outcomes = [];
 for (let g = 0; g < +G; g++) {

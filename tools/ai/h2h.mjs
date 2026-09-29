@@ -3,7 +3,7 @@
 //   A, B: bot options as in AIS[].opts, e.g. '{"mode":"net","search":{"kind":"plan","beam":3}}'
 // Games alternate 3 and 4 players with A and B seated as evenly as possible, seats rotated. Reported: wins, mean place,
 // and each setting's thinking time per turn (ms, on this machine) and network evaluations per turn.
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 import { readFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 if (!isMainThread) {

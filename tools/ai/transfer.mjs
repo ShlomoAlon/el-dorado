@@ -5,13 +5,13 @@
 // [+ BOT_FLAGS rule switches for multi-course networks] + course-specific slots (every space × 4 players, every tile connection × 8).
 // The summary weights and all hidden layers are copied; the source course's own board block is copied too (so on that course the
 // new network plays exactly like the old one); every other block and the rule switches start at zero.
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 const [, , from, target, out] = process.argv;
 const src = JSON.parse(readFileSync(from, 'utf8')), H1 = src.b1.length, K = E.BOT_NF, srcBlock = src.nf - K;
 const multi = target.startsWith('multi:'), courses = multi ? target.slice(6).split(',') : [target];
 for (const id of courses) { const c = E.courseById(id); if (!c || c.id !== id) throw new Error('unknown course ' + id); }
-const blockOf = id => { E.newGame({ course: E.courseById(id), seed: 1, fullRace: true, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) }); E.setNet(null); return E.botNetNF() - K; };
+const blockOf = id => { E.newGame({ course: E.courseById(id), seed: 1, fullRace: true, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) }); E.aiSetNet(null); return E.botNetNF() - K; };
 // new multi-course networks always get the course one-hot inputs (net.onehot) after the rule switches
 const sizes = courses.map(blockOf), FL = multi ? E.BOT_FLAGS + courses.length : 0, nf = K + FL + sizes.reduce((a, x) => a + x, 0);
 const w1T = new Array(nf * H1).fill(0), copyRows = (dst, srcRow, n) => { for (let r = 0; r < n; r++) for (let j = 0; j < H1; j++) w1T[(dst + r) * H1 + j] = src.w1T[(srcRow + r) * H1 + j]; };

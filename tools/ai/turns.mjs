@@ -1,6 +1,6 @@
 // Where does a heuristic lose time? Plays games and classifies every turn (moved / only bought / nothing).
 //   node tools/ai/turns.mjs [policy=plan] [games=40]
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 const [, , POL = 'plan', G = '40'] = process.argv;
 const T = id => E.S.cards[id];
 const kinds = {}, still = {}, inc = (o, k) => o[k] = (o[k] || 0) + 1; let turns = 0, fin = [], gain = [];
@@ -24,7 +24,7 @@ for (let g = 0; g < +G; g++) {
   close(); E.S.players.forEach(p => p.fin && fin.push(p.fin));
 }
 function nextTerrain(me) { // cheapest neighbouring step toward the goal
-  const P = E.S.players[me], k = P.pieces[0]; if (k === 'done') return '-'; const h = E.MAPX.hexes;
+  const P = E.S.players[me], k = P.pieces[0]; if (k === 'done') return '-'; const h = E.MAP.hexes;
   let best = null; for (const [q, r] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]]) { const [x, y] = k.split(',').map(Number), nk = (x + q) + ',' + (y + r), s = h.get(nk);
     if (!s || s.type === 'm') continue; const c = E.botCost(nk); if (best === null || c < best.c) best = { c, t: s.type + s.val }; }
   return best ? best.t : '?';

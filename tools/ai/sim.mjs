@@ -1,9 +1,9 @@
 // Plays bot-vs-bot games on the rules engine (no server) and reports how fast they finish.
 // usage: node tools/ai/sim.mjs [games=40] [players=3] [policies=heur,heur,heur] [net=path.json]
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 import { readFileSync } from 'node:fs';
 const [,, G = '40', NP = '3', POL = '', NET = '', MAPS = 'first'] = process.argv; // MAPS: first | rnd (held-out random courses 900+)
-if (NET) E.setNet(JSON.parse(readFileSync(NET, 'utf8')));
+if (NET) E.aiSetNet(JSON.parse(readFileSync(NET, 'utf8')));
 const pols = (POL || Array(+NP).fill('heur').join(',')).split(',');
 export function playGame(pols, seed, cap = 60, opts = {}, course = E.COURSES[0]) {
   E.newGame({ course, seed, fullRace: true, players: pols.map((_, i) => ({ name: 'B' + i, color: '#fff' })) });

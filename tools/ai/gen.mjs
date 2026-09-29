@@ -9,7 +9,7 @@
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { writeFileSync, readFileSync, appendFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { cpus } from 'node:os';
-import { E } from '../../src/engine.gen.js';
+import * as E from '../../src/engine.gen.js';
 const LAMBDA = 0.7;
 const MAXBACK = process.env.MAXBACK === '1';
 const EVAL_SELF = process.env.EVAL_SELF === '1';
@@ -45,7 +45,7 @@ if (!isMainThread) {
   const MW = MAPS && process.env.MAPS_W ? process.env.MAPS_W.split(',').map(Number) : null;
   const pickCourse = () => { if (!MAPS) return C0; let r = rnd() * (MW ? MW.reduce((a, x) => a + x, 0) : MAPS.length); for (let i = 0; i < MAPS.length; i++) { r -= MW ? MW[i] : 1; if (r <= 0) return MAPS[i]; } return MAPS[MAPS.length - 1]; };
   let C = C0;
-  if (net) E.setNet(net);
+  if (net) E.aiSetNet(net);
   let s = seed0 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
   const X = [], Y = [], GID = [], st = { win3: 0, seat3: 0, win4: 0, seat4: 0, netWins: 0, netSeats: 0, netRem: [], heurRem: [], netArr: [], heurArr: [], capped: 0, buysNet: {}, buysHeur: {}, transNet: {}, transHeur: {}, dec: {}, explore: {}, stuck: 0 };
   const inc = (k, sub, by = 1) => { const o = st.dec[k] = st.dec[k] || {}; o[sub] = (o[sub] || 0) + by; };
@@ -81,13 +81,13 @@ if (!isMainThread) {
       const S = E.S;
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
-      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && !lotemp && !ANNEAL && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: false && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
+      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && !lotemp && !ANNEAL && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
       const c = mode === 'eval' && pols[me] === 'netP' ? E.botChoose({ mode: 'net', rnd })
-        : mode === 'eval' && pols[me] === 'old' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd })))
-        : mode === 'eval' && pols[me] === 'oldS' ? (E.setNet(oldNet), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd, search })))
+        : mode === 'eval' && pols[me] === 'old' ? (E.aiSetNet(oldNet), ((x) => (E.aiSetNet(net), x))(E.botChoose({ mode: 'net', rnd })))
+        : mode === 'eval' && pols[me] === 'oldS' ? (E.aiSetNet(oldNet), ((x) => (E.aiSetNet(net), x))(E.botChoose({ mode: 'net', rnd, search })))
         : mode === 'eval' ? E.botChoose({ mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined })
         : isNet ? E.botChoose(lotemp || ANNEAL ? { mode: 'net', eps, lotemp: ANNEAL ? Math.max(ANNEAL[2], ANNEAL[0] * ANNEAL[1] ** (S.round - 1)) : lotemp, rnd } : { mode: 'net', eps, temp, typeEps, turnState, rnd, search: plainSeat[me] ? undefined : search })
-        : pols[me].startsWith('lg') ? (E.setNet(LEAGUE[+pols[me].slice(2)]), ((x) => (E.setNet(net), x))(E.botChoose({ mode: 'net', rnd, temp: .004 })))
+        : pols[me].startsWith('lg') ? (E.aiSetNet(LEAGUE[+pols[me].slice(2)]), ((x) => (E.aiSetNet(net), x))(E.botChoose({ mode: 'net', rnd, temp: .004 })))
         : E.botChoose({ mode: bench, eps: .03, noise: .3, rnd });
       // MAXBACK=1 (Q-learning style max backup within a turn): my turn has no luck between my own actions, so the position after
       // my previous action is worth the BEST option available now, not whatever I happen to do next (exploration, habits).
@@ -101,24 +101,24 @@ if (!isMainThread) {
           const useD = DISTILL && (DISTILL_P >= 1 || rnd() < DISTILL_P);
           const cb = c.best != null && !(turnState && turnState.noBuy) ? c : useD ? null : E.botChoose({ mode: 'net', rnd });
           const b = useD ? E.botChoose({ mode: 'net', rnd, search: { kind: 'plan', beam: DISTILL_BEAM } }).v
-            : PREV && cb.bestA ? (E.setNet(PREV), ((x) => (E.setNet(net), x))(E.botActionValue(me, cb.bestA, 'net', rnd, 4))) // Double-Q style
+            : PREV && cb.bestA ? (E.aiSetNet(PREV), ((x) => (E.aiSetNet(net), x))(E.botActionValue(me, cb.bestA, 'net', rnd, 4))) // Double-Q style
             : cb.best;
           trajB[me][lp.idx] = b; st.maxback = (st.maxback || 0) + 1; } }
       // TREESTRAP=n (TreeStrap-style): also learn from n options I did NOT take. Each is scored one step further ahead (the best
       // option available after it, within my turn), so positions my habits never reach (e.g. move before buying) get trained too.
       if (TREESTRAP && mode === 'self' && isNet) { const root = E.S, sib = E.botActions().filter(a => a.t !== 'end' && JSON.stringify(a) !== JSON.stringify(c.a));
         for (let k = 0; k < TREESTRAP && sib.length; k++) { const a = sib.splice(Math.floor(rnd() * sib.length), 1)[0];
-          E.S = E.botClone(root); const r = E.applyAction(me, a);
+          E.setS(E.botClone(root)); const r = E.applyAction(me, a);
           if (r.ok && !E.S.over && E.S.cur === me && !E.playerDone(E.S.players[me])) { const f = E.botNetFeatures(me), b = E.botChoose({ mode: 'net', rnd }).best;
             if (b != null && b > -Infinity) { X.push(f); Y.push(b); GID.push(wi * games + g); st.treestrap = (st.treestrap || 0) + 1; } }
-          E.S = root; } }
+          E.setS(root); } }
       // track every kind of decision the network makes (and which of them were exploration)
       if (isNet) {
         const a = c.a, P = S.players[me];
         st.netDec = (st.netDec || 0) + 1; if (c.why) st.explore[c.why] = (st.explore[c.why] || 0) + 1;
         if (turnState && turnState.noBuy && !turnState.nbCounted) { turnState.nbCounted = 1; st.explore.noBuyTurn = (st.explore.noBuyTurn || 0) + 1; }
         if (a.t === 'trash') { inc('Remove (Scientist / Travel Log): how many', a.cards.length + ''); for (const id of a.cards) inc('Remove (Scientist / Travel Log): which card', T(id)); }
-        else if (a.t === 'pay') { const kind = a.to[0] === 'B' ? 'Rubble blockade: cards given up' : E.MAPX.hexes.get(a.to).type === 'c' ? 'Base camp: cards removed from the game' : 'Rubble: cards discarded'; for (const id of a.cards) inc(kind, T(id)); }
+        else if (a.t === 'pay') { const kind = a.to[0] === 'B' ? 'Rubble blockade: cards given up' : E.MAP.hexes.get(a.to).type === 'c' ? 'Base camp: cards removed from the game' : 'Rubble: cards discarded'; for (const id of a.cards) inc(kind, T(id)); }
         else if (a.t === 'action') inc('Draw cards played', T(a.card));
         else if (a.t === 'native') inc('Native', a.to[0] === 'B' ? 'tore down a blockade' : 'moved');
         else if (a.t === 'end') {

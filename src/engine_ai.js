@@ -32,7 +32,6 @@ function aiNetDecode(bin){
   return N;
 }
 function aiSetNet(n){BOT_NET=n;}
-const aiNetFits=()=>botNetReady();
 /* one decision for the AI in seat S.cur. mem: per-game object ({}) that keeps the turn planner's cache between calls.
    Returns a legal action. */
 function aiChoose(id,mem){
