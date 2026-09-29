@@ -407,8 +407,10 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #rside .rev .bar{height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden}
 #rside .rev .bar span{display:block;height:100%;background:var(--gold);transform-origin:0 50%}
 #rside .rev b{text-align:right;color:var(--gold2);font-variant-numeric:tabular-nums}
-#rside .rexp{display:block;width:100%;margin:0 0 8px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);font:inherit;text-align:left;cursor:pointer}
-#rside .rexp:hover{color:var(--text);border-color:var(--gold)}
+#rside .radv{margin-top:14px}
+#rside .rplan{margin:0;padding:0;list-style:none;counter-reset:st}
+#rside .rplan .ralt{counter-increment:st}#rside .rplan .ralt::before{content:counter(st);min-width:16px;text-align:right;color:var(--gold2);font-weight:700}
+#rside .rcmp{margin:8px 0 0;color:var(--muted);line-height:1.4}#rside .rcmp b{color:var(--gold2)}
 @media (max-width:900px) and (orientation:portrait){
   #shell{grid-template-areas:"game" "side" "dock";grid-template-columns:100%;grid-template-rows:minmax(0,1fr) auto auto}
   #rside{width:auto;height:min(150px,22vh);border-left:0;border-top:1px solid var(--line);padding:10px 14px}

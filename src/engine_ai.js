@@ -44,6 +44,13 @@ function aiChoose(id,mem){
   let a=null;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;RNG=r0;}
   return aiFinishGuard(a||(S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}));
 }
+/* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
+   the line (the cards it draws change the plan). null: this AI doesn't plan whole turns with the network, or it isn't loaded */
+function aiPlan(id,rnd){
+  const A=aiById(id),o=A&&A.opts;if(!o||o.mode!=='net'||!o.search||o.search.kind!=='plan'||!botNetReady()||S.players.length===2||S.over)return null;
+  const best=botPlanTurn(S.cur,o.search.beam||3,rnd||Math.random,o.draws||4,false);
+  return best.line&&best.line.length?best.line:[S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}];
+}
 /* El Dorado can only be entered with a card of its symbol (paddle on the water side, machete on the jungle side) or a joker.
    The bot sometimes trashes its last such card (or nearly its whole deck) and, near the end, stops buying, so it could wait forever next to the finish
    (seen on the newer courses). Keep one such card when trashing, and buy one before ending a turn without any. */

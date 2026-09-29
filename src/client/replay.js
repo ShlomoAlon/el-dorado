@@ -1,7 +1,7 @@
 /* REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
    The log holds the seeds and every action; the engine rebuilds each position (replayStart), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
-import { S, MAP, CT, RNG, hexAt, mapFor, setS, setMAP, setRng, replayCheck, replayStart, replayStep, applyAction, botRemaining, botCost, botValue, botScoreActions, botNetReady, aiAllowed, aiSetNet, mulberry32 } from '../engine.gen.js';
+import { S, MAP, CT, RNG, hexAt, mapFor, setS, setMAP, setRng, replayCheck, replayStart, replayStep, applyAction, botRemaining, botCost, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
 import { $, esc, setHTML } from './dom.js';
 import { UI, G, online } from './state.js';
 import { render, resetView } from './frame.js';
@@ -27,12 +27,10 @@ function buildReplay(log,id){
   }finally{setRng(null);}
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
   let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}
-  let ex=false;try{ex=localStorage.getItem('eldorado-rexp')==='1';}catch(e){}
-  return{log,id,states,lines,evs,rem,fails,i:0,timer:0,speed:sp,side,ex,ev:{},alts:{}};
+  return{log,id,states,lines,evs,rem,fails,i:0,timer:0,speed:sp,side,ev:{},adv:{}};
 }
-/* ---- the evaluation: the shipped network's estimate for the position on screen ----
-   Only where a network was trained (First Expedition, 3-4 players: aiAllowed); elsewhere the replay shows none.
-   By default one line per explorer (the position itself); expanded, every option of the player to move is scored too. */
+/* ---- the evaluation: the shipped network's estimate for the position on screen, and the turn the strongest AI would play
+   from it. Only where a network was trained (First Expedition, 3-4 players: aiAllowed); elsewhere the replay shows none. */
 const replayEvalOK=()=>!!(G.replay&&S&&aiAllowed(S.course.id,S.players.length)&&!AIX.failed);
 function replayNet(){if(!AIX.net)return false;aiSetNet(AIX.net);return botNetReady();}
 function replayEval(){const R=G.replay;if(R.ev[R.i])return R.ev[R.i];if(!replayNet())return null;
@@ -40,12 +38,24 @@ function replayEval(){const R=G.replay;if(R.ev[R.i])return R.ev[R.i];if(!replayN
   // winning chances, so they add up to 100%
   const raw=S.players.map((p,j)=>p.resigned?0:Math.max(0,botValue(j,'net'))),tot=raw.reduce((a,x)=>a+x,0)||1;
   return R.ev[R.i]={raw,share:raw.map((x,j)=>S.players[j].resigned?null:x/tot)};}
-function replayAlts(){const R=G.replay;if(R.alts[R.i])return R.alts[R.i];if(!replayNet()||S.over)return null;
-  const g=mulberry32(R.i*7919+1),r0=RNG;let sc;
-  try{sc=botScoreActions(S.cur,g,8);}finally{setRng(r0);}
-  // each option's score for the player to move, as a share against the others' current scores (same scale as above)
-  const ev=replayEval(),me=S.cur,others=ev.raw.reduce((a,x,j)=>j===me?a:a+x,0);
-  return R.alts[R.i]=sc.filter(x=>x.v>-Infinity).map(x=>({a:x.a,v:Math.max(0,x.v)/((Math.max(0,x.v)+others)||1)}));}
+const ADVISOR='fawcett';
+/* the advisor's whole turn from the position on screen: [{a, html, key}] (each step described in the position it is played
+   from), or null. Worked out once per position, with a random stream of its own so it is the same each visit. */
+function replayAdvice(){const R=G.replay;if(R.i in R.adv)return R.adv[R.i];if(!replayNet()||S.over)return null;
+  const root=S,g=mulberry32(R.i*7919+1),r0=RNG;let steps=null;
+  try{setRng(g);const line=aiPlan(ADVISOR,g);
+    if(line){steps=[];setS(JSON.parse(R.states[R.i]));
+      for(const a of line){const st=JSON.parse(JSON.stringify(S));steps.push({a,html:describeAction(a,st),key:actionKey(a,st)});const me=S.cur;if(!applyAction(me,a).ok||S.over||S.cur!==me)break;}}}
+  finally{setS(root);setRng(r0);}
+  return R.adv[R.i]=steps;}
+/* the same move whichever copy of a card it uses */
+function actionKey(a,st){const ty=id=>st.cards[id]||id,tys=ids=>(ids||[]).map(ty).sort().join('+');
+  switch(a.t){case'move':case'native':return`${a.t} ${ty(a.card)} ${a.pi} ${a.to}`;case'pay':return`pay ${a.pi} ${a.to} ${tys(a.cards)}`;
+    case'buy':return`buy ${a.type} ${tys(a.cards)}`;case'transmit':return`transmit ${a.type}`;case'action':return`action ${ty(a.card)}`;
+    case'trash':return`trash ${tys(a.cards)}`;case'end':return`end ${tys(a.keep)}`;default:return a.t;}}
+/* the advice takes a moment (the advisor weighs many whole turns), so it is worked out once the viewer stops on a position */
+let adviceT=0;
+function adviceSoon(){clearTimeout(adviceT);const R=G.replay,i=R.i;adviceT=setTimeout(()=>{if(G.replay===R&&R.i===i&&!R.timer&&R.side){replayAdvice();render();}},250);}
 function startReplay(log,id){
   if(online())exitOnline(); // an online game in progress goes on (rejoin it from Online)
   aiReset();let R;try{R=buildReplay(log,id);}catch(e){console.error(e);toast('Could not load that replay: '+e.message,3500);showSetup();return;}
@@ -143,14 +153,20 @@ function replayBar(){
   let h=`<div class="rwh">Evaluation <span class="m">· estimated winning chances</span></div>`;
   if(!ev)h+=`<p class="m">Loading the network…</p>`;
   else h+=`<div class="revl">${S.players.map((p,j)=>`<div class="rev${j===S.cur&&!S.over?' now':''}"><i style="background:${p.color}"></i><span class="n">${esc(p.name)}</span><span class="bar"><span style="transform:scaleX(${ev.share[j]==null?0:Math.max(0,Math.min(1,ev.share[j]))})"></span></span><b>${p.resigned?'left':pc(ev.share[j])}</b></div>`).join('')}</div>`;
-  const nx=replayNext(),st=JSON.parse(R.states[R.i]),alts=ev&&!S.over&&R.ex?replayAlts():null;
-  if(ev&&!S.over)h+=`<button id="rbX" class="rexp" aria-expanded="${R.ex}">${R.ex?'Hide':'Show'} every option for ${esc(S.players[S.cur].name)}</button>`;
-  if(alts){const chosen=nx?JSON.stringify(nx[1]):'';
-    h+=alts.map((o,j)=>`<div class="ralt${JSON.stringify(o.a)===chosen?' on':''}" data-j="${j}"><b>${pc(o.v)}</b><span>${describeAction(o.a,st)}</span></div>`).join('');}
-  if(side.__h===h)return;setHTML(side,h); // (rewritten only when it changes: hovering an option redraws the board, not this list)
-  const xb=side.querySelector('#rbX');if(xb)xb.onclick=()=>{R.ex=!R.ex;try{localStorage.setItem('eldorado-rexp',R.ex?'1':'0');}catch(e){}render();};
-  // hovering an option marks its space on the board
-  side.querySelectorAll('.ralt').forEach(el=>{const o=alts[+el.dataset.j].a;
+  const nx=replayNext(),A=aiById(ADVISOR),who=esc(S.players[S.cur].name);let steps=null;
+  if(ev&&!S.over){
+    h+=`<div class="rwh radv">${esc(A.name)}’s turn for ${who} <span class="m">· the strongest AI’s plan from here</span></div>`;
+    if(R.timer)h+=`<p class="m">Pause to see it.</p>`;
+    else if(!(R.i in R.adv)){h+=`<p class="m">${esc(A.name)} is thinking…</p>`;adviceSoon();}
+    else if(!(steps=R.adv[R.i]))h+=`<p class="m">No plan for this position.</p>`;
+    else{const same=nx&&nx[0]===S.cur&&steps[0].key===actionKey(nx[1],JSON.parse(R.states[R.i]));
+      h+=`<ol class="rplan">${steps.map((o,j)=>`<li class="ralt${j===0&&same?' on':''}" data-j="${j}"><span>${o.html}</span></li>`).join('')}</ol>`;
+      if(steps[steps.length-1].a.t==='action')h+=`<p class="rcmp">…then decides the rest after seeing the cards it draws.</p>`; // (every action card draws)
+      if(nx&&nx[0]===S.cur)h+=`<p class="rcmp">${same?`<b>✓</b> ${who} made this move.`:`${who} played instead: ${describeAction(nx[1],JSON.parse(R.states[R.i]))}`}</p>`;}
+  }
+  if(side.__h===h)return;setHTML(side,h); // (rewritten only when it changes: hovering a step redraws the board, not this list)
+  // hovering a step marks its space on the board
+  side.querySelectorAll('.ralt').forEach(el=>{const o=steps[+el.dataset.j].a;
     el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(o.to)){R.hover=o.to;render();}};
     el.onpointerleave=()=>{R.hover=null;render();};});
 }

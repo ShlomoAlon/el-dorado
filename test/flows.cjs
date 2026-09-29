@@ -1,6 +1,6 @@
 // Plays the game the way a person does (mouse clicks and drags on the real page) and checks each step:
 // start, select a card, move by clicking a space and by dragging a card onto it, undo, buy (market card, then paying
-// cards), end a turn, an AI's turn (with its recap under the prompt), the journal, the menu, a replay (step, exit), and
+// cards), end a turn, an AI's turn (with its recap under the prompt), the journal, the menu, a replay (step, Fawcett's plan, exit), and
 // the market closed while a Travel Log's removal is still to choose.
 // Also checks that pressing Start changes nothing on the board, and that no step logs an error.
 //   NODE_PATH=$(npm root -g) node test/flows.cjs
@@ -93,6 +93,8 @@ const serve = () => { const pub = path.join(__dirname, '..', 'public'); const sr
   ok('replay open', await S(() => !!window.__ED.G.replay && !document.querySelector('#rdock').hidden));
   for (let k = 0; k < 6; k++) { await p.keyboard.press('ArrowRight'); await wait(250); }
   await idle(); ok('replay steps', await S(() => window.__ED.G.replay.i === 6));
+  await p.waitForFunction(() => document.querySelector('#rside .rplan li') || /No plan/.test(document.querySelector('#rside').textContent), null, { timeout: 15000 }).catch(() => {});
+  ok('replay: the strongest AI\'s turn from here', await S(() => !!document.querySelector('#rside .rplan li') && /Fawcett/.test(document.querySelector('#rside').textContent)));
   await p.click('#menuBtn'); await wait(800);
   ok('replay exit resumes the game', await S(() => !window.__ED.G.replay && !!window.__ED.S && !window.__ED.S.over && document.querySelectorAll('#cards .card').length > 0));
   // 11. a removal still to choose (Travel Log): the market stays closed until it's answered (a tap there says why, it

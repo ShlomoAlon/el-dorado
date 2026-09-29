@@ -175,6 +175,9 @@ Equal keys share a place. `winners` are the players in place 1.
 | `nativeTargets(seat, pi)` | `Map<key or 'B'+i, {kind: 'native'\|'nativebl', path, cost: 0, pi, bl}>` |
 | `payTargets(seat, pi)` | `Map<key or 'B'+i, {kind: 'rubble'\|'camp'\|'blr', need, path?, pi, bl?}>` (only those the hand can pay) |
 | `stackOf(type)` | `{src: 'm'\|'r', i, s}` or `null` |
+| `cantBuy(seat, type)` | Why `seat` can't buy that card now, payment aside (`''` if it can): not their turn, a removal still to choose, already bought this turn, sold out, reserve closed. The buy action and the page's market both use it. |
+| `buyOptions(seat)` | `[{src, i, t}]`: what `seat` can buy now with the coins in hand (market first) |
+| `reserveOpen()` | a market slot is empty, so the reserve can be bought from |
 | `coinVal(id)` | a card's value when paying |
 | `playerDone(p)`, `isActive(p)` | the player has arrived / is still racing |
 | `eloDeltas(ratings, places, games)` | Multiplayer Elo. For every pair of players, K = (48 in a player's first 10 games, else 32) / (n−1); rounded to 0.1. |
@@ -232,6 +235,7 @@ Each entry also has `rating` (its calibrated starting rating), `desc` and `opts`
 | `aiAllowed(course, n)` | AIs are offered on First Expedition with 3–4 players (`aiCourseOK(course)` checks the course alone). |
 | `aiChoose(id, mem)` → action | One decision for `S.cur`. `mem` is `{}` per game and seat; it keeps the turn planner's cache. An unknown id, a 2-player game, or no fitting network: the route planner. After 60 decisions in one turn it ends the turn. It never removes its last card that can enter El Dorado, never thins its deck below 4 cards, and buys such a card before ending a turn without one. |
 | `aiStep(id, mem, rec)` | `recApply` of `aiChoose`; if the action is refused, a `timeout` instead. |
+| `aiPlan(id, rnd)` → `[action]` or null | The whole turn that AI would play from here for `S.cur` (its planner's best line; a draw card ends the line). null unless the AI plans whole turns with a loaded network. The replay shows Fawcett's. |
 | `aiNetDecode(bytes)`, `aiSetNet(net)`, `aiNetFits()` | Load and select the network; `aiNetFits()` says whether it was trained for this course. |
 
 **The network file** (`src/ai/first.bin`, made by `tools/ai/pack.mjs`):
@@ -420,7 +424,7 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 | `eldorado-seats` | the AI choices on the start screen |
 | `eldorado-mkt` | whether the market is open |
 | `eldorado-sound` | sound on or off |
-| `eldorado-rspeed2`, `eldorado-rside`, `eldorado-rexp` | replay speed, evaluation panel, expanded options |
+| `eldorado-rspeed2`, `eldorado-rside` | replay speed, evaluation panel |
 
 **Test hooks (`window.__ED`):**
 
