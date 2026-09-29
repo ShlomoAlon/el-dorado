@@ -5,7 +5,7 @@ import { S, CT, MARKET0, stackOf, reserveOpen, cantBuy, fmt } from '../engine.ge
 import { $, setText, setStyle } from './dom.js';
 import { UI, canAct } from './state.js';
 import { geo, onGeo } from './geometry.js';
-import { cardHTML, cardTitle } from './cards.js';
+import { cardHTML, cardTitle, cardCompactHTML } from './cards.js';
 import { cam, fitSoon } from './board/camera.js';
 import { affordable, pickFromMarket, payTotal, cancelMode } from './actions.js';
 import { setT, placeAt, buySlotBox } from './hand.js';
@@ -22,28 +22,26 @@ function sizeMarket(){
   let avail=H-(parseFloat(getComputedStyle(ab).bottom)||0)-150-top; // room for up to three stacked buttons below
   if(avail<60)avail=ab.getBoundingClientRect().top-at-top-12; // very short screens: just stay above the current ones
   avail=Math.min(avail,$('#discPile').getBoundingClientRect().top-at-top-10); // and above the discard pile
-  const def=phone?44:72,min=phone?34:56,gap=phone?7:10,cg=phone?7:8,n=MARKET0.length+1; // (the market always has its 6 slots, and All cards)
-  // every column count against the room below (height) and beside (width: at most ~55% of the game area); the largest cards win
-  let pick=null;
-  for(let cols=phone?1:2;cols<=n;cols++){const rows=Math.ceil(n/cols),mw=Math.min(def,(avail-(rows-1)*gap-8)/(rows*1.4),(W*.55-(cols-1)*cg)/cols);if(!pick||mw>pick.mw+.5)pick={cols,mw};}
-  // no arrangement fits (a tiny game area): the market steps aside; the Market button then opens All cards
-  if(mk.classList.contains('cramped')!==pick.mw<min*.8){mk.classList.toggle('cramped',pick.mw<min*.8);noMkt();}
-  const mw=Math.max(28,Math.floor(pick.mw));
-  setStyle(mk,'--mw',mw+'px');setStyle($('#market'),'gridTemplateColumns',`repeat(${pick.cols},var(--mw))`);
-  setStyle($('#app'),'--mktW',(pick.cols*mw+(pick.cols-1)*cg)+'px'); // the market's width, for what must stay clear of it (the prompt)
+  // compact rows (D3-B): a fixed width, as tall as the name needs; one column, two when the column doesn't fit
+  const w=phone?140:190,h=phone?38:46,gap=phone?6:8,cg=8,n=MARKET0.length+1; // (the market's 6 slots, and All cards)
+  let cols=1;while(cols<3&&Math.ceil(n/cols)*(h+gap)-gap>avail)cols++;
+  const fits=Math.ceil(n/cols)*(h+gap)-gap<=avail&&cols*w+(cols-1)*cg<=W*.6;
+  if(mk.classList.contains('cramped')===fits){mk.classList.toggle('cramped',!fits);noMkt();}
+  setStyle(mk,'--mw',w+'px');setStyle(mk,'--mh',h+'px');setStyle($('#market'),'gridTemplateColumns',`repeat(${cols},var(--mw))`);
+  setStyle($('#app'),'--mktW',(cols*w+(cols-1)*cg)+'px'); // the market's width, for what must stay clear of it (the prompt)
 }
 const ALL_ICON='<svg viewBox="-10 -10 20 20"><rect x="-8.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".45" transform="rotate(-14)"/><rect x="-4.5" y="-7.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".7"/><rect x="-.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" transform="rotate(12)"/></svg>';
 /* market slots are made once and then updated in place (count, highlight, selection): a card's artwork is drawn again
    only when another card takes its slot (rebuilding every slot on each render re-drew all the art: late pop-ins) */
-function patchSlots(box,specs,before){
+function patchSlots(box,specs,before,compact){
   const have=[...box.children].filter(e=>e.classList.contains('mslot'));
   have.slice(specs.length).forEach(e=>e.remove());
   specs.forEach((sp,k)=>{let el=have[k];const key=sp.n>0?'c:'+sp.t:'e:'+sp.src;
     if(!el||el.dataset.k!==key){const n=document.createElement('div');n.dataset.k=key;
-      n.innerHTML=sp.n>0?`<div class="mcard">${cardHTML(sp.t)}</div><span class="cnt"></span>`:`Sold out${sp.src==='m'?'<br>reserve open':''}`;
+      n.innerHTML=sp.n>0?(compact?`${cardCompactHTML(sp.t)}<span class="cnt"></span><div class="mprev" aria-hidden="true"><div class="mcard">${cardHTML(sp.t)}</div></div>`:`<div class="mcard">${cardHTML(sp.t)}</div><span class="cnt"></span>`):`Sold out${sp.src==='m'?'<br>reserve open':''}`;
       if(el)el.replaceWith(n);else box.insertBefore(n,before||null);el=n;}
     if(el.className!==sp.cls)el.className=sp.cls;if(el.dataset.i!==String(sp.i))el.dataset.i=sp.i;
-    if(sp.n>0){if(el.dataset.src!==sp.src)el.dataset.src=sp.src;const t=cardTitle(sp.t);if(el.title!==t)el.title=t;const c=el.querySelector('.cnt');if(c.textContent!==String(sp.n))c.textContent=sp.n;}
+    if(sp.n>0){if(el.dataset.src!==sp.src)el.dataset.src=sp.src;const t=cardTitle(sp.t);if(el.title!==t)el.title=t;const c=el.querySelector('.cnt');const cn=compact?'×'+sp.n:String(sp.n);if(c.textContent!==cn)c.textContent=cn;}
     else delete el.dataset.src;});
 }
 function update(){
@@ -56,7 +54,7 @@ function update(){
   const resAff=[...aff].some(k=>k[0]==='r');
   const mk=$('#market');let at=$('#allTile');
   if(!at){mk.insertAdjacentHTML('beforeend',`<button class="alltile" id="allTile" title="See every card, including the reserve">${ALL_ICON}<span>All cards</span><small></small></button>`);at=$('#allTile');}
-  patchSlots(mk,S.market.map((s,i)=>spec('m',s,i)),at);
+  patchSlots(mk,S.market.map((s,i)=>spec('m',s,i)),at,true);
   const ac=`alltile${openSlot||tr?' open':''}${resAff?' can':''}`;if(at.className!==ac)at.className=ac;
   const sm=at.querySelector('small'),st=tr?'Pick any card':openSlot?'Reserve open':'Reserve locked';if(sm.textContent!==st)sm.textContent=st;
   $('#mktBtn').classList.toggle('canbuy',aff.size>0&&!UI.mktOpen);
@@ -78,8 +76,10 @@ export const buySlotPart = { name: 'buySlot', update(){const bs=$('#buySlot'),on
 /* where a card of the market is on screen now (a bought card flies from there): its slot, or the button that opens it */
 /* where a card type's stack is on screen now, or null: an event can describe an earlier action of the same batch (the server
    sends several AI actions at once), and by now its stack may be sold out and its slot refilled from the reserve */
+/* a card-shaped box on a market slot: a compact row's card sits at its left end, a little taller than the row */
+function cardBox(e){const r=e.getBoundingClientRect();if(!e.classList.contains('ccard'))return r;const h=r.height*1.5,w=h/1.4;return{left:r.left+4,top:r.top+r.height/2-h/2,width:w,height:h};}
 export function marketRectOf(t){const s=stackOf(t);return s?marketRect(s.src,s.i):null;}
-function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpen?`#market [data-i="${idx}"] .mcard`:'#mktBtn'):(UI.allOpen?`#reserve [data-i="${idx}"] .mcard`:(UI.mktOpen?'#allTile':'#mktBtn')));if(!e)return null;const r=e.getBoundingClientRect();
+function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpen?`#market [data-i="${idx}"] .ccard`:'#mktBtn'):(UI.allOpen?`#reserve [data-i="${idx}"] .mcard`:(UI.mktOpen?'#allTile':'#mktBtn')));if(!e)return null;const r=cardBox(e);
   if(src==='r'){const cw=86;return{left:r.left+r.width/2-cw/2,top:r.top-cw*.7+r.height/2,width:cw,height:cw*1.4};}return r;}
 
 /* ---------- drag a card out of the market (strip or All cards) toward your hand to start buying it ---------- */
@@ -94,7 +94,7 @@ function marketMove(e){const d=mdrag;if(!d||e.pointerId!==d.pid)return;
   if(!d.started){if(Math.hypot(e.clientX-d.x0,e.clientY-d.y0)<7)return;d.started=true;
     const stack=d.src==='m'?S.market[d.idx]:S.reserve[d.idx];if(!stack)return marketCancel();
     const g=document.createElement('div');g.className='card mghost free';g.innerHTML=cardHTML(stack.t);$('#cards').appendChild(g);d.ghost=g;d.t=stack.t;
-    placeAt(g,d.el.querySelector('.mcard').getBoundingClientRect(),0);d.el.style.opacity=.35;
+    placeAt(g,cardBox(d.el.querySelector('.ccard')||d.el.querySelector('.mcard')),0);d.el.style.opacity=.35;
     if(UI.allOpen)openAll(false);sfx('pick');}
   const A=geo.app,cw=geo.cw,ch=cw*1.4;setT(d.ghost,e.clientX-A.left-cw/2,e.clientY-A.top-ch*.45,(e.clientX-d.x0)*.015,.72);
 }
@@ -103,7 +103,7 @@ function marketUp(e){const d=mdrag;if(!d||e.pointerId!==d.pid)return;marketEnd()
   mdragJustEnded=true;setTimeout(()=>{mdragJustEnded=false;},0);
   const mk=$('#mkt').getBoundingClientRect(),overMarket=UI.mktOpen&&e.clientX>=mk.left-10&&e.clientY<=mk.bottom+10,g=d.ghost;
   const settle=(rect,ms)=>{g.classList.remove('free');requestAnimationFrame(()=>{if(rect)placeAt(g,rect,0);else g.style.opacity=0;});setTimeout(()=>g.remove(),ms);};
-  if(overMarket){settle(d.el.querySelector('.mcard').getBoundingClientRect(),300);return;}
+  if(overMarket){settle(cardBox(d.el.querySelector('.ccard')||d.el.querySelector('.mcard')),300);return;}
   const transmit=UI.mode==='transmit';pickFromMarket(d.src,d.idx);
   // settle into the purchase slot (or fade: the Transmitter's card flies to the discard pile)
   if(transmit||UI.mode!=='pay'){settle(null,280);return;}

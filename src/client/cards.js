@@ -27,3 +27,10 @@ export function cardHTML(t){
   return `<div class="cface k-${d.c}"><div class="c-art">${cardArt(t)}</div>${pow}<div class="c-title">${esc(d.n)}</div><div class="c-body">${body}</div>${foot}</div>`;
 }
 export function cardTitle(t){const d=CT[t];let s=d.n;if(d.c!=='p')s+=` — ${d.p} ${d.s==='*'?'joker (machete, paddle or coin)':SYMNAME[d.s]}`;else s+=' — '+d.txt;if(d.once)s+=' Single use: removed from the game after its effect.';if(d.cost!=null)s+=` Cost ${d.cost}.`;return s;}
+/* the compact face (design option D3-B): the market column's row. Strength and symbol (or the action's glyph), the name
+   at a legible size, the price; no scene art. The full card shows beside it on hover, in All cards, and in the buy slot. */
+export function cardCompactHTML(t){
+  const d=CT[t];
+  const pow=d.c==='p'?`<div class="cc-pow"><svg viewBox="-11 -11 22 22">${GLYPH[t]}</svg></div>`:`<div class="cc-pow"><b>${d.p}</b>${icon(d.s)}</div>`;
+  return `<div class="ccard k-${d.c}">${pow}<div class="cc-name">${esc(d.n)}</div><span class="cc-cost">${d.cost}</span></div>`;
+}
