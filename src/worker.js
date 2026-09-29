@@ -378,22 +378,20 @@ async function pruneReplays(DB, uids) {
   }
 }
 /* ---------------- Room: one live game ---------------- */
-const mapCache = new Map();
-function mapFor(S) { const k = S.course.id + ':' + S.seed; let m = mapCache.get(k); if (!m) { m = E.mapFor(S); mapCache.set(k, m); if (mapCache.size > 200) mapCache.delete(mapCache.keys().next().value); } return m; }
 const PCOLORS = E.COLORS.map(c => c.hex); // the seats' colours (one explorer figure each)
 const AI_RULE = 'AI players play First Expedition with 3 or 4 players for now.';
 const PLAYER_ACTIONS = ['move', 'native', 'pay', 'action', 'trash', 'transmit', 'buy', 'end', 'resign']; // what a player may send
 
 export class Room extends DurableObject {
   constructor(ctx, env) {
-    super(ctx, env); this.d = null; this.S = null; this.rec = null;
+    super(ctx, env); this.d = null; this.S = null; this.MAP = null; this.rec = null;
     E.setAssertMode({ debug: env.DEV_AUTH === '1' });
     ctx.blockConcurrencyWhile(() => this.restore());
   }
   // storage: d (the room) and rec (the game's record: engine recNewGame). The game state S is rebuilt from rec. rec holds the
   // secret shuffle seed, so it is never sent out; once the game is over it is saved as the game's replay.
   async restore() {
-    this.d = (await this.ctx.storage.get('d')) || null; this.rec = (await this.ctx.storage.get('rec')) || null; this.S = null; this.aiMem = {};
+    this.d = (await this.ctx.storage.get('d')) || null; this.rec = (await this.ctx.storage.get('rec')) || null; this.S = null; this.MAP = null; this.aiMem = {};
     if (this.rec && E.replayCheck(this.rec)) this.rec = null; // recorded under older rules: it can't be rebuilt
     if (this.rec) this.load();
     else if (this.d && this.d.status === 'playing') this.d.status = 'closed'; // a game this version can't rebuild
@@ -415,12 +413,12 @@ export class Room extends DurableObject {
       return new Response('Server error', { status: 500 });
     }
   }
-  // S from the record, plus who plays each seat
-  load() { const g = E.recState(this.rec); this.S = g.S; mapCache.set(this.S.course.id + ':' + this.S.seed, g.MAP); }
+  // the game (S) and its board (MAP), rebuilt from the record
+  load() { ({ S: this.S, MAP: this.MAP } = E.recState(this.rec)); }
   // who plays each seat: the room's seats, in the game's seat order (fixed once the game starts)
   get owners() { return this.d.seats.map(s => s.uid); }
   async persist() { await this.ctx.storage.put(this.rec ? { d: this.d, rec: this.rec } : { d: this.d }); }
-  engine() { E.setS(this.S); E.setMAP(mapFor(this.S)); return E; }
+  engine() { E.setS(this.S); E.setMAP(this.MAP); return E; }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.roomInfo()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
   roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid) })), results: d.results || null }; }
@@ -536,7 +534,7 @@ export class Room extends DurableObject {
   async startGame() {
     const d = this.d;
     this.rec = E.recNewGame({ course: d.opts.course === 'random' ? E.COURSES[Math.floor(Math.random() * E.COURSES.length)] : E.courseById(d.opts.course), seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
-    this.S = E.S; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
+    this.S = E.S; this.MAP = E.MAP;
     d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null;
     await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll();
   }
@@ -587,8 +585,8 @@ export class Room extends DurableObject {
      Returns the replay's id, or null (the log is too large, or the database failed). */
   async saveReplay() {
     const d = this.d; if (d.replay !== undefined) return d.replay;
-    d.replay = null; E.setS(this.S); E.setMAP(mapFor(this.S));
-    const log = E.recFinal(this.rec);
+    d.replay = null;
+    const log = this.engine().recFinal(this.rec);
     const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
     const text = JSON.stringify(log); if (text.length > REPLAY_MAX_BYTES) return null;
     try {
