@@ -177,6 +177,7 @@ Equal keys share a place. `winners` are the players in place 1.
 | `reach(seat, pi, syms, budget)` | `Map<key or 'B'+i, {kind: 'move'\|'bl', cost, sym, path: [key…], pi, bl?}>`: the cheapest route to each space (Dijkstra per symbol, first symbol wins ties). A route may pass blockades of its symbol by paying their cost; it can't enter occupied spaces, and it stops at El Dorado. |
 | `nativeTargets(seat, pi)` | `Map<key or 'B'+i, {kind: 'native'\|'nativebl', path, cost: 0, pi, bl}>` |
 | `payTargets(seat, pi)` | `Map<key or 'B'+i, {kind: 'rubble'\|'camp'\|'blr', need, path?, pi, bl?}>` (only those the hand can pay) |
+| `cardTargets(seat, pi, id)` | Where that card can go now: a movement card's reach plus the rubble / camps / rubble blockades it could be given up for; the card in play: its leftover strength's reach; the Native: `nativeTargets`. The page's targets and "card usable" come from it. |
 | `stackOf(type)` | `{src: 'm'\|'r', i, s}` or `null` |
 | `cantBuy(seat, type)` | Why `seat` can't buy that card now, payment aside (`''` if it can): not their turn, a removal still to choose, already bought this turn, sold out, reserve closed. The buy action and the page's market both use it. |
 | `buyOptions(seat)` | `[{src, i, t}]`: what `seat` can buy now with the coins in hand (market first) |

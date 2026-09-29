@@ -326,6 +326,19 @@ function nativeTargets(pl,pi){
   for(const n of neighbors(pk)){const b=blockAt(pk,n);if(b!==null&&!T.has('B'+b))T.set('B'+b,{kind:'nativebl',bl:b,path:[],cost:0,pi});}
   return T;
 }
+/* where seat can play card id with explorer pi now: Map<key or 'B'+i, target>. A movement card from the hand: the spaces its
+   strength reaches, plus the rubble, base camps and rubble blockades it could be given up for (any card can be); the card in
+   play with leftover strength: where that reaches; the Native: its own targets. Empty: not on the board now */
+function cardTargets(seat,pi,id){
+  const T=new Map(),P=S.players[seat],d=def(id),act=S.turn.active&&S.turn.active.id===id?S.turn.active:null;
+  if(!d||S.over||seat!==S.cur||S.turn.pending)return T;
+  if(act){for(const[k,v]of reach(seat,act.pi,[act.sym],act.left))T.set(k,v);return T;}
+  if(!P.hand.includes(id))return T;
+  if(typeOf(id)==='native'){for(const[k,v]of nativeTargets(seat,pi))T.set(k,v);return T;}
+  if(d.c!=='p')for(const[k,v]of reach(seat,pi,d.s==='*'?['j','w','v']:[d.s],d.p))T.set(k,v);
+  for(const[k,v]of payTargets(seat,pi))if(!T.has(k))T.set(k,v);
+  return T;
+}
 /* spaces/blockades entered by discarding (rubble, grey blockade) or removing cards (base camp) */
 function payTargets(pl,pi){
   const T=new Map();const P=S.players[pl];const pk=P.pieces[pi];if(!pk||pk==='done')return T;
@@ -1154,5 +1167,5 @@ function aiStep(id,mem,rec){
 
 export const E={AIS,COLORS,aiById,aiCourseOK,aiAllowed,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,replayStep,recNewGame,recApply,recCanUndo,recUndo,recState,recFinal,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botActionValue,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
 // for the page's modules: every name (live bindings), and setters for the game on show
-export {CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,RNG,setRng,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,aiById,drawCards,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,payTargets,endGame,checkEnd,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botWorth,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_ACT_SPEED,botHeuristic2,BOT_STARTER,BOT_PLANS,BOT_PLAN_CUR,BOT_PLAN_DEF,botPlanMoves,botPaddles,botClone,botCardWorth,BOT_PADDLE,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botDeepChoose,botRolloutChoose,botTurnSearch,botScoreActions,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botDeepPlayout,botTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiPlan,aiFinishCard,aiStep};
+export {CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,RNG,setRng,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,aiById,drawCards,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botWorth,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_ACT_SPEED,botHeuristic2,BOT_STARTER,BOT_PLANS,BOT_PLAN_CUR,BOT_PLAN_DEF,botPlanMoves,botPaddles,botClone,botCardWorth,BOT_PADDLE,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botDeepChoose,botRolloutChoose,botTurnSearch,botScoreActions,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botDeepPlayout,botTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiPlan,aiFinishCard,aiStep};
 export const setS=v=>{S=v},setMAP=v=>{MAP=v};

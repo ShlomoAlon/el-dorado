@@ -3,7 +3,7 @@
 // the reserve, the Transmitter, action cards, single-use cards, the end of a turn, both end-of-game rules and their
 // tie-break, two explorers each, resigning, what undo may take back, and what each player is shown.
 //   node test/rules.test.mjs
-import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cantBuy, buyOptions, COURSES, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck } from '../src/engine.gen.js';
+import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cardTargets, cantBuy, buyOptions, COURSES, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck } from '../src/engine.gen.js';
 let checks = 0; const failures = [];
 const ok = (cond, what) => { checks++; if (!cond) failures.push(what); };
 
@@ -107,6 +107,15 @@ ok(act({ t: 'buy', type: 'pioneer', cards: hand }).ok && S.market[0].t === 'pion
 game(['s j1']); hand = give(0, 'chest', 'giant');
 act({ t: 'buy', type: 'scout', cards: hand });
 ok(S.trash.includes(hand[0]) && S.players[0].play.includes(hand[1]), 'single use: a coin card paying its value leaves the game, a card paying ½ is discarded');
+// ---------- where a card can go (the engine answers the page's targets too)
+game(['s j1 r2', 'j1']); let [ctE, ctS, ctA] = give(0, 'explorer', 'sailor', 'cartographer');
+ok(cardTargets(0, 0, ctE).has('1,0') && cardTargets(0, 0, ctE).has('0,1') && cardTargets(0, 0, ctE).get('1,0').kind === 'move', 'a movement card: the spaces it reaches');
+ok(!cardTargets(0, 0, ctS).has('1,0') && cardTargets(0, 0, ctS).get('2,0') === undefined, 'a paddle: no jungle');
+game(['s r2']); [ctE, ctS, ctA] = give(0, 'explorer', 'sailor', 'cartographer');
+ok(cardTargets(0, 0, ctA).get('1,0') && cardTargets(0, 0, ctA).get('1,0').kind === 'rubble', 'any card can be given up for rubble next to the explorer');
+ok(!cardTargets(1, 0, ctE).size, 'nothing out of turn');
+game(['s j1 j1 j1']); [ctE] = give(0, 'trailblazer'); act({ t: 'move', card: ctE, pi: 0, to: '1,0' });
+ok([...cardTargets(0, 0, ctE).keys()].join() === '2,0,3,0', 'the card in play: where its leftover strength reaches');
 // ---------- what can be bought now (the engine answers the page's market too)
 game(['s j1']); hand = give(0, 'traveler', 'traveler', 'explorer');
 let bo = buyOptions(0);
