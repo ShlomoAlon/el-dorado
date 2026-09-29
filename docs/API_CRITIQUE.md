@@ -16,6 +16,20 @@ applyRaw(state, seat, action, rng)   (bots' look-ahead only)
 
 That shape has no module globals and no `setRng`, and nothing in it is English text. Most of the items below are steps toward it.
 
+**Status (2026-09-30).**
+
+- **Done:** 2 (randomness is a parameter), 3 (records only, log v3), 6 (state trimmed), 7 (the server doesn't write into
+  `S`), 8 (dead bot code), 9 (one export surface: `import * as E`), 10, 12 (events), 13 (player vs. system actions,
+  `keep` required), 15, 16, 24.
+- **Partly done:**
+  - 4: the journal is structured (the page writes the sentences); errors are still English.
+  - 5: `cardTargets` is the one page query, and every target names its action (`t`); the three internal queries remain.
+  - 14: `replayCheck` checks a record's players and `newGame` asserts them; colours are still hex, not ids (that would
+    need a log version bump, which drops every stored game).
+  - 19: the server keeps each room's board with its state; the bot's caches on `MAP` remain.
+  - 22: one `passTurn`.
+- **Open:** 1 (pass the game explicitly), 11, 17, 18, 20, 21, 23.
+
 ---
 
 ## 1. Pass the game in explicitly instead of using the module-global `S` and `MAP`
