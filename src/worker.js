@@ -11,7 +11,7 @@ import { E } from './engine.gen.js';
 import NET_BIN from './ai/first.bin'; // the AI's neural network as half floats (tools/ai/pack.mjs); wrangler imports .bin as an ArrayBuffer
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
-const bad = (msg, status = 400) => json({ error: msg }, status);
+const bad = (err, status = 400) => json({ err }, status);
 const CODE_CH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const genCode = () => Array.from({ length: 5 }, () => CODE_CH[Math.floor(Math.random() * CODE_CH.length)]).join('');
 const TURN_CHOICES = [60, 90, 120, 180, 300];
@@ -147,6 +147,12 @@ async function upsertUser(env, sub, displayName) {
   return { user: u, isNew: true };
 }
 
+/* a room's options: what the player chose (checked), or a quick match's, which are fixed. Developer servers allow short clocks. */
+function roomOpts(env, b) {
+  const turn = TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90;
+  return { max: Math.min(4, Math.max(2, +b.max || 3)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn, pub: b.pub !== false, rated: b.rated !== false, auto: false };
+}
+const matchOpts = env => ({ max: MATCH_SIZE, course: 'random', turn: env.DEV_AUTH === '1' ? 20 : 90, pub: true, rated: true, auto: true });
 async function createRoom(env, uid, opts) {
   for (let i = 0; i < 8; i++) {
     const code = genCode();
@@ -249,12 +255,11 @@ export default {
       }
       if (p === '/api/rooms' && req.method === 'POST') {
         const b = await req.json().catch(() => ({}));
-        const opts = { max: Math.min(4, Math.max(2, +b.max || 3)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn: TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90, pub: b.pub !== false, rated: b.rated !== false, auto: false };
-        const code = await createRoom(env, user.id, opts);
+        const code = await createRoom(env, user.id, roomOpts(env, b));
         return code ? json({ code }) : bad('Could not create a room, try again.', 500);
       }
       if (p === '/api/match' && req.method === 'POST') { // quick match: join the fullest waiting public match room, or open one
-        const r = await (await lobby.fetch('https://lobby/match', { method: 'POST', body: JSON.stringify({ uid: user.id, dev: env.DEV_AUTH === '1' }) })).json();
+        const r = await (await lobby.fetch('https://lobby/match', { method: 'POST', body: JSON.stringify({ uid: user.id, opts: matchOpts(env) }) })).json();
         return r.code ? json({ code: r.code }) : bad('Could not find or open a match, try again.', 500);
       }
       let m;
@@ -277,9 +282,10 @@ export default {
 
 /* ---------------- Lobby: live list of rooms ---------------- */
 export class Lobby extends DurableObject {
-  constructor(ctx, env) { super(ctx, env); this.rooms = null; ctx.blockConcurrencyWhile(async () => { this.rooms = (await ctx.storage.get('rooms')) || {}; }); }
+  // rooms: code → the room as it describes itself (Room.roomInfo) + when it last did. (Stored under 'list': 'rooms' held an older shape.)
+  constructor(ctx, env) { super(ctx, env); this.rooms = null; ctx.blockConcurrencyWhile(async () => { this.rooms = (await ctx.storage.get('list')) || {}; await ctx.storage.delete('rooms'); }); }
   prune() { const now = Date.now(); for (const c in this.rooms) { const r = this.rooms[c]; if (now - r.updated > (r.status === 'playing' ? 12 : 2) * 3600e3) delete this.rooms[c]; } }
-  list() { return Object.values(this.rooms).filter(r => r.pub !== false && (r.status === 'lobby' || r.status === 'playing')).map(r => ({ code: r.code, host: r.host, names: r.names, count: r.names.length, max: r.max, status: r.status, course: r.course, turn: r.turn, rated: r.rated !== false, ai: (r.uids || []).filter(u => u.startsWith('ai-')).length, auto: !!r.auto })); }
+  list() { return Object.values(this.rooms).filter(r => r.opts.pub && (r.status === 'lobby' || r.status === 'playing')).map(({ updated, ...r }) => r); }
   broadcast() { const msg = JSON.stringify({ t: 'rooms', rooms: this.list() }); for (const ws of this.ctx.getWebSockets()) { try { ws.send(msg); } catch (e) { } } }
   async fetch(req) {
     const url = new URL(req.url);
@@ -287,21 +293,20 @@ export class Lobby extends DurableObject {
     if (url.pathname === '/update') {
       const r = await req.json();
       if (r.status === 'closed' || r.status === 'over') delete this.rooms[r.code]; else this.rooms[r.code] = { ...r, updated: Date.now() };
-      this.prune(); await this.ctx.storage.put('rooms', this.rooms); this.broadcast(); return json({ ok: true });
+      this.prune(); await this.ctx.storage.put('list', this.rooms); this.broadcast(); return json({ ok: true });
     }
     if (url.pathname === '/match') {
-      const { uid, dev } = await req.json(); const now = Date.now();
-      const mine = Object.values(this.rooms).find(x => (x.uids || []).includes(uid) && (x.status === 'lobby' || x.status === 'playing'));
+      const { uid, opts } = await req.json(), now = Date.now(), seated = x => x.seats.some(s => s.uid === uid);
+      const mine = Object.values(this.rooms).find(x => seated(x) && (x.status === 'lobby' || x.status === 'playing'));
       if (mine) return json({ code: mine.code });
-      const open = Object.values(this.rooms).filter(x => x.auto && x.status === 'lobby' && x.names.length < x.max && now - x.updated < 15 * 60e3).sort((a, b) => b.names.length - a.names.length);
+      const open = Object.values(this.rooms).filter(x => x.opts.auto && x.status === 'lobby' && x.seats.length < x.opts.max && now - x.updated < 15 * 60e3).sort((a, b) => b.seats.length - a.seats.length);
       if (open.length) return json({ code: open[0].code });
-      const opts = { max: MATCH_SIZE, course: 'random', turn: dev ? 20 : 90, pub: true, rated: true, auto: true };
       const code = await createRoom(this.env, uid, opts); if (!code) return json({ code: null });
       // listed right away so a second quick-matcher lands in the same room
-      this.rooms[code] = { code, host: '', names: [], uids: [], max: MATCH_SIZE, status: 'lobby', course: 'random', turn: opts.turn, pub: true, auto: true, updated: now };
-      await this.ctx.storage.put('rooms', this.rooms); this.broadcast(); return json({ code });
+      this.rooms[code] = { code, host: uid, status: 'lobby', opts, seats: [], results: null, updated: now };
+      await this.ctx.storage.put('list', this.rooms); this.broadcast(); return json({ code });
     }
-    if (url.pathname === '/find') { const uid = url.searchParams.get('uid'); const r = Object.values(this.rooms).find(x => (x.uids || []).includes(uid)); return json({ code: r ? r.code : null }); }
+    if (url.pathname === '/find') { const uid = url.searchParams.get('uid'); const r = Object.values(this.rooms).find(x => x.seats.some(s => s.uid === uid)); return json({ code: r ? r.code : null }); }
     return bad('Not found', 404);
   }
   async webSocketMessage(ws, msg) { if (msg === 'ping') ws.send('pong'); }
@@ -344,17 +349,19 @@ export class Room extends DurableObject {
     });
   }
   // S from the record, plus who plays each seat
-  load() { const g = E.recState(this.rec); this.S = g.S; this.S.owners = this.d.seats.map(s => s.uid); this.S.room = this.d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, g.MAP); }
+  load() { const g = E.recState(this.rec); this.S = g.S; mapCache.set(this.S.course.id + ':' + this.S.seed, g.MAP); }
+  // who plays each seat: the room's seats, in the game's seat order (fixed once the game starts)
+  get owners() { return this.d.seats.map(s => s.uid); }
   async persist() { await this.ctx.storage.put(this.rec ? { d: this.d, rec: this.rec } : { d: this.d }); }
   engine() { E.S = this.S; E.MAP = mapFor(this.S); return E; }
-  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn, pub: d.opts.pub !== false, rated: d.opts.rated !== false, auto: !!d.opts.auto }; }
-  async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.summary()) }); } catch (e) { } }
+  async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.roomInfo()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
   roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid) })), results: d.results || null }; }
   send(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (e) { } }
   stateFor(uid, ev) {
-    const seat = this.S.owners.indexOf(uid);
-    return { t: 'state', S: E.redact(this.S, seat), ev: ev || [], seat, undo: seat >= 0 && seat === this.S.cur && E.recCanUndo(this.rec), deadline: this.d.deadline || null, now: Date.now(), room: this.roomInfo() };
+    const seat = this.owners.indexOf(uid);
+    // left: ms on the turn clock (the page counts it down from when the message arrives), null when no clock runs
+    return { t: 'state', S: E.redact(this.S, seat), ev: ev || [], seat, undo: seat >= 0 && seat === this.S.cur && E.recCanUndo(this.rec), left: this.d.deadline ? Math.max(0, this.d.deadline - Date.now()) : null, room: this.roomInfo() };
   }
   sendAll(ev) {
     for (const ws of this.ctx.getWebSockets()) {
@@ -367,7 +374,7 @@ export class Room extends DurableObject {
     if (url.pathname === '/init') {
       if (this.d) return json({ ok: false });
       const b = await req.json();
-      this.d = { code: b.code, host: b.uid, seats: [], status: 'lobby', opts: b.opts, created: Date.now(), deadline: null, timeouts: {}, rated: false, results: null };
+      this.d = { code: b.code, host: b.uid, seats: [], status: 'lobby', opts: b.opts, created: Date.now(), deadline: null, timeouts: {}, done: false, results: null };
       await this.persist(); return json({ ok: true });
     }
     if (url.pathname === '/ws') {
@@ -392,7 +399,7 @@ export class Room extends DurableObject {
     let m; try { m = JSON.parse(raw); } catch (e) { return; }
     const { uid } = ws.deserializeAttachment() || {};
     const d = this.d; if (!d || !uid) return;
-    const err = msg => this.send(ws, { t: 'error', msg });
+    const err = e => this.send(ws, { t: 'error', err: e });
     if (d.status === 'lobby') {
       const seat = d.seats.find(s => s.uid === uid);
       if (m.t === 'color' && seat && PCOLORS.includes(m.color) && !d.seats.some(s => s !== seat && s.color === m.color)) { seat.color = m.color; await this.persist(); this.sendAll(); }
@@ -433,7 +440,7 @@ export class Room extends DurableObject {
       return;
     }
     if (d.status !== 'playing' || !this.S) { if (m.t === 'act' || m.t === 'undo') err('This game is not running any more.'); return; }
-    const seat = this.S.owners.indexOf(uid);
+    const seat = this.owners.indexOf(uid);
     if (m.t === 'undo') {
       if (seat !== this.S.cur || !E.recCanUndo(this.rec)) return err('Nothing to undo.');
       this.rec.actions.pop(); this.load(); await this.persist(); this.sendAll(); return;
@@ -460,7 +467,7 @@ export class Room extends DurableObject {
   async startGame() {
     const d = this.d;
     this.rec = E.recNewGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
-    this.S = E.S; this.S.owners = d.seats.map(s => s.uid); this.S.room = d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
+    this.S = E.S; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
     d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null;
     await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll();
   }
@@ -484,7 +491,7 @@ export class Room extends DurableObject {
   async nextTurn() { if (this.aiToMove()) await this.scheduleAI(900); else await this.startTurnTimer(); }
   aiToMove() { return !!(this.S && !this.S.over && this.S.players[this.S.cur].ai); }
   // someone is following the game: a person still racing with the page open. Otherwise the AIs play on without pauses.
-  watched() { return this.S.players.some((p, i) => !p.ai && !p.resigned && !p.pieces.every(k => k === 'done') && this.online(this.S.owners[i])); }
+  watched() { return this.S.players.some((p, i) => !p.ai && !p.resigned && !p.pieces.every(k => k === 'done') && this.online(this.owners[i])); }
   async scheduleAI(ms) { this.settleClock(); const d = this.d; d.deadline = null; d.aiAt = Date.now() + (this.watched() ? ms : 0); await this.ctx.storage.setAlarm(d.aiAt); }
   /* AI seats play server-side, one action per alarm while people watch (so the table can follow),
      or up to ~0.3 s of actions per alarm when nobody is racing with the page open */
@@ -519,10 +526,10 @@ export class Room extends DurableObject {
     const text = JSON.stringify(log); if (text.length > REPLAY_MAX_BYTES) return null;
     try {
       await this.env.DB.prepare(`INSERT INTO replays(id,created,title,players,actions,body,game,uids,listed) VALUES(?,?,?,?,?,?,1,?,?)`)
-        .bind(id, Date.now(), log.title.slice(0, 120), log.players.map(x => x.name).join(', '), log.actions.length, text, ',' + this.S.owners.join(',') + ',', d.opts.pub === false ? 0 : 1).run();
+        .bind(id, Date.now(), log.title.slice(0, 120), log.players.map(x => x.name).join(', '), log.actions.length, text, ',' + this.owners.join(',') + ',', d.opts.pub ? 1 : 0).run();
       await this.env.DB.prepare(`UPDATE replays SET places=? WHERE id=?`).bind(JSON.stringify(this.S.places || []), id).run();
       d.replay = id;
-      await pruneReplays(this.env.DB, this.S.owners);
+      await pruneReplays(this.env.DB, this.owners);
     } catch (e) { }
     return d.replay;
   }
@@ -530,13 +537,13 @@ export class Room extends DurableObject {
     const d = this.d; this.settleClock(); d.status = 'over'; d.deadline = null;
     await this.ctx.storage.deleteAlarm();
     const replay = await this.saveReplay();
-    if (!d.rated && d.opts.rated === false) { // unrated room: the result is kept, ratings don't move
-      d.rated = true; d.results = { places: this.S.places, unrated: true, replay };
-      try { await this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: this.S.owners, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), places: this.S.places, rated: false, rounds: this.S.round, replay })).run(); } catch (e) { }
+    if (!d.done && !d.opts.rated) { // unrated room: the result is kept, ratings don't move
+      d.done = true; d.results = { places: this.S.places, unrated: true, replay };
+      try { await this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: this.owners, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), places: this.S.places, rated: false, rounds: this.S.round, replay })).run(); } catch (e) { }
     }
-    if (!d.rated) {
-      d.rated = true;
-      const uids = this.S.owners;
+    if (!d.done) {
+      d.done = true;
+      const uids = this.owners;
       try {
         const rows = (await this.env.DB.prepare(`SELECT id,rating,games FROM users WHERE id IN (${uids.map(() => '?').join(',')})`).bind(...uids).all()).results;
         const by = Object.fromEntries(rows.map(r => [r.id, r]));

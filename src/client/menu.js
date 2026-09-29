@@ -172,7 +172,8 @@ export function onlineRender(){
   const busy=onlineGame();mq('#oBusy').hidden=!busy;mq('#oPlay').hidden=busy;mq('#rejoin').hidden=busy||!NET.active;roomsRender();onlineTab();
 }
 export function roomsRender(){
-  const rrow=r=>`<div class="rrow"><span>${r.auto?'<b>Quick match</b>':`<b>${esc(r.host)}</b>’s room`} <span class="note">· ${r.count}/${r.max}${r.ai?` (${r.ai} AI)`:''} · ${r.turn}s turns · ${r.rated===false?'unrated':'rated'} · ${esc(courseName(r.course))}</span></span>${r.status==='lobby'&&r.count<r.max?`<button type="button" class="btn" data-join="${r.code}">Join</button>`:'<span class="note">in progress</span>'}</div>`;
+  const rrow=r=>{const o=r.opts,n=r.seats.length,ai=r.seats.filter(x=>x.ai).length,host=(r.seats.find(x=>x.uid===r.host)||{name:''}).name; // (a quick match's room can list before anyone is seated)
+    return`<div class="rrow"><span>${o.auto?'<b>Quick match</b>':`<b>${esc(host)}</b>’s room`} <span class="note">· ${n}/${o.max}${ai?` (${ai} AI)`:''} · ${o.turn}s turns · ${o.rated?'rated':'unrated'} · ${esc(courseName(o.course))}</span></span>${r.status==='lobby'&&n<o.max?`<button type="button" class="btn" data-join="${r.code}">Join</button>`:'<span class="note">in progress</span>'}</div>`;};
   const open=NET.rooms.filter(r=>r.status==='lobby'),live=NET.rooms.filter(r=>r.status==='playing');
   setHTML(mq('#roomsOpen'),open.map(rrow).join('')||'<p class="note">No open rooms right now. Create one and share the code.</p>');
   mq('#liveBox').hidden=!live.length;setHTML(mq('#roomsLive'),live.map(rrow).join(''));
@@ -241,7 +242,7 @@ async function uploadReplay(f){
   try{const text=await f.text();let log;try{log=JSON.parse(text);}catch(_){throw new Error('That file is not valid JSON.');}
     const err=replayCheck(log);if(err)throw new Error(err);
     let id=null;
-    if(NET.available){const r=await fetch('/api/replays',{method:'POST',headers:{'content-type':'application/json'},body:text});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Upload failed ('+r.status+')');id=j.id;}
+    if(NET.available){const r=await fetch('/api/replays',{method:'POST',headers:{'content-type':'application/json'},body:text});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.err||'Upload failed ('+r.status+')');id=j.id;}
     msg.textContent='';openReplay(log,id);}
   catch(e){msg.textContent=e.message;}
 }

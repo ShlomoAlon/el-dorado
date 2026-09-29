@@ -1,7 +1,7 @@
 /* ONLINE — talks to the game server (Cloudflare Worker).
    Sign in with Google → hub (profile, rooms, leaderboard) → room lobby → game. */
 import { S, mapFor, setS, setMAP } from '../engine.gen.js';
-import { UI, NET, canAct, cur } from './state.js';
+import { UI, NET, canAct, cur, online } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, banner, modal, closeModal, showGameOver } from './dialogs.js';
 import { showHub, showRoomLobby, renderRoomLobby, roomsRender, loadProfile } from './menu.js';
@@ -13,7 +13,7 @@ export async function api(path,opts={}){
   const headers={'content-type':'application/json'};if(NET.token)headers.authorization='Bearer '+NET.token;
   const r=await fetch(path,{...opts,headers});
   let j={};try{j=await r.json();}catch(e){}
-  if(!r.ok){const e=new Error(j.error||('Request failed ('+r.status+')'));e.status=r.status;throw e;}
+  if(!r.ok){const e=new Error(j.err||('Request failed ('+r.status+')'));e.status=r.status;throw e;}
   return j;
 }
 export async function netInit(){
@@ -49,7 +49,7 @@ export function closeLobbyWs(){if(NET.lobbyWs){try{NET.lobbyWs.close();}catch(e)
 export function netSend(m){if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(m));else{NET.busy=false;toast('Reconnecting…');}}
 export function joinRoom(code){
   closeLobbyWs();leaveRoomSocket();
-  NET.room={code,status:'connecting',seats:[]};NET.code=code;NET.retries=0;
+  NET.room={code,status:'connecting',seats:[]};NET.code=code;NET.S=null;NET.retries=0;
   try{history.replaceState(null,'',location.pathname+'?room='+code);}catch(e){}
   connectRoom();showRoomLobby();
 }
@@ -79,13 +79,13 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState!==
   if(!ws){clearTimeout(NET.retryT);connectRoom();return;}
   if(ws.readyState!==1)return;const t=Date.now();try{ws.send('ping');}catch(e){}setTimeout(()=>{if(NET.ws===ws&&NET.heard<t)lostConnection(ws);},5000);});
 export function onRoomMsg(m){
-  if(m.t==='error'){NET.busy=false;clearTimeout(NET.busyT);sfx('error');toast(m.msg);if(S)render();return;}
+  if(m.t==='error'){NET.busy=false;clearTimeout(NET.busyT);sfx('error');toast(m.err);if(S)render();return;}
   if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}renderRoomLobby();return;}
-  if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.deadline=m.deadline;NET.skew=m.now-Date.now();NET.busy=false;clearTimeout(NET.busyT);applyServerState(m.S,m.ev);}
+  if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.clockEnd=m.left==null?null:Date.now()+m.left;NET.busy=false;clearTimeout(NET.busyT);applyServerState(m.S,m.ev);}
 }
 export function applyServerState(S2,ev){
-  const old=S;const fresh=!old||!old.owners||old.seed!==S2.seed||old.room!==S2.room;UI.preview=false;
-  setS(S2);
+  const old=S,fresh=!online();UI.preview=false; // (joining a room clears NET.S: its first state is a new game on show)
+  setS(S2);NET.S=S2;
   if(fresh){setMAP(mapFor(S));closeModal();UI.cover=false;showGame();}
   const turnChanged=fresh||old.cur!==S.cur||old.round!==S.round;
   if(!fresh)playEvents(ev,viewIdx());
@@ -100,5 +100,5 @@ export function resignOnline(){
   modal(`<h2>Leave this game?</h2><p class="sub">${NET.room&&NET.room.opts&&NET.room.opts.rated===false?'Leaving counts as finishing last among the players still racing (this game is unrated).':'Leaving a rated game counts as finishing last among the players still racing. Your rating will drop.'}</p><div class="mrow"><button class="btn" id="rsNo">Stay</button><button class="btn pri" id="rsYes">Leave game</button></div>`,sc=>{
     sc.querySelector('#rsNo').onclick=closeModal;sc.querySelector('#rsYes').onclick=()=>{netSend({t:'act',a:{t:'resign'}});closeModal();};},true);
 }
-export function exitOnline(){NET.code=null;leaveRoomSocket();setS(null);try{history.replaceState(null,'',location.pathname);}catch(e){}resetView();}
+export function exitOnline(){NET.code=null;NET.S=null;leaveRoomSocket();setS(null);try{history.replaceState(null,'',location.pathname);}catch(e){}resetView();}
 
