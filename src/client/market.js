@@ -11,26 +11,31 @@ import { affordable, pickFromMarket, payTotal, cancelMode } from './actions.js';
 import { setT, placeAt, buySlotBox } from './hand.js';
 import { sfx } from './sound.js';
 
-const noMkt=()=>$('#app').classList.toggle('nomkt',!UI.mktOpen||$('#mkt').classList.contains('cramped'));
+/* phones: the market is a bottom sheet, so it takes no column at the right */
+const sheet=()=>(geo.app.width||innerWidth)<600;
+const noMkt=()=>{const a=$('#app'),up=UI.mktOpen&&sheet()&&UI.mode!=='pay';a.classList.toggle('nomkt',!UI.mktOpen||sheet()||$('#mkt').classList.contains('cramped'));
+  if(a.classList.contains('sheetup')!==up)a.classList.toggle('sheetup',up);}; // (the open sheet covers the piles and turn buttons: they hide under it)
 export function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
   if(!cam.userZoomed)fitSoon(true);}
 export function openAll(open){UI.allOpen=open;$('#allc').hidden=!open;if(open){$('#allc').scrollTop=0;update();}}
 /* size the market column so it always ends above the turn buttons and the discard pile: smaller cards, and more columns
    when that isn't enough (measured when the game area or the buttons change size, never while updating) */
 function sizeMarket(){
-  const mk=$('#mkt'),W=geo.app.width,H=geo.app.height,phone=W<600,top=mk.offsetTop,ab=$('#actBtns'),at=geo.app.top;
+  const mk=$('#mkt'),W=geo.app.width,H=geo.app.height,top=mk.offsetTop,ab=$('#actBtns'),at=geo.app.top;
+  if(sheet()){mk.classList.remove('cramped');noMkt();setStyle(mk,'--mw','96px');setStyle($('#market'),'gridTemplateColumns','');setStyle($('#app'),'--mktW','0px');return;}
   let avail=H-(parseFloat(getComputedStyle(ab).bottom)||0)-150-top; // room for up to three stacked buttons below
   if(avail<60)avail=ab.getBoundingClientRect().top-at-top-12; // very short screens: just stay above the current ones
   avail=Math.min(avail,$('#discPile').getBoundingClientRect().top-at-top-10); // and above the discard pile
-  const def=phone?44:72,min=phone?34:56,gap=phone?7:10,cg=phone?7:8,n=MARKET0.length+1; // (the market always has its 6 slots, and All cards)
+  avail-=40+44+22+24; // the drawer's heading, its All cards bar (and the gap above it), its padding
+  const def=104,min=96,gap=22,cg=10,n=MARKET0.length; // (the market always has its 6 slots; All cards is a bar under them)
   // every column count against the room below (height) and beside (width: at most ~55% of the game area); the largest cards win
   let pick=null;
-  for(let cols=phone?1:2;cols<=n;cols++){const rows=Math.ceil(n/cols),mw=Math.min(def,(avail-(rows-1)*gap-8)/(rows*1.4),(W*.55-(cols-1)*cg)/cols);if(!pick||mw>pick.mw+.5)pick={cols,mw};}
-  // no arrangement fits (a tiny game area): the market steps aside; the Market button then opens All cards
+  for(let cols=2;cols<=n;cols++){const rows=Math.ceil(n/cols),mw=Math.min(def,(avail-(rows-1)*gap)/(rows*1.4),(W*.55-(cols-1)*cg-30)/cols);if(!pick||mw>pick.mw+.5)pick={cols,mw};}
+  // no arrangement keeps the cards legible (a small game area): the drawer steps aside; the Market button then opens All cards
   if(mk.classList.contains('cramped')!==pick.mw<min*.8){mk.classList.toggle('cramped',pick.mw<min*.8);noMkt();}
-  const mw=Math.max(28,Math.floor(pick.mw));
+  const mw=Math.max(min*.8,Math.floor(pick.mw));
   setStyle(mk,'--mw',mw+'px');setStyle($('#market'),'gridTemplateColumns',`repeat(${pick.cols},var(--mw))`);
-  setStyle($('#app'),'--mktW',(pick.cols*mw+(pick.cols-1)*cg)+'px'); // the market's width, for what must stay clear of it (the prompt)
+  setStyle($('#app'),'--mktW',(pick.cols*mw+(pick.cols-1)*cg+30)+'px'); // the drawer's width, for what must stay clear of it (the prompt)
 }
 const ALL_ICON='<svg viewBox="-10 -10 20 20"><rect x="-8.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".45" transform="rotate(-14)"/><rect x="-4.5" y="-7.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".7"/><rect x="-.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" transform="rotate(12)"/></svg>';
 /* market slots are made once and then updated in place (count, highlight, selection): a card's artwork is drawn again
@@ -60,6 +65,8 @@ function update(){
   const ac=`alltile${openSlot||tr?' open':''}${resAff?' can':''}`;if(at.className!==ac)at.className=ac;
   const sm=at.querySelector('small'),st=tr?'Pick any card':openSlot?'Reserve open':'Reserve locked';if(sm.textContent!==st)sm.textContent=st;
   $('#mktBtn').classList.toggle('canbuy',aff.size>0&&!UI.mktOpen);
+  if($('#mkt').classList.contains('paying')!==(UI.mode==='pay')){$('#mkt').classList.toggle('paying',UI.mode==='pay');noMkt();} // (phones: the sheet steps aside while you pay from your hand)
+  const sub=tr?'Pick any card, free':S.turn.bought?'Bought this turn':aff.size?'Tap or drag a card to buy':'Nothing you can afford';setText($('#mktSub'),sub);
   if(!UI.allOpen)return;
   patchSlots($('#allMarket'),S.market.map((s,i)=>spec('m',s,i)));
   patchSlots($('#reserve'),S.reserve.map((s,i)=>spec('r',s,i)));
@@ -120,6 +127,7 @@ export function marketInit(){
   $('#allClose').onclick=()=>openAll(false);$('#allc').addEventListener('click',e=>{if(e.target.id==='allc'||e.target.classList.contains('allc-in'))openAll(false);});
   $('#mktBtn').onclick=()=>{if($('#mkt').classList.contains('cramped')){openAll(true);return;}setMkt(!UI.mktOpen);};
   let so=null;try{so=localStorage.getItem('eldorado-mkt');}catch(e){}
-  UI.mktOpen=so!=='0';$('#mkt').classList.toggle('hid',!UI.mktOpen);$('#mktBtn').classList.toggle('on',UI.mktOpen);noMkt();
+  UI.mktOpen=so?so!=='0':!sheet(); // (phones: the sheet starts closed, so the hand shows)
+  $('#mktX').onclick=()=>setMkt(false);$('#mkt').classList.toggle('hid',!UI.mktOpen);$('#mktBtn').classList.toggle('on',UI.mktOpen);noMkt();
   onGeo(sizeMarket);
 }

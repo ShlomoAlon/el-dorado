@@ -13,7 +13,7 @@ export function measure() {
   geo.app = a;
   geo.cw = parseFloat(getComputedStyle(app).getPropertyValue('--cw')) || 132; // set per game-area size (container queries)
   const pr = $('#prompt'); geo.promptBottom = pr.offsetHeight ? pr.getBoundingClientRect().bottom - a.top : 0;
-  geo.mktW = $('#mkt').offsetWidth; geo.actW = $('#actBtns').offsetWidth;
+  geo.mktW = $('#mkt').offsetWidth; geo.mktH = $('#mkt').offsetHeight; geo.actW = $('#actBtns').offsetWidth;
   geo.deck = rect($('#deckStack')); geo.disc = rect($('#discStack'));
   return sized;
 }

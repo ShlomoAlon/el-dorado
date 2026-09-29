@@ -205,7 +205,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* centred in the space left of the market column (--mktFoot = how far the market reaches in from the right edge) */
 #app{--mw:72px;--mktR:16px;--mktW:152px;--mktFoot:calc(var(--mktR) + var(--mktW) + 10px);--zoomFoot:66px}
 #app.replaying #prompt{display:none}
-#app.nomkt{--mktFoot:16px} /* (a class set by market.js, not :has(): every insertion anywhere in the game area would re-check a :has() and restyle the whole board) */
+#app.nomkt{--mktFoot:16px}
+#app.sheetup :is(.pile,#actBtns,.zoomctl){visibility:hidden} /* phones: the open market sheet covers them */ /* (a class set by market.js, not :has(): every insertion anywhere in the game area would re-check a :has() and restyle the whole board) */
 #mkt.cramped{display:none}
 #prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;width:max-content;box-sizing:border-box;top:var(--row2,64px);max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
 #prompt b{color:var(--gold2)}
@@ -270,12 +271,21 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .timer.low{background:rgba(232,99,79,.28);color:#ffb3a5;animation:pulse 1s ease-in-out infinite}
 
 /* ---------- market: six cards floating over the top of the board, plus an "all cards" spread */
-#mkt{position:absolute;right:var(--mktR);top:var(--row2,64px);z-index:16;transition:transform .35s var(--ease),opacity .25s}
+/* the market drawer (design option D3-A): a panel at the right of the game area with legible cards (>= 96 px);
+   on phones a bottom sheet (see the phone block) */
+#mkt{position:absolute;right:var(--mktR);top:var(--row2,64px);z-index:16;transition:transform .35s var(--ease),opacity .25s;background:rgba(12,21,18,.95);border:1px solid var(--line2);border-radius:14px;padding:10px 14px 14px;box-shadow:0 14px 36px rgba(0,0,0,.45)}
 #mkt.hid{transform:translateX(30px);opacity:0;pointer-events:none}
-#market{display:grid;grid-template-columns:repeat(2,var(--mw));gap:10px 8px}
-#mkt .mslot{filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
-#mkt .mslot{transform-origin:100% 25%}
-#mkt .mslot:hover{transform:scale(1.9);z-index:6}
+.mhead{display:flex;align-items:center;gap:10px;margin:0 -4px 12px 0;min-height:28px}
+.mhead h3{margin:0;font-family:var(--display);font-weight:400;font-size:18px;color:var(--gold2);line-height:1}
+#mktSub{flex:1;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mx{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer;flex:none}
+.mx:hover{color:var(--text);border-color:var(--gold)}
+.mgrab{display:none}
+#market{display:grid;grid-template-columns:repeat(2,var(--mw));gap:22px 10px}
+#mkt .mslot:hover{transform:translateY(-3px)}
+#mkt .alltile{grid-column:1/-1;width:auto;height:44px;flex-direction:row;gap:10px;font-size:13px;padding:0 14px;justify-content:flex-start}
+#mkt .alltile svg{width:22px;height:22px}
+#mkt .alltile small{margin-left:auto;font-size:12px}
 .mslot{position:relative;cursor:pointer;transition:transform .2s var(--ease);transform-origin:50% 0}
 .mslot .mcard{--cw:var(--mw)}
 .mslot.no{cursor:default}
@@ -511,16 +521,20 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   .tbtn{padding:0 10px;font-size:12.5px}
   #rulesBtn{display:none}
   #histBtn{padding:0 9px}#histBtn span{display:none} /* phones: the icon alone leaves the player chips room */
-  #app{--mw:44px;--mktR:6px;--zoomFoot:12px}
+  #app{--mktR:6px;--zoomFoot:12px}
+  /* the market: a bottom sheet (over the hand; it steps aside while you pay) with one scrolling row of cards */
+  #mkt{left:0;right:0;top:auto;bottom:0;z-index:27;background:#0c1613;border-radius:18px 18px 0 0;border-width:1px 0 0;padding:6px 0 10px;box-shadow:0 -12px 34px rgba(0,0,0,.5)}
+  #mkt.hid,#mkt.paying{transform:translateY(105%);opacity:0;pointer-events:none}
+  .mhead{position:relative;margin:0;padding:12px 12px 10px 16px}
+  .mgrab{display:block;position:absolute;left:50%;top:3px;width:38px;height:4px;border-radius:2px;background:var(--line2);transform:translateX(-50%)}
+  #market{display:flex;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;gap:12px;padding:8px 16px 20px;scroll-padding:16px;scrollbar-width:none}
+  #market>*{flex:none;scroll-snap-align:start}
+  #mkt .mslot{touch-action:pan-x}
+  #mkt .alltile{width:var(--mw);height:calc(var(--mw)*1.4);flex-direction:column;justify-content:center;gap:6px;padding:4px}
+  #mkt .alltile small{margin-left:0}
   #hist{--fw:34px}.hsteps{column-gap:12px}.fg .fcap{font-size:10px}.ht{padding:5px 8px 6px 10px}.hwho{margin-bottom:4px}
   #app{--row2:58px}
-  #market{gap:7px}
   #mkt .mslot:hover{transform:none}
-  .mslot.can::after{content:'';width:8px;height:8px;padding:0;bottom:-4px}
-  .alltile{font-size:9px;gap:2px;padding:2px}
-  .alltile svg{width:16px;height:16px}
-  .alltile small{font-size:8px}
-  #mkt .cnt{min-width:15px;height:15px;font-size:8.5px;top:-5px;right:-4px;padding:0 3px}
   .agrid{--mw:98px;gap:18px 12px;justify-content:center}
   .allc-in{padding:58px 12px 30px}
   .pstack{width:54px;height:76px}#discStack .mcard{--cw:54px}
@@ -569,7 +583,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div id="histList" aria-live="polite"></div>
     <div class="hbar" title="Drag to move"><button class="hbtn" id="histX" title="Hide (the History button brings it back)" aria-label="Hide the history"><svg viewBox="0 0 20 20" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button><button class="hbtn" id="histHome" title="Put it back under the prompt, one turn tall" aria-label="Put the history back" hidden><svg viewBox="0 0 20 20" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5a6 6 0 1 0 1.8-4.3"/><path d="M4 3.5v3h3"/></svg></button><span class="hgrip" aria-hidden="true"><svg viewBox="0 0 8 12" width="8" height="12"><g fill="currentColor"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></g></svg></span><div class="hsize" id="histSize" title="Drag to resize" aria-hidden="true"><svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M9 3L3 9M9 6.5L6.5 9"/></svg></div></div>
   </section>
-  <div id="mkt"><div id="market"></div></div>
+  <div id="mkt" class="drawer" role="region" aria-label="Market"><div class="mhead"><span class="mgrab" aria-hidden="true"></span><h3>Market</h3><span id="mktSub"></span><button class="mx" id="mktX" title="Close the market (the Market button opens it again)" aria-label="Close the market"><svg viewBox="0 0 20 20" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div><div id="market"></div></div>
   <div id="allc" hidden>
     <button class="sclose" id="allClose" aria-label="Close">✕</button>
     <div class="allc-in">

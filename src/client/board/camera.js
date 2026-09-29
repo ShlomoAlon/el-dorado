@@ -34,8 +34,9 @@ function settle() {
 function safeRect() {
   const W = geo.app.width, H = geo.app.height, phone = W < 600;
   const t = Math.max(phone ? 108 : 112, geo.promptBottom ? geo.promptBottom + 10 : 0);
-  const mr = UI.mktOpen && S ? geo.mktW + (phone ? 10 : 28) : 0; // the market column on the right
-  return { l: phone ? 8 : 62, t, r: W - 16 - mr, b: H - geo.cw * 1.4 * .62, W, H };
+  const mr = UI.mktOpen && S && !phone ? geo.mktW + 28 : 0; // the market drawer on the right (phones: a bottom sheet)
+  const mb = UI.mktOpen && S && phone ? geo.mktH + 8 : 0;
+  return { l: phone ? 8 : 62, t, r: W - 16 - mr, b: H - Math.max(geo.cw * 1.4 * .62, mb), W, H };
 }
 export function focusPoint() {
   const pl = cur(); const k = pl.pieces[UI.piece] && pl.pieces[UI.piece] !== 'done' ? pl.pieces[UI.piece] : pl.pieces.find(x => x !== 'done');

@@ -239,7 +239,7 @@ function place(sizeOnly){
   // under the prompt its band stays clear of the market column; when the market is a row of cards ending about where the
   // panel starts, or leaves too narrow a band beside it (small phones), the panel goes just below it and takes the whole width
   let top=isHome()?(homeTop()??row2):0,clear=false;
-  if(isHome()){const m=$('#mkt'),on=!m.classList.contains('hid')&&!m.classList.contains('cramped'),mr=on?m.getBoundingClientRect():null;
+  if(isHome()){const m=$('#mkt'),on=!$('#app').classList.contains('nomkt'),mr=on?m.getBoundingClientRect():null;
     if(mr&&(mr.bottom-a.top<top+40||mr.left-a.left<250)){top=Math.max(top,Math.round(mr.bottom-a.top+5));clear=true;}}
   setStyle(H,'top',isHome()&&(homeTop()!=null||clear)?top+'px':'');if(!sizeOnly)setStyle(H,'--mktClear',clear?'16px':'');
   if(!sizeOnly){const w=DRAG.w??P.w;setStyle(H,'width',w?Math.round(w)+'px':'');}
