@@ -46,15 +46,23 @@ async function createSchema(env) {
       if (r.meta && r.meta.changes) break;
     }
   }
-  // One-time calibration: the AIs start from the ratings measured in AI-vs-AI games (AIS[].rating, tools/ai/calibrate_ais.mjs)
-  // instead of the default 1200. It shifts (rating += calibrated - 1200), so an AI that already played rated games keeps what
-  // it won or lost. One transaction: the updates apply only while the marker row is missing, then the marker is written,
-  // so it runs exactly once per database, whichever isolate gets here first, and never touches ratings again.
-  const CAL = 'ai_calibration_v1';
-  await env.DB.batch([
-    ...E.AIS.filter(A => Number.isFinite(A.rating)).map(A => env.DB.prepare(`UPDATE users SET rating = rating + ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM settings WHERE k = ?)`).bind(A.rating - 1200, aiUid(A.id), CAL)),
-    env.DB.prepare(`INSERT OR IGNORE INTO settings(k,v) VALUES(?,?)`).bind(CAL, JSON.stringify({ at: Date.now(), ratings: Object.fromEntries(E.AIS.map(A => [A.id, A.rating])) })),
-  ]);
+  // The AIs start from the ratings measured in AI-vs-AI games (AIS[].rating, tools/ai/calibrate_ais.mjs) instead of the
+  // default 1200, applied as a shift (rating += calibrated - applied), so an AI that already played rated games keeps what it
+  // won or lost, and a new calibration later moves it by the difference. settings 'ai_rating:<id>' holds the rating applied
+  // (before these keys existed, the first calibration was recorded in 'ai_calibration_v1'). Each shift and its key are
+  // written in one transaction, conditional on the key still holding the old value: it applies exactly once, whichever
+  // isolate gets here first.
+  const v1 = await env.DB.prepare(`SELECT v FROM settings WHERE k='ai_calibration_v1'`).first();
+  const first = v1 ? (JSON.parse(v1.v).ratings || {}) : {};
+  for (const A of E.AIS.filter(A => Number.isFinite(A.rating))) {
+    const k = 'ai_rating:' + A.id, row = await env.DB.prepare(`SELECT v FROM settings WHERE k=?`).bind(k).first();
+    const applied = row ? +row.v : Number.isFinite(first[A.id]) ? first[A.id] : 1200;
+    if (row && applied === A.rating) continue;
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE users SET rating = rating + ? WHERE id = ? AND COALESCE((SELECT v FROM settings WHERE k = ?), ?) = ?`).bind(A.rating - applied, aiUid(A.id), k, String(applied), String(applied)),
+      env.DB.prepare(`INSERT INTO settings(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v = excluded.v WHERE settings.v = ?`).bind(k, String(A.rating), String(applied)),
+    ]);
+  }
 }
 let NET = null;
 function useNet() { if (!NET) NET = E.aiNetDecode(NET_BIN); E.aiSetNet(NET); }

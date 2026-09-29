@@ -1,6 +1,7 @@
-// Calibrate the named AIs' starting ratings (Humboldt / Orellana / Raleigh) by having them play each other offline,
+// Calibrate the named AIs' starting ratings (the three in AIS, e.g. Fawcett / Humboldt / Raleigh) by having them play each other offline,
 // exactly as the site plays them (engine_ai.js aiStep with the shipped network src/ai/first.bin, per-seat plan cache),
-// on First Expedition with the owner's end rule (fullRace, as online). Seeds are fixed, so the numbers reproduce.
+// on First Expedition with the owner's end rule (fullRace, as online). The deals and shuffles are seeded; the AIs' look-ahead is not
+// (aiChoose uses Math.random), so a rerun gives close but not identical numbers.
 //   nice -n 10 node tools/ai/calibrate_ais.mjs [games=360] [workers=2]        plays, then prints the ratings
 //   node tools/ai/calibrate_ais.mjs report                                     ratings from the saved games only
 // Tables, repeating in blocks of 12 games: the 6 seatings of all three AIs (3 players), 3 four-player tables (one AI twice,
@@ -13,8 +14,8 @@
 import { E } from '../../src/engine.gen.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-const OUT = new URL('./data/calibration.json', import.meta.url);
-const IDS = E.AIS.map(a => a.id); // humboldt, orellana, raleigh
+const IDS = E.AIS.map(a => a.id); // three AIs
+const OUT = new URL(`./data/calibration-${IDS.join('-')}.json`, import.meta.url); // (games already played for this set of AIs are kept)
 const ANCHOR = 'raleigh', ANCHOR_RATING = 1200, CAP = 30, SEED0 = 424200;
 function table(g) {
   const b = Math.floor(g / 12), k = g % 12;

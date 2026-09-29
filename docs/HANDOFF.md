@@ -121,7 +121,7 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
 build.mjs                 concatenates sources → public/index.html, build/artifact.html, src/engine.gen.js
 wrangler.jsonc            Worker config: assets ./public, D1 "DB", DOs ROOMS(Room) + LOBBY(Lobby), keep_vars
 src/engine_data.js        CT (cards), MARKET0/RESERVE0, BLOCKADES, BOARDS, hex geometry, genMap/buildMap (seeded)
-src/engine_ai.js          named AI players (AIS: Humboldt / Orellana / Raleigh) over engine_bot.js: aiChoose/aiStep, per-game
+src/engine_ai.js          named AI players (AIS: Fawcett / Humboldt / Raleigh) over engine_bot.js: aiChoose/aiStep, per-game
                           plan cache, aiNetDecode (half-float network). engine_bot.js itself is the training code's: don't change it
 src/ai/first.bin          the shipped network (tools/ai/pack.mjs from tools/ai/models/first-first1-best.json; build copies it to public/ai/)
 src/engine_rules.js       S/MAP globals, newGame, reach/nativeTargets/payTargets, applyAction, advance, resign,
@@ -215,8 +215,12 @@ incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning
 
 ### 6.6 AI players
 - Three named AIs (`AIS` in `src/engine_ai.js`), all the same bot code with different settings:
-  **Humboldt** (Master) = value network + whole-turn planner (`{mode:'net',search:{kind:'plan',beam:3}}`, the strongest),
-  **Orellana** (Strong) = value network one action at a time, **Raleigh** (Steady) = heuristic route planner (`mode:'plan'`).
+  **Fawcett** (Grandmaster) = value network + a wider whole-turn planner (`{mode:'net',search:{kind:'plan',beam:12},draws:8}`,
+  the strongest; ~3x Humboldt's thinking time), **Humboldt** (Master) = value network + whole-turn planner
+  (`{mode:'net',search:{kind:'plan',beam:3}}`), **Raleigh** (Steady) = heuristic route planner (`mode:'plan'`).
+  (Orellana, the network one action at a time, was retired.) Searching further rounds ahead (`search.kind:'deep'`, depth 1–3,
+  ~2.8 s per turn) was measured against Humboldt with tools/ai/h2h.mjs: depth 1 and 3 about as strong as Fawcett's wide search,
+  depth 2 no better than Humboldt; the wide search costs ~1/18 of the time, so it is the level shipped.
   The network (`first-first1-best`, trained under the fixed single-use rules, 2026-09-28; earlier `first-distill-35`, `first-distill-22`, `first-qmax`) only fits First Expedition (`botNetReady`); elsewhere the network AIs play as the planner.
 - Network shipping: half floats, 339 KB (288 KB gzip), outputs within 2e-4 of the JSON (checked in engine.test). The site
   fetches `/ai/first.bin` only when a network AI is about to move; the artifact has it inline (`AI_NET.b64`); the worker imports
@@ -239,9 +243,9 @@ incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning
   starts with: Raleigh is the "Steady" level for newcomers, so a new player is assumed equal to it, and real rated games then move
   everyone from there (Elo only fixes differences; anchoring the AIs' mean at 1200 would have put Raleigh ~140 below a
   first-timer, which experience says is too harsh on the person who beats it). Applied once by `ensureSchema()`: one D1 batch
-  shifts each ai-* row by (calibrated − 1200) only while the `settings` marker `ai_calibration_v1` is absent, then writes it —
-  so AIs that already played keep their gains/losses, and it never runs again. To recalibrate later, use a new marker key and
-  shift by (new − old calibrated rating), not (new − 1200) as the code does now.
+  shifts each ai-* row by (calibrated − applied) and records the applied rating in `settings` `ai_rating:<id>` (the first
+  calibration is in `ai_calibration_v1`), in one conditional transaction — so AIs that already played keep their gains/losses,
+  and changing `AIS[].rating` later (a new calibration, or a new AI) moves that AI by the difference exactly once.
 - **Known problem (2 players):** in the 180 two-player calibration games the network AIs (Humboldt, Orellana) mostly failed to
   reach El Dorado within 30 rounds (88 capped; Raleigh won all 120 of its 2-player games). The network seems not to handle two
   explorers per player. Those games are left out of the ratings. Worth a look by the training side (engine_bot.js), or a

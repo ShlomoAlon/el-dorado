@@ -87,7 +87,7 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
   };
   E.aiSetNet(half);
   let diff = 0, n = 0, e0 = E.BOT_EVALS;
-  aiGame(E.courseById('first'), ['humboldt', 'humboldt', 'raleigh'], () => {
+  aiGame(E.courseById('first'), ['fawcett', 'humboldt', 'raleigh'], () => {
     if (n++ % 9) return; const f = E.botNetFeatures(E.S.cur); E.aiSetNet(full); const a = E.botNetValue(f); E.aiSetNet(half); diff = Math.max(diff, Math.abs(a - E.botNetValue(f))); });
   assert(E.BOT_EVALS - e0 > 1000, 'network not used on First Expedition');
   assert(plays > 50, 'no play events');
