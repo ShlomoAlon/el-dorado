@@ -439,7 +439,7 @@ function applyAction(seat,a){
       const n={cartographer:2,compass:3,scientist:1,travellog:2}[t];if(!n)return fail('That card has no draw effect.');
       T.active=null;rm(P.hand,a.card);if(CT[t].once)S.trash.push(a.card);else P.play.push(a.card);
       const got=drawCards(P,n);reveal=true;ev.push({e:'play',pl:seat,k:'action',ts:[t],n:got.length});
-      log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');ev.push({e:'draw',pl:seat,n:got.length});
+      log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');
       if(t==='scientist'||t==='travellog')T.pending={max:t==='scientist'?1:2};
       break;
     }
@@ -455,7 +455,7 @@ function applyAction(seat,a){
       const st=stackOf(a.type),stack=st&&st.s;if(!stack||stack.n<=0)return fail('That card is sold out.');
       T.active=null;rm(P.hand,a.card);S.trash.push(a.card);
       stack.n--;P.discard.push(newCard(stack.t));ev.push({e:'play',pl:seat,k:'transmit',ts:['transmitter'],got:stack.t});
-      log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');ev.push({e:'gain',pl:seat,t:stack.t});
+      log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');
       break;
     }
     case 'buy':{
@@ -469,7 +469,7 @@ function applyAction(seat,a){
       const t=stack.t;
       if(st.src==='r'){const slot=S.market.findIndex(s=>s.n===0);S.market[slot]={t,n:stack.n};S.reserve.splice(st.i,1);stack=S.market[slot];}
       stack.n--;P.discard.push(newCard(t));T.bought=true;
-      log(seat,'buys '+CT[t].n+' for '+fmt(total)+' coin'+(total===1?'':'s')+'.');ev.push({e:'gain',pl:seat,t});
+      log(seat,'buys '+CT[t].n+' for '+fmt(total)+' coin'+(total===1?'':'s')+'.');
       break;
     }
     case 'end':{

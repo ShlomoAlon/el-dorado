@@ -66,7 +66,7 @@ const CHECK = () => {
       ['recap of an AI turn', async () => { await p.evaluate(() => { const E = window.__ED, S = E.S; S.players[1].ai = 'raleigh';
         E.playEvents([{ e: 'play', pl: 1, k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { e: 'play', pl: 1, k: 'action', ts: ['cartographer'], n: 2 },
           { e: 'play', pl: 1, k: 'rubble', ts: ['traveler', 'sailor'] }, { e: 'play', pl: 1, k: 'buy', ts: ['traveler', 'traveler', 'explorer'], got: 'scout', paid: 2.5 },
-          { e: 'gain', pl: 1, t: 'scout' }, { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1 }], 0); E.render(); }); }],
+          { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1 }], 0); E.render(); }); }],
       ['recap, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await settle(p); const n = await p.evaluate(() => document.querySelectorAll('#feed .fg:not(.gone)').length); if (!n) throw new Error('no recap shown'); }],
       ['replay journal', async () => { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForFunction(() => window.__ED.G.replay); await settle(p);
         await p.evaluate(() => { const r = document.querySelector('#rbR'); r.value = Math.floor(r.max * .4); r.dispatchEvent(new Event('input')); }); await p.click('#jrnBtn', { timeout: 5000 }); }],

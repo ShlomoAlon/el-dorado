@@ -64,7 +64,7 @@ export function playEvents(ev,viewer){
     if(e.e==='move')animateMove(e.pl,e.pi,e.path);
     else if(e.e==='block'){if(!watched)toast(S.players[e.pl].name+' claims blockade #'+e.n);}
     else if(e.e==='arrive')toast(S.players[e.pl].name+' reaches El Dorado!',2200);
-    else if(e.e==='gain'&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.t,takeBuyFrom()||marketRectOf(e.t));
+    else if(e.e==='play'&&e.got&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.got,takeBuyFrom()||marketRectOf(e.got));
     else if(e.e==='timeout')toast(S.players[e.pl].name+' ran out of time');
     else if(e.e==='resign')toast(S.players[e.pl].name+' left the game');
   }

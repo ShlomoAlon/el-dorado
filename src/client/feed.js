@@ -27,11 +27,11 @@ export function feedEvent(e){
     if(e.k==='end')FEED.ended=true;
     const g={...e,id:++FEED.seq,v:0};FEED.groups.push(g);
     if(g.ts&&g.ts.length)FEED.fly.push({gid:g.id,kind:'hand',from:chipRect(e.pl)});
+    if(g.got)FEED.fly.push({gid:g.id,kind:'got',from:marketRectOf(g.got)}); // the card bought or taken flies in from the market
     return;}
   if(FEED.pl!==e.pl)return;
   const last=FEED.groups[FEED.groups.length-1];if(!last)return;
-  if(e.e==='gain'&&(last.k==='buy'||last.k==='transmit'))FEED.fly.push({gid:last.id,kind:'got',from:marketRectOf(e.t)});
-  else if(e.e==='block'){last.bl=e.n;last.v++;}
+  if(e.e==='block'){last.bl=e.n;last.v++;}
   else if(e.e==='arrive'){last.arr=true;last.v++;}
   else if(e.e==='move')FEED.trail.push(e.path);
 }

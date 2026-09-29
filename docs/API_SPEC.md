@@ -163,8 +163,6 @@ Equal keys share a place; the winners are the players in place 1.
 | `{e:'move', pl, pi, path: [key…]}` | The explorer's path, including where it started. |
 | `{e:'block', pl, n}` | A blockade was taken. |
 | `{e:'arrive', pl, pi}` | The explorer reached El Dorado. |
-| `{e:'draw', pl, n}` | A card's effect drew `n` cards (not emitted for the draw at the end of a turn). |
-| `{e:'gain', pl, t}` | A card was bought or taken. |
 | `{e:'turn', pl}` | The turn passed to `pl`. |
 | `{e:'timeout', pl}`, `{e:'resign', pl}`, `{e:'over'}` | |
 
