@@ -135,6 +135,41 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #acct{min-height:32px} /* its line is there before the script fills it: nothing below moves */
 #shell{isolation:isolate} /* nothing in the game can stack above the menu, whatever its z-index */
 #shell{visibility:hidden} /* the game shows once its CSS (the late block) has arrived */
+
+/* ---------- D2-A "expedition kit": the chrome is made of the game's materials. Dark oiled leather panels framed in brass,
+   Young Serif for section titles (no letter-spaced caps), brass-rimmed buttons; the gold button is polished brass, not a glow. */
+:root{--leather:#1c1610;--leather2:#251c13;--brass:#b98d4b;--brassHi:#efcd8a;--brassDk:#5a4020;
+  --glass:linear-gradient(180deg,rgba(40,30,20,.95),rgba(26,20,13,.95));--glass2:linear-gradient(180deg,rgba(54,41,26,.96),rgba(34,26,17,.96));
+  --line:rgba(214,170,100,.14);--line2:rgba(214,170,100,.34);--muted:#b3a58c;--faint:#7c6f58}
+.glass{border-color:rgba(199,154,82,.5);box-shadow:inset 0 1px 0 rgba(255,228,170,.1),0 8px 22px rgba(0,0,0,.4)}
+#menu{background:rgba(8,6,4,.76)}
+.modal{background:radial-gradient(120% 80% at 50% 0%,#2a2016 0%,#1b150e 60%,#15100b 100%);border:1px solid var(--brass);border-radius:14px;
+  box-shadow:inset 0 0 0 5px #17120c,inset 0 0 0 6px rgba(199,154,82,.35),0 30px 80px rgba(0,0,0,.65)}
+.modal h2{color:var(--brassHi)}
+.field>label{font-family:var(--display);font-size:17px;letter-spacing:0;text-transform:none;color:var(--brassHi);font-weight:400;margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.field>label::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(199,154,82,.45),transparent)}
+.field>label.chk::after{display:none}
+.btn{background:linear-gradient(180deg,#34281a,#221a11);border:1px solid var(--brass);border-radius:9px;color:#f1e6cf;box-shadow:inset 0 1px 0 rgba(255,230,180,.16),inset 0 -1px 0 rgba(0,0,0,.35),0 2px 0 #0b0805,0 6px 14px rgba(0,0,0,.35)}
+.btn:hover{background:linear-gradient(180deg,#403120,#2a2015);border-color:var(--brassHi)}
+.btn.pri{background:linear-gradient(180deg,#f6d88f 0%,#dcac55 45%,#b98434 100%);border-color:#7a5620;color:#2a1b06;box-shadow:inset 0 1px 0 rgba(255,250,225,.75),inset 0 -2px 0 rgba(110,70,20,.45),0 2px 0 #3a2807,0 6px 14px rgba(0,0,0,.4)}
+.btn.pri:hover{background:linear-gradient(180deg,#fbe3a6 0%,#e4b867 45%,#c38e3c 100%)}
+.btn.big{border-radius:10px}
+.seg{background:#120e09;border-color:rgba(199,154,82,.28);border-radius:9px;box-shadow:inset 0 2px 4px rgba(0,0,0,.5)}
+.seg label{border-radius:6px}
+.seg button.on,.seg label:has(input:checked){background:linear-gradient(180deg,#3d2f1e,#2b2115);color:var(--brassHi);box-shadow:inset 0 0 0 1px var(--brass),inset 0 1px 0 rgba(255,230,180,.15)}
+#sMode{background:none;border:0;box-shadow:none;border-bottom:1px solid rgba(199,154,82,.35);border-radius:0;padding:0;gap:0}
+#sMode label{font-family:var(--display);font-weight:400;font-size:17px;border-radius:0;padding:9px 4px 10px;color:var(--muted)}
+#sMode label:has(input:checked){background:none;box-shadow:inset 0 -2px 0 var(--brassHi);color:var(--brassHi)}
+.clist button,.clist label,.rlist button,.boxrow,.rrow,.seatrow,.pst{background:#16110b;border-color:rgba(199,154,82,.2)}
+.clist button.on,.clist label:has(input:checked){border-color:var(--brass);background:linear-gradient(180deg,rgba(199,154,82,.16),rgba(199,154,82,.06));box-shadow:inset 0 0 0 1px rgba(239,205,138,.25)}
+.clist .dtag{text-transform:none;letter-spacing:0;font-size:11.5px;font-style:italic;font-family:var(--display);border:0;padding:0}
+.prow input,select.who{background-color:#120e09;border-color:rgba(199,154,82,.3)}
+select.who option,select.who optgroup{background:#1c1610}
+.ingame{border-color:var(--brass);background:linear-gradient(180deg,rgba(199,154,82,.14),rgba(199,154,82,.05))}
+.ingame #igTxt{font-family:var(--display)}
+.aitag{font-family:var(--display);font-weight:400;letter-spacing:0;font-size:11px;border-color:rgba(199,154,82,.6);color:var(--brassHi)}
+.sws label:has(input:checked){border-color:var(--brassHi)}
+.modal.menu{scrollbar-color:rgba(199,154,82,.35) transparent}
 </style>
 <style data-late>
 /* the game's CSS: a separate cached file on the site (build.mjs), inline in the artifact */
@@ -534,6 +569,33 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @keyframes bsIn{from{transform:translateY(-14px) scale(.9);opacity:0}}
 #shell,#overlay,#banner{--display:'Young Serif', Georgia, 'Times New Roman', serif;--ui:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;font-family:var(--ui)}
 html.gameready.boardready #shell{visibility:visible} /* once the game's fonts are in (ui_boot.js) and its board is fitted (fit): no text swaps fonts, no board jumps */
+
+/* ---------- D2-A "expedition kit" (game chrome) */
+#vp{background:radial-gradient(ellipse 80% 70% at 45% 42%,#1b2a1e 0%,#101a14 55%,#0a0f0b 100%)}
+.brand{color:var(--brassHi)}
+#roundLbl{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px;color:var(--muted)}
+.tbtn{border-radius:9px;color:#f1e6cf}
+.tbtn.on{border-color:var(--brassHi);color:var(--brassHi);box-shadow:inset 0 0 0 1px rgba(239,205,138,.35),inset 0 1px 0 rgba(255,228,170,.15),0 8px 22px rgba(0,0,0,.4)}
+.pchip{border-radius:9px}
+.pchip .dot{box-shadow:0 0 0 1.5px #0b0805,0 0 0 2.5px rgba(199,154,82,.6)}
+.zoomctl button{border-radius:9px;color:var(--brassHi)}
+#prompt{border-radius:10px;color:#eadfc8}
+#prompt b{color:var(--brassHi)}
+#hist{background:linear-gradient(180deg,rgba(38,29,19,.97),rgba(25,19,13,.97));border-radius:10px}
+.ht+.ht{border-top:1px dashed rgba(199,154,82,.22)}
+.hwho{font-family:var(--display);font-weight:400;font-size:13px}
+.hwho span{font-family:var(--ui)}
+.fend .fpill{border-color:rgba(199,154,82,.45);background:rgba(199,154,82,.08);color:#f1e6cf;border-radius:6px}
+.pile .lbl{border-radius:7px}
+#playLbl{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px}
+#banner .s{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:16px}
+#banner{border-radius:12px}
+.allc-sect h3 span,.allc-head span{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px}
+#rdock,#rside,#lside{background:#17120c;border-color:rgba(199,154,82,.3)}
+#rdock button{background:linear-gradient(180deg,#34281a,#221a11);border-color:rgba(199,154,82,.55);border-radius:8px}
+#rdock .rgrp button.pri{background:linear-gradient(180deg,#f6d88f,#dcac55 45%,#b98434);border-color:#7a5620}
+#rdock .rspd{border-color:rgba(199,154,82,.45)}#rdock .rspd button+button{border-left-color:rgba(199,154,82,.3)}
+.sclose,.bs-x{border-color:var(--brass);background:#1c1610}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
