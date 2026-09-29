@@ -16,6 +16,48 @@ const CODE_CH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const genCode = () => Array.from({ length: 5 }, () => CODE_CH[Math.floor(Math.random() * CODE_CH.length)]).join('');
 const TURN_CHOICES = [60, 90, 120, 180, 300];
 
+/* ---------------- abuse limits ----------------
+   Enough to keep a lazy flood from taking the site down, not a defence against a real attack.
+   Request rates use Cloudflare's rate limiting bindings (ratelimits in wrangler.jsonc; counted per Cloudflare location):
+   RL_API every /api request per IP, RL_WRITE sign-ins and room/name changes (per player, or per IP before sign-in),
+   RL_UPLOAD replay uploads per IP. A missing binding or a limiter error lets the request through. */
+class HttpError extends Error { constructor(msg, status) { super(msg); this.status = status; } }
+const clientIp = req => req.headers.get('cf-connecting-ip') || 'local';
+async function limited(limiter, key) {
+  if (!limiter) return false;
+  try { return !(await limiter.limit({ key })).success; } catch (e) { return false; }
+}
+const tooMany = () => new Response(JSON.stringify({ error: 'Too many requests. Please wait a moment and try again.' }),
+  { status: 429, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'retry-after': '60' } });
+const BODY_MAX = 16 * 1024; // JSON bodies other than replay uploads are tiny
+async function readBody(req, max = BODY_MAX) {
+  if (+(req.headers.get('content-length') || 0) > max) throw new HttpError('Request too large.', 413);
+  const text = await req.text(); if (text.length > max) throw new HttpError('Request too large.', 413);
+  return text;
+}
+async function readJSON(req, max) {
+  const text = await readBody(req, max); if (!text) return {};
+  try { return JSON.parse(text); } catch (e) { throw new HttpError('Bad request.', 400); }
+}
+/* WebSockets: each person may hold a few connections to a room or the lobby (several tabs), and each connection may send
+   a steady few messages a second (bursts allowed). Past that, messages are dropped; a connection that keeps flooding is closed. */
+const WS_MSG_MAX = 4096, WS_RATE = 8, WS_BURST = 40, WS_KICK = 200;
+const wsBuckets = new WeakMap(); // (in memory: a hibernated Durable Object starts every connection afresh, which is fine)
+function wsFlooding(ws, raw) {
+  const now = Date.now(); let b = wsBuckets.get(ws);
+  if (!b) wsBuckets.set(ws, b = { tokens: WS_BURST, at: now, dropped: 0 });
+  b.tokens = Math.min(WS_BURST, b.tokens + (now - b.at) / 1000 * WS_RATE); b.at = now;
+  if (typeof raw === 'string' && raw.length <= WS_MSG_MAX && b.tokens >= 1) { b.tokens--; return false; }
+  if (++b.dropped >= WS_KICK) try { ws.close(1008, 'Too many messages'); } catch (e) { }
+  return true;
+}
+// past WS_PER_USER connections from one person (tabs, or dead connections not yet noticed), their oldest are closed
+const WS_PER_USER = 5;
+function dropOldest(ctx, uid, keep) {
+  const mine = ctx.getWebSockets(uid).filter(w => w !== keep);
+  for (const w of mine.slice(0, Math.max(0, mine.length - (WS_PER_USER - 1)))) try { w.close(1008, 'Too many connections'); } catch (e) { }
+}
+
 /* ---------------- database ---------------- */
 let schemaReady = null;
 function ensureSchema(env) {
@@ -168,7 +210,11 @@ export default {
     const url = new URL(req.url); const p = url.pathname;
     if (!p.startsWith('/api/')) return env.ASSETS.fetch(req);
     let m0;
+    const ip = clientIp(req), write = req.method !== 'GET' && req.method !== 'HEAD';
+    if (await limited(env.RL_API, ip)) return tooMany();
     try {
+      if (p === '/api/replays' && write && await limited(env.RL_UPLOAD, ip)) return tooMany();
+      if (p.startsWith('/api/auth/') && await limited(env.RL_WRITE, 'ip:' + ip)) return tooMany();
       await ensureSchema(env);
       // AI training progress (/train.html polls it): the training machine posts its run's status with a secret token
       // whose SHA-256 is TRAIN_TOKEN_HASH (wrangler.jsonc); anyone may read it
@@ -176,7 +222,7 @@ export default {
         const tok = (req.headers.get('authorization') || '').replace(/^Bearer /, '');
         const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tok)))].map(b => b.toString(16).padStart(2, '0')).join('');
         if (!env.TRAIN_TOKEN_HASH || h !== env.TRAIN_TOKEN_HASH) return bad('Not allowed', 403);
-        const text = await req.text(); if (text.length > 300000) return bad('Too large', 413);
+        const text = await readBody(req, 300000);
         let st; try { st = JSON.parse(text); } catch (e) { return bad('Not JSON', 400); }
         await env.DB.prepare(`INSERT INTO train(run,updated,body) VALUES(?,?,?) ON CONFLICT(run) DO UPDATE SET updated=excluded.updated, body=excluded.body`).bind(String(st.run || 'run').slice(0, 40), Date.now(), text).run();
         return json({ ok: true });
@@ -188,21 +234,20 @@ export default {
       if (p === '/api/config') return json({ google: env.GOOGLE_CLIENT_ID || null, dev: env.DEV_AUTH === '1' });
       if (p === '/api/auth/google' && req.method === 'POST') {
         if (!env.GOOGLE_CLIENT_ID) return bad('Google sign-in is not set up yet (GOOGLE_CLIENT_ID).', 500);
-        const { credential } = await req.json();
+        const { credential } = await readJSON(req);
         let g; try { g = await verifyGoogleToken(credential, env.GOOGLE_CLIENT_ID); } catch (e) { return bad('Google sign-in failed: ' + e.message, 401); }
         const { user, isNew } = await upsertUser(env, 'g:' + g.sub, g.given_name || g.name || 'Explorer');
         return json({ token: await makeToken(env, user.id), user, isNew });
       }
       if (p === '/api/auth/dev' && req.method === 'POST') { // local testing only (DEV_AUTH=1 in .dev.vars)
         if (env.DEV_AUTH !== '1') return bad('Not found', 404);
-        const { name } = await req.json();
+        const { name } = await readJSON(req);
         const { user, isNew } = await upsertUser(env, 'dev:' + cleanName(name).toLowerCase(), name);
         return json({ token: await makeToken(env, user.id), user, isNew });
       }
       // game logs anyone can upload and watch step by step (/?replay=<id>); the page rebuilds the game from the log
       if (p === '/api/replays' && req.method === 'POST') {
-        const text = await req.text();
-        if (text.length > REPLAY_MAX_BYTES) return bad('That game log is too large.', 413);
+        const text = await readBody(req, REPLAY_MAX_BYTES).catch(e => { if (e.status === 413) throw new HttpError('That game log is too large.', 413); throw e; });
         let log; try { log = JSON.parse(text); } catch (e) { return bad('That file is not valid JSON.', 400); }
         const err = E.replayCheck(log); if (err) return bad(err, 400);
         const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
@@ -236,20 +281,23 @@ export default {
       }
       const user = await authUser(req, env);
       if (!user) return bad('Please sign in.', 401);
+      if (write && await limited(env.RL_WRITE, 'u:' + user.id)) return tooMany();
       const lobby = env.LOBBY.get(env.LOBBY.idFromName('main'));
       if (p === '/api/me' && req.method === 'GET') {
         const active = await (await lobby.fetch('https://lobby/find?uid=' + encodeURIComponent(user.id))).json();
         return json({ user, active: active.code || null });
       }
       if (p === '/api/me' && req.method === 'PATCH') {
-        const { name } = await req.json();
+        const { name } = await readJSON(req);
         const n = await uniqueName(env, name, user.id);
         await env.DB.prepare(`UPDATE users SET name=? WHERE id=?`).bind(n, user.id).run();
         return json({ user: { ...user, name: n } });
       }
       if (p === '/api/rooms' && req.method === 'POST') {
-        const b = await req.json().catch(() => ({}));
+        const b = await readJSON(req).catch(e => { if (e.status === 413) throw e; return {}; });
         const opts = { max: Math.min(4, Math.max(2, +b.max || 3)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn: TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90, pub: b.pub !== false, rated: b.rated !== false, auto: false };
+        const busy = await (await lobby.fetch('https://lobby/find?busy=1&uid=' + encodeURIComponent(user.id))).json();
+        if (busy.code) return bad(`You're already in a game (${busy.code}). Rejoin it, or leave it, before opening another.`, 409);
         const code = await createRoom(env, user.id, opts);
         return code ? json({ code }) : bad('Could not create a room, try again.', 500);
       }
@@ -261,37 +309,47 @@ export default {
       if ((m = p.match(/^\/api\/rooms\/([A-Z0-9]{4,6})\/ws$/))) {
         if (req.headers.get('upgrade') !== 'websocket') return bad('Expected a WebSocket', 426);
         const room = env.ROOMS.get(env.ROOMS.idFromName(m[1]));
-        const h = new Headers(req.headers); h.set('x-uid', user.id); h.set('x-name', user.name);
+        const busy = await (await lobby.fetch('https://lobby/find?busy=1&uid=' + encodeURIComponent(user.id))).json();
+        const h = new Headers(req.headers); h.set('x-uid', user.id); h.set('x-name', user.name); h.set('x-busy', busy.code || '');
         return room.fetch(new Request('https://room/ws', { headers: h }));
       }
       if (p === '/api/lobby/ws') {
         if (req.headers.get('upgrade') !== 'websocket') return bad('Expected a WebSocket', 426);
-        return lobby.fetch(new Request('https://lobby/ws', { headers: req.headers }));
+        const h = new Headers(req.headers); h.set('x-uid', user.id);
+        return lobby.fetch(new Request('https://lobby/ws', { headers: h }));
       }
       return bad('Not found', 404);
     } catch (e) {
-      return bad('Server error: ' + (e && e.message || e), 500);
+      if (e instanceof HttpError) return bad(e.message, e.status);
+      console.error(e); // (in the dashboard's logs; the page gets no internals)
+      return bad('Server error, please try again.', 500);
     }
   }
 };
 
 /* ---------------- Lobby: live list of rooms ---------------- */
+const LOBBY_WS_MAX = 2000, LOBBY_ROOMS = 500;
 export class Lobby extends DurableObject {
   constructor(ctx, env) { super(ctx, env); this.rooms = null; ctx.blockConcurrencyWhile(async () => { this.rooms = (await ctx.storage.get('rooms')) || {}; }); }
   prune() { const now = Date.now(); for (const c in this.rooms) { const r = this.rooms[c]; if (now - r.updated > (r.status === 'playing' ? 12 : 2) * 3600e3) delete this.rooms[c]; } }
+  // at most LOBBY_ROOMS rooms are kept (the least recently updated go first), so a flood of new rooms can't grow it without end
+  cap() { const cs = Object.keys(this.rooms); if (cs.length <= LOBBY_ROOMS) return; cs.sort((a, b) => this.rooms[a].updated - this.rooms[b].updated).slice(0, cs.length - LOBBY_ROOMS).forEach(c => delete this.rooms[c]); }
   list() { return Object.values(this.rooms).filter(r => r.pub !== false && (r.status === 'lobby' || r.status === 'playing')).map(r => ({ code: r.code, host: r.host, names: r.names, count: r.names.length, max: r.max, status: r.status, course: r.course, turn: r.turn, rated: r.rated !== false, ai: (r.uids || []).filter(u => u.startsWith('ai-')).length, auto: !!r.auto })); }
   broadcast() { const msg = JSON.stringify({ t: 'rooms', rooms: this.list() }); for (const ws of this.ctx.getWebSockets()) { try { ws.send(msg); } catch (e) { } } }
   async fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === '/ws') { const pair = new WebSocketPair(); this.ctx.acceptWebSocket(pair[1]); pair[1].send(JSON.stringify({ t: 'rooms', rooms: this.list() })); return new Response(null, { status: 101, webSocket: pair[0] }); }
+    if (url.pathname === '/ws') {
+      const uid = req.headers.get('x-uid') || '';
+      if (this.ctx.getWebSockets().length >= LOBBY_WS_MAX) return tooMany();
+      const pair = new WebSocketPair(); this.ctx.acceptWebSocket(pair[1], [uid]); dropOldest(this.ctx, uid, pair[1]); pair[1].send(JSON.stringify({ t: 'rooms', rooms: this.list() })); return new Response(null, { status: 101, webSocket: pair[0] }); }
     if (url.pathname === '/update') {
       const r = await req.json();
       if (r.status === 'closed' || r.status === 'over') delete this.rooms[r.code]; else this.rooms[r.code] = { ...r, updated: Date.now() };
-      this.prune(); await this.ctx.storage.put('rooms', this.rooms); this.broadcast(); return json({ ok: true });
+      this.prune(); this.cap(); await this.ctx.storage.put('rooms', this.rooms); this.broadcast(); return json({ ok: true });
     }
     if (url.pathname === '/match') {
       const { uid, dev } = await req.json(); const now = Date.now();
-      const mine = Object.values(this.rooms).find(x => (x.uids || []).includes(uid) && (x.status === 'lobby' || x.status === 'playing'));
+      const mine = Object.values(this.rooms).find(x => (x.busy || x.uids || []).includes(uid) && (x.status === 'lobby' || x.status === 'playing'));
       if (mine) return json({ code: mine.code });
       const open = Object.values(this.rooms).filter(x => x.auto && x.status === 'lobby' && x.names.length < x.max && now - x.updated < 15 * 60e3).sort((a, b) => b.names.length - a.names.length);
       if (open.length) return json({ code: open[0].code });
@@ -301,10 +359,15 @@ export class Lobby extends DurableObject {
       this.rooms[code] = { code, host: '', names: [], uids: [], max: MATCH_SIZE, status: 'lobby', course: 'random', turn: opts.turn, pub: true, auto: true, updated: now };
       await this.ctx.storage.put('rooms', this.rooms); this.broadcast(); return json({ code });
     }
-    if (url.pathname === '/find') { const uid = url.searchParams.get('uid'); const r = Object.values(this.rooms).find(x => (x.uids || []).includes(uid)); return json({ code: r ? r.code : null }); }
+    // the room a person is in; busy=1: only a room they are still playing in (waiting to start, or racing: not resigned or finished)
+    if (url.pathname === '/find') {
+      const uid = url.searchParams.get('uid'), busy = url.searchParams.get('busy') === '1';
+      const r = Object.values(this.rooms).find(x => (busy ? (x.status === 'lobby' || x.status === 'playing') && (x.busy || x.uids || []) : (x.uids || [])).includes(uid));
+      return json({ code: r ? r.code : null });
+    }
     return bad('Not found', 404);
   }
-  async webSocketMessage(ws, msg) { if (msg === 'ping') ws.send('pong'); }
+  async webSocketMessage(ws, msg) { if (wsFlooding(ws, msg)) return; if (msg === 'ping') ws.send('pong'); }
   async webSocketClose(ws, code) { try { ws.close(code); } catch (e) { } }
 }
 
@@ -329,6 +392,7 @@ const mapCache = new Map();
 function mapFor(S) { const k = S.course.id + ':' + S.seed; let m = mapCache.get(k); if (!m) { m = E.mapFor(S); mapCache.set(k, m); if (mapCache.size > 200) mapCache.delete(mapCache.keys().next().value); } return m; }
 const PCOLORS = ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636']; // matches COLORS: one explorer figure per colour
 const AI_RULE = 'AI players play First Expedition with 3 or 4 players for now.';
+const ROOM_WS_MAX = 100; // players and watchers
 const PLAYER_ACTIONS = ['move', 'native', 'pay', 'action', 'trash', 'transmit', 'buy', 'end', 'resign']; // what a player may send
 
 export class Room extends DurableObject {
@@ -347,7 +411,13 @@ export class Room extends DurableObject {
   load() { const g = E.recState(this.rec); this.S = g.S; this.S.owners = this.d.seats.map(s => s.uid); this.S.room = this.d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, g.MAP); }
   async persist() { await this.ctx.storage.put(this.rec ? { d: this.d, rec: this.rec } : { d: this.d }); }
   engine() { E.S = this.S; E.MAP = mapFor(this.S); return E; }
-  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn, pub: d.opts.pub !== false, rated: d.opts.rated !== false, auto: !!d.opts.auto }; }
+  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn, pub: d.opts.pub !== false, rated: d.opts.rated !== false, auto: !!d.opts.auto, busy: this.busyUids() }; }
+  // people who can't open or join another game while in this one: everyone seated before it starts, then whoever is still racing
+  busyUids() {
+    const d = this.d; if (d.status === 'lobby') return d.seats.filter(s => !s.ai).map(s => s.uid);
+    if (d.status !== 'playing' || !this.S) return [];
+    return this.S.players.map((p, i) => !p.ai && !p.resigned && !p.pieces.every(k => k === 'done') ? this.S.owners[i] : null).filter(Boolean);
+  }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.summary()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
   roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid) })), results: d.results || null }; }
@@ -373,9 +443,13 @@ export class Room extends DurableObject {
     if (url.pathname === '/ws') {
       if (!this.d || this.d.status === 'closed') return new Response('No such room', { status: 404 });
       const uid = req.headers.get('x-uid'), name = req.headers.get('x-name');
+      if (this.ctx.getWebSockets().length >= ROOM_WS_MAX && !this.d.seats.some(s => s.uid === uid)) return tooMany(); // (players always get in)
       const pair = new WebSocketPair();
-      this.ctx.acceptWebSocket(pair[1], [uid]); pair[1].serializeAttachment({ uid, name });
-      if (this.d.status === 'lobby' && !this.d.seats.find(s => s.uid === uid) && this.d.seats.length < this.d.opts.max) {
+      this.ctx.acceptWebSocket(pair[1], [uid]); pair[1].serializeAttachment({ uid, name }); dropOldest(this.ctx, uid, pair[1]);
+      const elsewhere = req.headers.get('x-busy'); // one game at a time: someone still in another room only watches this one
+      if (this.d.status === 'lobby' && !this.d.seats.find(s => s.uid === uid) && elsewhere && elsewhere !== this.d.code)
+        this.send(pair[1], { t: 'error', msg: `You're already in a game (${elsewhere}). Leave it to take a seat here.` });
+      else if (this.d.status === 'lobby' && !this.d.seats.find(s => s.uid === uid) && this.d.seats.length < this.d.opts.max) {
         const used = this.d.seats.map(s => s.color);
         this.d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) });
         if (!this.d.seats.find(s => s.uid === this.d.host)) this.d.host = uid;
@@ -388,6 +462,7 @@ export class Room extends DurableObject {
     return bad('Not found', 404);
   }
   async webSocketMessage(ws, raw) {
+    if (wsFlooding(ws, raw)) return;
     if (raw === 'ping') { ws.send('pong'); return; }
     let m; try { m = JSON.parse(raw); } catch (e) { return; }
     const { uid } = ws.deserializeAttachment() || {};
@@ -467,6 +542,7 @@ export class Room extends DurableObject {
   async afterChange(ev) {
     if (this.S.log.length > 120) this.S.log = this.S.log.slice(-120);
     if (this.S.over && this.d.status === 'playing') await this.finish();
+    else { const b = this.busyUids().join(); if (b !== this.lastBusy) { this.lastBusy = b; this.tellLobby(); } } // someone resigned or finished: free for another game
     await this.persist(); this.sendAll(ev);
   }
   /* time bank: each turn adds opts.turn seconds to the player's clock, and time not used carries over to their later
