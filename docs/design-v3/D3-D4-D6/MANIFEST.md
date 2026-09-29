@@ -46,3 +46,28 @@ progress, one coin paid), `market` (close-up of the market, `@2x`).
 - **Trade-offs:** everything in the market is readable at a glance and the board keeps most of its room, but the market
   no longer looks like cards (less charm), single-use and card text are only on hover / All cards, and on phones the
   column is wider (140 px vs ~95 px), so the history panel moves below it and covers more of the board.
+
+## D4. Card anatomy
+
+**Problem:** two round gold-ish badges per card (strength top-left, cost bottom-left) can be confused; the stack-count
+badge is the heaviest mark on market cards; "SINGLE USE" is a loud red pill; the suit shows three times.
+
+States: `hand` (the hand in place, with four fixed cards: Scout, Giant Machete, Photographer, Compass, `@2x`),
+`handcards` (the same four cards laid flat at 150 px, so the whole face shows, `@2x`), `market` (close-up `@2x`), `allcards`.
+
+| state | before | A | B |
+|---|---|---|---|
+| hand | `D4-before-hand-1440@2x.png` | `D4-A-hand-1440@2x.png` | |
+| hand cards, flat | `D4-before-handcards-1440@2x.png` | `D4-A-handcards-1440@2x.png` | |
+| market close-up | `D4-before-market-1440@2x.png`, `D4-before-market-390@2x.png` | `D4-A-market-1440@2x.png`, `D4-A-market-390@2x.png` | |
+| All cards | `D4-before-allcards-1440.png`, `D4-before-allcards-390.png` | `D4-A-allcards-1440.png`, `D4-A-allcards-390.png` | |
+
+### Option A: price tag, quiet count, bookmark — branch `design/v3-D4-A`
+- **What changed:** strength stays the round badge top-left. The cost is a parchment price tag (notched, with a string
+  hole) in the frame's top-right corner: a different shape, colour and corner from the strength. The stack count is
+  quiet "×3" text under the card instead of a black badge on it. Single use is a red bookmark hanging over the top edge
+  instead of the red pill. The foot is now empty; in the market the "Can buy" tag sits there, inside the card.
+- **Effort / risk:** small (cards.js markup, CSS, market count text and row gap). `layout ok` at 5 sizes. Risk: low.
+- **Trade-offs:** strength and cost can no longer be mixed up, and the market is calmer. On the lightest art (coin cards)
+  the parchment tag has less contrast; the bookmark needs learning once (its tooltip says "Single use"). The repeated
+  suit icons stay (that is option B's change).

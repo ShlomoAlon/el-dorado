@@ -66,7 +66,10 @@ const seedScript = () => { let a = 20260929; Math.random = () => { a |= 0; a = a
     const { p, ctx, idle } = await game(vw, vh, 2);
     const sfx = vw === 1440 ? '' : '-390';
     if (want.has('market')) { const c = await clipOf(p, process.env.MKTSEL || '#mkt'); if (c) await shot(p, `market${sfx}@2x.png`, { clip: c }); }
-    if (want.has('hand') && vw === 1440) { const c = await clipOf(p, '#cards', 30); if (c) await shot(p, `hand@2x.png`, { clip: c }); }
+    if (want.has('hand') && vw === 1440) { await p.evaluate(() => { const E = window.__ED, S = E.S, P = S.players[S.cur]; P.hand = ['scout', 'giant', 'photographer', 'compass'].map((t, i) => { const id = 'c9' + i + '0'; S.cards[id] = t; return id; }); E.render(); }); await idle(); const c = await p.evaluate(() => { const rs = [...document.querySelectorAll('#cards .card')].map(e => e.getBoundingClientRect()); if (!rs.length) return null; const l = Math.max(0, Math.min(...rs.map(r => r.left)) - 30), t = Math.max(0, Math.min(...rs.map(r => r.top)) - 30), r = Math.min(innerWidth, Math.max(...rs.map(r => r.right)) + 30), b = Math.min(innerHeight, Math.max(...rs.map(r => r.bottom))); return { x: l, y: t, width: r - l, height: b - t }; }); if (c) await shot(p, `hand@2x.png`, { clip: c }); }
+    if (want.has('hand') && vw === 1440) { await p.evaluate(() => { const d = document.createElement('div'); d.id = 'shootrow'; d.style.cssText = 'position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);display:flex;gap:18px;padding:28px;background:#0a1310;z-index:9999;border-radius:14px';
+      for (const c of document.querySelectorAll('#cards .card')) { const m = document.createElement('div'); m.className = 'mcard'; m.style.setProperty('--cw', '150px'); m.innerHTML = c.innerHTML; d.appendChild(m); } document.querySelector('#shell').appendChild(d); });
+      const c = await clipOf(p, '#shootrow', 0); if (c) await shot(p, 'handcards@2x.png', { clip: c }); await p.evaluate(() => document.querySelector('#shootrow').remove()); }
     if (want.has('chips') && vw === 1440) { const c = await clipOf(p, '#players', 8); if (c) await shot(p, `chips@2x.png`, { clip: c }); }
     await ctx.close();
   }
