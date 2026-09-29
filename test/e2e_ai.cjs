@@ -61,7 +61,9 @@ const fail = m => { console.log('FAIL: ' + m); process.exitCode = 1; };
   const code2 = await mkRoom(false); await A.waitForTimeout(1200);
   await A.click('[data-addai="raleigh"]'); await A.waitForTimeout(400); await A.click('[data-addai="raleigh"]'); await A.waitForTimeout(600); // AI needs 3+ players; the same AI can sit twice
   await A.click('#rlStart'); await A.waitForTimeout(1500);
-  await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } })); await A.waitForTimeout(1500);
+  await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
+  // the two AIs then finish the race by themselves, without pauses (nobody is watching): wait for the end, up to 60 s
+  await A.waitForFunction(() => __ED.S && __ED.S.over && __ED.NET.room && __ED.NET.room.results, null, { timeout: 60000 }).catch(() => {});
   const r2 = await A.evaluate(() => ({ over: __ED.S.over, res: __ED.NET.room.results, code: __ED.NET.code }));
   const lb2 = await board();
   console.log('unrated', code2, r2);

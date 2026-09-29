@@ -174,8 +174,8 @@ function applyAction(seat,a){
   if(!S||S.over)return fail('The game is over.');
   if(!a||typeof a!=='object')return fail('Bad action.');
   if(a.t==='resign')return resign(seat);
-  if(a.t==='endgame'){log(seat,'ends the game.');endGame();return{ok:true,ev:[{e:'over'}]};} // local play only (the server refuses it)
   if(seat!==S.cur)return fail('It is not your turn.');
+  if(a.t==='endgame'){log(seat,'ends the game.');endGame();return{ok:true,ev:[{e:'over'}]};} // local play only (the server refuses it)
   if(a.t==='timeout'){log(seat,'ran out of time.');if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;
     const r=applyAction(seat,{t:'end',keep:[]});return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}
   const P=S.players[seat],T=S.turn,ev=[];let reveal=false;
@@ -309,9 +309,7 @@ function resign(seat){
   P.resigned=++S.resigns;log(seat,'leaves the expedition.');
   const ev=[{e:'resign',pl:seat}];
   const others=S.players.filter((p,i)=>i!==seat&&!p.resigned);
-  if(others.length<=1||S.players.filter(isActive).length<=1){ // nobody left to race: finish now
-    if(S.players.filter(isActive).length===0||others.length<=1){endGame();ev.push({e:'over'});return{ok:true,ev};}
-  }
+  if(others.length<=1||!S.players.some(isActive)){endGame();ev.push({e:'over'});return{ok:true,ev};} // nobody left to race: finish now
   checkEnd();
   if(seat===S.cur){S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});}
   if(S.over)ev.push({e:'over'});

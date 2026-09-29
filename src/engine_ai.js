@@ -33,8 +33,8 @@ const aiNetFits=()=>botNetReady();
 /* one decision for the AI in seat S.cur. mem: per-game object ({}) that keeps the turn planner's cache between calls.
    Returns a legal action (falls back to ending the turn). */
 function aiChoose(id,mem){
-  const A=aiById(id)||AIS[AIS.length-1];mem=mem||{};
-  let opts=A.opts;if(opts.mode==='net'&&(!botNetReady()||S.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
+  const A=aiById(id);mem=mem||{};
+  let opts=A?A.opts:{mode:'plan'};if(opts.mode==='net'&&(!botNetReady()||S.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
   const me=S.cur,tk=me+':'+S.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
   if(++mem.n>60)return S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
   const r0=RNG;setRng(null);BOT_PLAN_CACHE=mem.plan||null;

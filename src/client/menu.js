@@ -2,7 +2,7 @@
    `hidden`; choices are native form controls that keep their own state (the Online tabs are pure CSS). This file wires
    them, reads them when they're used, and fills only the boxes that hold data (seats, rooms, leaderboard, profile,
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
-import { S, MAP, COLORS, COURSES, courseById, aiById, aiAllowed, aiCourseOK, aiUsesNet, recNewGame, replayCheck, plural } from '../engine.gen.js';
+import { S, MAP, COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, replayCheck, plural } from '../engine.gen.js';
 import { $, esc, setHTML, setText } from './dom.js';
 import { UI, NET, G, cur, isAI, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
@@ -204,7 +204,7 @@ export function renderRoomLobby(){
   mq('#lkIn').value=location.origin+location.pathname+'?room='+NET.code;
   mq('#rlCount').textContent=`Players ${seats.length}/${max}`;
   setHTML(mq('#rlSeats'),seats.map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="seatrow"><span><i style="background:${s.color}"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note">(you)</span>':''}</span>${A?`<span class="lbp"><span class="note">${esc(A.tier)}</span>${host&&lobby?`<button type="button" class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note">${s.now?'wants to start · ':''}${s.uid===r.host&&!auto?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('')||'<p class="note">Connecting…</p>');
-  const ctl=host&&!auto&&lobby,aiOK=!!(o&&aiCourseOK(o.course)&&o.max>=3);
+  const ctl=host&&!auto&&lobby,aiOK=!!(o&&aiAllowed(o.course,o.max));
   mq('#rlAIBox').hidden=!ctl;mq('#rlAINo').hidden=aiOK;mq('#rlAIList').hidden=!aiOK||!room;mq('#rlFull').hidden=!aiOK||room;
   mq('#rlAINote').textContent='AI players move on the server'+(rated?' and gain or lose rating like everyone else':'')+'.';
   mq('#rlRatedBox').hidden=!ctl;setRadio('rlrated',rated?'1':'0');

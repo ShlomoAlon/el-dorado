@@ -313,6 +313,8 @@ async function pruneReplays(DB, uids) {
 const mapCache = new Map();
 function mapFor(S) { const k = S.course.id + ':' + S.seed; let m = mapCache.get(k); if (!m) { m = E.mapFor(S); mapCache.set(k, m); if (mapCache.size > 200) mapCache.delete(mapCache.keys().next().value); } return m; }
 const PCOLORS = ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636']; // matches COLORS: one explorer figure per colour
+const AI_RULE = 'AI players play First Expedition with 3 or 4 players for now.';
+const PLAYER_ACTIONS = ['move', 'native', 'pay', 'action', 'trash', 'transmit', 'buy', 'end', 'resign']; // what a player may send
 
 export class Room extends DurableObject {
   constructor(ctx, env) {
@@ -387,11 +389,10 @@ export class Room extends DurableObject {
         if (uid === d.host) { d.status = 'closed'; await this.persist(); this.tellLobby(); this.sendAll(); for (const w of this.ctx.getWebSockets()) try { w.close(1000, 'Room closed'); } catch (e) { } return; }
         d.seats = d.seats.filter(s => s.uid !== uid); await this.persist(); this.tellLobby(); this.sendAll(); try { ws.close(1000, 'Left'); } catch (e) { }
       }
-      else if (m.t === 'join' && !seat) { if (d.seats.length >= d.opts.max) return err('This room is full.'); const used = d.seats.map(s => s.color); const { name } = ws.deserializeAttachment(); d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) }); if (await this.seatsChanged()) return; await this.persist(); this.tellLobby(); this.sendAll(); }
       else if (m.t === 'addAI') { // host seats a named AI (each at most once per room); it plays server-side
         if (d.opts.auto || uid !== d.host) return err('Only the host can add AI players.');
         const A = E.aiById(m.ai); if (!A) return err('Unknown AI.');
-        if (!E.aiCourseOK(d.opts.course) || d.opts.max < 3) return err('AI players only play First Expedition with 3 or 4 players for now.');
+        if (!E.aiAllowed(d.opts.course, d.opts.max)) return err(AI_RULE);
         if (d.seats.length >= d.opts.max) return err('This room is full.');
         // the same AI may take several seats (named Humboldt, Humboldt 2, …; they share its rating)
         const row = await this.env.DB.prepare(`SELECT name FROM users WHERE id=?`).bind(aiUid(A.id)).first().catch(() => null);
@@ -410,7 +411,7 @@ export class Room extends DurableObject {
         if (d.opts.auto) return;
         if (uid !== d.host) return err('Only the host can start.');
         if (d.seats.length < 2) return err('You need at least 2 players.');
-        if (d.seats.some(s => s.ai) && !E.aiAllowed(d.opts.course, d.seats.length)) return err('AI players need 3 or 4 players (and First Expedition) for now.');
+        if (d.seats.some(s => s.ai) && !E.aiAllowed(d.opts.course, d.seats.length)) return err(AI_RULE);
         await this.startGame();
       }
       return;
@@ -419,12 +420,12 @@ export class Room extends DurableObject {
     const seat = this.S.owners.indexOf(uid);
     if (m.t === 'undo') {
       if (seat !== this.S.cur || !E.recCanUndo(this.rec)) return err('Nothing to undo.');
-      this.rec.actions.pop(); this.load(); await this.persist(); this.sendAll([{ e: 'undo' }]); return;
+      this.rec.actions.pop(); this.load(); await this.persist(); this.sendAll(); return;
     }
     if (m.t === 'act') {
       if (seat < 0) return err('You are watching this game.');
       if (!m.a || typeof m.a !== 'object') return err('Bad action.');
-      if (m.a.t === 'endgame') return err('Online games end when the race is over.'); // local play only
+      if (!PLAYER_ACTIONS.includes(m.a.t)) return err('Bad action.'); // (timeout and endgame are the server's and local play's, not a player's)
       const eng = this.engine(); const prevCur = this.S.cur; let r;
       try { r = eng.recApply(this.rec, seat, m.a); } catch (e) { r = { ok: false, err: 'Bad action.' }; }
       // a refused action (or an engine exception) must never leave the game half-changed: rebuild it from the record
@@ -445,7 +446,7 @@ export class Room extends DurableObject {
     this.rec = E.recNewGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
     this.S = E.S; this.S.owners = d.seats.map(s => s.uid); this.S.room = d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
     d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null;
-    await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll([{ e: 'start' }]);
+    await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll();
   }
   async afterChange(ev) {
     if (this.S.log.length > 120) this.S.log = this.S.log.slice(-120);

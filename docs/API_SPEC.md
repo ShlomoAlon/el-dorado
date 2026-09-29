@@ -26,7 +26,8 @@ The engine works on three module-level variables:
 
 - **Access from outside:** consumers read and replace them through `E.S`, `E.MAP` (getters and setters), or through the named live
   exports with `setS(v)` and `setMAP(v)`.
-- **Determinism:** the same `RNG` sequence plus the same actions always give the same game.
+- **Determinism:** the same `RNG` sequence plus the same actions always give the same game. The AIs decide with `Math.random`
+  (look-ahead shuffles), so the same seeded game between AIs doesn't repeat move for move.
 
 ### 1.2 Data
 
@@ -107,9 +108,10 @@ P = { name, color, ai?: AI id, pieces: [key|'done'], deck: [id], hand: [id], dis
       blocks: [blockade index], fin: round arrived|0, resigned: 0|order of resigning }
 ```
 
+- **`v`:** the state format (nothing reads it); **`start`:** the first player (always 0).
 - **`turn.active`:** the card whose leftover strength can keep moving the same explorer.
 - **`turn.pending`:** a Scientist or Travel Log is waiting for its `trash` action.
-- **Online additions:** the server adds `owners: [uid per seat]` and `room: code`.
+- **Online additions:** the server adds `owners: [uid per seat]` and `room: code`, and keeps only the last 120 log lines.
 
 ### 1.5 Actions — `applyAction(seat, a)` → `{ok, err?, ev: [event], reveal?}`
 
@@ -117,14 +119,14 @@ The acting seat must be `S.cur`, except for `resign`. A refused action returns `
 
 | action | effect |
 |---|---|
-| `{t:'move', card, pi, to}` | Move explorer `pi` to `to`: a space key, or `'B'+index` for a blockade. `card` is a movement card in hand, or `turn.active.id` to use its leftover strength. The target must be in `reach(seat, pi, symbols, strength)`. Blockades crossed on the path are taken. |
+| `{t:'move', card, pi, to}` | Move explorer `pi` to `to`: a space key, or `'B'+index` for a blockade. `card` is a movement card in hand, or `turn.active.id` to use its leftover strength (then `pi` is ignored: the same explorer moves on). The target must be in `reach(seat, pi, symbols, strength)`. Blockades crossed on the path are taken. |
 | `{t:'native', card, pi, to}` | The Native moves to an adjacent free space, or tears down an adjacent blockade (`nativeTargets`). |
 | `{t:'pay', pi, to, cards}` | Rubble or a rubble blockade (discard) or base camp (remove from the game), per `payTargets`. `cards` must be exactly `need` distinct cards from the hand. |
 | `{t:'action', card}` | Cartographer (draw 2), Compass (draw 3), Scientist (draw 1, then remove up to 1) or Travel Log (draw 2, then remove up to 2). Sets `reveal`. |
 | `{t:'trash', cards}` | Finishes a pending Scientist or Travel Log: 0…`max` cards from the hand are removed from the game. |
 | `{t:'transmit', card, type}` | The Transmitter (then removed) takes one card of `type` from the market or reserve into the discard pile. |
 | `{t:'buy', type, cards}` | At most one buy per turn. Coin and joker cards pay their strength; every other card pays ½. The reserve opens once a market slot is empty, and a reserve stack then moves into that slot. The bought card goes to the discard pile. |
-| `{t:'end', keep}` | The rest of the hand and the played cards go to the discard pile, then the player draws up to 4 (reshuffling the discard pile when the deck runs out). Sets `reveal`; the turn passes. |
+| `{t:'end', keep}` | `keep` (optional, default none): hand cards kept for next turn. The rest of the hand and the played cards go to the discard pile, then the player draws up to 4 (reshuffling the discard pile when the deck runs out). Sets `reveal`; the turn passes. |
 | `{t:'timeout'}` | Ends the turn for the player: a pending removal is skipped and nothing is kept. |
 | `{t:'resign'}` | Any seat, at any time. The player places below everyone still racing. |
 | `{t:'endgame'}` | Local play only (the server refuses it): the game ends now. |
@@ -155,16 +157,15 @@ Equal keys share a place. `winners` are the players in place 1.
 
 | event | meaning |
 |---|---|
-| `{e:'play', pl, k, …}` | What became public. `k`: `move`, `native`, `rubble`, `camp`, `blr`, `action`, `trash`, `transmit`, `buy`, `end`. `ts: [types]` lists the cards played, spent or removed. `move`/`native` add `n` (spaces), `sym` and `more` (leftover strength). `buy` adds `got` and `paid`; `transmit` adds `got`. `end` gives only counts, `kept` and `disc`. |
+| `{e:'play', pl, k, …}` | What became public. `k`: `move`, `native`, `rubble`, `camp`, `blr`, `action`, `trash`, `transmit`, `buy`, `end`. `ts: [types]` lists the cards played, spent or removed. `move` adds `n` (spaces), `sym` and `more` (leftover strength); `native` adds `n` (1, or 0 for a blockade); `action` adds `n` (cards drawn). `buy` adds `got` and `paid`; `transmit` adds `got`. `end` gives only counts, `kept` and `disc`. |
 | `{e:'move', pl, pi, path: [key…]}` | The explorer's path, including where it started. |
 | `{e:'block', pl, n}` | A blockade was taken. |
 | `{e:'arrive', pl, pi}` | The explorer reached El Dorado. |
-| `{e:'draw', pl, n}` | The player drew `n` cards. |
+| `{e:'draw', pl, n}` | A card's effect drew `n` cards (not emitted for the draw at the end of a turn). |
 | `{e:'gain', pl, t}` | A card was bought or taken. |
 | `{e:'turn', pl}` | The turn passed to `pl`. |
 | `{e:'timeout', pl}`, `{e:'resign', pl}`, `{e:'over'}` | |
 
-The server adds `{e:'start'}` and `{e:'undo'}`.
 
 ### 1.7 Queries
 
@@ -199,17 +200,18 @@ A game is its setup plus its list of actions; any position is rebuilt by replayi
 
 | function | |
 |---|---|
-| `recNewGame(opts)` → rec | Starts a game (`opts` as for `newGame`; `rng` comes from `crypto.getRandomValues`). Sets `S` and `MAP`. |
+| `recNewGame(opts)` → rec | Starts a game (`opts` as for `newGame`; `rng` comes from `crypto.getRandomValues`, or `Math.random` where there is none). Sets `S` and `MAP`. |
 | `recApply(rec, seat, a)` | `applyAction` with the action's generator. On success the action is recorded (`rec` may be `null`: not recorded). `mark` moves up when an action reveals cards, passes the turn, resigns or ends the game. |
 | `recCanUndo(rec)` | `actions.length > mark` |
 | `recUndo(rec)` | Drops the last action and rebuilds `S` and `MAP`. |
 | `recState(rec)` → `{S, MAP}` | The position a record leads to (the module's `S` and `MAP` are left as they were). |
-| `recFinal(rec)` | The finished log, with `title` and `result`, and without `mark`. |
+| `recFinal(rec)` | The finished log, with `title` and `result` (`{places, rounds}`, read from the game on show, `S`), and without `mark`. |
 | `replayCheck(log)` | `null`, or why the log can't be played. |
 | `replayStart(log)`, `replayStep(log, i)` | Rebuild step by step; `replayStep` returns `applyAction`'s result. |
 
 **Training logs** (`v: 1`, tools only) use one generator for the whole game, `mulberry32(rng)`, consumed only by the recorded actions.
-They may give every player one extra card (`gift`) shuffled into the deck.
+They may give every player one extra card (`gift`) shuffled into the deck. `replayStart` leaves their generator installed for the
+steps that follow. Tool logs also carry `notes` and `result: {capped, arrived}`.
 
 `newGame({course, seed, players: [{name, color, ai?}], fullRace?, privacy?})` starts a game without a record (tools and tests).
 
@@ -228,7 +230,7 @@ Each entry also has `rating` (its calibrated starting rating), `desc` and `opts`
 |---|---|
 | `aiById(id)`, `aiUsesNet(id)` | |
 | `aiAllowed(course, n)` | AIs are offered on First Expedition with 3–4 players (`aiCourseOK(course)` checks the course alone). |
-| `aiChoose(id, mem)` → action | One decision for `S.cur`. `mem` is `{}` per game and seat; it keeps the turn planner's cache. After 60 decisions in one turn it ends the turn. Keeps one card that can enter El Dorado. |
+| `aiChoose(id, mem)` → action | One decision for `S.cur`. `mem` is `{}` per game and seat; it keeps the turn planner's cache. An unknown id, a 2-player game, or no fitting network: the route planner. After 60 decisions in one turn it ends the turn. It never removes its last card that can enter El Dorado, never thins its deck below 4 cards, and buys such a card before ending a turn without one. |
 | `aiStep(id, mem, rec)` | `recApply` of `aiChoose`; if the action is refused, a `timeout` instead. |
 | `aiNetDecode(bytes)`, `aiSetNet(net)`, `aiNetFits()` | Load and select the network; `aiNetFits()` says whether it was trained for this course. |
 
@@ -240,10 +242,11 @@ Each entry also has `rating` (its calibrated starting rating), `desc` and `opts`
 4. Each part (`w1T, b1, w2, b2, w3, b3`) as little-endian IEEE half floats.
 
 The network is 3 layers with leaky ReLU (slope `leak`) and a sigmoid output: a player's expected result, where 1st = 1 and each later place is worth less.
+The file has no room for a multi-course network's `courses`, `onehot` or `extra`: only single-course networks can ship.
 
 ### 1.10 Bot and training API (`engine_bot.js`)
 
-These functions belong to the training code. They act for `S.cur` unless given a seat `me`.
+These functions belong to the training code. `botActions` and `botChoose` act for `S.cur`; the others take a seat `me`.
 
 | function | |
 |---|---|
@@ -263,10 +266,12 @@ These functions belong to the training code. They act for `S.cur` unless given a
 
 | option | values |
 |---|---|
-| `mode` | `net` (the default when a network is set), `heur`, `heur2`, or `plan…` (the planner, with `BOT_PLANS[mode]`) |
+| `mode` | `net` (the default when a network is set; without a fitting network it becomes `heur`), `heur`, `heur2`, or `plan…` (the planner, with `BOT_PLANS[mode]`; it returns before any option below is read) |
 | `search` | `{kind: 'plan', beam}`, `{kind: 'deep', beam, cands, depth, budget}`, `{kind: 'rollout', cands, sims, margin}` or `{width, depth}` |
 | exploration | `rnd`, `eps`, `typeEps`, `temp`, `lotemp`, `noise`, `turnState: {noBuy, forceBuy, forceTransmit}` |
 | other | `draws` (K), `explain` |
+
+No caller uses `botTurn`, `setPlan`, `forceBuy`, `draws`, `heur2`, `{kind: 'rollout'}` or `{width, depth}`; they are candidates for removal.
 
 **Contract:** the feature vectors, including the order of `BOT_TYPES`, space keys sorted as strings and connection order, must stay
 bit-for-bit identical for trained networks to keep working. `test/fixtures/features.json` pins them at 348 positions.
@@ -274,8 +279,25 @@ bit-for-bit identical for trained networks to keep working. `test/fixtures/featu
 ### 1.11 Exports
 
 - `export {…every top-level name}`: live bindings, for the page's modules. `setS(v)` and `setMAP(v)` replace the game.
-- `export const E = {…}`: the curated object the server and the tools use. It holds the functions above, plus `S` and `MAP` as getters
-  and setters.
+- `export const E = {…}`: the curated object the server and the tools use. It holds most functions above (not `stackOf`, `coinVal`,
+  `isActive`), `S` and `MAP` as getters and setters, `MAPX` (the same as `MAP`) and a `BOT_EVALS` getter.
+
+### 1.12 What a port must reproduce exactly
+
+Stored records replay only if a port keeps these exactly:
+
+- **Randomness:** `mulberry32`, `recRng`, `shuffle` (Fisher–Yates from the end), and the order of draws. `newGame` shuffles each
+  player's deck, then deals; a deck is refilled from the shuffled discard pile only when it runs out mid-draw.
+- **Move paths:** `reach` picks among equally cheap routes by its search order: a linear scan for the smallest cost that pops the
+  first minimum and swap-removes it, with neighbours in `DIRS` order. A record stores only the destination, and the path decides
+  which blockades on the way are taken.
+
+The trained networks work only if a port keeps these exactly:
+
+- **Features:** the order of inputs follows `BOT_TYPES`, space keys sorted as strings, and each connection's first edge, which
+  follows the order spaces were added to `MAP.hexes`.
+- **Arithmetic:** layer 1 accumulates in 32-bit floats and the rest in 64-bit, ending with `exp`. Compare network outputs with a
+  small tolerance; `exp` can differ in the last bit between platforms.
 
 ---
 
@@ -298,7 +320,8 @@ bit-for-bit identical for trained networks to keep working. `test/fixtures/featu
 - **Token:** `uid.expiry.hmac`, HMAC-SHA256 with a secret kept in `settings`. It lasts 60 days.
 - **Sending it:** as `Authorization: Bearer …`, or as `?t=` on WebSocket URLs.
 - **Google sign-in:** the ID token is verified against Google's keys (audience, issuer, expiry, RS256).
-- **Names:** at most 16 letters, digits, spaces and `_.'-`, unique without regard to case (a clash gets a number added).
+- **Names:** at most 16 letters, digits, spaces and `_.'-`, unique without regard to case (a clash gets a number added). (The setup
+  screen allows 14 characters for local players; logs keep up to 24.)
 
 ### 2.3 HTTP (`/api/…`; JSON; errors are `{error}` with an HTTP status)
 
@@ -312,13 +335,13 @@ bit-for-bit identical for trained networks to keep working. `test/fixtures/featu
 | `GET users/:id` | optional | `{user: {…, bot, rank}, games: [{id, created, title, actions, place, of}]}`: the latest 10 games; games from private rooms are shown only to the player |
 | `GET leaderboard` | | `{players: [{id, name, rating, games, wins, bot}]}`: top 100 with rated games, plus the current AIs |
 | `POST rooms {max 2–4, course\|'random', turn ∈ 60/90/120/180/300, pub, rated}` | yes | `{code}` |
-| `POST match` | yes | `{code}`: the player's current quick match, else the fullest open one, else a new one |
+| `POST match` | yes | `{code}`: the room the player is already in (of any kind), else the fullest open quick match, else a new one |
 | `GET rooms/:code/ws` | yes | WebSocket to the Room (§2.5) |
 | `GET lobby/ws` | yes | WebSocket: `{t: 'rooms', rooms: [summary]}` on connect and on every change |
 | `POST replays <log>` | | `{id}`: any valid log, up to 1.9 MB; the latest 1000 uploads are kept |
 | `GET replays` | | `{replays: [{id, created, title, players, actions}]}`: the latest 50 listed |
 | `GET replays/:id` | | the log |
-| `POST train` / `GET train` | token / | training progress (for `/train.html`) |
+| `POST train` / `GET train` | token / | training progress for `/train.html`: `POST` stores a status (`{ok: true}`); `GET` returns `{updated, now, status}` |
 
 A room summary is `{code, host, names, count, max, status, course, turn, rated, ai, auto}`, public rooms only. A room leaves the list when
 it closes or ends, or after 2 h in the lobby or 12 h in play.
@@ -330,7 +353,7 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 - **Status:** `lobby` → `playing` → `over`, or `closed` (the host left the lobby, or a quick match emptied).
 - **Seats:** `{uid, name, color, now?, ai?}`.
   - A person takes a seat by connecting while there is room.
-  - The host adds AIs (First Expedition with 3–4 seats; the same AI may take several seats, named "Humboldt 2", …).
+  - The host adds AIs (First Expedition in a room for 3–4, never in quick match; the same AI may take several seats, named "Humboldt 2", …).
   - **Quick-match rooms** (`auto`, 3 seats, a random course, 90 s turns) start when full, or when 2 or more are seated and all pressed
     "start now". A seat is given up when its player closes the page before the start.
 - **Turn clock (time bank):** each turn adds `turn` seconds to the player's bank; unused time carries over, and undo doesn't change it.
@@ -340,7 +363,7 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
   the page open, they play without pauses (~0.3 s of moves per alarm).
 - **Game over:**
   - The record becomes a replay (listed unless the room was private; each person keeps their latest 10).
-  - In a rated room, ratings and games/wins update (`eloDeltas`), and `matches` gets a row.
+  - `matches` gets a row either way; in a rated room, ratings and games/wins update (`eloDeltas`).
   - `results` goes out with the room:
     - rated: `{places, before, deltas, replay}`
     - unrated: `{places, unrated: true, replay}`
@@ -352,9 +375,9 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 
 | phase | message |
 |---|---|
-| lobby | `{t: 'color', color}`, `{t: 'join'}`, `{t: 'leave'}`, `{t: 'now'}` (quick match: toggle "start now") |
+| lobby | `{t: 'color', color}`, `{t: 'leave'}`, `{t: 'now'}` (quick match: toggle "start now"). A seat is taken by connecting. |
 | lobby, host | `{t: 'addAI', ai}`, `{t: 'removeAI', uid}`, `{t: 'rated', v}`, `{t: 'start'}` |
-| playing | `{t: 'act', a}`: an action (§1.5) for the sender's seat. The server runs `recApply`; a refused action is answered with an error and leaves the game untouched. |
+| playing | `{t: 'act', a}`: a player action (§1.5: not `timeout` or `endgame`) for the sender's seat. The server runs `recApply`; a refused action is answered with an error and leaves the game untouched. |
 | playing | `{t: 'undo'}`: the player to move takes back their last action if `recCanUndo`. |
 
 **Server → client:**
@@ -362,7 +385,7 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 | message | |
 |---|---|
 | `{t: 'room', room}` | In the lobby, after every change. |
-| `{t: 'state', S, ev, seat, undo, deadline, now, room}` | In play, after every change, to every socket. `S` is `redact(S, seat)`; `seat` is −1 for watchers; `undo` says whether this seat may undo now. |
+| `{t: 'state', S, ev, seat, undo, deadline, now, room}` | In play, after every change, to every socket. `S` is `redact(S, seat)`; `seat` is −1 for watchers (the page finds its seat in `S.owners`); `undo` says whether this seat may undo now; `now` lets the page correct for clock skew. |
 | `{t: 'error', msg}` | |
 
 `room = {code, host, status, opts: {max, course, turn, pub, rated, auto}, seats: [{uid, name, color, now, ai, online}], results}`
@@ -373,7 +396,7 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 |---|---|
 | `users` | `id` (`u…` for people, `ai-<id>` for AIs), `google_sub`, `name`, `rating` (1200), `games`, `wins`, `created`, `bot` |
 | `replays` | `id`, `created`, `title`, `players`, `actions`, `body` (the log), `game` (1 = an online game), `uids` (`,uid,uid,`), `listed`, `places` (JSON, in `uids` order) |
-| `matches` | `id`, `room`, `finished`, `data` (JSON: players, names, ai, places, rated, before, deltas) |
+| `matches` | `id`, `room`, `finished`, `data` (JSON: players, names, ai, places, rated, before, deltas, rounds, replay) |
 | `settings` | `k`, `v` (the session secret; the one-time AI rating calibration marker) |
 | `train` | `run`, `updated`, `body` |
 
@@ -402,8 +425,9 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 **Test hooks (`window.__ED`):**
 
 - The page's state: `S`, `MAP`, `UI`, `NET`, `G`.
-- Its entry points: `act`, `onHandCard`, `doMove`, `pickFromMarket`, `confirmBuy`, `startEndTurn`, `finishTurn`, `cancelMode`,
-  `openReplay`, `joinRoom`, `netSend`, …. Each call leaves the page updated.
+- Its entry points: `act`, `playEvents`, `onHandCard`, `doMove`, `pickFromMarket`, `confirmBuy`, `confirmDiscardFor`, `confirmTrash`,
+  `startEndTurn`, `finishTurn`, `cancelMode`, `openReplay`, `joinRoom`, `netSend`, `render`; each call leaves the page updated.
+- Also `view`, `frameStats`, `myId`, `canAct`, `reach`, `applyAction`, and `showCourse` (for `tools/course-check`).
 
 ---
 
@@ -422,4 +446,4 @@ while (!E.S.over) { const me = E.S.cur; E.setNet(netFor(me));
   bots' look-ahead never consumes it.
 - `tools/ai/golden.mjs` checks the feature contract (§1.10).
 - `h2h.mjs` plays AI settings against each other.
-- `calibrate_ais.mjs` measures the AIs' starting ratings.
+- `calibrate_ais.mjs` measures the AIs' starting ratings (the deals are seeded; the AIs' choices are not, see §1.1).
