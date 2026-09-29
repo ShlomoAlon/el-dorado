@@ -9,6 +9,7 @@ import { showGame, playEvents, syncMode } from './actions.js';
 import { ensureVisible } from './board/camera.js';
 import { viewIdx } from './state.js';
 import { sfx } from './sound.js';
+import { diag } from './debug.js';
 export async function api(path,opts={}){
   const headers={'content-type':'application/json'};if(NET.token)headers.authorization='Bearer '+NET.token;
   const r=await fetch(path,{...opts,headers});
@@ -16,8 +17,10 @@ export async function api(path,opts={}){
   if(!r.ok){const e=new Error(j.err||('Request failed ('+r.status+')'));e.status=r.status;throw e;}
   return j;
 }
+/* the page came from the game server (not a file, not the claude.ai artifact, where nothing can be reached) */
+export const HAS_SERVER=!(location.protocol==='file:'||/claude\.ai$|claudeusercontent/.test(location.hostname));
 export async function netInit(){
-  if(location.protocol==='file:'||/claude\.ai$|claudeusercontent/.test(location.hostname))return;
+  if(!HAS_SERVER)return;
   try{NET.cfg=await api('/api/config');NET.available=true;}catch(e){NET.available=false;return;}
   try{NET.token=localStorage.getItem('ed-token');}catch(e){}
   if(NET.token){try{const r=await api('/api/me');NET.user=r.user;NET.active=r.active;loadProfile(r.user.id).catch(()=>{});}catch(e){if(e.status===401){NET.token=null;try{localStorage.removeItem('ed-token');}catch(_){}}}}
@@ -72,6 +75,8 @@ function lostConnection(ws){
   NET.retries++;if(NET.retries>8&&!S){NET.status='Could not reach this room. It may have closed.';renderRoomLobby();return;}
   clearTimeout(NET.retryT);NET.retryT=setTimeout(connectRoom,Math.min(8000,800*NET.retries));
 }
+/* after a bug (boundary.js): a fresh connection, which brings the room's current state */
+export function reconnect(){if(NET.ws)lostConnection(NET.ws);}
 /* a move or an undo: the server answers with the new state or an error; no answer in 10 s means the connection is gone */
 export function netAct(m){NET.busy=true;netSend(m);const ws=NET.ws;clearTimeout(NET.busyT);if(ws)NET.busyT=setTimeout(()=>{if(NET.busy)lostConnection(ws);},10000);}
 // a phone waking up (or a tab coming back): check the connection at once instead of waiting for the next heartbeat
@@ -79,7 +84,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState!==
   if(!ws){clearTimeout(NET.retryT);connectRoom();return;}
   if(ws.readyState!==1)return;const t=Date.now();try{ws.send('ping');}catch(e){}setTimeout(()=>{if(NET.ws===ws&&NET.heard<t)lostConnection(ws);},5000);});
 export function onRoomMsg(m){
-  if(m.t==='error'){NET.busy=false;clearTimeout(NET.busyT);sfx('error');toast(m.err);if(S)render();return;}
+  if(m.t==='error'){diag('server: '+m.err);NET.busy=false;clearTimeout(NET.busyT);sfx('error');toast(m.err);if(S)render();return;}
   if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}renderRoomLobby();return;}
   if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.clockEnd=m.left==null?null:Date.now()+m.left;NET.busy=false;clearTimeout(NET.busyT);applyServerState(m.S,m.ev);}
 }

@@ -1,7 +1,7 @@
 /* Turning what the player does into engine actions. Every rules change goes through act(): locally it runs the shared
    engine (and is recorded: G.rec); online it is sent to the server, which runs the same engine and sends back the new
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
-import { S, CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, setS, setMAP } from '../engine.gen.js';
+import { S, CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, setS, setMAP } from '../engine.gen.js';
 import { esc } from './dom.js';
 import { UI, NET, G, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave } from './state.js';
 import { replayDecorate } from './replay.js';
@@ -16,15 +16,24 @@ import { openAll, marketRectOf } from './market.js';
 import { feedWatch, feedEvent, feedClear } from './feed.js';
 import { sfx, sfxEvent } from './sound.js';
 import { aiKick, aiReset } from './ai.js';
-import { netAct } from './online.js';
+import { netAct, reconnect } from './online.js';
+import { diag } from './debug.js';
 
 /* a different game is on show (a new deal, a loaded save, a replay, an online game): draw its board, drop the old one's
    elements, fit it */
 export function showGame(){buildBoard();resetView();fitSoon();}
 /* continue the saved local game (first visit, or back from a replay). Returns false if there is none in progress. */
 export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
-  try{aiReset();UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!G.rec.privacy;syncMode(false);render();aiKick();
-    if(!UI.cover)banner(cur().name,'Round '+S.round);return true;}catch(e){console.error(e);setS(null);return false;}}
+  aiReset();UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!G.rec.privacy;syncMode(false);render();aiKick();
+  if(!UI.cover)banner(cur().name,'Round '+S.round);return true;}
+/* after a bug (boundary.js): the game on show again from its source, with nothing selected. Online: a new connection
+   brings the server's state. A local game: rebuilt from its record (the action that failed was never recorded) */
+export function resync(){
+  UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;
+  if(online())reconnect();
+  else if(G.rec&&!G.replay){const g=recState(G.rec);aiReset();setS(g.S);setMAP(g.MAP);syncMode(true);resetView();aiKick();}
+  toast('Something went wrong, sorry. The game was restored.',3200);render();
+}
 
 export function computeTargets(){
   const T=new Map();UI.targets=T;if(!S||S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
@@ -63,6 +72,7 @@ export function playEvents(ev,viewer){
 }
 export function act(a){
   if(!S||!canAct()){if(online()&&!S.over&&S.cur===NET.seat)toast('Reconnecting… your move wasn’t sent.');return;}
+  diag('act '+a.t);
   if(online()){netAct({t:'act',a});render();return;}
   const prevCur=S.cur,prevRound=S.round;
   const r=recApply(G.rec,S.cur,a);

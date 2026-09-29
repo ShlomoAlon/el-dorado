@@ -41,7 +41,7 @@ const T = report('online');
     await B.click('#sBack');
     T.ok('back to the online game, still connected', await wait(B, () => !document.querySelector('#menu').open && __ED.NET.connected && !!__ED.S));
     // a connection that dies silently (a phone asleep, a dropped network): noticed when the page comes back, and replaced
-    await B.evaluate(() => { const w = __ED.NET.ws; window.__deadWs = w; w.send = () => { }; document.dispatchEvent(new Event('visibilitychange')); });
+    await B.evaluate(() => { const w = __ED.NET.ws; window.__deadWs = w; w.send = () => { }; w.onmessage = () => { }; document.dispatchEvent(new Event('visibilitychange')); });
     T.ok('a silently dead connection is noticed and replaced', await wait(B, () => __ED.NET.ws && __ED.NET.ws !== window.__deadWs && __ED.NET.connected && !!__ED.S, null, 30000));
     const view = await Promise.all([A, B, C].map(p => p.evaluate(me => { const S = __ED.S, seat = __ED.NET.seat;
       return { seat, mine: S.players[seat].hand.every(id => S.cards[id]), others: S.players.every((q, i) => i === seat || q.hand.every(id => !S.cards[id])) }; }, ids[[A, B, C].indexOf(p)])));
@@ -64,6 +64,21 @@ const T = report('online');
     // actions only the server or local play may use are refused
     await P.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'timeout' } }));
     T.ok('a player can\'t send timeout', await wait(P, () => /Bad action/.test(document.querySelector('#toast').textContent), null, 5000));
+    // a bug in the live room (a failed assertion, forced by a developer-only message): that message is refused, the room is
+    // rebuilt from storage and plays on (the turns below), and the bug is stored as a report with the room and its record
+    const round0 = await P.evaluate(() => __ED.S.round);
+    await P.evaluate(() => __ED.netSend({ t: 'selftest' }));
+    T.ok('a failed assertion in a room: the player is told, and the game goes on as it was', await wait(P, r => /went wrong on the server/.test(document.querySelector('#toast').textContent) && __ED.S.round === r && __ED.NET.connected, round0, 5000));
+    // …and in a page: reported, and the page takes a fresh connection (the server's state)
+    await C.evaluate(() => { window.__ws0 = __ED.NET.ws; setTimeout(() => __ED.assert(false, 'self-test: a broken invariant in the page')); });
+    T.ok('a failed assertion in a page: it reconnects and has the game again', await wait(C, () => __ED.NET.ws !== window.__ws0 && __ED.NET.connected && !!__ED.S, null, 10000));
+    let reps = [];
+    for (let i = 0; i < 20 && reps.length < 2; i++) { reps = ((await srv.bugs()).bugs || []).filter(b => /self-test/.test(b.msg)); if (reps.length < 2) await A.waitForTimeout(250); }
+    const roomRep = reps.find(b => b.source === 'room'), pageRep = reps.find(b => b.source === 'page');
+    const roomFull = roomRep && await srv.bugs(roomRep.id), pageFull = pageRep && await srv.bugs(pageRep.id);
+    T.ok('bug reports: the room\'s carries the room and its record', !!roomFull && roomFull.context.d.code === code && Array.isArray(roomFull.context.rec.actions) && /selftest/.test(roomFull.context.what), JSON.stringify(reps.map(b => b.source + ': ' + b.msg)));
+    T.ok('bug reports: the page\'s carries the game it held, its selection and its log', !!pageFull && pageFull.context.game.room === code && !!pageFull.context.game.S && !!pageFull.context.ui && Array.isArray(pageFull.context.log) && /^app\.\w+\.js$/.test(pageFull.build) && pageFull.who === ids[2], pageFull && pageFull.build);
+    T.ok('bug reports can\'t be read without the key', (await fetch(srv.url + 'api/bugs')).status === 403);
     const cur0 = await P.evaluate(() => __ED.S.cur);
     await P.evaluate(() => { __ED.startEndTurn(); if (['endTurn', 'buyWarn'].includes(__ED.UI.mode)) { __ED.startEndTurn(); if (__ED.UI.mode === 'endTurn') __ED.finishTurn(); } });
     T.ok('end turn: the next player moves', await wait(A, c => __ED.S.cur !== c, cur0));
@@ -131,8 +146,10 @@ const T = report('online');
     await G2.click('#rlNow'); await H2.click('#rlNow');
     T.ok('quick match: "Start now" from everyone starts it early', await wait(G2, () => __ED.online()) && await wait(H2, () => __ED.online()));
 
-    const errs = pages.flatMap(p => p.errors);
+    const errs = pages.flatMap(p => p.errors).filter(e => !/self-test/.test(e));
     T.ok('no page errors', !errs.length, errs.slice(0, 5).join(' | '));
+    const other = ((await srv.bugs()).bugs || []).filter(b => !/self-test/.test(b.msg));
+    T.ok('no bug reports but the forced ones (no assertion failed on the server or in a page)', !other.length, other.slice(0, 5).map(b => b.source + ': ' + b.msg).join(' | '));
   } catch (e) { T.ok('test ran to the end', false, e.message.split('\n').slice(0, 3).join(' · ')); const errs = pages.flatMap(p => p.errors); if (errs.length) console.log('page errors:\n  ' + errs.slice(0, 8).join('\n  ')); }
   finally { await b.close(); srv.stop(); }
   T.done();

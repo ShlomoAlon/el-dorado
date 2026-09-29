@@ -1,6 +1,7 @@
 /* The page's own state: what the player has selected (UI), the online connection (NET), and the game record / replay
    (G). The game itself is the engine's S and MAP. Selectors answer "who am I, whose turn, may I act". */
 import { S, isActive, recState, replayCheck, recFinal } from '../engine.gen.js';
+import { failed } from './boundary.js';
 export const UI = { mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), cover: false, hover: null, mktOpen: true, allOpen: false,
   buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null };
 /* NET.S: the online game the server last sent (the game on show is online while it is that one); NET.seat: my seat in it;
@@ -28,7 +29,13 @@ export const inGame = () => !!(S && !S.over && !G.replay && !UI.preview);
    (-v1 keys: games recorded under older rules, which can't be replayed; dropped) */
 const SAVE_KEY = 'eldorado-game-v2';
 try { localStorage.removeItem('eldorado-game-v1'); localStorage.removeItem('eldorado-games-v1'); } catch (e) { }
-export function loadSave() { try { const rec = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (!rec || replayCheck(rec)) return null; return { rec, ...recState(rec) }; } catch (e) { return null; } }
+/* the saved game rebuilt from its record, {rec, S, MAP}, or null. Storage can fail, or hold a game that this version can't
+   rebuild: a bug, reported, and the page goes on without it */
+export function loadSave() {
+  let rec; try { rec = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; }
+  if (!rec || replayCheck(rec)) return null;
+  try { return { rec, ...recState(rec) }; } catch (e) { console.error(e); failed(e, 'rebuilding the saved game'); return null; }
+}
 export function save() {
   if (online() || G.replay || UI.preview) return; // (a game not started yet is never saved)
   try { if (G.rec) localStorage.setItem(SAVE_KEY, JSON.stringify(G.rec)); else localStorage.removeItem(SAVE_KEY); } catch (e) { }

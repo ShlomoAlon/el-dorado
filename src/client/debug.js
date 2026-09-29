@@ -1,12 +1,14 @@
-/* On-device diagnostics, only with ?debug in the address: a small log over the game of what the page and the browser did
-   (screen size changes, fits, zoom bakes, touches, slow frames, errors), with a Mark button to tap right after something
-   looks wrong and a Copy button for the log. For bugs that only a real phone shows. */
+/* On-device diagnostics. The page keeps a log of its last 200 notable events (fits, zoom bakes, layout changes, errors):
+   a bug report carries it (boundary.js). With ?debug in the address (debug mode) the log is also shown over the game,
+   with more in it (screen size changes, touches, slow frames, what changed on the page), a Mark button to tap right after
+   something looks wrong and a Copy button for the log. For bugs that only a real phone shows. */
 export const DEBUG = /[?&]debug\b/.test(location.search);
 const lines = []; let box = null, t0 = performance.now();
 export function diag(msg) {
-  if (!DEBUG) return; lines.push(((performance.now() - t0) / 1000).toFixed(2) + ' ' + msg); if (lines.length > 200) lines.shift();
+  lines.push(((performance.now() - t0) / 1000).toFixed(2) + ' ' + msg); if (lines.length > 200) lines.shift();
   if (box) { box.textContent = lines.slice(-22).join('\n'); }
 }
+export const diagLog = () => lines.slice();
 export function debugInit() {
   if (!DEBUG) return;
   const wrap = document.createElement('div'); wrap.style.cssText = 'position:fixed;left:0;top:0;z-index:100;pointer-events:none;max-width:70vw';
@@ -24,7 +26,6 @@ export function debugInit() {
   document.addEventListener('visibilitychange', () => diag('visibility ' + document.visibilityState));
   for (const t of ['pointerdown', 'pointerup', 'pointercancel']) addEventListener(t, e => diag(`${t.slice(7)} #${e.pointerId} ${e.pointerType} on ${e.target.id || e.target.className && String(e.target.className.baseVal ?? e.target.className).slice(0, 14) || e.target.tagName}`), true);
   for (const t of ['gesturestart', 'gestureend']) document.addEventListener(t, e => diag(t + ' scale ' + (e.scale || 0).toFixed(2)), true);
-  addEventListener('error', e => diag('ERROR ' + e.message));
   // every change the page makes to itself, summed per frame by area (a redraw nobody expected shows up here)
   const area = n => { for (let e = n.nodeType === 1 ? n : n.parentElement; e; e = e.parentElement) { if (e === wrap) return null; if (e.id) return e.id; } return '?'; };
   let pend = null;

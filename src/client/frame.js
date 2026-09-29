@@ -6,18 +6,20 @@ const parts = [], afterQ = [];
 let raf = 0;
 /* p: { update(), reset?() } — reset: a different game is on show (drop its elements) */
 export function addPart(p) { parts.push(p); }
-const safe = (f, what) => { try { f(); } catch (e) { console.error(what, e); } }; // one part failing leaves the others working
+// a part that fails is a bug: logged and reported (boundary.js), and the other parts still update
+const safe = (f, what) => { try { f(); } catch (e) { console.error(what, e); failed(e, 'view ' + what); } };
 /* timing per part (tests and debugging: set frameStats.on) */
 export const frameStats = { on: false, ms: {} };
 export function render() { if (!raf) raf = requestAnimationFrame(flush); }
 import { diag, DEBUG } from './debug.js';
+import { failed } from './boundary.js';
 export function flush() {
   if (raf) { cancelAnimationFrame(raf); raf = 0; }
   const t0 = DEBUG ? performance.now() : 0;
-  if (frameStats.on) { for (const p of parts) { const t = performance.now(); safe(() => p.update(), 'update'); const k = p.name || '?'; frameStats.ms[k] = (frameStats.ms[k] || 0) + performance.now() - t; } }
-  else for (const p of parts) safe(() => p.update(), 'update');
+  if (frameStats.on) { for (const p of parts) { const t = performance.now(); safe(() => p.update(), p.name); const k = p.name; frameStats.ms[k] = (frameStats.ms[k] || 0) + performance.now() - t; } }
+  else for (const p of parts) safe(() => p.update(), p.name);
   for (const f of afterQ.splice(0)) safe(f, 'after');
   if (DEBUG) { const ms = performance.now() - t0; if (ms > 8) diag(`update ${ms.toFixed(0)} ms`); }
 }
 export function after(f) { afterQ.push(f); render(); }
-export function resetView() { for (const p of parts) if (p.reset) safe(() => p.reset(), 'reset'); render(); }
+export function resetView() { for (const p of parts) if (p.reset) safe(() => p.reset(), p.name + ' reset'); render(); }

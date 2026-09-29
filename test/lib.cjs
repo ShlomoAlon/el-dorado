@@ -1,6 +1,6 @@
 // Shared helpers for the browser tests (Playwright; run with NODE_PATH=$(npm root -g), or through test/run.mjs):
 //   serveStatic()      public/ over http (as on the site)
-//   startServer()      the game server (wrangler dev) with developer sign-in and an empty database of its own
+//   startServer()      the game server (wrangler dev) with developer sign-in and an empty database of its own; bugs(): its bug reports
 //   openPage(browser)  a page that collects every page error and console error
 //   settle(page)       wait until nothing on the page is animating (instead of fixed pauses)
 //   report()           ok(name, pass, detail) lines and a final summary
@@ -21,15 +21,17 @@ function serveStatic() {
 }
 
 const freePort = () => new Promise(res => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
-/* wrangler dev on a free port, DEV_AUTH=1 (name-only sign-in), its own temporary storage (a fresh D1 and Durable Objects) */
+/* wrangler dev on a free port, DEV_AUTH=1 (name-only sign-in and debug mode), BUGS_KEY set (bug reports can be read: bugs(id)),
+   its own temporary storage (a fresh D1 and Durable Objects) */
 async function startServer() {
   const port = await freePort(), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eldorado-srv-'));
-  const p = spawn('npx', ['wrangler', 'dev', '--ip', '127.0.0.1', '--port', String(port), '--var', 'DEV_AUTH:1', '--persist-to', dir],
+  const p = spawn('npx', ['wrangler', 'dev', '--ip', '127.0.0.1', '--port', String(port), '--var', 'DEV_AUTH:1', '--var', 'BUGS_KEY:test-key', '--persist-to', dir],
     { cwd: ROOT, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; p.stdout.on('data', d => out += d); p.stderr.on('data', d => out += d);
-  const url = `http://127.0.0.1:${port}/`, stop = () => { try { process.kill(-p.pid, 'SIGTERM'); } catch (e) { } fs.rmSync(dir, { recursive: true, force: true }); };
+  const url = `http://127.0.0.1:${port}/`, bugs = async id => (await fetch(url + 'api/bugs' + (id ? '?id=' + id : ''), { headers: { 'x-bugs-key': 'test-key' } })).json();
+  const stop = () => { try { process.kill(-p.pid, 'SIGTERM'); } catch (e) { } fs.rmSync(dir, { recursive: true, force: true }); };
   for (let i = 0; i < 120; i++) {
-    try { const r = await fetch(url + 'api/config'); if (r.ok) return { url, stop }; } catch (e) { }
+    try { const r = await fetch(url + 'api/config'); if (r.ok) return { url, stop, bugs }; } catch (e) { }
     if (p.exitCode !== null) break; await new Promise(r => setTimeout(r, 500));
   }
   stop(); throw new Error('wrangler dev did not start:\n' + out.slice(-2000));
