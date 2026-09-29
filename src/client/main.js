@@ -1,6 +1,6 @@
 /* BOOT: wires the modules together, sets the order the view parts update in, and decides what opens first (a replay
    or room link, a game in progress, the Online screen, or the start screen). */
-import { S, MAP, buildCourse, courseById, applyAction, reach, setMAP } from '../engine.gen.js';
+import { S, MAP, buildCourse, courseById, applyAction, reach, setMAP, assert } from '../engine.gen.js';
 import { $ } from './dom.js';
 import { UI, NET, G, canAct, myId, online } from './state.js';
 import { addPart, render, flush, frameStats } from './frame.js';
@@ -22,6 +22,7 @@ import { netInit, joinRoom, netSend } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
 import { soundInit } from './sound.js';
 import { debugInit } from './debug.js';
+import { boundaryInit } from './boundary.js';
 import { cam } from './board/camera.js';
 import { showHover, hideHover } from './board/overlays.js';
 import { drag } from './hand.js';
@@ -31,7 +32,7 @@ for (const p of [derivePart, overlaysPart, piecesPart, hudPart, feedPart, market
 GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); });
 
 function boot() {
-  debugInit(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
+  boundaryInit(); debugInit(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
   if (!document.documentElement.classList.contains('resume')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check)
   $('#deckPile').onclick = () => showPile('deck'); $('#discPile').onclick = () => showPile('discard');
   $('#rulesBtn').onclick = showRules; $('#jrnBtn').onclick = showJournal;
@@ -78,7 +79,7 @@ function onBoardOut(e) { if (drag) return; if (!e.relatedTarget || !e.relatedTar
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, view, frameStats, myId, canAct, online, reach, applyAction, joinRoom, netSend,
+window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, view, frameStats, myId, canAct, online, reach, applyAction, joinRoom, netSend, assert,
   render() { render(); flush(); },
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },
   ...Object.fromEntries(Object.entries({ act, playEvents, openReplay, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, confirmDiscardFor, confirmTrash, cancelMode }).map(([k, f]) => [k, now(f)])) };

@@ -5,6 +5,7 @@
      move with the shared rules engine, sends each player only what they may see,
      runs the turn timer, and records Elo ratings when the game ends.
    - Lobby Durable Object: the live list of open rooms.
+   - Bugs: what the page's and the server's boundaries caught, stored as reports (docs/ASSERTIONS.md).
    Tables are created automatically on first use; no migrations to run. */
 import { DurableObject } from 'cloudflare:workers';
 import { E } from './engine.gen.js';
@@ -32,6 +33,10 @@ async function createSchema(env) {
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS replays(id TEXT PRIMARY KEY, created INTEGER NOT NULL, title TEXT, players TEXT, actions INTEGER, body TEXT NOT NULL)`),
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS replays_created ON replays(created DESC)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS train(run TEXT PRIMARY KEY, updated INTEGER NOT NULL, body TEXT NOT NULL)`),
+    // bug reports: source page | room | worker; who = the sender (uid, ip:…, room:…: the rate limit); context = JSON
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS bugs(id TEXT PRIMARY KEY, created INTEGER NOT NULL, source TEXT NOT NULL, who TEXT, msg TEXT, stack TEXT, build TEXT, context TEXT)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS bugs_created ON bugs(created DESC)`),
+    env.DB.prepare(`CREATE INDEX IF NOT EXISTS bugs_who ON bugs(who, created)`),
   ]);
   try { await env.DB.prepare(`ALTER TABLE users ADD COLUMN bot TEXT`).run(); } catch (e) { } // already there
   // replays of online games (game=1) are kept for good; uids = ',uid1,uid2,' (who played); listed=0: a private room's game
@@ -71,6 +76,31 @@ async function createSchema(env) {
     ]);
   }
 }
+/* ---------------- bugs ----------------
+   A report: the error, and the game as its record (replaying it offline rebuilds the exact state). Anyone may send one
+   (people signed out hit bugs too), at most BUGS_PER_HOUR per sender; the newest BUGS_KEEP are kept. Reading them needs the
+   BUGS_KEY secret (docs/ASSERTIONS.md). */
+const BUG_MAX_BYTES = 256e3, BUGS_PER_HOUR = 20, BUGS_KEEP = 2000;
+const newId = () => [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+const errText = e => String(e && e.message || e);
+/* store a report ({msg, stack, build, context}); the id, or null (over the limit, or the database failed). Never throws:
+   a report must not become a second failure */
+async function storeBug(env, source, who, b) {
+  try {
+    await ensureSchema(env);
+    const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM bugs WHERE who=? AND created>?`).bind(who, Date.now() - 3600e3).first();
+    if (n.n >= BUGS_PER_HOUR) return null;
+    let context = JSON.stringify(b.context === undefined ? null : b.context);
+    if (context.length > 1.5e6) context = JSON.stringify({ tooLarge: context.length }); // (a D1 row holds 2 MB)
+    const id = newId();
+    await env.DB.prepare(`INSERT INTO bugs(id,created,source,who,msg,stack,build,context) VALUES(?,?,?,?,?,?,?,?)`)
+      .bind(id, Date.now(), source, who, String(b.msg || '').slice(0, 1000), String(b.stack || '').slice(0, 8000), String(b.build || '').slice(0, 80), context).run();
+    await env.DB.prepare(`DELETE FROM bugs WHERE id NOT IN (SELECT id FROM bugs ORDER BY created DESC LIMIT ${BUGS_KEEP})`).run();
+    return id;
+  } catch (e) { console.error('bug report not stored:', e); return null; }
+}
+const ipOf = req => 'ip:' + (req.headers.get('cf-connecting-ip') || 'unknown');
+
 let NET = null;
 function useNet() { if (!NET) NET = E.aiNetDecode(NET_BIN); E.aiSetNet(NET); }
 let secretCache = null;
@@ -173,9 +203,24 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url); const p = url.pathname;
     if (!p.startsWith('/api/')) return env.ASSETS.fetch(req);
+    E.setAssertMode({ debug: env.DEV_AUTH === '1' });
     let m0;
+    // the worker's boundary: whatever a route throws is a bug, reported; the request gets a 500 (a body that isn't JSON: a 400)
     try {
       await ensureSchema(env);
+      if (p === '/api/bugs' && req.method === 'POST') {
+        const text = await req.text(); if (text.length > BUG_MAX_BYTES) return bad('Too large', 413);
+        let b; try { b = JSON.parse(text); } catch (e) { return bad('Not JSON', 400); }
+        const user = await authUser(req, env);
+        const id = await storeBug(env, 'page', user ? user.id : ipOf(req), b);
+        return id ? json({ id }) : bad('Not stored (too many reports)', 429);
+      }
+      if (p === '/api/bugs') { // the owner's reading: header x-bugs-key = the BUGS_KEY secret (not set: nobody can read)
+        if (!env.BUGS_KEY || req.headers.get('x-bugs-key') !== env.BUGS_KEY) return bad('Not allowed', 403);
+        const id = url.searchParams.get('id');
+        if (id) { const r = await env.DB.prepare(`SELECT * FROM bugs WHERE id=?`).bind(id).first(); return r ? json({ ...r, context: JSON.parse(r.context) }) : bad('No such report.', 404); }
+        return json({ bugs: (await env.DB.prepare(`SELECT id,created,source,who,msg,build FROM bugs ORDER BY created DESC LIMIT 200`).all()).results });
+      }
       // AI training progress (/train.html polls it): the training machine posts its run's status with a secret token
       // whose SHA-256 is TRAIN_TOKEN_HASH (wrangler.jsonc); anyone may read it
       if (p === '/api/train' && req.method === 'POST') {
@@ -275,7 +320,10 @@ export default {
       }
       return bad('Not found', 404);
     } catch (e) {
-      return bad('Server error: ' + (e && e.message || e), 500);
+      if (e instanceof SyntaxError) return bad('Expected JSON', 400); // (a request body that isn't JSON: the sender's mistake)
+      console.error('worker:', req.method, p, e);
+      await storeBug(env, 'worker', ipOf(req), { msg: errText(e), stack: e && e.stack, context: { method: req.method, path: p } });
+      return bad('Server error: ' + errText(e), 500);
     }
   }
 };
@@ -339,14 +387,33 @@ const PLAYER_ACTIONS = ['move', 'native', 'pay', 'action', 'trash', 'transmit', 
 export class Room extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env); this.d = null; this.S = null; this.rec = null;
-    // storage: d (the room) and rec (the game's record: engine recNewGame). The game state S is rebuilt from rec. rec holds the
-    // secret shuffle seed, so it is never sent out; once the game is over it is saved as the game's replay.
-    ctx.blockConcurrencyWhile(async () => {
-      this.d = (await ctx.storage.get('d')) || null; this.rec = (await ctx.storage.get('rec')) || null;
-      if (this.rec && E.replayCheck(this.rec)) this.rec = null; // recorded under older rules: it can't be rebuilt
-      if (this.rec) this.load();
-      else if (this.d && this.d.status === 'playing') this.d.status = 'closed'; // a game this version can't rebuild
-    });
+    E.setAssertMode({ debug: env.DEV_AUTH === '1' });
+    ctx.blockConcurrencyWhile(() => this.restore());
+  }
+  // storage: d (the room) and rec (the game's record: engine recNewGame). The game state S is rebuilt from rec. rec holds the
+  // secret shuffle seed, so it is never sent out; once the game is over it is saved as the game's replay.
+  async restore() {
+    this.d = (await this.ctx.storage.get('d')) || null; this.rec = (await this.ctx.storage.get('rec')) || null; this.S = null; this.aiMem = {};
+    if (this.rec && E.replayCheck(this.rec)) this.rec = null; // recorded under older rules: it can't be rebuilt
+    if (this.rec) this.load();
+    else if (this.d && this.d.status === 'playing') this.d.status = 'closed'; // a game this version can't rebuild
+  }
+  /* The room's boundary: each entry point (fetch, webSocketMessage, alarm, webSocketClose) runs in here. A bug (a failed
+     assertion, or any exception) stops that one operation: it is logged and stored as a report with the room and its record,
+     the room is rebuilt from storage (its last good state; the message that hit the bug is refused), and everyone is sent
+     the state again. If even that fails, the socket that sent the message is closed; the object itself stays up. */
+  async guard(what, ws, f) {
+    try { return await f(); }
+    catch (e) {
+      console.error('room', this.d && this.d.code, what, e);
+      await storeBug(this.env, 'room', 'room:' + (this.d ? this.d.code : '?'), { msg: errText(e), stack: e && e.stack, context: { what, d: this.d, rec: this.rec } });
+      try {
+        await this.restore();
+        if (ws) this.send(ws, { t: 'error', err: 'Something went wrong on the server, sorry. That was not done; the game goes on.' });
+        if (this.d) { this.sendAll(); if (this.S && !this.S.over && this.d.status === 'playing') await this.ctx.storage.setAlarm(Date.now() + 10000); } // (a failed alarm: its work is tried again)
+      } catch (e2) { console.error('room: could not recover', e2); if (ws) try { ws.close(1011, 'Server error'); } catch (_) { } }
+      return new Response('Server error', { status: 500 });
+    }
   }
   // S from the record, plus who plays each seat
   load() { const g = E.recState(this.rec); this.S = g.S; mapCache.set(this.S.course.id + ':' + this.S.seed, g.MAP); }
@@ -369,7 +436,11 @@ export class Room extends DurableObject {
       if (this.S && this.d.status !== 'lobby') this.send(ws, this.stateFor(uid, ev)); else this.send(ws, { t: 'room', room: this.roomInfo() });
     }
   }
-  async fetch(req) {
+  fetch(req) { return this.guard(new URL(req.url).pathname, null, () => this.onFetch(req)); }
+  webSocketMessage(ws, raw) { return this.guard(String(raw).slice(0, 2000), ws, () => this.onMessage(ws, raw)); }
+  alarm() { return this.guard('alarm', null, () => this.onAlarm()); }
+  webSocketClose(ws, code) { return this.guard('close', null, () => this.onClose(ws, code)); }
+  async onFetch(req) {
     const url = new URL(req.url);
     if (url.pathname === '/init') {
       if (this.d) return json({ ok: false });
@@ -394,7 +465,7 @@ export class Room extends DurableObject {
     }
     return bad('Not found', 404);
   }
-  async webSocketMessage(ws, raw) {
+  async onMessage(ws, raw) {
     if (raw === 'ping') { ws.send('pong'); return; }
     let m; try { m = JSON.parse(raw); } catch (e) { return; }
     const { uid } = ws.deserializeAttachment() || {};
@@ -441,6 +512,7 @@ export class Room extends DurableObject {
     }
     if (d.status !== 'playing' || !this.S) { if (m.t === 'act' || m.t === 'undo') err('This game is not running any more.'); return; }
     const seat = this.owners.indexOf(uid);
+    if (m.t === 'selftest' && this.env.DEV_AUTH === '1') { this.S.round = -1; E.assert(false, 'self-test: a broken invariant in a live room'); } // (test/online.cjs: the boundary)
     if (m.t === 'undo') {
       if (seat !== this.S.cur || !E.recCanUndo(this.rec)) return err('Nothing to undo.');
       this.rec.actions.pop(); this.load(); await this.persist(); this.sendAll(); return;
@@ -449,10 +521,8 @@ export class Room extends DurableObject {
       if (seat < 0) return err('You are watching this game.');
       if (!m.a || typeof m.a !== 'object') return err('Bad action.');
       if (!PLAYER_ACTIONS.includes(m.a.t)) return err('Bad action.'); // (timeout and endgame are the server's and local play's, not a player's)
-      const eng = this.engine(); const prevCur = this.S.cur; let r;
-      try { r = eng.recApply(this.rec, seat, m.a); } catch (e) { r = { ok: false, err: 'Bad action.' }; }
-      // a refused action (or an engine exception) must never leave the game half-changed: rebuild it from the record
-      if (!r.ok) { this.load(); return err(r.err); }
+      const eng = this.engine(), prevCur = this.S.cur, r = eng.recApply(this.rec, seat, m.a);
+      if (!r.ok) return err(r.err); // (a refused action changes nothing)
       this.S = E.S; d.timeouts[seat] = 0;
       if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn();
       await this.afterChange(r.ev); return;
@@ -505,7 +575,7 @@ export class Room extends DurableObject {
     if (!this.S.over) { if (this.aiToMove()) await this.scheduleAI(700); else await this.startTurnTimer(); }
     await this.afterChange(ev);
   }
-  async alarm() {
+  async onAlarm() {
     const d = this.d; if (!d || d.status !== 'playing' || !this.S || this.S.over) return;
     if (this.aiToMove()) { if (d.aiAt && Date.now() < d.aiAt - 50) { await this.ctx.storage.setAlarm(d.aiAt); return; } await this.aiMove(); return; }
     if (Date.now() < d.deadline - 1000) { await this.ctx.storage.setAlarm(d.deadline); return; }
@@ -557,7 +627,7 @@ export class Room extends DurableObject {
     }
     this.tellLobby();
   }
-  async webSocketClose(ws, code) {
+  async onClose(ws, code) {
     try { ws.close(code); } catch (e) { }
     const d = this.d; if (!d || d.status === 'closed') return;
     const { uid } = ws.deserializeAttachment() || {};
