@@ -90,6 +90,8 @@ export function menuClick(e){
   const run=f=>Promise.resolve().then(f).catch(x=>err(x.message));
   switch(b.id){
     case'sBack':menuClose();return;
+    case'mSnd':document.getElementById('sndBtn').click();return;
+    case'mFs':document.getElementById('fsBtn').click();return;
     case'sResign':menuClose();online()?resignOnline():resignLocal();return;
     case'sEnd':menuClose();endLocal();return;
     case'sResume':menuClose();resumeSaved();return;

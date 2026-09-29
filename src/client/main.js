@@ -40,7 +40,7 @@ function boot() {
   // full screen (hidden where the browser can't do it, e.g. iPhone Safari — there, Add to Home Screen gives a full-screen app)
   const fsEl = document.documentElement, fsOn = () => document.fullscreenElement || document.webkitFullscreenElement;
   if (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen) {
-    const fb = $('#fsBtn'); fb.hidden = false;
+    const fb = $('#fsBtn'); fb.hidden = false; $('#mFs').hidden = false;
     // (the browser may refuse: it throws, or rejects the promise, in older and newer versions)
     fb.onclick = () => { try { Promise.resolve(fsOn() ? (document.exitFullscreen || document.webkitExitFullscreen).call(document) : (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl, { navigationUI: 'hide' })).catch(() => { }); } catch (e) { } };
     const sync = () => { const on = !!fsOn(); fb.classList.toggle('full', on); fb.title = fb.ariaLabel = on ? 'Exit full screen' : 'Full screen'; };

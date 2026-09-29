@@ -92,6 +92,8 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .rlist button b{font-size:14px}.rlist button span{font-size:12px;color:var(--muted)}.rlist button:hover{border-color:var(--line2)}
 .ingame{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 16px;padding:10px 12px;border-radius:10px;border:1px solid var(--gold);background:rgba(233,178,74,.1)}
 .ingame .ig-b{display:flex;gap:8px;flex-wrap:wrap}
+.devrow{display:none;gap:8px;margin:0 0 14px}.devrow .btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:none}.devrow .btn.off{color:var(--muted)}
+@media (max-width:600px){.devrow{display:flex}}
 .acct{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--muted)}
 .gsi{color-scheme:light}
 @media (max-width:500px){.pstats{grid-template-columns:repeat(3,1fr)}
@@ -189,7 +191,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .pchip .bk{display:flex;gap:4px;align-items:center}.pchip .bk b{margin-left:3px;font-size:12px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
 .pchip .bk i{width:9px;height:9px;border-radius:2px;display:block;transform:rotate(45deg);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
 .pchip .fin{color:var(--gold);font-weight:800;font-size:12px}
-.hbtns{display:flex;gap:8px}
+.hbtns{display:flex;gap:8px;align-items:center}
+.hsep{width:1px;height:22px;background:var(--line2);margin:0 2px}
+#hud #sndBtn,#hud #fsBtn{width:var(--hudH);padding:0;color:var(--muted)}#hud #sndBtn:hover,#hud #fsBtn:hover{color:var(--text)}
 .tbtn{border-radius:11px;padding:0 13px;height:var(--hudH);box-sizing:border-box;display:inline-flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
 .tbtn:hover{background:var(--glass2)}
 .tbtn.on{border-color:var(--gold);color:var(--gold2)}
@@ -200,7 +204,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #fsBtn.full .fs-out{display:inline}
 #sndBtn .snd-off,#sndBtn.off .snd-on{display:none}
 #sndBtn.off .snd-off{display:inline}
-#sndBtn.off{opacity:.7}
+#sndBtn.off{opacity:.8}
 
 /* centred in the space left of the market column (--mktFoot = how far the market reaches in from the right edge) */
 #app{--mw:72px;--mktR:16px;--mktW:152px;--mktFoot:calc(var(--mktR) + var(--mktW) + 10px);--zoomFoot:66px}
@@ -511,6 +515,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   .tbtn{padding:0 10px;font-size:12.5px}
   #rulesBtn{display:none}
   #histBtn{padding:0 9px}#histBtn span{display:none} /* phones: the icon alone leaves the player chips room */
+  #hud #sndBtn,#hud #fsBtn,.hsep{display:none} /* phones: Sound and Full screen are at the top of the Menu */
   #app{--mw:44px;--mktR:6px;--zoomFoot:12px}
   #hist{--fw:34px}.hsteps{column-gap:12px}.fg .fcap{font-size:10px}.ht{padding:5px 8px 6px 10px}.hwho{margin-bottom:4px}
   #app{--row2:58px}
@@ -561,6 +566,8 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
       <button class="tbtn glass" id="mktBtn">Market</button>
       <button class="tbtn glass" id="histBtn" title="History: every turn, newest first" aria-label="History" aria-pressed="true"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M3.6 10a6.4 6.4 0 1 0 1.9-4.55"/><path d="M3.3 3.4v2.9h2.9"/><path d="M10 6.6V10l2.3 1.5"/></svg><span>History</span></button>
       <button class="tbtn glass" id="rulesBtn">Rules</button>
+      <span class="hsep" aria-hidden="true"></span>
+      <button class="tbtn glass ico" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button><button class="tbtn glass ico" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button>
       <button class="tbtn glass" id="menuBtn">Menu</button>
     </div>
   </div>
@@ -578,7 +585,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
       <div class="allc-sect"><h3>Reserve <span id="resState"></span></h3><p class="note" id="resNote" style="margin:-6px 0 14px"></p><div id="reserve" class="agrid"></div></div>
     </div>
   </div>
-  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button><button class="glass" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button></div>
+  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button></div>
   <div class="pile" id="deckPile" title="Draw pile — click to view"><div class="pstack" id="deckStack"></div><div class="lbl glass">Deck <b id="deckN">0</b></div></div>
   <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
   <div id="actBtns"></div>
@@ -601,6 +608,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <script>/* a saved game or a room / replay link opens straight into it: no start screen first */try{if(localStorage.getItem('eldorado-game-v2')||/[?&](room|replay)=/.test(location.search))document.documentElement.classList.add('resume')}catch(e){}</script>
 <dialog id="menu" aria-label="Menu" open>
 <form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
+  <div class="devrow" id="devRow"><button type="button" class="btn" id="mSnd">Sound on</button><button type="button" class="btn" id="mFs" hidden>Full screen</button></div>
   <div class="acct" id="acct"></div>
   <div class="ingame" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn pri" id="sBack">Back to game</button></span></div>
   <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>This device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label></div>

@@ -83,6 +83,7 @@ export function sfxEvent(e,viewer){
 export function setSound(on){
   SND.muted=!on;try{localStorage.setItem('eldorado-sound',on?'1':'0');}catch(e){}
   const b=document.getElementById('sndBtn');b.classList.toggle('off',!on);b.title=b.ariaLabel=on?'Mute sounds':'Unmute sounds';
+  const m=document.getElementById('mSnd');if(m){m.textContent=on?'Sound on':'Sound off';m.classList.toggle('off',!on);} // (the Menu's copy, on phones)
 }
 export function soundInit(){
   // first gesture unlocks audio; then a soft tick for every button, a paper swish for picking a card
