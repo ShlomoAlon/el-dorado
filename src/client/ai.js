@@ -5,6 +5,7 @@ import { UI, G, online, isAI, viewIdx, humanRacing } from './state.js';
 import { reduceMotion } from './dom.js';
 import { toast } from './dialogs.js';
 import { playEvents, afterLocalChange } from './actions.js';
+// gen: which game is on show (aiReset: showGame); a move scheduled for an earlier one is dropped
 export const AIX={timer:0,mem:{},net:null,loading:null,failed:false,gen:0};
 export function aiNetLoad(){ // the neural network (~340 KB) is only fetched once a network AI is about to play
   if(AIX.net)return Promise.resolve(AIX.net);
@@ -24,11 +25,11 @@ export function aiKick(){
   const go=async()=>{
     if(gen!==AIX.gen)return;
     if(UI.anim){AIX.timer=setTimeout(go,120);return;} // let a moving explorer finish first (thinking can take a frame or two)
-    const id=S&&S.players[seat]&&S.players[seat].ai;
-    if(!id||S.over||online()||G.replay||S.cur!==seat||S.round!==round){AIX.timer=0;aiKick();return;}
+    if(S.over||S.cur!==seat||S.round!==round){AIX.timer=0;aiKick();return;} // (in the meantime someone resigned, or the game was ended)
+    const id=S.players[seat].ai;
     if(aiUsesNet(id)&&!AIX.net&&!AIX.failed)await aiNetLoad();
     if(gen!==AIX.gen)return;
-    if(!S||S.over||online()||G.replay||S.cur!==seat){AIX.timer=0;return;}
+    if(S.over||S.cur!==seat){AIX.timer=0;return;}
     aiSetNet(AIX.net);
     const prevCur=S.cur,prevRound=S.round,mem=AIX.mem[seat]||(AIX.mem[seat]={});
     const r=aiStep(id,mem,G.rec);

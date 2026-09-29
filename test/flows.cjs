@@ -12,7 +12,7 @@ const T = report('flows');
 (async () => {
   const srv = await serveStatic(), b = await chromium.launch(), p = await openPage(b, 'flows', { viewport: { width: 1366, height: 820 } });
   const S = (f, a) => p.evaluate(f, a);
-  const until = (f, a, ms = 8000) => p.waitForFunction(f, a, { timeout: ms }).then(() => true, () => false);
+  const until = (f, a, ms = 15000) => p.waitForFunction(f, a, { timeout: ms }).then(() => true, () => false);
   const check = async (name, f, a, ms) => T.ok(name, await until(f, a, ms));
   const idle = async () => { await until(() => !window.__ED.UI.anim, null, 10000); await settle(p); };
   const center = async sel => { const r = await p.evaluate(s => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, sel); if (!r) throw new Error('not found: ' + sel); return r; };

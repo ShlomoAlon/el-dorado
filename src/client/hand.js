@@ -65,7 +65,7 @@ function update() {
   // cards that left: to the discard pile, up and away (removed from the game), or down (another player's hand now)
   for (const [id, el] of cardEls) {
     if (keep.has(id)) continue; cardEls.delete(id); el.style.pointerEvents = 'none'; el.__enter = false;
-    const t = el.__t || { x: 0, y: 0, rot: 0, sc: 1 };
+    const t = el.__t;
     if (switching || !S.cards[id]) { setT(el, t.x, A.height + 40, t.rot, t.sc); el.style.opacity = 0; }
     else if (S.trash.includes(id)) { setT(el, t.x, t.y - 90, t.rot - 8, t.sc * .9); el.style.opacity = 0; }
     else placeAt(el, geo.disc, 0);
@@ -113,7 +113,7 @@ export const handPart = { name: 'hand',  update, reset: clear };
 
 /* a card bought (or taken) by the player on view flies from where it was bought into the discard pile */
 export function flyToDiscard(t, from) {
-  if (!from || !from.width || !geo.disc || reduceMotion) return;
+  if (!from || !from.width || reduceMotion) return;
   const el = document.createElement('div'); el.className = 'card fly'; el.innerHTML = cardHTML(t); $('#cards').appendChild(el);
   const [x, y, , sc] = rectT(from, 0), end = rectT(geo.disc, 6);
   el.animate([{ transform: T(x, y, 0, sc) }, { transform: T(x, y - 30, 0, sc * 1.15), offset: .3 }, { transform: T(...end) }], { duration: 700, easing: EASE, fill: 'forwards' }).finished.then(() => el.remove(), () => el.remove());
@@ -122,10 +122,10 @@ export function flyToDiscard(t, from) {
 /* ---------- pressing and dragging a card ---------- */
 const pastHand = y => y < geo.app.top + geo.app.height - geo.cw * 1.4 * 1.25; // dragged up out of the hand
 function wire(el, id) {
-  el.addEventListener('pointerenter', () => { if (drag || !S || UI.cover) return; if (hp().hand.includes(id)) { UI.hover = id; layoutCards(); } });
+  el.addEventListener('pointerenter', () => { if (drag || UI.cover) return; if (hp().hand.includes(id)) { UI.hover = id; layoutCards(); } });
   el.addEventListener('pointerleave', () => { if (UI.hover === id) { UI.hover = null; if (!drag) layoutCards(); } });
   el.addEventListener('pointerdown', e => {
-    if (!S || S.over || UI.cover || UI.anim || e.button > 0 || !canAct()) return;
+    if (S.over || UI.cover || UI.anim || e.button > 0 || !canAct()) return;
     const inHand = cur().hand.includes(id), isAct = S.turn.active && S.turn.active.id === id;
     if (!inHand && !isAct) return;
     e.preventDefault();

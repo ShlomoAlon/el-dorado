@@ -89,7 +89,7 @@ export function showHover(k, tg) {
   tip.style.left = ((x - MAP.minX) * view.s + view.x) + 'px'; tip.style.top = ((y - MAP.minY) * view.s + view.y) + 'px'; tip.style.opacity = 1;
 }
 // clearing an already-empty SVG group still re-lays out the whole layer, so only clear when needed
-export function hideHover() { if (!hoverShown) return; hoverShown = false; if (L.path) L.path.innerHTML = ''; $('#tip').style.opacity = 0; }
+export function hideHover() { if (!hoverShown) return; hoverShown = false; L.path.innerHTML = ''; $('#tip').style.opacity = 0; }
 onViewMove(hideHover);
 /* the target a card is being aimed or dragged at: lit ring, path and tip */
 export function setHot(k) {
@@ -110,7 +110,7 @@ export function targetAt(cx, cy) {
 }
 
 /* ---------- rubble / base camp / rubble blockade being paid: one dot per card, filled as cards go in (HTML, above the explorers) ---------- */
-function discardAnchor(tk) { if (tk[0] === 'B') { const p = blPos[+tk.slice(1)]; return p ? [p[0], p[1] - 40] : null; } const h = hexAt(tk); return [h.x, h.y - R * .95]; }
+function discardAnchor(tk) { if (tk[0] === 'B') { const p = blPos[+tk.slice(1)]; return [p[0], p[1] - 40]; } const h = hexAt(tk); return [h.x, h.y - R * .95]; }
 function updatePips() {
   const box = $('#bfx'), P = UI.mode === 'discardFor' ? UI.pending : null, a = P && discardAnchor(P.tk);
   const sig = a ? [P.tk, P.kind, P.need, UI.picks.length].join('|') : '';
@@ -129,7 +129,7 @@ export function pulseDiscard() {
 /* ---------- another player's moves this turn: a dotted trail in their colour (feed.js says what) ---------- */
 let trailSig = '';
 export function setTrail(paths, color) {
-  const sig = color + JSON.stringify(paths); if (sig === trailSig || !L.trail) return; trailSig = sig; L.trail.innerHTML = '';
+  const sig = color + JSON.stringify(paths); if (sig === trailSig) return; trailSig = sig; L.trail.innerHTML = '';
   for (const keys of paths) {
     if (keys.length < 2) continue; const d = keys.map((k, i) => { const h = hexAt(k); return (i ? 'L' : 'M') + h.x.toFixed(1) + ' ' + h.y.toFixed(1); }).join(' ');
     sv('path', { d, fill: 'none', stroke: 'rgba(0,0,0,.45)', 'stroke-width': 7, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.trail);
@@ -141,11 +141,11 @@ export function setTrail(paths, color) {
 let targetsSig = '';
 export const overlaysPart = { name: 'overlays', 
   update() {
-    if (!S || !MAP || !L.hl) return;
+    if (!S) return; // (a game on show has its board: showGame)
     // the targets changed (another card, another explorer, a move made): the path and tip shown were for the old ones
     const tsig = [...UI.targets.keys()].join(',') + '|' + UI.card + '|' + UI.piece;
     if (tsig !== targetsSig) { targetsSig = tsig; setHot(null); hideHover(); }
     updateBlockades(); updateTargets(); updatePips();
   },
-  reset() { rings.clear(); blSig = ''; targetsSig = ''; trailSig = ''; hot = null; hoverShown = false; for (const k in blPos) delete blPos[k]; if (L.hl) { L.hl.innerHTML = ''; L.path.innerHTML = ''; L.trail.innerHTML = ''; } const b = $('#bfx'); b.innerHTML = ''; b.__sig = ''; },
+  reset() { rings.clear(); blSig = ''; targetsSig = ''; trailSig = ''; hot = null; hoverShown = false; for (const k in blPos) delete blPos[k]; L.hl.innerHTML = ''; L.path.innerHTML = ''; L.trail.innerHTML = ''; const b = $('#bfx'); b.innerHTML = ''; b.__sig = ''; },
 };

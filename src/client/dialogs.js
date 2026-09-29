@@ -1,6 +1,6 @@
 /* Everything that opens over the game: the round banner, toasts, and one modal at a time (rules, results, a pile,
    the journal). The menu is its own dialog (menu.js); opening a modal closes it. */
-import { S, CT, typeOf, playerDone, plural, blocksOf } from '../engine.gen.js';
+import { S, CT, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
 import { $, esc } from './dom.js';
 import { UI, NET, online, hp } from './state.js';
 import { cardHTML } from './cards.js';
@@ -17,8 +17,8 @@ export function toast(t,ms){const e=$('#toast');const host=MENU.dlg&&MENU.dlg.op
 /* one overlay at a time (the menu is its own dialog: menu.js; it closes when another overlay opens) */
 export function modal(html,onMount,dismiss){const o=$('#overlay');if(MENU.dlg&&MENU.dlg.open)MENU.dlg.close();
   o.innerHTML=`<div class="scrim"><div class="modal">${html}</div></div>`;const sc=o.firstChild;
-  if(dismiss)sc.onclick=e=>{if(e.target===sc)closeModal();};onMount&&onMount(sc);}
-export function closeModal(){menuClose();const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');const mo=sc.querySelector('.modal');if(mo)mo.className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
+  if(dismiss)sc.onclick=e=>{if(e.target===sc)closeModal();};onMount(sc);}
+export function closeModal(){menuClose();const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');sc.querySelector('.modal').className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
 export const modalOpen=()=>!!document.querySelector('#overlay .modal');
 
 /* ---------- journal: the game log, newest first, grouped by round; stays live while open ---------- */
@@ -31,7 +31,6 @@ function journalHTML(){
   return out||'<p class="note">Nothing has happened yet.</p>';
 }
 export function showJournal(){
-  if(!S)return;
   modal(`<h2>Journal <span>newest first</span></h2><div id="log">${journalHTML()}</div><div class="mrow" style="margin-top:14px"><button class="btn pri" id="jClose">Close</button></div>`,
     sc=>{sc.classList.add('plain');sc.querySelector('.modal').classList.add('jrn');sc.querySelector('#jClose').onclick=closeModal;},true);
 }
@@ -53,10 +52,11 @@ export function showRules(){
   </div><div class="mrow"><button class="btn pri" id="rClose">Close</button></div>`,sc=>sc.querySelector('#rClose').onclick=closeModal,true);
 }
 export function showGameOver(){
-  const w=S.players.map((p,i)=>i).filter(i=>S.places&&S.places[i]===1);const fin=S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i]));
-  const res=online()&&NET.room&&NET.room.results;const ord=S.players.map((p,i)=>i).sort((a,b)=>(S.places?S.places[a]-S.places[b]:0));
+  assert(S.over,'showGameOver: the game is over');
+  const w=S.players.map((p,i)=>i).filter(i=>S.places[i]===1),fin=S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i]));
+  const res=online()&&NET.room.results,ord=S.players.map((p,i)=>i).sort((a,b)=>S.places[a]-S.places[b]);
   const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
-  const rows=ord.map(i=>[S.players[i],i]).map(([p,i])=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:${w.includes(i)?'rgba(233,178,74,.14)':'#0c1512'};border:1px solid ${w.includes(i)?'var(--gold)':'var(--line)'}"><span style="display:flex;align-items:center;gap:8px">${S.places?`<b style="color:var(--gold2);min-width:34px">${ordn(S.places[i])}</b>`:''}<i style="width:12px;height:12px;border-radius:50%;background:${p.color};display:inline-block"></i><b>${esc(p.name)}</b></span><span style="color:var(--muted);font-size:13px">${playerDone(p)?'Reached El Dorado (round '+p.fin+')':p.resigned?'Left the game':'Still in the jungle'} · ${plural(blocksOf(i).length,'blockade')}${blocksOf(i).length?' (biggest #'+Math.max(...blocksOf(i).map(b=>S.blockades[b].n))+')':''}${res&&res.deltas?` · <b style="color:${res.deltas[i]>=0?'#8fe3a8':'#ff9c8a'}">${res.deltas[i]>=0?'+':''}${res.deltas[i]}</b> → ${Math.round(res.before[i]+res.deltas[i])}`:''}</span></div>`).join('');
+  const rows=ord.map(i=>[S.players[i],i]).map(([p,i])=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:${w.includes(i)?'rgba(233,178,74,.14)':'#0c1512'};border:1px solid ${w.includes(i)?'var(--gold)':'var(--line)'}"><span style="display:flex;align-items:center;gap:8px"><b style="color:var(--gold2);min-width:34px">${ordn(S.places[i])}</b><i style="width:12px;height:12px;border-radius:50%;background:${p.color};display:inline-block"></i><b>${esc(p.name)}</b></span><span style="color:var(--muted);font-size:13px">${playerDone(p)?'Reached El Dorado (round '+p.fin+')':p.resigned?'Left the game':'Still in the jungle'} · ${plural(blocksOf(i).length,'blockade')}${blocksOf(i).length?' (biggest #'+Math.max(...blocksOf(i).map(b=>S.blockades[b].n))+')':''}${res&&res.deltas?` · <b style="color:${res.deltas[i]>=0?'#8fe3a8':'#ff9c8a'}">${res.deltas[i]>=0?'+':''}${res.deltas[i]}</b> → ${Math.round(res.before[i]+res.deltas[i])}`:''}</span></div>`).join('');
   const rid=res&&res.replay||null;
   const tie=fin.length>1?'<p class="sub" style="margin:10px 0 0">Explorers arriving in the same round are split by blockades held, then the highest-numbered blockade.</p>':'';
   modal(`<h2>${w.length?w.map(i=>esc(S.players[i].name)).join(' & ')+' win'+(w.length>1?'':'s'):'Expedition over'}</h2><p class="sub">The race ended in round ${S.round}.${res&&res.deltas?' Ratings updated.':res&&res.unrated?' Unrated game: ratings unchanged.':''}</p>${rows}${tie}<div class="mrow">${rid||UI.lastReplay&&!online()?'<button class="btn" id="gRep">Watch replay</button>':''}<button class="btn" id="gClose">View board</button><button class="btn pri" id="gNew">New game</button></div>`,
@@ -64,7 +64,7 @@ export function showGameOver(){
       const gr=sc.querySelector('#gRep');if(gr)gr.onclick=()=>{closeModal();if(online()){exitOnline();loadReplayId(rid);}else openReplay(UI.lastReplay,null);};sc.querySelector('#gNew').onclick=()=>{if(online()){exitOnline();showHub();}else showSetup();};},true);
 }
 export function showPile(which){
-  if(!S||UI.cover)return;const pl=hp();
+  if(UI.cover)return;const pl=hp();
   const ids=which==='deck'?pl.deck.slice():pl.discard.slice();
   const order=Object.keys(CT);const sorted=ids.map(typeOf).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
   const all=pl.deck.length+pl.hand.length+pl.discard.length+pl.play.length;

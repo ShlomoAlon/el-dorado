@@ -13,7 +13,7 @@ import { marketRectOf } from './market.js';
 import { setTrail } from './board/overlays.js';
 const FEED={pl:-1,ended:false,groups:[],seq:0,fly:[],trail:[]};
 /* whose actions get shown: the AIs (local), everyone but me (online); never in replays, where the actor's own hand is shown */
-export function feedWatch(pl){if(!S||G.replay||pl==null||!S.players[pl])return false;return online()?pl!==NET.seat:isAI(pl);}
+export function feedWatch(pl){if(G.replay||pl==null)return false;return online()?pl!==NET.seat:isAI(pl);} // (pl: none on the game's end)
 function feedReset(){FEED.pl=-1;FEED.ended=false;FEED.groups=[];FEED.fly=[];FEED.trail=[];}
 export function feedClear(){if(FEED.pl<0&&!FEED.groups.length)return;feedReset();render();}
 function chipRect(pl){const c=document.querySelectorAll('#players .pchip')[pl];return c?c.getBoundingClientRect():null;}
@@ -56,9 +56,11 @@ function feedGroupHTML(g){
   return`<div class="fg f-${g.k}" data-g="${g.id}"><div class="frc"><div class="fcs">${g.ts.map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap">${feedCap(g)}</div></div>`;
 }
 function update(){
-  const F=$('#feed');const p=S&&S.players[FEED.pl];
+  const F=$('#feed'),hide=()=>{if(!F.hidden){F.hidden=true;F.innerHTML='';F.dataset.pl='';}};
+  if(!S){hide();return;}
+  const p=S.players[FEED.pl]; // (none while nobody's turn is shown)
   setTrail(p&&!G.replay?FEED.trail:[],p?p.color:'');
-  if(!S||G.replay||UI.cover||!FEED.groups.length||!p){if(!F.hidden){F.hidden=true;F.innerHTML='';F.dataset.pl='';}return;}
+  if(G.replay||UI.cover||!FEED.groups.length||!p){hide();return;}
   if(F.dataset.pl!==String(FEED.pl)){F.innerHTML='<div class="fwho"></div><div class="frow"></div>';F.dataset.pl=FEED.pl;}
   const recap=S.cur!==FEED.pl||S.over; // their turn is over: say whose turn this was
   const who=F.querySelector('.fwho');setHTML(who,recap?`<i style="background:${p.color}"></i>${esc(p.name)}’s turn`:'');who.hidden=!recap;
@@ -67,7 +69,7 @@ function update(){
   for(const el of[...row.children])if(!ids.has(el.dataset.g))el.remove();
   for(const g of FEED.groups){let el=row.querySelector(`[data-g="${g.id}"]`);
     if(!el){row.insertAdjacentHTML('afterbegin',feedGroupHTML(g));el=row.firstElementChild;if(!reduceMotion)el.classList.add('new');el.dataset.v=g.v;}
-    else if(el.dataset.v!==String(g.v)){el.dataset.v=g.v;const c=el.querySelector('.fcap');if(c)c.innerHTML=feedCap(g);}}
+    else if(el.dataset.v!==String(g.v)){el.dataset.v=g.v;el.querySelector('.fcap').innerHTML=feedCap(g);}}
   F.hidden=false;
   if(FEED.fly.length){const list=FEED.fly;FEED.fly=[];if(!reduceMotion)after(()=>feedFly(list));}
 }

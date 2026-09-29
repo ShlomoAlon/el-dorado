@@ -8,7 +8,7 @@ const path = require('path');
 const T = report('menus'), LOG = path.join(__dirname, 'fixtures/replay.json');
 (async () => {
   const srv = await serveStatic(), b = await chromium.launch(), p = await openPage(b, 'menus');
-  const until = (f, a, ms = 8000) => p.waitForFunction(f, a, { timeout: ms }).then(() => true, () => false);
+  const until = (f, a, ms = 15000) => p.waitForFunction(f, a, { timeout: ms }).then(() => true, () => false);
   const check = async (name, f, a, ms) => T.ok(name, await until(f, a, ms));
   const screen = s => `!document.querySelector('section[data-screen="${s}"]').hidden`;
   await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);

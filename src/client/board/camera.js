@@ -70,7 +70,7 @@ function clampView() {
 }
 /* glide the explorer about to move into view, if it isn't */
 export function ensureVisible() {
-  if (!MAP || !S) return; const r = safeRect(), c = focusPoint();
+  const r = safeRect(), c = focusPoint();
   const sx = (c[0] - MAP.minX) * view.s + view.x, sy = (c[1] - MAP.minY) * view.s + view.y, m = 40;
   if (sx > r.l + m && sx < r.r - m && sy > r.t + m && sy < r.b - m) return; diag('ensureVisible: glide');
   view.x += (r.l + r.r) / 2 - sx; view.y += (r.t + r.b) / 2 - sy; clampView(); glide(); applyView();

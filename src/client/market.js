@@ -1,7 +1,7 @@
 /* The market: six cards floating at the top right (plus an "All cards" tile), the All cards spread (market and
    reserve), the purchase slot above the hand, and dragging a market card down to buy it. Slots are made once and
    updated in place; a card's artwork is drawn again only when another card takes its slot. */
-import { S, CT, stackOf, reserveOpen, cantBuy, fmt } from '../engine.gen.js';
+import { S, CT, MARKET0, stackOf, reserveOpen, cantBuy, fmt } from '../engine.gen.js';
 import { $, setText, setStyle } from './dom.js';
 import { UI, canAct } from './state.js';
 import { geo, onGeo } from './geometry.js';
@@ -22,7 +22,7 @@ function sizeMarket(){
   let avail=H-(parseFloat(getComputedStyle(ab).bottom)||0)-150-top; // room for up to three stacked buttons below
   if(avail<60)avail=ab.getBoundingClientRect().top-at-top-12; // very short screens: just stay above the current ones
   avail=Math.min(avail,$('#discPile').getBoundingClientRect().top-at-top-10); // and above the discard pile
-  const def=phone?44:72,min=phone?34:56,gap=phone?7:10,cg=phone?7:8,n=S?S.market.length+1:7;
+  const def=phone?44:72,min=phone?34:56,gap=phone?7:10,cg=phone?7:8,n=MARKET0.length+1; // (the market always has its 6 slots, and All cards)
   // every column count against the room below (height) and beside (width: at most ~55% of the game area); the largest cards win
   let pick=null;
   for(let cols=phone?1:2;cols<=n;cols++){const rows=Math.ceil(n/cols),mw=Math.min(def,(avail-(rows-1)*gap-8)/(rows*1.4),(W*.55-(cols-1)*cg)/cols);if(!pick||mw>pick.mw+.5)pick={cols,mw};}
@@ -70,12 +70,14 @@ function update(){
 export const marketPart = { name: 'market', update};
 
 /* ---------- the purchase in progress: the card waits above the hand until it's paid for ---------- */
-export const buySlotPart = { name: 'buySlot', update(){const bs=$('#buySlot'),on=!!S&&UI.mode==='pay'&&!!UI.buy&&!UI.cover;
+export const buySlotPart = { name: 'buySlot', update(){const bs=$('#buySlot'),on=!!S&&UI.mode==='pay'&&!UI.cover;
   if(!on){if(!bs.hidden){bs.hidden=true;bs.dataset.t='';}return;}
   if(bs.dataset.t!==UI.buy.src+UI.buy.idx){bs.dataset.t=UI.buy.src+UI.buy.idx;bs.querySelector('.bs-card').innerHTML=`<div class="mcard">${cardHTML(UI.buy.t)}</div>`;}
   const c=CT[UI.buy.t].cost,t=payTotal();setText($('#bsPaid'),fmt(t));setText($('#bsCost'),c);bs.classList.toggle('paid',t>=c);bs.hidden=false;}};
 
 /* where a card of the market is on screen now (a bought card flies from there): its slot, or the button that opens it */
+/* where a card type's stack is on screen now, or null: an event can describe an earlier action of the same batch (the server
+   sends several AI actions at once), and by now its stack may be sold out and its slot refilled from the reserve */
 export function marketRectOf(t){const s=stackOf(t);return s?marketRect(s.src,s.i):null;}
 function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpen?`#market [data-i="${idx}"] .mcard`:'#mktBtn'):(UI.allOpen?`#reserve [data-i="${idx}"] .mcard`:(UI.mktOpen?'#allTile':'#mktBtn')));if(!e)return null;const r=e.getBoundingClientRect();
   if(src==='r'){const cw=86;return{left:r.left+r.width/2-cw/2,top:r.top-cw*.7+r.height/2,width:cw,height:cw*1.4};}return r;}
@@ -107,8 +109,8 @@ function marketUp(e){const d=mdrag;if(!d||e.pointerId!==d.pid)return;marketEnd()
   if(transmit||UI.mode!=='pay'){settle(null,280);return;}
   const B=buySlotBox;settle({left:geo.app.left+B.x,top:geo.app.top+B.y,width:B.w,height:B.w*1.4},300);
 }
-function marketCancel(){const d=mdrag;marketEnd();if(d&&d.ghost)d.ghost.remove();}
-function marketEnd(){const d=mdrag;mdrag=null;if(d&&d.el)d.el.style.opacity='';window.removeEventListener('pointermove',marketMove);window.removeEventListener('pointerup',marketUp);window.removeEventListener('pointercancel',marketCancel);}
+function marketCancel(){const d=mdrag;marketEnd();if(d.ghost)d.ghost.remove();}
+function marketEnd(){const d=mdrag;mdrag=null;d.el.style.opacity='';window.removeEventListener('pointermove',marketMove);window.removeEventListener('pointerup',marketUp);window.removeEventListener('pointercancel',marketCancel);}
 
 export function marketInit(){
   const pick=e=>{if(!S||UI.cover||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;

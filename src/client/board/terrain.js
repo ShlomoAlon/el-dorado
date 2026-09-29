@@ -38,7 +38,7 @@ let drawn='';
    deal) is kept: starting that game costs no redraw */
 export function buildBoard(){
   const sig=MAP.course+'|'+MAP.blockDefs.map(b=>b.n+':'+b.conn).join(',');
-  if(drawn===sig&&$('#board').childElementCount)return false;
+  if(drawn===sig)return false;
   drawn=sig;
   const svg=$('#board'),svg2=$('#board2'),lab=$('#blabels');svg.innerHTML='';svg2.innerHTML='';lab.innerHTML='';$('#blabels2').innerHTML='';
   for(const s of[svg,svg2]){s.setAttribute('width',MAP.w);s.setAttribute('height',MAP.h);s.setAttribute('viewBox',`${MAP.minX} ${MAP.minY} ${MAP.w} ${MAP.h}`);}
@@ -70,7 +70,7 @@ export function buildBoard(){
     const g=sv('g',null,L.terrain);
     const pts=hexPts(h.x,h.y,R-1.4);
     const vt=h.type==='g'?h.sym:h.type; // El Dorado's finishing spaces look like the terrain they need (water or jungle)
-    sv('polygon',{points:pts,fill:'url(#gr-'+vt+(TSHADE[vt]?Math.min(4,Math.max(1,h.val||1)):'')+')'},g);
+    sv('polygon',{points:pts,fill:'url(#gr-'+vt+(TSHADE[vt]?Math.min(4,h.val):'')+')'},g);
     if(vt!=='m'&&vt!=='s'&&vt!=='g')sv('polygon',{points:pts,fill:'url(#p-'+vt+')'},g);
     sv('polygon',{points:pts,fill:'url(#hexShine)',stroke:'rgba(255,255,255,.16)','stroke-width':1},g);
     if(h.type==='m'){drawMountain(g,h);continue;}
@@ -83,7 +83,7 @@ export function buildBoard(){
       label(lab,h.x,h.y-8,'FINISH',{anchor:'middle',size:8,weight:800,spacing:1.2,color:'#f8dc97'});continue;}
     const sym=h.type,n=h.val;
     // icons spaced out so the count reads at a glance: 1 · 2 side by side · 3 in a triangle · 4 in a square
-    const at=ICON_AT[Math.min(4,n)]||ICON_AT[1],is=n===1?18:n===2?15:13.5;
+    const at=ICON_AT[Math.min(4,n)],is=n===1?18:n===2?15:13.5;
     if(n<=2){const w=n===1?28:44;sv('rect',{x:h.x-w/2,y:h.y-12,width:w,height:24,rx:12,fill:CHIP[sym]},g);}
     else sv('circle',{cx:h.x,cy:h.y+(n===3?.4:0),r:n===3?19:19.5,fill:CHIP[sym]},g);
     for(const[dx,dy]of at){const u=sv('use',{href:'#i-'+sym,x:h.x+dx-is/2,y:h.y+dy-is/2,width:is,height:is},g);u.style.color=ICOL[sym];}
