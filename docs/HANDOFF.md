@@ -35,6 +35,10 @@ His user preference: think carefully before every answer, even simple ones.
 
 ## 3. Current status at handoff
 
+- **AI training is paused** (owner, 2026-09-29): it took the machine's CPU from everything else; the priority is a professional
+  first deployment. Don't restart the training job (tools/ai supervisor) until he asks. The shipped network is first-first1-351;
+  the AI ratings (AIS[].rating) are still the ones measured for first-first1-best: rerun `nice -n 10 node tools/ai/calibrate_ais.mjs 720 2`
+  when the machine is free (move tools/ai/data/calibration-*.json aside first: those games used the previous network).
 - Code complete and tested locally (engine test + 3-browser online e2e against `wrangler dev`).
 - **Deployed** at `https://el-dorado.shlomoalon9.workers.dev` via Cloudflare Workers Builds from `main` (preview builds off).
   D1 auto-provisioned fine on the first deploy. Google OAuth client created; its ID is in `wrangler.jsonc` `vars`.

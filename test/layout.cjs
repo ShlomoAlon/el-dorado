@@ -2,7 +2,7 @@
 // and no two controls overlap (the board may sit under things: it pans). Run after any UI change:
 //   NODE_PATH=$(npm root -g) node test/layout.cjs [--quick] [--shots dir]
 // --quick: five sizes (phone portrait and landscape, tablet, laptop, desktop). Sizes run in parallel.
-const { chromium } = require('playwright');
+const { chromium, serveStatic, settle } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
 const ALL = [[320, 568], [390, 844], [844, 390], [768, 1024], [1024, 700], [1024, 768], [1280, 720], [1366, 768], [1440, 900], [1920, 1080], [2560, 1440]];
 const SIZES = process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1920, 1080]] : ALL;
@@ -53,27 +53,22 @@ const CHECK = () => {
 (async () => {
   const b = await chromium.launch(); let fails = 0, checks = 0;
   // served over http (as on the site), so the page can fetch the AI network (/ai/first.bin) for the replay's evaluation
-  const pub = path.join(__dirname, '..', 'public'), srv = require('http').createServer((q, r) => {
-    const f = path.join(pub, decodeURIComponent(q.url.split('?')[0]).replace(/^\/$/, '/index.html'));
-    if (!f.startsWith(pub) || !fs.existsSync(f)) { r.writeHead(404); r.end(); return; }
-    r.writeHead(200, { 'content-type': f.endsWith('.html') ? 'text/html' : f.endsWith('.css') ? 'text/css' : f.endsWith('.js') ? 'text/javascript' : f.endsWith('.woff2') ? 'font/woff2' : 'application/octet-stream' }); r.end(fs.readFileSync(f)); });
-  await new Promise(res => srv.listen(0, '127.0.0.1', res));
-  const url = `http://127.0.0.1:${srv.address().port}/`;
+  const srv = await serveStatic(), url = srv.url;
   const one = async ([w, h]) => {
     const out = [];
     const p = await b.newPage({ viewport: { width: w, height: h } }); const errs = [];
     p.on('pageerror', e => errs.push(e.message));
-    await p.goto(url); await p.waitForTimeout(600);
+    await p.goto(url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     // normal play: start a local game from the setup screen
-    await p.click('#sGo'); await p.waitForTimeout(1600);
+    await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
     const states = [['play', null], ['journal', async () => { await p.click('#jrnBtn', { timeout: 5000 }); }], ['play, market closed', async () => { await p.click('#mktBtn', { timeout: 5000 }); }],
       // another player's turn as a recap under the prompt (more steps than fit on a phone), market closed and open
       ['recap of an AI turn', async () => { await p.evaluate(() => { const E = window.__ED, S = E.S; S.players[1].ai = 'raleigh';
         E.playEvents([{ e: 'play', pl: 1, k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { e: 'play', pl: 1, k: 'action', ts: ['cartographer'], n: 2 },
           { e: 'play', pl: 1, k: 'rubble', ts: ['traveler', 'sailor'] }, { e: 'play', pl: 1, k: 'buy', ts: ['traveler', 'traveler', 'explorer'], got: 'scout', paid: 2.5 },
           { e: 'gain', pl: 1, t: 'scout' }, { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1 }], 0); E.render(); }); }],
-      ['recap, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await p.waitForTimeout(300); const n = await p.evaluate(() => document.querySelectorAll('#feed .fg:not(.gone)').length); if (!n) throw new Error('no recap shown'); }],
-      ['replay journal', async () => { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForTimeout(1200);
+      ['recap, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await settle(p); const n = await p.evaluate(() => document.querySelectorAll('#feed .fg:not(.gone)').length); if (!n) throw new Error('no recap shown'); }],
+      ['replay journal', async () => { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForFunction(() => window.__ED.G.replay); await settle(p);
         await p.evaluate(() => { const r = document.querySelector('#rbR'); r.value = Math.floor(r.max * .4); r.dispatchEvent(new Event('input')); }); await p.click('#jrnBtn', { timeout: 5000 }); }],
       ['replay', null],
       ['replay, bot view hidden', async () => { await p.click('#rbA', { timeout: 5000 }); }],
@@ -82,7 +77,7 @@ const CHECK = () => {
       await p.keyboard.press('Escape').catch(() => {}); // close any overlay a previous step opened
       try { if (setup) await setup(); } catch (e) { fails++; out.push(`FAIL ${w}×${h} ${name}: could not set up (${e.message.split('\n')[0]})`); continue; }
       await p.mouse.move(w / 2, 1); // park the pointer away from the hand (hovered cards lift by design)
-      await p.waitForTimeout(900);
+      await settle(p, 6000); // (card flights, panels, the market: whatever the step set moving)
       const bad = await p.evaluate(CHECK); checks++;
       if (bad.length) { fails++; out.push(`FAIL ${w}×${h} ${name}:\n   ` + bad.join('\n   ')); }
       if (shots) await p.screenshot({ path: `${shots}/layout_${w}x${h}_${name.replace(/[^a-z]+/g, '-')}.png` });
