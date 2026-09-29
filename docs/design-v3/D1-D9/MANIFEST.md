@@ -55,3 +55,30 @@ phone the Start button is two screens down.
 - **Trade-offs:** on a phone Start is on the first screen now (no scrolling), but the page still says "settings" more
   than "title". The "Against the AI / Pass and play" choice is new vocabulary; it replaces nothing (the per-seat
   Human/AI pickers remain inside More options).
+
+## D9. The top bar's content
+
+**Problem:** identity (the "El Dorado" name), state (round, players) and navigation (Market, History, Rules, Menu) share
+one row, and Sound / Full screen live in the zoom column where nobody looks for them.
+
+| state | before | A | B |
+|---|---|---|---|
+| 4-player game (you + 3 AIs), round 2 | `D9-before-game4-1440/390` | `D9-A-game4-1440/390` | `D9-B-game4-1440/390` |
+| the top row (crop) | `D9-before-toprow-1440/390` | `D9-A-toprow-1440/390` | `D9-B-toprow-1440/390` |
+| HUD close-up | `D9-before-hud-1440@2x` | `D9-A-hud-1440@2x` | `D9-B-hud-1440@2x` |
+| the Menu during a game | `D9-before-menu-ingame-1440/390` | `D9-A-menu-ingame-1440/390` | `D9-B-menu-ingame-1440/390` |
+
+### Option A — state on the left, one Menu on the right (branch `design/v3-D9-A`)
+- **What changed:** the "El Dorado" name is gone from the bar. Left: a small **Round 2** box (it turns gold and reads
+  "Final" in the final round), then the player chips in turn order, left-aligned. Right: **Market** and one
+  **☰ Menu**.
+- Menu opens a drop-down (opaque, no blur): **History** and **Sound** as switches (they stay open so you see them
+  flip), **Rules**, **Full screen**, a divider, then **New game…**, **Replays**, **Online** (each opens that menu tab).
+  In a replay its first item is **Exit replay**. Esc or a click outside closes it.
+- Sound and Full screen leave the zoom column (it is only + − ⤢ now; on phones it is empty).
+- On phones the round box stays (it was hidden before) and Menu is the ☰ icon alone.
+- **Effort / risk:** medium-small (markup + ≈ 30 lines CSS, 15 JS in main.js/hud.js). Layout, menus and flows tests
+  pass (they now reach History and the menu through the drop-down).
+- **Trade-offs:** History and Rules are two taps instead of one; leaving a replay is two taps. The chips get the
+  space the name and three buttons used (all four names show in full at 1440; phones still truncate them).
+  The drop-down floats over the market column while open (it is transient and closes on any outside tap).
