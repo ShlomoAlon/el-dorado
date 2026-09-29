@@ -32,7 +32,7 @@ export function signedIn(r,after){
   (after||showHub)();
 }
 /* the Google sign-in button, drawn into el. after(): what to show once signed in (default: the Online screen) */
-export function gsiMount(el,err,after,size){if(!el||!NET.cfg||!NET.cfg.google)return;
+export function gsiMount(el,err,after,size){
   loadGsi().then(()=>{google.accounts.id.initialize({client_id:NET.cfg.google,callback:async r=>{try{signedIn(await api('/api/auth/google',{method:'POST',body:JSON.stringify({credential:r.credential})}),after);}catch(e){err(e.message);}}});
     if(el.isConnected)google.accounts.id.renderButton(el,{theme:'filled_black',size:size||'large',shape:'pill',text:'signin_with'});}).catch(()=>err('Could not load Google sign-in.'));}
 export function signOut(then){NET.token=null;NET.user=null;try{localStorage.removeItem('ed-token');}catch(e){}closeLobbyWs();(then||showHub)();}
@@ -46,7 +46,7 @@ export function openLobbyWs(){
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(_){return;}if(m.t==='rooms'){NET.rooms=m.rooms;roomsRender();}};
   ws.onclose=()=>{if(NET.lobbyWs===ws)NET.lobbyWs=null;};
 }
-export function closeLobbyWs(){if(NET.lobbyWs){try{NET.lobbyWs.close();}catch(e){}NET.lobbyWs=null;}}
+export function closeLobbyWs(){if(NET.lobbyWs){NET.lobbyWs.close();NET.lobbyWs=null;}}
 
 /* ---------- room connection ---------- */
 export function netSend(m){if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(m));else{NET.busy=false;toast('Reconnecting…');}}
@@ -56,7 +56,7 @@ export function joinRoom(code){
   try{history.replaceState(null,'',location.pathname+'?room='+code);}catch(e){}
   connectRoom();showRoomLobby();
 }
-export function leaveRoomSocket(){if(NET.ws){const w=NET.ws;NET.ws=null;try{w.close();}catch(e){}}clearTimeout(NET.retryT);NET.connected=false;}
+export function leaveRoomSocket(){if(NET.ws){const w=NET.ws;NET.ws=null;w.close();}clearTimeout(NET.retryT);NET.connected=false;}
 export function connectRoom(){
   const code=NET.code;if(!code)return;
   const ws=new WebSocket(wsUrl('/api/rooms/'+code+'/ws'));NET.ws=ws;NET.heard=Date.now();
@@ -69,7 +69,7 @@ export function connectRoom(){
 }
 /* the connection to the room is gone (closed, silent, or not answering): unless we left, reconnect (backing off) */
 function lostConnection(ws){
-  if(NET.ws!==ws)return;NET.ws=null;NET.connected=false;NET.busy=false;clearTimeout(NET.busyT);try{ws.close();}catch(e){}
+  if(NET.ws!==ws)return;NET.ws=null;NET.connected=false;NET.busy=false;clearTimeout(NET.busyT);ws.close();
   if(!NET.code)return; // we left, or the room closed
   NET.status='Connection lost. Reconnecting…';if(S)render();renderRoomLobby();
   NET.retries++;if(NET.retries>8&&!S){NET.status='Could not reach this room. It may have closed.';renderRoomLobby();return;}
@@ -82,7 +82,7 @@ export function netAct(m){NET.busy=true;netSend(m);const ws=NET.ws;clearTimeout(
 // a phone waking up (or a tab coming back): check the connection at once instead of waiting for the next heartbeat
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible'||!NET.code)return;const ws=NET.ws;
   if(!ws){clearTimeout(NET.retryT);connectRoom();return;}
-  if(ws.readyState!==1)return;const t=Date.now();try{ws.send('ping');}catch(e){}setTimeout(()=>{if(NET.ws===ws&&NET.heard<t)lostConnection(ws);},5000);});
+  if(ws.readyState!==1)return;const t=Date.now();ws.send('ping');setTimeout(()=>{if(NET.ws===ws&&NET.heard<t)lostConnection(ws);},5000);});
 export function onRoomMsg(m){
   if(m.t==='error'){diag('server: '+m.err);NET.busy=false;clearTimeout(NET.busyT);sfx('error');toast(m.err);if(S)render();return;}
   if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}renderRoomLobby();return;}
@@ -102,7 +102,7 @@ export function applyServerState(S2,ev){
   if(turnChanged&&!S.over){banner(canAct()?'Your turn':cur().name,canAct()?'Round '+S.round:'Round '+S.round);ensureVisible();}
 }
 export function resignOnline(){
-  modal(`<h2>Leave this game?</h2><p class="sub">${NET.room&&NET.room.opts&&NET.room.opts.rated===false?'Leaving counts as finishing last among the players still racing (this game is unrated).':'Leaving a rated game counts as finishing last among the players still racing. Your rating will drop.'}</p><div class="mrow"><button class="btn" id="rsNo">Stay</button><button class="btn pri" id="rsYes">Leave game</button></div>`,sc=>{
+  modal(`<h2>Leave this game?</h2><p class="sub">${NET.room.opts.rated===false?'Leaving counts as finishing last among the players still racing (this game is unrated).':'Leaving a rated game counts as finishing last among the players still racing. Your rating will drop.'}</p><div class="mrow"><button class="btn" id="rsNo">Stay</button><button class="btn pri" id="rsYes">Leave game</button></div>`,sc=>{
     sc.querySelector('#rsNo').onclick=closeModal;sc.querySelector('#rsYes').onclick=()=>{netSend({t:'act',a:{t:'resign'}});closeModal();};},true);
 }
 export function exitOnline(){NET.code=null;NET.S=null;leaveRoomSocket();setS(null);try{history.replaceState(null,'',location.pathname);}catch(e){}resetView();}

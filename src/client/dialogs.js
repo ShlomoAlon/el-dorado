@@ -12,10 +12,10 @@ export function banner(t,s){const b=$('#banner');b.querySelector('.t').textConte
   b.getAnimations().forEach(a=>a.cancel());
   b.animate([{opacity:0,transform:'translate(-50%,-44%) scale(.96)'},{opacity:1,transform:'translate(-50%,-50%) scale(1)',offset:.18},{opacity:1,transform:'translate(-50%,-50%) scale(1)',offset:.75},{opacity:0,transform:'translate(-50%,-56%) scale(1)'}],{duration:1400,easing:'ease-out'});}
 let toastT=0;
-export function toast(t,ms){const e=$('#toast');const host=MENU.dlg&&MENU.dlg.open?MENU.dlg:document.body;if(e.parentNode!==host)host.appendChild(e); /* over the menu while it's open */
+export function toast(t,ms){const e=$('#toast');const host=MENU.dlg.open?MENU.dlg:document.body;if(e.parentNode!==host)host.appendChild(e); /* over the menu while it's open */
   e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),ms||1700);}
 /* one overlay at a time (the menu is its own dialog: menu.js; it closes when another overlay opens) */
-export function modal(html,onMount,dismiss){const o=$('#overlay');if(MENU.dlg&&MENU.dlg.open)MENU.dlg.close();
+export function modal(html,onMount,dismiss){const o=$('#overlay');if(MENU.dlg.open)MENU.dlg.close();
   o.innerHTML=`<div class="scrim"><div class="modal">${html}</div></div>`;const sc=o.firstChild;
   if(dismiss)sc.onclick=e=>{if(e.target===sc)closeModal();};onMount(sc);}
 export function closeModal(){menuClose();const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');sc.querySelector('.modal').className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
