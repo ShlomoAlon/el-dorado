@@ -296,6 +296,8 @@ export default {
       if (p === '/api/rooms' && req.method === 'POST') {
         const b = await readJSON(req).catch(e => { if (e.status === 413) throw e; return {}; });
         const opts = { max: Math.min(4, Math.max(2, +b.max || 3)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn: TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90, pub: b.pub !== false, rated: b.rated !== false, auto: false };
+        const busy = await (await lobby.fetch('https://lobby/find?busy=1&uid=' + encodeURIComponent(user.id))).json();
+        if (busy.code) return bad(`You're already in a game (${busy.code}). Rejoin it, or leave it, before opening another.`, 409);
         const code = await createRoom(env, user.id, opts);
         return code ? json({ code }) : bad('Could not create a room, try again.', 500);
       }
@@ -307,7 +309,8 @@ export default {
       if ((m = p.match(/^\/api\/rooms\/([A-Z0-9]{4,6})\/ws$/))) {
         if (req.headers.get('upgrade') !== 'websocket') return bad('Expected a WebSocket', 426);
         const room = env.ROOMS.get(env.ROOMS.idFromName(m[1]));
-        const h = new Headers(req.headers); h.set('x-uid', user.id); h.set('x-name', user.name);
+        const busy = await (await lobby.fetch('https://lobby/find?busy=1&uid=' + encodeURIComponent(user.id))).json();
+        const h = new Headers(req.headers); h.set('x-uid', user.id); h.set('x-name', user.name); h.set('x-busy', busy.code || '');
         return room.fetch(new Request('https://room/ws', { headers: h }));
       }
       if (p === '/api/lobby/ws') {
@@ -346,7 +349,7 @@ export class Lobby extends DurableObject {
     }
     if (url.pathname === '/match') {
       const { uid, dev } = await req.json(); const now = Date.now();
-      const mine = Object.values(this.rooms).find(x => (x.uids || []).includes(uid) && (x.status === 'lobby' || x.status === 'playing'));
+      const mine = Object.values(this.rooms).find(x => (x.busy || x.uids || []).includes(uid) && (x.status === 'lobby' || x.status === 'playing'));
       if (mine) return json({ code: mine.code });
       const open = Object.values(this.rooms).filter(x => x.auto && x.status === 'lobby' && x.names.length < x.max && now - x.updated < 15 * 60e3).sort((a, b) => b.names.length - a.names.length);
       if (open.length) return json({ code: open[0].code });
@@ -356,7 +359,12 @@ export class Lobby extends DurableObject {
       this.rooms[code] = { code, host: '', names: [], uids: [], max: MATCH_SIZE, status: 'lobby', course: 'random', turn: opts.turn, pub: true, auto: true, updated: now };
       await this.ctx.storage.put('rooms', this.rooms); this.broadcast(); return json({ code });
     }
-    if (url.pathname === '/find') { const uid = url.searchParams.get('uid'); const r = Object.values(this.rooms).find(x => (x.uids || []).includes(uid)); return json({ code: r ? r.code : null }); }
+    // the room a person is in; busy=1: only a room they are still playing in (waiting to start, or racing: not resigned or finished)
+    if (url.pathname === '/find') {
+      const uid = url.searchParams.get('uid'), busy = url.searchParams.get('busy') === '1';
+      const r = Object.values(this.rooms).find(x => (busy ? (x.status === 'lobby' || x.status === 'playing') && (x.busy || x.uids || []) : (x.uids || [])).includes(uid));
+      return json({ code: r ? r.code : null });
+    }
     return bad('Not found', 404);
   }
   async webSocketMessage(ws, msg) { if (wsFlooding(ws, msg)) return; if (msg === 'ping') ws.send('pong'); }
@@ -403,7 +411,13 @@ export class Room extends DurableObject {
   load() { const g = E.recState(this.rec); this.S = g.S; this.S.owners = this.d.seats.map(s => s.uid); this.S.room = this.d.code; mapCache.set(this.S.course.id + ':' + this.S.seed, g.MAP); }
   async persist() { await this.ctx.storage.put(this.rec ? { d: this.d, rec: this.rec } : { d: this.d }); }
   engine() { E.S = this.S; E.MAP = mapFor(this.S); return E; }
-  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn, pub: d.opts.pub !== false, rated: d.opts.rated !== false, auto: !!d.opts.auto }; }
+  summary() { const d = this.d; return { code: d.code, host: (d.seats.find(s => s.uid === d.host) || d.seats[0] || {}).name || '', names: d.seats.map(s => s.name), uids: d.seats.map(s => s.uid), max: d.opts.max, status: d.status, course: d.opts.course, turn: d.opts.turn, pub: d.opts.pub !== false, rated: d.opts.rated !== false, auto: !!d.opts.auto, busy: this.busyUids() }; }
+  // people who can't open or join another game while in this one: everyone seated before it starts, then whoever is still racing
+  busyUids() {
+    const d = this.d; if (d.status === 'lobby') return d.seats.filter(s => !s.ai).map(s => s.uid);
+    if (d.status !== 'playing' || !this.S) return [];
+    return this.S.players.map((p, i) => !p.ai && !p.resigned && !p.pieces.every(k => k === 'done') ? this.S.owners[i] : null).filter(Boolean);
+  }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.summary()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
   roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid) })), results: d.results || null }; }
@@ -432,7 +446,10 @@ export class Room extends DurableObject {
       if (this.ctx.getWebSockets().length >= ROOM_WS_MAX && !this.d.seats.some(s => s.uid === uid)) return tooMany(); // (players always get in)
       const pair = new WebSocketPair();
       this.ctx.acceptWebSocket(pair[1], [uid]); pair[1].serializeAttachment({ uid, name }); dropOldest(this.ctx, uid, pair[1]);
-      if (this.d.status === 'lobby' && !this.d.seats.find(s => s.uid === uid) && this.d.seats.length < this.d.opts.max) {
+      const elsewhere = req.headers.get('x-busy'); // one game at a time: someone still in another room only watches this one
+      if (this.d.status === 'lobby' && !this.d.seats.find(s => s.uid === uid) && elsewhere && elsewhere !== this.d.code)
+        this.send(pair[1], { t: 'error', msg: `You're already in a game (${elsewhere}). Leave it to take a seat here.` });
+      else if (this.d.status === 'lobby' && !this.d.seats.find(s => s.uid === uid) && this.d.seats.length < this.d.opts.max) {
         const used = this.d.seats.map(s => s.color);
         this.d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) });
         if (!this.d.seats.find(s => s.uid === this.d.host)) this.d.host = uid;
@@ -525,6 +542,7 @@ export class Room extends DurableObject {
   async afterChange(ev) {
     if (this.S.log.length > 120) this.S.log = this.S.log.slice(-120);
     if (this.S.over && this.d.status === 'playing') await this.finish();
+    else { const b = this.busyUids().join(); if (b !== this.lastBusy) { this.lastBusy = b; this.tellLobby(); } } // someone resigned or finished: free for another game
     await this.persist(); this.sendAll(ev);
   }
   /* time bank: each turn adds opts.turn seconds to the player's clock, and time not used carries over to their later
