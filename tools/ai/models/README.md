@@ -135,3 +135,11 @@ Checkpoint for the feature trial (tools/ai/featexp.sh): control vs card-property
 ## first-first1-L0 (frozen 2026-09-28 19:08 UTC)
 
 first1 at iteration 198 + 12 iterations (the feature trial's control branch fx-ctl). Feature trial result: card-property inputs tied the control on the ladder (plain 105 vs 103 wins /448, with search 163 vs 150) at +11-16% cost per move; the local-patch inputs lost (plain 83 vs 124, search 148 vs 161). Neither adopted. Start of distillation level 1.
+
+## first-first1-351 (frozen 2026-09-29 06:50 UTC, shipped)
+
+The first1 run (trained under the fixed single-use rules, `RUN=first1`, planner self-play with distillation) at iteration 351.
+Frozen because it beat the network then shipped, `first-first1-best` (iteration ~198), in 512 ladder games under the current
+rules: with the planner search it won 106 of its 224 seats to first-first1-best's 59, without search 55 to 39.
+The same day's checks of first-first1-best against the older lines (512 games each): distill-35 (the network shipped before it)
+won 11 seats to its 246, distill-53 20 to 236, multi4-40 9 to 247; ck198 was even (136 to 122). No regression along the way.
