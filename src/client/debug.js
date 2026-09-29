@@ -25,6 +25,13 @@ export function debugInit() {
   for (const t of ['pointerdown', 'pointerup', 'pointercancel']) addEventListener(t, e => diag(`${t.slice(7)} #${e.pointerId} ${e.pointerType} on ${e.target.id || e.target.className && String(e.target.className.baseVal ?? e.target.className).slice(0, 14) || e.target.tagName}`), true);
   for (const t of ['gesturestart', 'gestureend']) document.addEventListener(t, e => diag(t + ' scale ' + (e.scale || 0).toFixed(2)), true);
   addEventListener('error', e => diag('ERROR ' + e.message));
+  // every change the page makes to itself, summed per frame by area (a redraw nobody expected shows up here)
+  const area = n => { for (let e = n.nodeType === 1 ? n : n.parentElement; e; e = e.parentElement) { if (e === wrap) return null; if (e.id) return e.id; } return '?'; };
+  let pend = null;
+  new MutationObserver(list => { for (const m of list) { const a = area(m.target); if (!a) continue; pend = pend || {}; const k = a + (m.type === 'attributes' ? '.' + m.attributeName : m.type === 'childList' ? '+-' : '~'); pend[k] = (pend[k] || 0) + 1; }
+    if (pend && !pend.__q) { pend.__q = 1; requestAnimationFrame(() => { const p = pend; pend = null; delete p.__q; const ks = Object.keys(p).filter(k => !/^(stage\.style|diag)/.test(k));
+      if (ks.length) diag('dom ' + ks.map(k => k + (p[k] > 1 ? '×' + p[k] : '')).join(' ')); }); } })
+    .observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
   // slow frames: any gap between animation frames over 50 ms
   let last = performance.now(); const tick = t => { if (t - last > 50) diag(`slow frame ${Math.round(t - last)} ms`); last = t; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
 }
