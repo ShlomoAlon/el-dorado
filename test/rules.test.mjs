@@ -3,7 +3,7 @@
 // the reserve, the Transmitter, action cards, single-use cards, the end of a turn, both end-of-game rules and their
 // tie-break, two explorers each, resigning, what undo may take back, and what each player is shown.
 //   node test/rules.test.mjs
-import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cantBuy, buyOptions, COURSES, recNewGame, recApply, recCanUndo, recUndo, redact } from '../src/engine.gen.js';
+import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cardTargets, cantBuy, buyOptions, COURSES, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck } from '../src/engine.gen.js';
 let checks = 0; const failures = [];
 const ok = (cond, what) => { checks++; if (!cond) failures.push(what); };
 
@@ -107,6 +107,15 @@ ok(act({ t: 'buy', type: 'pioneer', cards: hand }).ok && S.market[0].t === 'pion
 game(['s j1']); hand = give(0, 'chest', 'giant');
 act({ t: 'buy', type: 'scout', cards: hand });
 ok(S.trash.includes(hand[0]) && S.players[0].play.includes(hand[1]), 'single use: a coin card paying its value leaves the game, a card paying ½ is discarded');
+// ---------- where a card can go (the engine answers the page's targets too)
+game(['s j1 r2', 'j1']); let [ctE, ctS, ctA] = give(0, 'explorer', 'sailor', 'cartographer');
+ok(cardTargets(0, 0, ctE).has('1,0') && cardTargets(0, 0, ctE).has('0,1') && cardTargets(0, 0, ctE).get('1,0').kind === 'move', 'a movement card: the spaces it reaches');
+ok(!cardTargets(0, 0, ctS).has('1,0') && cardTargets(0, 0, ctS).get('2,0') === undefined, 'a paddle: no jungle');
+game(['s r2']); [ctE, ctS, ctA] = give(0, 'explorer', 'sailor', 'cartographer');
+ok(cardTargets(0, 0, ctA).get('1,0') && cardTargets(0, 0, ctA).get('1,0').kind === 'rubble', 'any card can be given up for rubble next to the explorer');
+ok(!cardTargets(1, 0, ctE).size, 'nothing out of turn');
+game(['s j1 j1 j1']); [ctE] = give(0, 'trailblazer'); act({ t: 'move', card: ctE, pi: 0, to: '1,0' });
+ok([...cardTargets(0, 0, ctE).keys()].join() === '2,0,3,0', 'the card in play: where its leftover strength reaches');
 // ---------- what can be bought now (the engine answers the page's market too)
 game(['s j1']); hand = give(0, 'traveler', 'traveler', 'explorer');
 let bo = buyOptions(0);
@@ -156,17 +165,16 @@ ok(S.cur === 0 && S.round === 2, 'a new round starts with the first player');
 game(['s gw', '. .', 's gw'], { players: 3 }); S.players[1].pieces[0] = '0,2';
 give(0, 'sailor'); act({ t: 'move', card: S.players[0].hand[0], pi: 0, to: '1,0' });
 ok(S.players[0].pieces[0] === 'done' && S.players[0].fin === 1 && !S.over, 'full race: the first arrival doesn\'t end the game');
-act({ t: 'end', keep: [] });
+ok(S.cur === 1 && !S.players[0].play.length && !S.players[0].hand.length, 'arriving with your last explorer ends your turn at once (nothing left to draw for)');
 S.blockades = [{ n: 1, k: 'j', v: 1, conn: 9, owner: 1 }]; S.players[1].blocks = [0];
 give(1, 'sailor'); act({ t: 'move', card: S.players[1].hand[0], pi: 0, to: '1,2' });
-act({ t: 'end', keep: [] });
 ok(S.cur === 2 && !S.over, 'full race: with one left racing, the round is still finished');
 act({ t: 'end', keep: [] });
 ok(S.over && S.places.join() === '2,1,3', 'full race: over at the end of that round; arrivals ranked by blockades, the one still racing last');
 game(['s gw'], { players: 3, fullRace: false }); S.cur = 1; S.players[1].pieces[0] = '0,0'; S.players[0].pieces[0] = key(7, 4); give(1, 'sailor');
 act({ t: 'move', card: S.players[1].hand[0], pi: 0, to: '1,0' }, 1);
-ok(!S.over, 'first-arrival rule: the round is finished first');
-act({ t: 'end', keep: [] }, 1); act({ t: 'end', keep: [] }, 2);
+ok(!S.over && S.cur === 2, 'first-arrival rule: the round is finished first');
+act({ t: 'end', keep: [] }, 2);
 ok(S.over && S.winners.join() === '1', 'first-arrival rule: over at the end of that round');
 game(['s gw'], { players: 3 });
 for (const [i, blocks] of [[0, [1]], [1, [0, 2]], [2, []]]) { S.players[i].pieces = ['done']; S.players[i].fin = 1; S.players[i].blocks = blocks; }
@@ -179,10 +187,10 @@ S.blockades = [{ n: 3, k: 'j', v: 1, conn: 0, owner: 1 }, { n: 5, k: 'r', v: 2, 
 act({ t: 'end', keep: [] }); act({ t: 'end', keep: [] }, 1); act({ t: 'end', keep: [] }, 2);
 ok(S.over && S.places.join() === '1,2,3', 'tie-break: then the highest-numbered blockade');
 // ---------- two explorers each (2 players)
-game(['s gw', '. .', 's j1'], { players: 2 }); S.players[0].pieces = ['0,0', '0,2']; give(0, 'sailor', 'explorer');
+game(['s gw', '. .', 's gj'], { players: 2 }); S.players[0].pieces = ['0,0', '0,2']; give(0, 'sailor', 'explorer');
 act({ t: 'move', card: S.players[0].hand[0], pi: 0, to: '1,0' });
 ok(S.players[0].pieces[0] === 'done' && !S.players[0].fin && S.cur === 0, 'with two explorers, one arriving is not enough: the turn goes on');
-ok(act({ t: 'move', card: S.players[0].hand[0], pi: 1, to: '1,2' }).ok, 'and the other explorer still moves');
+ok(act({ t: 'move', card: S.players[0].hand[0], pi: 1, to: '1,2' }).ok && S.cur === 1, 'the other explorer still moves; when it arrives too, the turn ends');
 // ---------- resigning, turns, validation
 game(['s j1']);
 ok(!act({ t: 'end', keep: [] }, 1).ok, 'out of turn: refused');
@@ -201,6 +209,7 @@ for (let seed = 1; seed < 40 && !before; seed++) { // a deal where the first pla
 ok(before && recCanUndo(rec) && recUndo(rec) && JSON.stringify(S.players[S.cur].pieces) === before, 'a move can be taken back');
 recApply(rec, S.cur, { t: 'end', keep: [] });
 ok(!recCanUndo(rec), 'nothing before a draw or a new turn can be taken back');
+ok(rec.v === 3 && !replayCheck(rec) && /older version/.test(replayCheck({ ...rec, v: 2 })), 'records are log v3; records from before (older rules) are refused');
 // ---------- what each player is shown
 const R = redact(S, 1), mine = R.players[1];
 ok(mine.hand.every(id => R.cards[id] === S.cards[id]), 'a player sees their own hand');

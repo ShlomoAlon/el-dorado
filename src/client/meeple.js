@@ -135,7 +135,7 @@ function meepleStandee(v,K){
 
 /* ---------- C: stepped glyph idol with gold inlay ---------- */
 function meepleIdol(v,K){
-  const{c,lt,dk,dk2,skin,skinDk,hair}=K,G=MEEPLE_GOLD,woman=v===1||v===3;let s='';
+  const{c,lt,dk,skin,skinDk,hair}=K,G=MEEPLE_GOLD,woman=v===1||v===3;let s='';
   // ziggurat base: lower step dark, upper step player colour, gold lip
   s+=mpG('-13.4,12.4 13.4,12.4 13.4,16.6 -13.4,16.6',dk,1.4);
   s+=mpG('-10,8.2 10,8.2 10,12.4 -10,12.4',c,1.3);

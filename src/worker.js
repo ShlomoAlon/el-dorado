@@ -38,6 +38,13 @@ async function createSchema(env) {
   // places: JSON array of finishing places, in the order of uids
   for (const c of ['game INTEGER NOT NULL DEFAULT 0', 'uids TEXT', 'listed INTEGER NOT NULL DEFAULT 1', 'places TEXT'])
     try { await env.DB.prepare(`ALTER TABLE replays ADD COLUMN ${c}`).run(); } catch (e) { }
+  // game logs from before log v3 were played under older rules and can't be replayed: deleted, once (ratings stay).
+  // (a failure only means it runs again on the next start)
+  try {
+    if (!(await env.DB.prepare(`SELECT v FROM settings WHERE k='logs_v3'`).first()))
+      await env.DB.batch([env.DB.prepare(`DELETE FROM replays WHERE CASE WHEN json_valid(body) THEN json_extract(body,'$.v') IS NOT 3 ELSE 1 END`),
+        env.DB.prepare(`INSERT OR IGNORE INTO settings(k,v) VALUES('logs_v3','1')`)]);
+  } catch (e) { }
   for (const A of E.AIS) { // one rated player per named AI; if a person already has the name, the AI gets "(AI)" after it
     const id = aiUid(A.id);
     if (await env.DB.prepare(`SELECT id FROM users WHERE id=?`).bind(id).first()) continue;
@@ -331,8 +338,9 @@ export class Room extends DurableObject {
     // secret shuffle seed, so it is never sent out; once the game is over it is saved as the game's replay.
     ctx.blockConcurrencyWhile(async () => {
       this.d = (await ctx.storage.get('d')) || null; this.rec = (await ctx.storage.get('rec')) || null;
+      if (this.rec && E.replayCheck(this.rec)) this.rec = null; // recorded under older rules: it can't be rebuilt
       if (this.rec) this.load();
-      else if (this.d && this.d.status === 'playing') this.d.status = 'closed'; // a game from before games were records
+      else if (this.d && this.d.status === 'playing') this.d.status = 'closed'; // a game this version can't rebuild
     });
   }
   // S from the record, plus who plays each seat
@@ -424,7 +432,7 @@ export class Room extends DurableObject {
       }
       return;
     }
-    if (d.status !== 'playing' || !this.S) return;
+    if (d.status !== 'playing' || !this.S) { if (m.t === 'act' || m.t === 'undo') err('This game is not running any more.'); return; }
     const seat = this.S.owners.indexOf(uid);
     if (m.t === 'undo') {
       if (seat !== this.S.cur || !E.recCanUndo(this.rec)) return err('Nothing to undo.');

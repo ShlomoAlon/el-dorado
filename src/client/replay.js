@@ -9,7 +9,7 @@ import { toast, banner, closeModal } from './dialogs.js';
 import { showGame, resumeSaved, playEvents, firstPiece } from './actions.js';
 import { AIX, aiNetLoad, aiReset } from './ai.js';
 import { exitOnline } from './online.js';
-import { showSetup, MENU } from './menu.js';
+import { showSetup, showHub, showReplays, MENU } from './menu.js';
 const TERR={j:'jungle',w:'water',v:'village',r:'rubble',c:'base camp',g:'El Dorado',s:'start'};
 function buildReplay(log,id){
   const err=replayCheck(log);if(err)throw new Error(err);
@@ -60,9 +60,10 @@ function actionKey(a,st){const ty=id=>st.cards[id]||id,tys=ids=>(ids||[]).map(ty
 let adviceT=0;
 function adviceSoon(){clearTimeout(adviceT);const R=G.replay,i=R.i;adviceT=setTimeout(()=>{if(G.replay===R&&R.i===i&&!R.timer&&R.side){replayAdvice();render();}},250);}
 function startReplay(log,id){
-  if(online())exitOnline(); // an online game in progress goes on (rejoin it from Online)
+  const from=MENU.dlg&&MENU.dlg.open?MENU.screen:null; // the menu screen it was opened from: exiting goes back there
+  if(online())exitOnline(); // a finished online game (the menu doesn't open replays during one in progress)
   aiReset();let R;try{R=buildReplay(log,id);}catch(e){console.error(e);toast('Could not load that replay: '+e.message,3500);showSetup();return;}
-  closeModal();G.replay=R;UI.preview=false;
+  R.from=from;closeModal();G.replay=R;UI.preview=false;
   setS(JSON.parse(R.states[0]));setMAP(mapFor(S));showGame();replayGo(0,false);
   banner(log.title||'Replay',`${log.players.length} players · ${log.actions.length} moves`);
   if(replayEvalOK()&&!AIX.net)aiNetLoad().then(()=>{if(G.replay===R)render();});
@@ -94,9 +95,10 @@ function replayPlay(){const R=G.replay;if(!R)return;if(R.timer){replayStop();ret
     R.timer=setTimeout(tick,(1300+(endTurn?900:0))/R.speed);};
   R.timer=setTimeout(tick,50);render();}
 function replayStop(){const R=G.replay;if(R&&R.timer){clearTimeout(R.timer);R.timer=0;}render();}
-export function exitReplay(){replayStop();G.replay=null;$('#app').classList.remove('replaying');$('#rdock').hidden=true;$('#rside').hidden=true;$('#rdock').innerHTML='';
+export function exitReplay(){const from=G.replay.from;replayStop();G.replay=null;$('#app').classList.remove('replaying');$('#rdock').hidden=true;$('#rside').hidden=true;$('#rdock').innerHTML='';
   try{const u=new URL(location.href);u.searchParams.delete('replay');history.replaceState(null,'',u);}catch(e){}
-  setS(null);resetView();if(!resumeSaved())showSetup();} // back to the local game in progress, if any
+  setS(null);resetView();const resumed=resumeSaved(); // the local game in progress, if any, comes back behind the menu
+  if(from==='replays')showReplays();else if(from==='online')showHub();else if(from||!resumed)showSetup();}
 
 /* words for one action, read against the position before it */
 function describeAction(a,st){

@@ -31,9 +31,18 @@ const T = report('online');
     await B.fill('#jCode', code); await B.click('#jGo');
     await C.goto(srv.url + '?room=' + code);
     T.ok('room: joined by code and by link', await wait(A, () => __ED.NET.room && __ED.NET.room.seats.length === 3), code);
+    T.ok('room lobby: no tabs or Profile link to wander off with (Leave is the way out)', await B.evaluate(() => document.querySelector('#sMode').hidden && getComputedStyle(document.querySelector('#acProfile')).display === 'none'));
     await A.click('#rlStart');
     const started = await Promise.all([A, B, C].map(p => wait(p, () => __ED.S && __ED.S.owners && !document.querySelector('#menu').open)));
     T.ok('start: every player is in the game, menu closed', started.every(Boolean));
+    // the menu during an online game: the Online screen with the game bar only (no second game to start, no tabs)
+    await B.click('#menuBtn');
+    T.ok('menu during an online game: Back to game, nothing that would leave it', await wait(B, () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.querySelector('#sMode').hidden && document.querySelector('#oPlay').hidden && !document.querySelector('#oBusy').hidden));
+    await B.click('#sBack');
+    T.ok('back to the online game, still connected', await wait(B, () => !document.querySelector('#menu').open && __ED.NET.connected && !!__ED.S));
+    // a connection that dies silently (a phone asleep, a dropped network): noticed when the page comes back, and replaced
+    await B.evaluate(() => { const w = __ED.NET.ws; window.__deadWs = w; w.send = () => { }; document.dispatchEvent(new Event('visibilitychange')); });
+    T.ok('a silently dead connection is noticed and replaced', await wait(B, () => __ED.NET.ws && __ED.NET.ws !== window.__deadWs && __ED.NET.connected && !!__ED.S, null, 20000));
     const view = await Promise.all([A, B, C].map(p => p.evaluate(me => { const S = __ED.S, seat = S.owners.indexOf(me);
       return { seat, mine: S.players[seat].hand.every(id => S.cards[id]), others: S.players.every((q, i) => i === seat || q.hand.every(id => !S.cards[id])) }; }, ids[[A, B, C].indexOf(p)])));
     T.ok('each player sees their own hand and no one else\'s', view.every(v => v.seat >= 0 && v.mine && v.others) && new Set(view.map(v => v.seat)).size === 3, JSON.stringify(view));
@@ -107,7 +116,11 @@ const T = report('online');
     const D = await open('D'), E2 = await open('E'), F = await open('F'); await signIn(D, 'Dora'); await signIn(E2, 'Emil'); await signIn(F, 'Finn');
     const pub = await mkRoom(D, { max: 3, turn: 60, course: 'first', pub: true }), priv = await mkRoom(E2, { max: 3, turn: 60, course: 'first', pub: false });
     T.ok('a public room is listed, a private one is not', await wait(F, (c) => __ED.NET.rooms.some(r => r.code === c[0]) && !__ED.NET.rooms.some(r => r.code === c[1]), [pub, priv]));
-    for (const p of [D, E2]) { await p.click('#rlLeave'); await wait(p, () => !__ED.NET.code); }
+    // signing out in a room leaves it (the host's room closes); leaving with the button does too
+    await D.click('#acOut');
+    T.ok('sign out in a room: out of the room, which closes', await wait(D, () => !__ED.NET.code && !__ED.NET.user) && await wait(F, c => !__ED.NET.rooms.some(r => r.code === c), pub));
+    await E2.click('#rlLeave'); await wait(E2, () => !__ED.NET.code);
+    await signIn(D, 'Dora');
     for (const p of [D, E2]) { await p.click('#qGo'); await wait(p, () => __ED.NET.room && __ED.NET.room.opts && __ED.NET.room.opts.auto); }
     T.ok('quick match: two players land in the same room', await wait(D, () => __ED.NET.room.seats.length === 2) && (await D.evaluate(() => __ED.NET.code)) === (await E2.evaluate(() => __ED.NET.code)));
     await F.click('#qGo');

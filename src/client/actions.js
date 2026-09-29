@@ -1,7 +1,7 @@
 /* Turning what the player does into engine actions. Every rules change goes through act(): locally it runs the shared
    engine (and is recorded: G.rec); online it is sent to the server, which runs the same engine and sends back the new
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
-import { S, CT, typeOf, def, coinVal, rm, reach, payTargets, nativeTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, setS, setMAP } from '../engine.gen.js';
+import { S, CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, setS, setMAP } from '../engine.gen.js';
 import { esc } from './dom.js';
 import { UI, NET, G, cur, canAct, online, isAI, myId, viewIdx, save, keepLocalReplay, loadSave } from './state.js';
 import { replayDecorate } from './replay.js';
@@ -16,7 +16,7 @@ import { openAll, marketRectOf } from './market.js';
 import { feedWatch, feedEvent, feedClear } from './feed.js';
 import { sfx, sfxEvent } from './sound.js';
 import { aiKick, aiReset } from './ai.js';
-import { netSend } from './online.js';
+import { netAct } from './online.js';
 
 /* a different game is on show (a new deal, a loaded save, a replay, an online game): draw its board, drop the old one's
    elements, fit it */
@@ -28,29 +28,12 @@ export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
 
 export function computeTargets(){
   const T=new Map();UI.targets=T;if(!S||S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
-  const act=S.turn.active;
-  if(UI.mode==='card'){
-    const id=UI.card,d=def(id);if(!d)return;
-    if(typeOf(id)==='native'){for(const[k,v]of nativeTargets(S.cur,UI.piece))T.set(k,v);return;}
-    const isAct=act&&act.id===id;
-    const pi=isAct?act.pi:UI.piece;
-    const syms=isAct?[act.sym]:(d.s==='*'?['j','w','v']:[d.s]);
-    const budget=isAct?act.left:d.p;
-    for(const[k,v]of reach(S.cur,pi,syms,budget))T.set(k,v);
-    // a card from hand can also be dropped onto rubble / base camp / a rubble blockade next to the explorer
-    if(!isAct&&cur().hand.includes(id))for(const[k,v]of payTargets(S.cur,UI.piece))if(!T.has(k))T.set(k,v);
-  }else if(UI.mode==='idle'){
-    for(const[k,v]of payTargets(S.cur,UI.piece))T.set(k,v);
-  }else if(UI.mode==='discardFor'&&UI.pending){T.set(UI.pending.tk,UI.pending);}
+  const src=UI.mode==='card'?cardTargets(S.cur,UI.piece,UI.card):UI.mode==='idle'?payTargets(S.cur,UI.piece):null;
+  if(src)for(const[k,v]of src)T.set(k,v);
+  else if(UI.mode==='discardFor'&&UI.pending)T.set(UI.pending.tk,UI.pending);
 }
-export function cardUsable(id){
-  const t=typeOf(id),d=CT[t],pl=cur();if(!d)return false;const pk=pl.pieces[UI.piece];
-  if(!pk||pk==='done')return d.c==='p'&&t!=='native';
-  if(t==='native')return nativeTargets(S.cur,UI.piece).size>0;
-  if(d.c==='p')return true;
-  if(payTargets(S.cur,UI.piece).size)return true;
-  return reach(S.cur,UI.piece,d.s==='*'?['j','w','v']:[d.s],d.p).size>0;
-}
+/* the card can do something now: an action card (played from the hand), or somewhere on the board to put it */
+export function cardUsable(id){const d=def(id);return!!d&&((d.c==='p'&&typeOf(id)!=='native')||cardTargets(S.cur,UI.piece,id).size>0);}
 export const isTargeted=id=>{const d=def(id);return d&&(d.c!=='p'||typeOf(id)==='native');};
 export function firstPiece(){return Math.max(0,cur().pieces.findIndex(k=>k!=='done'));}
 /* after the state changed, put the UI into the matching mode */
@@ -79,8 +62,8 @@ export function playEvents(ev,viewer){
   }
 }
 export function act(a){
-  if(!S||!canAct())return;
-  if(online()){NET.busy=true;netSend({t:'act',a});render();return;}
+  if(!S||!canAct()){if(online()&&S&&!S.over&&S.owners[S.cur]===myId())toast('Reconnecting… your move wasn’t sent.');return;}
+  if(online()){netAct({t:'act',a});render();return;}
   const prevCur=S.cur,prevRound=S.round;
   const r=recApply(G.rec,S.cur,a);
   if(!r.ok){sfx('error');toast(r.err);render();return;}
@@ -159,7 +142,7 @@ export function startEndTurn(){
 export function finishTurn(){act({t:'end',keep:UI.mode==='endTurn'?UI.picks.slice():[]});}
 export function undo(){
   if(!canAct())return;
-  if(online()){if(NET.canUndo){NET.busy=true;netSend({t:'undo'});}return;}
+  if(online()){if(NET.canUndo)netAct({t:'undo'});return;}
   if(!recUndo(G.rec))return;
   UI.picks=[];UI.buy=null;UI.pending=null;UI.mode='idle';UI.card=null;
   syncMode(false);render();save();

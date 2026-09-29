@@ -136,6 +136,9 @@ The acting seat must be `S.cur`, except for `resign`. A refused action returns `
 - Single-use cards (`once`) are removed from the game when their effect is used.
 - A single-use *coin or joker* card used to pay is also removed. Any other card used to pay goes to play as usual.
 
+**Arriving:** when a player's last explorer reaches El Dorado, their turn ends at once: the hand and the cards played go to the
+discard pile, nothing is drawn, and the next player moves (`turn` event). With two explorers each, the first to arrive doesn't end it.
+
 **Game end:**
 
 - Full race (`fullRace`, the default): the game ends at the end of the round in which at most one player is still racing.
@@ -174,6 +177,7 @@ Equal keys share a place. `winners` are the players in place 1.
 | `reach(seat, pi, syms, budget)` | `Map<key or 'B'+i, {kind: 'move'\|'bl', cost, sym, path: [key…], pi, bl?}>`: the cheapest route to each space (Dijkstra per symbol, first symbol wins ties). A route may pass blockades of its symbol by paying their cost; it can't enter occupied spaces, and it stops at El Dorado. |
 | `nativeTargets(seat, pi)` | `Map<key or 'B'+i, {kind: 'native'\|'nativebl', path, cost: 0, pi, bl}>` |
 | `payTargets(seat, pi)` | `Map<key or 'B'+i, {kind: 'rubble'\|'camp'\|'blr', need, path?, pi, bl?}>` (only those the hand can pay) |
+| `cardTargets(seat, pi, id)` | Where that card can go now: a movement card's reach plus the rubble / camps / rubble blockades it could be given up for; the card in play: its leftover strength's reach; the Native: `nativeTargets`. The page's targets and "card usable" come from it. |
 | `stackOf(type)` | `{src: 'm'\|'r', i, s}` or `null` |
 | `cantBuy(seat, type)` | Why `seat` can't buy that card now, payment aside (`''` if it can): not their turn, a removal still to choose, already bought this turn, sold out, reserve closed. The buy action and the page's market both use it. |
 | `buyOptions(seat)` | `[{src, i, t}]`: what `seat` can buy now with the coins in hand (market first) |
@@ -189,7 +193,7 @@ Equal keys share a place. `winners` are the players in place 1.
 A game is its setup plus its list of actions; any position is rebuilt by replaying them.
 
 ```
-{ kind: 'eldorado-replay', v: 2, course: id, seed, rng, fullRace, privacy?,
+{ kind: 'eldorado-replay', v: 3, course: id, seed, rng, fullRace, privacy?,
   players: [{name, color, bot?}], actions: [[seat, action]…],
   mark,                          // records in play only: actions before it can't be undone
   title?, result?: {places, rounds} }  // finished logs
@@ -209,7 +213,7 @@ A game is its setup plus its list of actions; any position is rebuilt by replayi
 | `recUndo(rec)` | Drops the last action and rebuilds `S` and `MAP`. |
 | `recState(rec)` → `{S, MAP}` | The position a record leads to (the module's `S` and `MAP` are left as they were). |
 | `recFinal(rec)` | The finished log, with `title` and `result` (`{places, rounds}`, read from the game on show, `S`), and without `mark`. |
-| `replayCheck(log)` | `null`, or why the log can't be played. |
+| `replayCheck(log)` | `null`, or why the log can't be played. Records before v3 were played under older rules (the turn went on after the last explorer arrived) and are refused; the server deleted its stored ones once (settings `logs_v3`), rooms with one close, and the page dropped its old saves (keys `-v1`). |
 | `replayStart(log)`, `replayStep(log, i)` | Rebuild step by step; `replayStep` returns `applyAction`'s result. |
 
 **Training logs** (`v: 1`, tools only) use one generator for the whole game, `mulberry32(rng)`, consumed only by the recorded actions.
@@ -418,8 +422,8 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 
 | key | holds |
 |---|---|
-| `eldorado-game-v1` | the game in progress: its record, `S` rebuilt from it |
-| `eldorado-games-v1` | up to 20 finished local games (logs) |
+| `eldorado-game-v2` | the game in progress: its record, `S` rebuilt from it (the -v1 keys held records from before v3; dropped on load) |
+| `eldorado-games-v2` | up to 20 finished local games (logs) |
 | `ed-token` | the sign-in token |
 | `eldorado-seats` | the AI choices on the start screen |
 | `eldorado-mkt` | whether the market is open |

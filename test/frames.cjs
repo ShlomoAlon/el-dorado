@@ -2,7 +2,7 @@
 //   - select a card, move an explorer, cancel: no restyle of the whole board (at most a few hundred elements), no long task
 //   - the explorer's move (slide and hop) and the cards' moves run on the compositor (no animation fell back to the main thread)
 //   NODE_PATH=$(npm root -g) node test/frames.cjs [--verbose]
-const { chromium } = require('playwright');
+const { chromium, settle } = require('./lib.cjs');
 const path = require('path');
 const V = process.argv.includes('--verbose');
 let fails = 0; const ok = (name, pass, detail) => { if (!pass) fails++; console.log(`${pass ? 'ok  ' : 'FAIL'} ${name}${detail ? ': ' + detail : ''}`); };
@@ -16,9 +16,9 @@ function summary(T) {
 (async () => {
   const b = await chromium.launch(), ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
   const p = await ctx.newPage(), errs = []; p.on('pageerror', e => errs.push(e.message));
-  await p.goto('file://' + path.join(__dirname, '..', 'public/index.html')); await p.waitForTimeout(800);
+  await p.goto('file://' + path.join(__dirname, '..', 'public/index.html'));
   await p.waitForFunction(() => window.__ED && window.__ED.S); await p.click('#sGo');
-  await p.waitForFunction(() => !window.__ED.UI.preview && !window.__ED.UI.anim && document.querySelectorAll('#cards .card').length === 4); await p.waitForTimeout(1000);
+  await p.waitForFunction(() => !window.__ED.UI.preview && !window.__ED.UI.anim && document.querySelectorAll('#cards .card').length === 4); await settle(p);
   const cdp = await ctx.newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
   const traced = async (label, f, ms = 900) => { await p.waitForTimeout(300); await b.startTracing(p, { categories: CATS }); await p.evaluate(f); await p.waitForTimeout(ms);
     const s = summary(JSON.parse((await b.stopTracing()).toString()).traceEvents); if (V) console.log('     ', label, JSON.stringify(s)); return s; };

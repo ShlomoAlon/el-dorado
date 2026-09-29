@@ -4,7 +4,7 @@ import { S, isActive, recState, replayCheck, recFinal } from '../engine.gen.js';
 export const UI = { mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), cover: false, hover: null, mktOpen: true, allOpen: false,
   buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null };
 export const NET = { available: false, cfg: null, user: null, token: null, ws: null, lobbyWs: null, room: null, seat: -1, connected: false, deadline: null, skew: 0,
-  canUndo: false, busy: false, status: '', rooms: [], active: null, code: null, pendingRoom: null, viewUser: null };
+  canUndo: false, busy: false, heard: 0, status: '', rooms: [], active: null, code: null, pendingRoom: null, viewUser: null };
 /* rec: the local game's record (engine recNewGame; saved with the game, kept as a replay once it's over).
    replay: set while watching a replay (replay.js): nothing can be played then */
 export const G = { rec: null, replay: null };
@@ -22,15 +22,17 @@ export const hp = () => S.players[viewIdx()];
 export const humanRacing = () => S.players.some(p => !p.ai && isActive(p));
 export const inGame = () => !!(S && !S.over && !G.replay && !UI.preview);
 
-/* the local save is the game's record (the state is rebuilt from it): {rec, S, MAP} or null */
-const SAVE_KEY = 'eldorado-game-v1';
+/* the local save is the game's record (the state is rebuilt from it): {rec, S, MAP} or null.
+   (-v1 keys: games recorded under older rules, which can't be replayed; dropped) */
+const SAVE_KEY = 'eldorado-game-v2';
+try { localStorage.removeItem('eldorado-game-v1'); localStorage.removeItem('eldorado-games-v1'); } catch (e) { }
 export function loadSave() { try { const rec = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (!rec || replayCheck(rec)) return null; return { rec, ...recState(rec) }; } catch (e) { return null; } }
 export function save() {
   if (online() || G.replay || UI.preview) return; // (a game not started yet is never saved)
   try { if (G.rec) localStorage.setItem(SAVE_KEY, JSON.stringify(G.rec)); else localStorage.removeItem(SAVE_KEY); } catch (e) { }
 }
 /* finished local games are kept on this device (newest first, up to 20) to watch again from Replays */
-const MYGAMES = 'eldorado-games-v1';
+const MYGAMES = 'eldorado-games-v2';
 export function myGames() { try { return JSON.parse(localStorage.getItem(MYGAMES) || '[]'); } catch (e) { return []; } }
 export function keepLocalReplay() {
   const L = recFinal(G.rec); G.rec = null; if (!L) return null; L.created = Date.now(); L.lid = L.created.toString(36);

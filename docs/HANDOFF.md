@@ -35,6 +35,10 @@ His user preference: think carefully before every answer, even simple ones.
 
 ## 3. Current status at handoff
 
+- **AI training is paused** (owner, 2026-09-29): it took the machine's CPU from everything else; the priority is a professional
+  first deployment. Don't restart the training job (tools/ai supervisor) until he asks. The shipped network is first-first1-351;
+  the AI ratings (AIS[].rating) are still the ones measured for first-first1-best: rerun `nice -n 10 node tools/ai/calibrate_ais.mjs 720 2`
+  when the machine is free (move tools/ai/data/calibration-*.json aside first: those games used the previous network).
 - Code complete and tested locally (engine test + 3-browser online e2e against `wrangler dev`).
 - **Deployed** at `https://el-dorado.shlomoalon9.workers.dev` via Cloudflare Workers Builds from `main` (preview builds off).
   D1 auto-provisioned fine on the first deploy. Google OAuth client created; its ID is in `wrangler.jsonc` `vars`.
@@ -123,7 +127,7 @@ wrangler.jsonc            Worker config: assets ./public, D1 "DB", DOs ROOMS(Roo
 src/engine_data.js        CT (cards), MARKET0/RESERVE0, BLOCKADES, BOARDS, hex geometry, genMap/buildMap (seeded)
 src/engine_ai.js          named AI players (AIS: Fawcett / Humboldt / Raleigh) over engine_bot.js: aiChoose/aiStep, per-game
                           plan cache, aiNetDecode (half-float network). engine_bot.js itself is the training code's: don't change it
-src/ai/first.bin          the shipped network (tools/ai/pack.mjs from tools/ai/models/first-first1-best.json; build copies it to public/ai/)
+src/ai/first.bin          the shipped network (tools/ai/pack.mjs from tools/ai/models/first-first1-351.json; build copies it to public/ai/)
 src/engine_rules.js       S/MAP globals, newGame, reach/nativeTargets/payTargets, applyAction, advance, resign,
                           endGame (placements), eloDeltas, redact
 src/client/shell.html     <title>, fonts, all CSS (design tokens in :root), SVG symbol defs, DOM skeleton
@@ -163,7 +167,7 @@ Every action also emits `play{pl,k,ts,…}` (k = move/native/rubble/camp/blr/act
 it may only name cards that just became public (in play or removed); `end` carries counts only (`kept`, `disc`). engine.test checks this.
 Log lines are `{p,t,r}` (r = round; lines the server adds have none).
 `S.hist` (v6) is the turn history the history panel shows: the last 60 turns, oldest first, each `{i (running number), p (seat), r (round),
-s: steps, end}`; a step is a `play` event without `e`/`pl` (so public only, like the events), plus `bl`/`arr` from `block`/`arrive`,
+s: steps, end}` (`end`: the turn passed on, also when the last explorer arrived); a step is a `play` event without `e`/`pl` (so public only, like the events), plus `bl`/`arr` from `block`/`arrive`,
 `{k:'timeout'}` and `{k:'resign'}`; a leftover-strength move adds to the step before. Built in `applyAction` (`hist()`), so it
 replays with the record and is the same for every seat after `redact`. `botClone` gives look-ahead copies an empty one (engine.test checks
 it matches the game's `play` events).
@@ -234,7 +238,12 @@ incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning
   (Orellana, the network one action at a time, was retired.) Searching further rounds ahead (`search.kind:'deep'`, depth 1–3,
   ~2.8 s per turn) was measured against Humboldt with tools/ai/h2h.mjs: depth 1 and 3 about as strong as Fawcett's wide search,
   depth 2 no better than Humboldt; the wide search costs ~1/18 of the time, so it is the level shipped.
-  The network (`first-first1-best`, trained under the fixed single-use rules, 2026-09-28; earlier `first-distill-35`, `first-distill-22`, `first-qmax`) only fits First Expedition (`botNetReady`); elsewhere the network AIs play as the planner.
+  The network (`first-first1-351`: the first1 training run at iteration 351, 2026-09-29; before it `first-first1-best`, then
+  `first-distill-35`, `first-distill-22`, `first-qmax`) only fits First Expedition (`botNetReady`); elsewhere the network AIs play as the planner.
+  **Keep shipping the best network trained** (owner, 2026-09-29): before promoting, play the candidate against the shipped one with
+  `node tools/ai/ladder.mjs match <shipped> <candidate> 128 3` (512 games; each side with and without the planner search). The
+  2026-09-29 check, all under the current rules: first-first1-best vs distill-35 (the one shipped before) 246 wins to 11, vs
+  distill-53 236 to 20, vs multi4-40 247 to 9, vs ck198 122 to 136 (even), vs the run at iteration 351 98 to 161, hence 351.
 - Network shipping: half floats, 339 KB (288 KB gzip), outputs within 2e-4 of the JSON (checked in engine.test). The site
   fetches `/ai/first.bin` only when a network AI is about to move; the artifact has it inline (`AI_NET.b64`); the worker imports
   the .bin (wrangler's default Data rule → ArrayBuffer). To ship a new network: `node tools/ai/pack.mjs <model.json>` then build.

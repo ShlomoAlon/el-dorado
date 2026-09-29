@@ -70,14 +70,15 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
 // the network plays on its own course (First Expedition) and the AIs fall back to the route planner elsewhere
 {
   const { readFileSync } = await import('node:fs');
-  const full = JSON.parse(readFileSync(new URL('../tools/ai/models/first-first1-best.json', import.meta.url), 'utf8'));
+  const full = JSON.parse(readFileSync(new URL('../tools/ai/models/first-first1-351.json', import.meta.url), 'utf8'));
   const half = E.aiNetDecode(readFileSync(new URL('../src/ai/first.bin', import.meta.url)));
   assert(half.course === full.course && half.nf === full.nf && half.w1T.length === full.w1T.length, 'packed network header');
-  // 'play' events (shown to every player online) name only cards that just became public: in play or removed from the game
+  // 'play' events (shown to every player online) name only cards that just became public: in play, discarded (an arrival
+  // clears the finished player's cards) or removed from the game
   let plays = 0;
   const publicEvents = ev => { for (const e of ev) { if (e.e !== 'play') continue; plays++;
     if (e.k === 'end') { assert(!e.ts && Number.isInteger(e.kept) && Number.isInteger(e.disc), 'end event shows cards'); continue; }
-    const pub = {}; for (const id of [...E.S.players[e.pl].play, ...E.S.trash]) pub[E.S.cards[id]] = (pub[E.S.cards[id]] || 0) + 1;
+    const pub = {}; for (const id of [...E.S.players[e.pl].play, ...E.S.players[e.pl].discard, ...E.S.trash]) pub[E.S.cards[id]] = (pub[E.S.cards[id]] || 0) + 1;
     for (const t of e.ts) assert(pub[t]-- > 0, 'play event names a card that is not public: ' + e.k + ' ' + t); } };
   const aiGame = (course, ais, check) => {
     E.newGame({ course, seed: (Math.random() * 1e9) | 0, fullRace: true, players: ais.map((a, i) => ({ name: 'P' + i, color: '#fff', ai: a })) });
@@ -87,7 +88,8 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
     // the same for every seat after redaction
     const H = []; for (const e of all) { let t = H[H.length - 1];
       if (e.e === 'play') { if (!t || t.p !== e.pl || t.end) H.push(t = { i: t ? t.i + 1 : 0, p: e.pl, s: [] }); const l = t.s[t.s.length - 1];
-        if (!(e.k === 'move' && e.more && l && l.k === 'move') && !(e.k === 'trash' && !e.ts.length)) { t.s.push({ k: e.k, ...(e.ts ? { ts: e.ts } : {}) }); if (e.k === 'end') t.end = 1; } } }
+        if (!(e.k === 'move' && e.more && l && l.k === 'move') && !(e.k === 'trash' && !e.ts.length)) { t.s.push({ k: e.k, ...(e.ts ? { ts: e.ts } : {}) }); if (e.k === 'end') t.end = 1; } }
+      else if (e.e === 'turn' && t) t.end = 1; }
     const got = E.S.hist.map(t => ({ i: t.i, p: t.p, s: t.s.map(x => ({ k: x.k, ...(x.ts ? { ts: x.ts } : {}) })), ...(t.end ? { end: 1 } : {}) }));
     assert(got.length <= 60 && got.length === Math.min(60, H.length), 'history keeps the last 60 turns: ' + got.length + ' of ' + H.length);
     { const a = JSON.stringify(got), b = JSON.stringify(H.slice(-got.length)); if (a !== b) { let k = 0; while (a[k] === b[k]) k++; console.error(a.slice(k - 200, k + 200) + '\n---\n' + b.slice(k - 200, k + 200)); } assert(a === b, 'history differs from the play events'); }

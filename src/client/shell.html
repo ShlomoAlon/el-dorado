@@ -53,7 +53,7 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 /* the menu panel: one size for every menu screen, the contents scroll inside it */
 .modal.menu{width:min(620px,calc(100% - 32px));height:min(860px,calc(100% - 32px));box-sizing:border-box;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
 .modal.menu::-webkit-scrollbar{width:8px}.modal.menu::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
-.seg.modes{margin:0 0 14px}
+.seg.modes{margin:0 0 14px;display:grid;grid-template-columns:repeat(3,1fr);text-align:center}.seg.modes[hidden]{display:none}.seg.modes label{padding-inline:4px;white-space:nowrap}
 .lbn{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;text-align:left}.lbn:hover{text-decoration:underline}
 .pfh{display:flex;align-items:center;gap:12px;margin:4px 0 12px}.pfh h3{margin:0;font-size:18px}
 .av.big{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(233,178,74,.18);color:var(--gold2);font-weight:800;font-size:18px;flex:none}
@@ -177,11 +177,14 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .brandbox{display:flex;align-items:baseline;gap:10px;padding:0 14px;height:var(--hudH);box-sizing:border-box;border-radius:12px;white-space:nowrap}
 .brand{font-family:var(--display);font-size:19px;color:var(--gold2);line-height:calc(var(--hudH) - 2px)}
 #roundLbl{color:var(--muted);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-variant-numeric:tabular-nums}
-#players{display:flex;gap:8px;flex:1;min-width:0;justify-content:safe center;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
-.pchip{display:flex;align-items:center;gap:8px;padding:0 11px 0 8px;height:var(--hudH);box-sizing:border-box;flex:none;border-radius:12px;white-space:nowrap;font-size:13px;transition:border-color .3s,box-shadow .3s,transform .3s var(--ease)}
+#players{display:flex;gap:8px;flex:1;min-width:0;justify-content:safe center;flex-wrap:nowrap;overflow:hidden;container:players/inline-size}
+/* short of room, the chips lose the card count first, then the AI tag; the names come last (ellipsis) */
+@container players (max-width:560px){.pchip .st{display:none}}
+@container players (max-width:380px){.pchip .aitag{display:none}.pchip{gap:6px;padding:0 9px 0 7px}}
+.pchip{display:flex;align-items:center;gap:8px;padding:0 11px 0 8px;height:var(--hudH);box-sizing:border-box;flex:0 1 auto;min-width:0;border-radius:12px;white-space:nowrap;font-size:13px;transition:border-color .3s,box-shadow .3s,transform .3s var(--ease)}
 .pchip.on{border-color:var(--pc);box-shadow:0 0 0 1px var(--pc) inset,0 10px 30px rgba(0,0,0,.35)}
 .pchip .dot{width:14px;height:14px;border-radius:50%;background:var(--pc);box-shadow:0 0 0 2px rgba(0,0,0,.45) inset}
-.pchip .nm{font-weight:700}
+.pchip>*{flex:none}.pchip .nm{font-weight:700;flex:0 1 auto;min-width:1.5em;overflow:hidden;text-overflow:ellipsis} /* short of room, chips shrink: the name gives way (never a chip cut in half) */
 .pchip .st{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
 .pchip .bk{display:flex;gap:4px;align-items:center}.pchip .bk b{margin-left:3px;font-size:12px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
 .pchip .bk i{width:9px;height:9px;border-radius:2px;display:block;transform:rotate(45deg);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
@@ -304,7 +307,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .sclose{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:rgba(0,0,0,.35);cursor:pointer;display:grid;place-items:center;font-size:15px;color:var(--muted)}
 .sclose:hover{color:var(--text)}
 #menu.closing{opacity:0;transition:opacity .16s}
-.acct .acb{margin-left:auto;display:flex;gap:14px;white-space:nowrap}.acct>span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct.inroom #acProfile{display:none}.acct .acb{margin-left:auto;display:flex;gap:14px;white-space:nowrap}.acct>span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .scrim.plain{background:rgba(4,8,7,.7)}
 
 /* ---------- bottom controls */
@@ -487,6 +490,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 }
 @container game (max-height:520px){#app{--zoomFoot:140px}.zoomctl{top:var(--row2,64px);transform:none;flex-direction:row}.zoomctl button:not(#fsBtn):not(#sndBtn):not(#zfit){display:none}
 }
+@container game (max-width:800px){.brandbox{display:none}}
 @container game (max-width:900px){
   #app{--cw:104px}
   .brandbox .brand{font-size:16px}
@@ -591,12 +595,12 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <div id="overlay"></div>
 <!-- the menu: one native dialog; every screen is written here once and shown with the hidden attribute. Choices are
      native form controls (they keep their own state); ui_menu.js reads them and fills only the data lists. -->
-<script>/* a saved game or a room / replay link opens straight into it: no start screen first */try{if(localStorage.getItem('eldorado-game-v1')||/[?&](room|replay)=/.test(location.search))document.documentElement.classList.add('resume')}catch(e){}</script>
+<script>/* a saved game or a room / replay link opens straight into it: no start screen first */try{if(localStorage.getItem('eldorado-game-v2')||/[?&](room|replay)=/.test(location.search))document.documentElement.classList.add('resume')}catch(e){}</script>
 <dialog id="menu" aria-label="Menu" open>
 <form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
   <div class="acct" id="acct"></div>
   <div class="ingame" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn pri" id="sBack">Back to game</button></span></div>
-  <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>On this device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label></div>
+  <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>This device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label></div>
   <section data-screen="setup">
     <h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
     <div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div><p class="note" id="n2note" hidden>Two players each lead two explorers. Both must reach El Dorado.</p></div>
@@ -604,7 +608,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div class="field"><label>Course</label><div class="clist" id="sC"><!--COURSES:course--></div><div class="routeInfo" id="rInfo"><!--ROUTE--></div><div class="aiNote" id="aiNote" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><label data-v="1"><input type="radio" name="full" value="1" checked><span>When all but one arrive</span></label><label data-v="0"><input type="radio" name="full" value="0"><span>At the first arrival (official)</span></label></div></div>
     <div class="field"><label class="chk"><input type="checkbox" name="priv" id="sPriv"> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
-    <div class="mrow"><button type="button" class="btn" id="sReplays">Replays</button><button type="button" class="btn" id="sResume" hidden>Resume saved game</button><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
+    <div class="mrow"><button type="button" class="btn" id="sResume" hidden>Resume saved game</button><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
   </section>
   <section data-screen="online" hidden>
     <div id="oOff" hidden><h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p></div>
@@ -616,6 +620,8 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
       <div class="seg" id="hTabs"><label data-v="play"><input type="radio" name="otab" value="play" checked><span>Play</span></label><label data-v="board"><input type="radio" name="otab" value="board"><span>Leaderboard</span></label><label data-v="me"><input type="radio" name="otab" value="me"><span>Profile</span></label></div>
       <div class="tab" data-tab="play">
         <div class="rejoin" id="rejoin" hidden><span>You have a game in progress.</span><button type="button" class="btn pri" id="rejoinGo">Rejoin</button></div>
+        <p class="note" id="oBusy" hidden>You’re in a game. Finish it, or resign, to play another; <b>Back to game</b> is at the top.</p>
+        <div id="oPlay">
         <div class="field"><label>Quick match</label><div class="boxrow"><span class="note">Join the next public game. It starts as soon as 3 players are in (90 s added per turn, unused time carries over, rated).</span><button type="button" class="btn pri" id="qGo">Quick match</button></div></div>
         <div class="field"><label>Create a room</label>
           <div class="opts"><div class="seg"><label data-v="1"><input type="radio" name="pub" value="1" checked><span>Public</span></label><label data-v="0"><input type="radio" name="pub" value="0"><span>Private</span></label></div><div class="seg"><label data-v="2"><input type="radio" name="max" value="2"><span>2 players</span></label><label data-v="3"><input type="radio" name="max" value="3" checked><span>3 players</span></label><label data-v="4"><input type="radio" name="max" value="4"><span>4 players</span></label></div><div class="seg"><label data-v="1"><input type="radio" name="rated" value="1" checked><span>Rated</span></label><label data-v="0"><input type="radio" name="rated" value="0"><span>Unrated</span></label></div><div class="seg"><label data-v="60"><input type="radio" name="turn" value="60"><span>60s</span></label><label data-v="90"><input type="radio" name="turn" value="90" checked><span>90s</span></label><label data-v="120"><input type="radio" name="turn" value="120"><span>2 min</span></label><label data-v="180"><input type="radio" name="turn" value="180"><span>3 min</span></label></div></div>
@@ -625,13 +631,13 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
         <div class="field"><label>Join with a code</label><div class="prow"><input id="jCode" maxlength="5" placeholder="e.g. K7Q2M" autocomplete="off"><button type="button" class="btn" id="jGo">Join</button></div></div>
         <div class="field"><label>Open rooms</label><div id="roomsOpen"></div></div>
         <div class="field" id="liveBox" hidden><label>Games in progress</label><div id="roomsLive"></div></div>
+        </div>
       </div>
       <div class="tab" data-tab="board"><div id="lbList"><p class="note">Loading…</p></div></div>
       <div class="tab" data-tab="me"><button type="button" class="linkbtn" id="pfBack" hidden>‹ Leaderboard</button><div id="pf"><p class="note">Loading…</p></div>
         <div class="field" id="meNameBox"><label>Display name</label><div class="prow"><input id="meName" maxlength="16"><button type="button" class="btn" id="meSave">Save</button></div></div></div>
     </div>
     <p class="note warn" id="hErr"></p>
-    <div class="mrow"><button type="button" class="btn" data-go="setup">Back</button></div>
   </section>
   <section data-screen="room" hidden>
     <h2 id="rlTitle">Room</h2><p class="sub" id="rlSub"></p>
@@ -649,7 +655,6 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div class="field"><label>Your games</label><div id="rMine" class="rlist"></div></div>
     <div class="field"><button type="button" class="btn" id="rUp">Upload a game log</button><input type="file" id="rFile" accept=".json,application/json" hidden> <span id="rMsg" class="note"></span></div>
     <div class="field"><label>Recent games and uploads</label><div id="rList" class="rlist"></div></div>
-    <div class="mrow"><button type="button" class="btn" data-go="setup">Back</button></div>
   </section>
 </form>
 </dialog>

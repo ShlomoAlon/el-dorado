@@ -17,8 +17,8 @@ import { hudPart, hudInit } from './hud.js';
 import { feedPart, histInit } from './feed.js';
 import { showRules, showPile, closeModal, modalOpen } from './dialogs.js';
 import { derivePart, act, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, confirmDiscardFor, confirmTrash, cancelMode, undo, resumeSaved } from './actions.js';
-import { MENU, menuInit, showSetup, showHub, setupSync, prepareGame, startLocal, radio } from './menu.js';
-import { netInit, joinRoom, netSend, exitOnline } from './online.js';
+import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, startLocal, radio } from './menu.js';
+import { netInit, joinRoom, netSend } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
 import { soundInit } from './sound.js';
 import { debugInit } from './debug.js';
@@ -45,7 +45,7 @@ function boot() {
     document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
   }
   // Menu: the start screen, without ending the game in progress (it offers Back to game and Resign)
-  $('#menuBtn').onclick = () => { if (G.replay) { exitReplay(); return; } if (S && S.owners && S.over) { exitOnline(); showHub(); } else showSetup(); };
+  $('#menuBtn').onclick = () => { if (G.replay) exitReplay(); else showMenu(); };
   window.addEventListener('keydown', e => {
     if (replayKeys(e)) return; if (e.target.tagName === 'INPUT') return;
     if (e.key === 'Escape' && UI.allOpen) { openAll(false); return; }
