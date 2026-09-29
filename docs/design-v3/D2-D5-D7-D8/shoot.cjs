@@ -8,8 +8,9 @@ const want = new Set(which.split(','));
 const log = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'test/fixtures/replay.json'), 'utf8'));
 fs.mkdirSync(out, { recursive: true });
 
-// the same deal every time: Math.random is a seeded generator
-const SEED = () => { let a = 20260929; Math.random = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+// the same deal every time: Math.random and crypto.getRandomValues (the engine's shuffle secret) are a seeded generator
+const SEED = () => { let a = 20260929; Math.random = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  crypto.getRandomValues = arr => { for (let i = 0; i < arr.length; i++) arr[i] = Math.floor(Math.random() * 4294967296) & (arr.BYTES_PER_ELEMENT === 4 ? 0xffffffff : arr.BYTES_PER_ELEMENT === 2 ? 0xffff : 0xff); return arr; }; };
 
 async function page(b, w, h, dsf = 1) {
   const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dsf });
@@ -58,7 +59,7 @@ const N = (d, st, size) => `${d}-${tag}-${st}-${size}`;
     // a game in mid-play (six turns: two rounds), the History panel expanded, the Menu during the game
     if (want.has('D2') || want.has('D8')) { const p = await page(b, w, h); await open(p, url); await start(p);
       for (let t = 0; t < 6; t++) await turn(p, 2);
-      await p.evaluate(() => { const E = window.__ED, id = E.S.players[E.S.cur].hand[0]; E.onHandCard(id); }); await idle(p);
+      await p.evaluate(() => { const E = window.__ED; for (const id of E.S.players[E.S.cur].hand) { E.onHandCard(id); if (E.UI.targets.size) return; E.cancelMode(); } }); await idle(p);
       for (const d of ['D2', 'D8']) if (want.has(d)) await shot(p, N(d, 'game', sz));
       if (want.has('D2')) {
         await p.evaluate(() => window.__ED.cancelMode()); await idle(p);
