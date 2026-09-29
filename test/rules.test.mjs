@@ -3,20 +3,23 @@
 // the reserve, the Transmitter, action cards, single-use cards, the end of a turn, both end-of-game rules and their
 // tie-break, two explorers each, resigning, what undo may take back, and what each player is shown.
 //   node test/rules.test.mjs
-import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cardTargets, cantBuy, buyOptions, COURSES, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck } from '../src/engine.gen.js';
+import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cardTargets, cantBuy, buyOptions, COURSES, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck, setAssertMode } from '../src/engine.gen.js';
+setAssertMode({ debug: true }); // a broken invariant fails the run
 let checks = 0; const failures = [];
 const ok = (cond, what) => { checks++; if (!cond) failures.push(what); };
 
 /* a board from rows of space codes: j/w/v + strength (jungle, water, village), r/c + count (rubble, base camp), m (mountain),
    s (start), g + j|w (El Dorado on its jungle or water side), . (no space). Row r holds the spaces (q, r) for q = 0, 1, …;
-   (q, r) touches (q±1, r), (q+1, r−1), (q, r−1), (q−1, r+1) and (q, r+1). Row 4 is parking for explorers not in the check. */
+   (q, r) touches (q±1, r), (q+1, r−1), (q, r−1), (q−1, r+1) and (q, r+1). Row 4 is parking for explorers not in the check;
+   it leads to an El Dorado space of its own (9,4), as every explorer on a real course can reach El Dorado (buildCourse). */
 function board(rows, blockades = []) {
   const hexes = new Map(), add = (q, r, code) => {
     if (code === '.') return; const t = code[0], k = key(q, r);
     hexes.set(k, { type: t, val: t === 'g' || t === 'm' || t === 's' ? 1 : +code.slice(1), sym: t === 'g' ? code[1] : undefined, q, r, k, tile: 0, x: q, y: r });
   };
   rows.forEach((row, r) => row.split(/\s+/).forEach((code, q) => add(q, r, code)));
-  for (let q = 0; q < 8; q++) add(q, 4, 's');
+  for (let q = 0; q < 9; q++) add(q, 4, 's');
+  add(9, 4, 'gj');
   const edgeConn = new Map(); blockades.forEach(([a, b], conn) => { edgeConn.set(a + '|' + b, conn); edgeConn.set(b + '|' + a, conn); });
   return { hexes, edgeConn, tiles: [], conns: [], starts: [], goals: [], blockDefs: [], city: { x: 0, y: 0, dx: 1, dy: 0 }, endSym: 'j', minX: 0, minY: 0, w: 1, h: 1, route: [], name: 'test', course: 'test' };
 }
@@ -178,11 +181,13 @@ act({ t: 'end', keep: [] }, 2);
 ok(S.over && S.winners.join() === '1', 'first-arrival rule: over at the end of that round');
 game(['s gw'], { players: 3 });
 for (const [i, blocks] of [[0, [1]], [1, [0, 2]], [2, []]]) { S.players[i].pieces = ['done']; S.players[i].fin = 1; S.players[i].blocks = blocks; }
+S.endTriggered = true; // (as the arrivals would have: checkEnd)
 S.blockades = [{ n: 2, k: 'j', v: 1, conn: 0, owner: 1 }, { n: 6, k: 'r', v: 2, conn: 1, owner: 0 }, { n: 1, k: 'j', v: 1, conn: 2, owner: 1 }];
 act({ t: 'end', keep: [] }); act({ t: 'end', keep: [] }, 1); act({ t: 'end', keep: [] }, 2);
 ok(S.over && S.places.join() === '2,1,3', 'tie-break: most blockades first');
 game(['s gw'], { players: 3 });
 for (const [i, blocks] of [[0, [1]], [1, [0]], [2, []]]) { S.players[i].pieces = ['done']; S.players[i].fin = 1; S.players[i].blocks = blocks; }
+S.endTriggered = true; // (as the arrivals would have: checkEnd)
 S.blockades = [{ n: 3, k: 'j', v: 1, conn: 0, owner: 1 }, { n: 5, k: 'r', v: 2, conn: 1, owner: 0 }];
 act({ t: 'end', keep: [] }); act({ t: 'end', keep: [] }, 1); act({ t: 'end', keep: [] }, 2);
 ok(S.over && S.places.join() === '1,2,3', 'tie-break: then the highest-numbered blockade');
@@ -192,7 +197,7 @@ act({ t: 'move', card: S.players[0].hand[0], pi: 0, to: '1,0' });
 ok(S.players[0].pieces[0] === 'done' && !S.players[0].fin && S.cur === 0, 'with two explorers, one arriving is not enough: the turn goes on');
 ok(act({ t: 'move', card: S.players[0].hand[0], pi: 1, to: '1,2' }).ok && S.cur === 1, 'the other explorer still moves; when it arrives too, the turn ends');
 // ---------- resigning, turns, validation
-game(['s j1']);
+game(['s j1 gj']);
 ok(!act({ t: 'end', keep: [] }, 1).ok, 'out of turn: refused');
 ok(!act({ t: 'endgame' }, 1).ok, 'ending the game needs the turn too');
 ok(!act({ t: 'move', card: 'c9999', pi: 0, to: '1,0' }).ok && !act({ t: 'nope' }).ok && !act(null).ok, 'unknown cards and actions: refused');

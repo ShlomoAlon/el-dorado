@@ -39,10 +39,11 @@ function updatePrompt(){
   const who=`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>`;
   let txt='',btns=[];
   if(G.replay){setHTML(P,replayPromptHTML());btnWire(B,[]);return;}
-  const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};const tm=online()&&!S.over?'<span id="turnTimer" class="timer" hidden></span>':'';
+  const tm=online()&&!S.over?'<span id="turnTimer" class="timer" hidden></span>':'';
   if(S.over){setHTML(P,'The expedition is over.');btnWire(B,[{t:'Results',id:'bRes',fn:()=>showGameOver(S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i])))},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
   if(!canAct()){setHTML(P,tm+who+(online()&&S.owners[S.cur]===myId()?'<span class="m">Reconnecting…</span>':(isAI(S.cur)?'is playing…':'is taking their turn…'))+(NET.status?` <span class="m">${esc(NET.status)}</span>`:''));btnWire(B,[]);renderTimer();return;}
   if(UI.cover){setHTML(P,who+'is up next. Pass the device, then reveal the hand.');btnWire(B,[{t:'Reveal hand',id:'bRev',pri:1,big:1,fn:()=>{UI.cover=false;render();banner(cur().name,'Round '+S.round);}}]);return;}
+  const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};
   switch(UI.mode){
     case 'idle':{
       const hasDisc=[...UI.targets.values()].some(t=>t.kind==='rubble'||t.kind==='camp'||t.kind==='blr');

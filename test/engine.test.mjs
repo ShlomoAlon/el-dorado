@@ -4,6 +4,7 @@
 //   node test/engine.test.mjs [--quick]   (--quick: 12 random games, and AI games on First Expedition only)
 const QUICK = process.argv.includes('--quick');
 import { E } from '../src/engine.gen.js';
+E.setAssertMode({ debug: true }); // a broken invariant fails the run
 const assert = (c, m) => { if (!c) { console.error('FAIL:', m); process.exit(1); } };
 const t0 = performance.now(); for (let i = 0; i < 200; i++) E.buildCourse(E.COURSES[i % E.COURSES.length], i);
 const mapMs = (performance.now() - t0) / 200;
