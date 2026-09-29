@@ -1,6 +1,6 @@
 // The menus as a person uses them, on this device (no server): the start screen's three tabs (This device / Online /
 // Replays) and no extra Back or Replays buttons; a replay opened from Replays comes back to Replays when closed; during a
-// game the menu shows the game bar, and watching a replay from there keeps the game.
+// game the menu shows the game bar, and watching a replay from there keeps the game; the results at the end of a game.
 // (Online menus, the room lobby and signing out: test/online.cjs.)
 //   NODE_PATH=$(npm root -g) node test/menus.cjs
 const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
@@ -33,6 +33,10 @@ const T = report('menus'), LOG = path.join(__dirname, 'fixtures/replay.json');
   await settle(p); await p.click('#menuBtn');
   await check('closing it comes back to Replays, the game kept', new Function('r', `return !window.__ED.G.replay && ${screen('replays')} && !document.querySelector('#ingame').hidden && JSON.stringify(window.__ED.S.players.map(q => q.hand)) === r`), pos);
   await p.click('#sBack'); await check('Back to game', () => !document.querySelector('#menu').open && !!window.__ED.S && !window.__ED.G.replay);
+  // the end of a game: two resign, the third wins, the results come up; New game goes back to the start screen
+  await p.evaluate(() => { __ED.act({ t: 'resign' }); }); await p.evaluate(() => { __ED.act({ t: 'resign' }); });
+  await check('game over: the results', () => window.__ED.S.over && !!document.querySelector('#overlay #gNew') && document.querySelectorAll('#overlay .prow').length === 3);
+  await p.click('#overlay #gNew'); await check('New game: the start screen', new Function(`return document.querySelector('#menu').open && ${screen('setup')}`));
   T.ok('no page errors', !p.errors.length, p.errors.slice(0, 5).join(' | '));
   await b.close(); srv.close(); T.done();
 })().catch(e => { console.error(e); process.exit(1); });

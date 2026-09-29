@@ -148,7 +148,7 @@ export function prepareGame(force){
   if(online())exitOnline(); // a finished online game: its room is left (rejoin a running one from Online)
   aiReset();G.rec=recNewGame(setupOpts());UI.preview=true;UI.lastReplay=null;
   UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.piece=0;UI.viewer=null;
-  UI.cover=S.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;showGame();
+  UI.cover=!!G.rec.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;showGame();
   setHTML(mq('#rInfo'),`Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random`);
 }
 export function startLocal(){

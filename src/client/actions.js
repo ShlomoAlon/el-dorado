@@ -23,7 +23,7 @@ import { netAct } from './online.js';
 export function showGame(){buildBoard();resetView();fitSoon();}
 /* continue the saved local game (first visit, or back from a replay). Returns false if there is none in progress. */
 export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
-  try{aiReset();UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();aiKick();
+  try{aiReset();UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!G.rec.privacy;syncMode(false);render();aiKick();
     if(!UI.cover)banner(cur().name,'Round '+S.round);return true;}catch(e){console.error(e);setS(null);return false;}}
 
 export function computeTargets(){
@@ -76,7 +76,7 @@ export function afterLocalChange(turnChanged){
   else{
     syncMode(true);
     // hide the hand between human players only (pass-and-play); AI turns never need it
-    if(S.privacy&&!S.over&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
+    if(G.rec.privacy&&!S.over&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
     render();
     if(!UI.cover&&!S.over){banner(cur().name,isAI(S.cur)?'AI · Round '+S.round:'Round '+S.round);ensureVisible();}
   }
