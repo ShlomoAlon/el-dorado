@@ -17,16 +17,16 @@ const say = s => { console.log(s); appendFileSync(LOG, s + '\n'); };
 const shuf = (a, g) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(g() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 function playout(root, me, cand, seed, budget, DEPTH) { // returns [value, simulated actions]
-  const g = E.mulberry32(seed); E.S = E.botClone(root); E.setRng(g);
+  const g = E.mulberry32(seed); E.S = E.botClone(root);
   E.S.players.forEach((p, j) => { if (j === me) { shuf(p.deck, g); return; } const pool = shuf([...p.hand, ...p.deck], g); p.hand = pool.slice(0, p.hand.length); p.deck = pool.slice(p.hand.length); });
-  let r = E.applyAction(me, cand), n = 1, away = false, turns = 0;
+  let r = E.applyAction(me, cand, g), n = 1, away = false, turns = 0;
   while (r.ok && !E.S.over && n < budget) {
     if (E.S.cur !== me) away = true; else if (away) { away = false; if (++turns >= +DEPTH) break; } // my turn came round again
     if (E.S.round > 25) { E.endGame(); break; } // the 25-round cap: not arriving counts as a loss
-    E.setRng(null); const c = E.botChoose({ mode: 'net', rnd: g }); E.setRng(g);
-    r = E.applyAction(E.S.cur, c.a); n++; if (!r.ok) r = E.applyAction(E.S.cur, { t: 'end', keep: [] });
+    const c = E.botChoose({ mode: 'net', rnd: g });
+    r = E.applyAction(E.S.cur, c.a, g); n++; if (!r.ok) r = E.applyAction(E.S.cur, { t: 'end', keep: [] }, g);
   }
-  const v = E.botValue(me, 'net'); E.setRng(null); return [v, n];
+  const v = E.botValue(me, 'net'); return [v, n];
 }
 function searchChoose(me, budget, rnd, DEPTH) {
   const root = E.S, sc = E.botScoreActions(me, rnd, 4); E.S = root;
@@ -61,16 +61,15 @@ for (let g = 0; g < +G; g++) {
   const gen = E.replayStart(log); let rs = (seed * 7919) >>> 0; const rnd = () => ((rs = (rs * 1664525 + 1013904223) >>> 0) / 4294967296);
   const cpu = pols.map(() => 0), per = pols.map(() => ({ moves: 0, searched: 0, overruled: 0, playouts: 0, simActions: 0 })); let acts = 0, capped = false;
   while (!E.S.over) {
-    if (E.S.round > 25) { capped = true; E.setRng(null); E.endGame(); break; }
-    const me = E.S.cur, pol = pols[me]; E.setRng(null); const t0 = process.cpuUsage();
+    if (E.S.round > 25) { capped = true; E.endGame(); break; }
+    const me = E.S.cur, pol = pols[me]; const t0 = process.cpuUsage();
     const c = pol === 'net' ? E.botChoose({ mode: 'net', rnd }) : searchChoose(me, +BUDGET, rnd, pol);
     const u = process.cpuUsage(t0); cpu[me] += (u.user + u.system) / 1e6;
     per[me].moves++;
     if (pol !== 'net' && c.why !== 'forced') { stat(pol).decisions++; if (c.why === 'changed') stat(pol).changed++; per[me].searched++; if (c.why === 'changed') per[me].overruled++; per[me].playouts += c.sims || 0; per[me].simActions += c.used || 0; }
-    E.setRng(gen); const r = E.applyAction(me, c.a); log.actions.push([me, r.ok ? c.a : { t: 'end', keep: [] }]); if (!r.ok) E.applyAction(me, { t: 'end', keep: [] });
+    const r = E.applyAction(me, c.a, gen); log.actions.push([me, r.ok ? c.a : { t: 'end', keep: [] }]); if (!r.ok) E.applyAction(me, { t: 'end', keep: [] }, gen);
     if (++acts > 4000) { capped = true; break; }
   }
-  E.setRng(null);
   const S = E.S, res = [];
   pols.forEach((p, i) => { const P = S.players[i], place = S.places ? S.places[i] : n, fail = capped && !P.fin, st = stat(p);
     st.games++; if (place === 1 && !fail) st.wins++; st.place += place; st.pv += fail ? 0 : E.botPlaceValue(place, n); if (P.fin) st.arr.push(P.fin); st.cpu += cpu[i];

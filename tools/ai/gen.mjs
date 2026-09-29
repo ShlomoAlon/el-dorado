@@ -75,7 +75,7 @@ if (!isMainThread) {
     if (mode === 'self' && search && process.env.MIX_PLAIN === '1') { const ns = pols.map((p, i) => p === 'net' ? i : -1).filter(i => i >= 0);
       if (ns.length > 1 || rnd() < .5) plainSeat[ns[Math.floor(rnd() * ns.length)]] = true; }
     glog.players.forEach((p, i) => { if (pols[i] === 'net' && search) p.name = `${plainSeat[i] ? 'Net (no search)' : 'Net + search'} ${i + 1}`; });
-    const shuf = E.replayStart(glog); E.setRng(null);
+    const shuf = E.replayStart(glog); // (the game's shuffles; the bots' look-ahead uses its own)
     const traj = pols.map(() => []), trajU = pols.map(() => []), trajB = pols.map(() => []), lastPush = pols.map(() => null); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
     while (!E.S.over) {
       const S = E.S; S.log.length = 0;
@@ -133,9 +133,9 @@ if (!isMainThread) {
       if (c.a.t === 'buy' || c.a.t === 'transmit') { const stk = { t: c.a.type }; if (stk.t) { const b = c.a.t === 'transmit' ? (isNet ? st.transNet : st.transHeur) : (isNet ? st.buysNet : st.buysHeur); b[stk.t] = (b[stk.t] || 0) + 1; } }
       // sample = the position right after my action, as I'll see it: for "end turn", before the next hand is drawn
       const f = mode === 'self' ? (c.a.t === 'end' ? E.botEndFeatures(me, c.a.keep) : null) : null;
-      E.setRng(shuf); const r = E.applyAction(me, c.a); acts++;
-      if (!r.ok) E.applyAction(me, { t: 'end', keep: [] });
-      E.setRng(null); glog.actions.push([me, r.ok ? c.a : { t: 'end', keep: [] }]);
+      const r = E.applyAction(me, c.a, shuf); acts++;
+      if (!r.ok) E.applyAction(me, { t: 'end', keep: [] }, shuf);
+      glog.actions.push([me, r.ok ? c.a : { t: 'end', keep: [] }]);
       if (r.ok && isNet) for (const e of r.ev) if (e.e === 'block') inc('Blockades taken', '#' + e.n);
       // no samples once my place is settled: play never asks the network about those positions (they get the exact place value),
       // and bootstrapping through its guess for them (the average over all places) inflated the moves just before arriving,

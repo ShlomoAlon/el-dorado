@@ -12,9 +12,9 @@ for (let g = 0; g < +G; g++) {
   E.newGame({ course: E.COURSES[0], seed, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
   let acts = 0, cap = false;
   while (!E.S.over) { E.S.log.length = 0; if (E.S.round > 25 || acts++ > 20000) { cap = true; E.endGame(); break; }
-    const me = E.S.cur; E.setRng(null); const c = E.botChoose({ mode: pols[me] }); E.setRng(gen);
-    const r = E.applyAction(me, c.a); if (!r.ok) E.applyAction(me, { t: 'end', keep: [] }); }
-  E.setRng(null); if (cap) capped++;
+    const me = E.S.cur; const c = E.botChoose({ mode: pols[me] });
+    const r = E.applyAction(me, c.a, gen); if (!r.ok) E.applyAction(me, { t: 'end', keep: [] }, gen); }
+  if (cap) capped++;
   E.S.players.forEach((p, i) => { places[i].push(E.S.places[i]); if (E.S.places[i] === 1 && !(cap && !p.fin)) wins[i]++; if (p.fin) arr[i].push(p.fin); });
 }
 const avg = a => (a.reduce((x, y) => x + y, 0) / (a.length || 1)).toFixed(2);

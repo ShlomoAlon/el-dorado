@@ -92,9 +92,8 @@ const rot=(q,r,k)=>{for(let i=0;i<k;i++){const t=q;q=-r;r=t+r;}return[q,r];};
 const pxOf=(q,r)=>[R*SQ3*(q+r/2),R*1.5*r];
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 /* where shuffles get their randomness: Math.random in play; a seeded generator while recording or replaying a game log */
-let RNG=Math.random;
-function setRng(f){RNG=f||Math.random;}
-function shuffle(a,rnd=RNG){for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+/* randomness is always passed in (rnd: () => [0, 1)): a game's shuffles come from its record's generators (engine_rules.js) */
+function shuffle(a,rnd){for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 const hash=(x,y)=>{let h=Math.imul(x|0,374761393)+Math.imul(y|0,668265263);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
 
 /* =========================================================
@@ -220,19 +219,14 @@ function replayCheck(log){
   if(log.gift&&!(CT[log.gift]&&CT[log.gift].cost))return'Unknown gift card: '+log.gift;
   if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
   return null;}
-function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry32(log.rng>>>0);setRng(g);
-  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:rec&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:rec?p.bot:undefined}))});
+/* set up the log's game (S, MAP). Returns the generator a training log's actions share (records give each action its own) */
+function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry32(log.rng>>>0);
+  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:rec&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:rec?p.bot:undefined}))},g);
   // training exploration: every player starts with the same extra card, shuffled into the draw pile
-  if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(RNG()*(p.deck.length+1)),0,newCard(log.gift));
-  if(rec)setRng(null);
+  if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(g()*(p.deck.length+1)),0,newCard(log.gift));
   return g;}
-/* apply action i of a log to S (after replayStart and actions 0…i-1) */
-function replayStep(log,i){
-  const[seat,a]=log.actions[i],rec=log.v===3,r0=RNG;if(rec)setRng(recRng(log.rng,i));
-  try{
-    return applyAction(seat,a);
-  }finally{if(rec)RNG=r0;}
-}
+/* apply action i of a log to S (after replayStart and actions 0…i-1); g: the generator replayStart returned */
+function replayStep(log,i,g){const[seat,a]=log.actions[i];return applyAction(seat,a,log.v===3?recRng(log.rng,i):g);}
 /* ---- game records (log v3): a game is its setup and its list of actions; the state is rebuilt from them ----
    Each action's shuffles come from a generator of its own, seeded from the game's secret number (rec.rng) and the action's
    index (newGame's: index -1), so re-applying the log rebuilds the same game and nothing needs a generator's state between
@@ -242,23 +236,22 @@ function replayStep(log,i){
 function recRng(rng,k){return mulberry32(((rng>>>0)+Math.imul(k+2,0x9E3779B1))>>>0);}
 function recNewGame(o){
   // the secret: from the platform's cryptographic generator where there is one (Math.random's state could be guessed)
-  const rng=crypto.getRandomValues(new Uint32Array(1))[0],r0=RNG;setRng(recRng(rng,-1));
-  try{newGame(o);}finally{RNG=r0;}
+  const rng=crypto.getRandomValues(new Uint32Array(1))[0];
+  newGame(o,recRng(rng,-1));
   // (privacy: the page's pass-and-play cover, a setting of the table rather than of the game: kept in the record only)
   return{kind:'eldorado-replay',v:3,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(o.privacy?{privacy:true}:{}),
     players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0};
 }
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
-function recApply(rec,seat,a){
-  const r0=RNG,prev=S.cur;if(rec)setRng(recRng(rec.rng,rec.actions.length));
-  let r;try{r=applyAction(seat,a);}finally{RNG=r0;}
+function recApply(rec,seat,a,rnd=Math.random){ // (rnd: for a game without a record)
+  const prev=S.cur,r=applyAction(seat,a,rec?recRng(rec.rng,rec.actions.length):rnd);
   if(r.ok&&rec){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||S.cur!==prev||S.over)rec.mark=rec.actions.length;}
   return r;
 }
 const recCanUndo=rec=>rec.actions.length>rec.mark;
 /* the state a record leads to, as {S, MAP} (the module's S and MAP are left as they were) */
-function recState(rec){const s0=S,m0=MAP,r0=RNG;
-  try{replayStart(rec);for(let i=0;i<rec.actions.length;i++)replayStep(rec,i);return{S,MAP};}finally{S=s0;MAP=m0;RNG=r0;}}
+function recState(rec){const s0=S,m0=MAP;
+  try{replayStart(rec);for(let i=0;i<rec.actions.length;i++)replayStep(rec,i);return{S,MAP};}finally{S=s0;MAP=m0;}}
 /* take back the last action (S becomes the rebuilt state; callers check recCanUndo first) */
 function recUndo(rec){assert(recCanUndo(rec),'recUndo: an action can be taken back');rec.actions.pop();({S,MAP}=recState(rec));return true;}
 /* the log of the game on show (S), ready to save and watch, with a title. places: null for a game that didn't finish (a
@@ -269,14 +262,14 @@ function recFinal(rec){
   L.result={places:S.places,rounds:S.round};
   return L;
 }
-function newGame(o){
+function newGame(o,rnd=Math.random){
 
   const course=o.course||COURSES[0];
   MAP=buildCourse(course,o.seed);
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
     const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
-    const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck),hand:[],discard:[],play:[],fin:0,resigned:0};
+    const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck,rnd),hand:[],discard:[],play:[],fin:0,resigned:0};
     if(p.ai&&aiById(p.ai))pl.ai=p.ai; // a named AI plays this seat (engine_ai.js)
     return pl;
   });
@@ -286,12 +279,12 @@ function newGame(o){
   S={seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
      blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,round:1,endTriggered:false,over:false,places:null,
      fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[]};
-  players.forEach(p=>drawCards(p,4));
+  players.forEach(p=>drawCards(p,4,rnd));
   log(null,'The expedition sets out: '+players.map(p=>p.name).join(', ')+'. Course: '+MAP.name+' ('+MAP.route.join(' · ')+' · El Dorado).');
   return S;
 }
 function newCard(t){const id='c'+(S.nid++);S.cards[id]=t;return id;}
-function drawCards(p,n){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(!p.discard.length)break;p.deck=shuffle(p.discard);p.discard=[];}const c=p.deck.pop();p.hand.push(c);got.push(c);}return got;}
+function drawCards(p,n,rnd){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(!p.discard.length)break;p.deck=shuffle(p.discard,rnd);p.discard=[];}const c=p.deck.pop();p.hand.push(c);got.push(c);}return got;}
 function log(pi,t){S.log.push({p:pi,t,r:S.round});if(S.log.length>200)S.log.shift();}
 function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
 /* the standing blockade between spaces a and b (its index), or null. Blockade i sits on connection i (buildCourse deals one per connection) */
@@ -361,7 +354,8 @@ function payTargets(pl,pi){
 
 /* =========================================================
    APPLY AN ACTION. Returns {ok, err?, ev:[events], reveal}
-   reveal = new information came out (cards drawn), so undo stops here.
+   reveal = new information came out (cards drawn), so undo stops here. rnd: where any shuffle this action needs comes from
+   (a record passes the action's own generator; look-ahead copies of a game don't care)
    Actions (acting player = S.cur, except resign):
      {t:'move', card, pi, to}        movement card (or a card with leftover strength)
      {t:'native', card, pi, to}
@@ -375,15 +369,15 @@ function payTargets(pl,pi){
      {t:'resign'}                    the player leaves the game (any time, in or out of turn)
      {t:'endgame'}                   (local play) the game ends now for everyone: arrivals first, then who is closest
    ========================================================= */
-function applyAction(seat,a){
+function applyAction(seat,a,rnd=Math.random){
   const fail=err=>({ok:false,err,ev:[]});
   if(S.over)return fail('The game is over.');
   if(!a||typeof a!=='object')return fail('Bad action.');
   if(a.t==='resign')return resign(seat);
   if(seat!==S.cur)return fail('It is not your turn.');
   if(a.t==='endgame'){log(seat,'ends the game.');endGame();return{ok:true,ev:[{e:'over'}]};} // local play only (the server refuses it)
-  if(a.t==='timeout'){log(seat,'ran out of time.');if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;
-    const r=applyAction(seat,{t:'end',keep:[]});return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}
+  if(a.t==='timeout'){log(seat,'ran out of time.');if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]},rnd);S.turn.active=null;
+    const r=applyAction(seat,{t:'end',keep:[]},rnd);return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}
   const P=S.players[seat],T=S.turn,ev=[];let reveal=false;
   const inHand=id=>typeof id==='string'&&P.hand.includes(id);
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
@@ -438,7 +432,7 @@ function applyAction(seat,a){
       const t=inHand(a.card)&&typeOf(a.card);
       const n={cartographer:2,compass:3,scientist:1,travellog:2}[t];if(!n)return fail('That card has no draw effect.');
       T.active=null;rm(P.hand,a.card);if(CT[t].once)S.trash.push(a.card);else P.play.push(a.card);
-      const got=drawCards(P,n);reveal=true;ev.push({e:'play',pl:seat,k:'action',ts:[t],n:got.length});
+      const got=drawCards(P,n,rnd);reveal=true;ev.push({e:'play',pl:seat,k:'action',ts:[t],n:got.length});
       log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');
       if(t==='scientist'||t==='travellog')T.pending={max:t==='scientist'?1:2};
       break;
@@ -479,7 +473,7 @@ function applyAction(seat,a){
       const toDisc=P.hand.filter(id=>!keep.includes(id));ev.push({e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length}); // counts only: the hand is private
       for(const id of toDisc){rm(P.hand,id);P.discard.push(id);}
       P.discard.push(...P.play);P.play=[];
-      drawCards(P,4-P.hand.length);reveal=true;
+      drawCards(P,4-P.hand.length,rnd);reveal=true;
       log(seat,'ends the turn'+(toDisc.length?', discarding '+toDisc.length:'')+(keep.length?(toDisc.length?' and':'')+' keeping '+keep.length:'')+'.');
       passTurn();break;
     }
@@ -949,8 +943,8 @@ function botScoreActions(me,rnd,K){
   const root=S,acts=botActions(),out=[];
   for(const a of acts){
     if(a.t==='end'){S=botClone(root);shuffle(S.players[me].deck,rnd);botEndView(me,a.keep);out.push({a,v:botValue(me,'net'),st:null});S=root;continue;}
-    if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(root);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);v+=r.ok?botValue(me,'net'):-1;S=root;}out.push({a,v:v/K,st:null});continue;}
-    S=botClone(root);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);
+    if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(root);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a,rnd);v+=r.ok?botValue(me,'net'):-1;S=root;}out.push({a,v:v/K,st:null});continue;}
+    S=botClone(root);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a,rnd);
     const v=r.ok?botValue(me,'net'):-Infinity,st=r.ok&&!S.over&&S.cur===me?S:null;S=root;out.push({a,v,st});
   }
   return out.sort((x,y)=>y.v-x.v);
@@ -976,8 +970,8 @@ function botPlanTurn(me,B,rnd,K,noBuy,top){ // top: optional array that receives
         if(noBuy&&(a.t==='buy'||a.t==='transmit'))continue; // exploration: a turn without gaining a card
         const line=[...node.line,a];
         if(a.t==='end'){S=botClone(node.st);botEndView(me,a.keep);const v=botValue(me,'net');S=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}
-        if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(node.st);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);v+=r.ok?botValue(me,'net'):-1;S=root;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
-        S=botClone(node.st);const r=applyAction(me,a);
+        if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(node.st);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a,rnd);v+=r.ok?botValue(me,'net'):-1;S=root;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
+        S=botClone(node.st);const r=applyAction(me,a,rnd);
         if(!r.ok){S=root;continue;}
         const v=botValue(me,'net');
         if(S.over||S.cur!==me){S=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
@@ -1008,17 +1002,17 @@ function botPlanTurnChoose(opts){
    every candidate), scored by the network where the playout stops (exact once places are settled). Successive halving
    spends `budget` network evaluations (BOT_EVALS). The chosen turn is then followed like a normal plan. */
 function botDeepPlayout(root,me,line,seed,o){
-  const g=mulberry32(seed),saved=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;S=botClone(root);const r0=RNG;setRng(g);
+  const g=mulberry32(seed),saved=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;S=botClone(root);
   S.players.forEach((p,j)=>{if(j===me){shuffle(p.deck,g);return;}const pool=shuffle([...p.hand,...p.deck],g);p.hand=pool.slice(0,p.hand.length);p.deck=pool.slice(p.hand.length);});
-  for(const a of line){if(S.over||S.cur!==me)break;if(!applyAction(me,a).ok){applyAction(me,{t:'end',keep:[]});break;}}
+  for(const a of line){if(S.over||S.cur!==me)break;if(!applyAction(me,a,g).ok){applyAction(me,{t:'end',keep:[]},g);break;}}
   let away=S.cur!==me,turns=0,n=0;
   while(!S.over&&n++<3000){
     if(S.cur!==me)away=true;else if(away){away=false;if(++turns>=o.depth)break;}
     if(S.round>25){endGame();break;}
     const c=botChoose({mode:'net',rnd:g,search:{kind:'plan',beam:o.beam||3}});
-    if(!applyAction(S.cur,c.a).ok)applyAction(S.cur,{t:'end',keep:[]});
+    if(!applyAction(S.cur,c.a,g).ok)applyAction(S.cur,{t:'end',keep:[]},g);
   }
-  const v=botValue(me,'net');RNG=r0;BOT_PLAN_CACHE=saved;S=root;return v;
+  const v=botValue(me,'net');BOT_PLAN_CACHE=saved;S=root;return v;
 }
 function botDeepChoose(opts){
   const me=S.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
@@ -1056,16 +1050,16 @@ function botRolloutChoose(opts){
   const me=S.cur,root=S,rnd=opts.rnd||Math.random,o=opts.search,C=o.cands||3,M=o.sims||6,K=opts.draws||4;
   const sc=botScoreActions(me,rnd,K);S=root;
   if(sc.length<2||sc[0].v-sc[1].v>(o.margin??.03))return{a:sc[0].a,v:sc[0].v,why:'clear'};
-  const cand=sc.slice(0,C).filter(x=>x.v>-Infinity),seeds=[...Array(M)].map(()=>(rnd()*2**31)|0),prevRng=RNG;let best=null;
+  const cand=sc.slice(0,C).filter(x=>x.v>-Infinity),seeds=[...Array(M)].map(()=>(rnd()*2**31)|0);let best=null;
   for(const c of cand){let tot=0;
-    for(const seed of seeds){const g=mulberry32(seed);S=botClone(root);RNG=g;
+    for(const seed of seeds){const g=mulberry32(seed);S=botClone(root);
       S.players.forEach((p,j)=>{if(j===me){shuffle(p.deck,g);return;}const pool=shuffle([...p.hand,...p.deck],g);p.hand=pool.slice(0,p.hand.length);p.deck=pool.slice(p.hand.length);});
-      let r=applyAction(me,c.a),left=400,passed=false;
+      let r=applyAction(me,c.a,g),left=400,passed=false;
       while(r.ok&&!S.over&&left-->0){if(S.cur!==me)passed=true;else if(passed)break;
-        RNG=Math.random;const ch=botChoose({mode:'net',rnd:g});RNG=g;r=applyAction(S.cur,ch.a);if(!r.ok)r=applyAction(S.cur,{t:'end',keep:[]});}
+        const ch=botChoose({mode:'net',rnd:g});r=applyAction(S.cur,ch.a,g);if(!r.ok)r=applyAction(S.cur,{t:'end',keep:[]},g);}
       tot+=S.over||S.cur!==me?botValue(me,'net'):botValue(me,'net');S=root;}
-    RNG=prevRng;const v=tot/M;if(!best||v>best.v)best={a:c.a,v};}
-  RNG=prevRng;S=root;return{a:best?best.a:sc[0].a,v:best?best.v:sc[0].v,why:'rollout'};
+    const v=tot/M;if(!best||v>best.v)best={a:c.a,v};}
+  S=root;return{a:best?best.a:sc[0].a,v:best?best.v:sc[0].v,why:'rollout'};
 }
 /* play one whole turn for the player to move (used by the UI and the simulator) */
 function botTurn(opts){const me=S.cur;const steps=[];for(let g=0;g<40&&!S.over&&S.cur===me;g++){const{a}=botChoose(opts);const r=applyAction(me,a);steps.push(a);if(!r.ok){applyAction(me,{t:'end',keep:[]});break;}}return steps;}
@@ -1141,8 +1135,8 @@ function aiChoose(id,mem){
   let opts=A.opts;if(opts.mode==='net'&&(!botNetReady()||S.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
   const me=S.cur,tk=me+':'+S.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
   if(++mem.n>60)return S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
-  const r0=RNG;setRng(null);BOT_PLAN_CACHE=mem.plan||null;
-  let a;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;RNG=r0;}
+  BOT_PLAN_CACHE=mem.plan||null;
+  let a;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;}
   return aiFinishGuard(a);
 }
 /* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
@@ -1169,13 +1163,13 @@ function aiFinishGuard(a){
   return a;
 }
 /* apply the AI's decision (recorded in rec, the game's log; may be null). Returns applyAction's result. */
-function aiStep(id,mem,rec){
-  const r=recApply(rec,S.cur,aiChoose(id,mem));
+function aiStep(id,mem,rec,rnd){ // rnd: the game's shuffles when there is no record (tools)
+  const r=recApply(rec,S.cur,aiChoose(id,mem),rnd);
   assert(r.ok,'aiStep: the AI chooses a legal action');
   return r;
 }
 
-export const E={assert,AssertionError,setAssertMode,AIS,COLORS,aiById,aiCourseOK,aiAllowed,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,replayStep,recNewGame,recApply,recCanUndo,recUndo,recState,recFinal,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botActionValue,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
+export const E={assert,AssertionError,setAssertMode,AIS,COLORS,aiById,aiCourseOK,aiAllowed,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,replayCheck,replayStart,replayStep,recNewGame,recApply,recCanUndo,recUndo,recState,recFinal,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botActionValue,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
 // for the page's modules: every name (live bindings), and setters for the game on show
-export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,RNG,setRng,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,aiById,drawCards,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botWorth,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_ACT_SPEED,botHeuristic2,BOT_STARTER,BOT_PLANS,BOT_PLAN_CUR,BOT_PLAN_DEF,botPlanMoves,botPaddles,botClone,botCardWorth,BOT_PADDLE,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botDeepChoose,botRolloutChoose,botTurnSearch,botScoreActions,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botDeepPlayout,botTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiPlan,aiFinishCard,aiStep};
+export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,aiById,drawCards,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botWorth,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_ACT_SPEED,botHeuristic2,BOT_STARTER,BOT_PLANS,BOT_PLAN_CUR,BOT_PLAN_DEF,botPlanMoves,botPaddles,botClone,botCardWorth,BOT_PADDLE,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botDeepChoose,botRolloutChoose,botTurnSearch,botScoreActions,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botDeepPlayout,botTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiPlan,aiFinishCard,aiStep};
 export const setS=v=>{S=v},setMAP=v=>{MAP=v};

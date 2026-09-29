@@ -116,7 +116,7 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
   E.applyAction(seat, { t: 'end', keep: [] });
   assert(!P.discard.includes(id) && !P.deck.includes(id) && !P.hand.includes(id), t + ' came back after the turn');
 }
-// game records (log v2): a recorded game with undos, timeouts and a resignation replays to exactly the same final position
+// game records (log v3): a recorded game with undos, timeouts and a resignation replays to exactly the same final position
 { let recs = 0;
   for (let g = 0; g < 12; g++) {
     const np = 2 + (g % 3), C = E.COURSES[g % E.COURSES.length];
@@ -135,9 +135,8 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
     if (!E.S.over) continue;
     const fin = JSON.stringify({ ...E.S, log: [] }), log = JSON.parse(JSON.stringify(E.recFinal(rec)));
     assert(!E.replayCheck(log), 'record fails replayCheck: ' + E.replayCheck(log));
-    E.replayStart(log);
-    for (let i = 0; i < log.actions.length; i++) { const r = E.replayStep(log, i); assert(r.ok, 'replay step ' + i + ' failed: ' + r.err); }
-    E.setRng(null);
+    const gen = E.replayStart(log);
+    for (let i = 0; i < log.actions.length; i++) { const r = E.replayStep(log, i, gen); assert(r.ok, 'replay step ' + i + ' failed: ' + r.err); }
     assert(JSON.stringify({ ...E.S, log: [] }) === fin, 'replay differs from the recorded game (' + C.id + ', ' + np + ' players, ' + undos + ' undos)');
     recs++;
   }

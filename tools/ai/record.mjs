@@ -33,15 +33,12 @@ for (let g = 0; g < G; g++) {
     const S = E.S; S.log.length = 0;
     if (S.round > 25 || acts++ > 20000) { capped = true; break; }
     const me = S.cur, pol = pols[me];
-    E.setRng(null); // the bots' look-ahead must not use up the game's shuffle stream
-    const c = E.botChoose(optsOf(pol) || { mode: pol, explain: true });
-    E.setRng(gen);
-    const r = E.applyAction(me, c.a), a = r.ok ? c.a : { t: 'end', keep: [] };
-    if (!r.ok) E.applyAction(me, a);
+    const c = E.botChoose(optsOf(pol) || { mode: pol, explain: true }); // (its look-ahead has its own randomness: the game's stream is for the game)
+    const r = E.applyAction(me, c.a, gen), a = r.ok ? c.a : { t: 'end', keep: [] };
+    if (!r.ok) E.applyAction(me, a, gen);
     log.actions.push([me, slim(a)]);
     log.notes.push(c.alts ? { v: +c.v.toFixed(3), alts: c.alts.map(x => ({ a: slim(x.a), v: x.v === -Infinity ? null : +x.v.toFixed(3) })) } : null);
   }
-  E.setRng(null);
   const S = E.S, fin = S.players.map(p => p.fin), netLost = pols.some((p, i) => p === 'net') && !pols.some((p, i) => p === 'net' && S.places && S.places[i] === 1);
   if (FILTER === 'capped' && !capped) continue;
   if (FILTER === 'netlost' && !netLost) continue;

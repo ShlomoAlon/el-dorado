@@ -382,8 +382,8 @@ function botScoreActions(me,rnd,K){
   const root=S,acts=botActions(),out=[];
   for(const a of acts){
     if(a.t==='end'){S=botClone(root);shuffle(S.players[me].deck,rnd);botEndView(me,a.keep);out.push({a,v:botValue(me,'net'),st:null});S=root;continue;}
-    if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(root);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);v+=r.ok?botValue(me,'net'):-1;S=root;}out.push({a,v:v/K,st:null});continue;}
-    S=botClone(root);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);
+    if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(root);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a,rnd);v+=r.ok?botValue(me,'net'):-1;S=root;}out.push({a,v:v/K,st:null});continue;}
+    S=botClone(root);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a,rnd);
     const v=r.ok?botValue(me,'net'):-Infinity,st=r.ok&&!S.over&&S.cur===me?S:null;S=root;out.push({a,v,st});
   }
   return out.sort((x,y)=>y.v-x.v);
@@ -409,8 +409,8 @@ function botPlanTurn(me,B,rnd,K,noBuy,top){ // top: optional array that receives
         if(noBuy&&(a.t==='buy'||a.t==='transmit'))continue; // exploration: a turn without gaining a card
         const line=[...node.line,a];
         if(a.t==='end'){S=botClone(node.st);botEndView(me,a.keep);const v=botValue(me,'net');S=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}
-        if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(node.st);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a);v+=r.ok?botValue(me,'net'):-1;S=root;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
-        S=botClone(node.st);const r=applyAction(me,a);
+        if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(node.st);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a,rnd);v+=r.ok?botValue(me,'net'):-1;S=root;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
+        S=botClone(node.st);const r=applyAction(me,a,rnd);
         if(!r.ok){S=root;continue;}
         const v=botValue(me,'net');
         if(S.over||S.cur!==me){S=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
@@ -441,17 +441,17 @@ function botPlanTurnChoose(opts){
    every candidate), scored by the network where the playout stops (exact once places are settled). Successive halving
    spends `budget` network evaluations (BOT_EVALS). The chosen turn is then followed like a normal plan. */
 function botDeepPlayout(root,me,line,seed,o){
-  const g=mulberry32(seed),saved=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;S=botClone(root);const r0=RNG;setRng(g);
+  const g=mulberry32(seed),saved=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;S=botClone(root);
   S.players.forEach((p,j)=>{if(j===me){shuffle(p.deck,g);return;}const pool=shuffle([...p.hand,...p.deck],g);p.hand=pool.slice(0,p.hand.length);p.deck=pool.slice(p.hand.length);});
-  for(const a of line){if(S.over||S.cur!==me)break;if(!applyAction(me,a).ok){applyAction(me,{t:'end',keep:[]});break;}}
+  for(const a of line){if(S.over||S.cur!==me)break;if(!applyAction(me,a,g).ok){applyAction(me,{t:'end',keep:[]},g);break;}}
   let away=S.cur!==me,turns=0,n=0;
   while(!S.over&&n++<3000){
     if(S.cur!==me)away=true;else if(away){away=false;if(++turns>=o.depth)break;}
     if(S.round>25){endGame();break;}
     const c=botChoose({mode:'net',rnd:g,search:{kind:'plan',beam:o.beam||3}});
-    if(!applyAction(S.cur,c.a).ok)applyAction(S.cur,{t:'end',keep:[]});
+    if(!applyAction(S.cur,c.a,g).ok)applyAction(S.cur,{t:'end',keep:[]},g);
   }
-  const v=botValue(me,'net');RNG=r0;BOT_PLAN_CACHE=saved;S=root;return v;
+  const v=botValue(me,'net');BOT_PLAN_CACHE=saved;S=root;return v;
 }
 function botDeepChoose(opts){
   const me=S.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
@@ -489,16 +489,16 @@ function botRolloutChoose(opts){
   const me=S.cur,root=S,rnd=opts.rnd||Math.random,o=opts.search,C=o.cands||3,M=o.sims||6,K=opts.draws||4;
   const sc=botScoreActions(me,rnd,K);S=root;
   if(sc.length<2||sc[0].v-sc[1].v>(o.margin??.03))return{a:sc[0].a,v:sc[0].v,why:'clear'};
-  const cand=sc.slice(0,C).filter(x=>x.v>-Infinity),seeds=[...Array(M)].map(()=>(rnd()*2**31)|0),prevRng=RNG;let best=null;
+  const cand=sc.slice(0,C).filter(x=>x.v>-Infinity),seeds=[...Array(M)].map(()=>(rnd()*2**31)|0);let best=null;
   for(const c of cand){let tot=0;
-    for(const seed of seeds){const g=mulberry32(seed);S=botClone(root);RNG=g;
+    for(const seed of seeds){const g=mulberry32(seed);S=botClone(root);
       S.players.forEach((p,j)=>{if(j===me){shuffle(p.deck,g);return;}const pool=shuffle([...p.hand,...p.deck],g);p.hand=pool.slice(0,p.hand.length);p.deck=pool.slice(p.hand.length);});
-      let r=applyAction(me,c.a),left=400,passed=false;
+      let r=applyAction(me,c.a,g),left=400,passed=false;
       while(r.ok&&!S.over&&left-->0){if(S.cur!==me)passed=true;else if(passed)break;
-        RNG=Math.random;const ch=botChoose({mode:'net',rnd:g});RNG=g;r=applyAction(S.cur,ch.a);if(!r.ok)r=applyAction(S.cur,{t:'end',keep:[]});}
+        const ch=botChoose({mode:'net',rnd:g});r=applyAction(S.cur,ch.a,g);if(!r.ok)r=applyAction(S.cur,{t:'end',keep:[]},g);}
       tot+=S.over||S.cur!==me?botValue(me,'net'):botValue(me,'net');S=root;}
-    RNG=prevRng;const v=tot/M;if(!best||v>best.v)best={a:c.a,v};}
-  RNG=prevRng;S=root;return{a:best?best.a:sc[0].a,v:best?best.v:sc[0].v,why:'rollout'};
+    const v=tot/M;if(!best||v>best.v)best={a:c.a,v};}
+  S=root;return{a:best?best.a:sc[0].a,v:best?best.v:sc[0].v,why:'rollout'};
 }
 /* play one whole turn for the player to move (used by the UI and the simulator) */
 function botTurn(opts){const me=S.cur;const steps=[];for(let g=0;g<40&&!S.over&&S.cur===me;g++){const{a}=botChoose(opts);const r=applyAction(me,a);steps.push(a);if(!r.ok){applyAction(me,{t:'end',keep:[]});break;}}return steps;}
