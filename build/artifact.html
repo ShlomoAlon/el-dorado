@@ -135,6 +135,34 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #acct{min-height:32px} /* its line is there before the script fills it: nothing below moves */
 #shell{isolation:isolate} /* nothing in the game can stack above the menu, whatever its z-index */
 #shell{visibility:hidden} /* the game shows once its CSS (the late block) has arrived */
+
+/* ---------- D2-B "quiet dashboard": the chrome steps back so the cards and the board carry the character. Strict: one surface
+   colour, one border, one radius (8px), sentence-case labels, no glows, no gradients, no drop shadows on controls. */
+:root{--surface:#111a16;--surface2:#18231e;--border:rgba(255,255,255,.1);--r:8px;
+  --glass:var(--surface);--glass2:var(--surface2);--line:var(--border);--line2:var(--border)}
+.glass{border:1px solid var(--border);box-shadow:none}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:none;animation:fade .2s ease}
+.modal h2{color:var(--text);font-size:26px}
+.field>label{font-size:13px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--muted)}
+.btn{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);box-shadow:none;font-weight:700}
+.btn:hover{background:#1f2c26}
+.btn.pri{background:var(--gold);border-color:var(--gold);color:var(--goldInk);box-shadow:none}
+.btn.pri:hover{background:#f0bf5e}
+.btn.big{border-radius:var(--r)}
+.seg{background:none;border:1px solid var(--border);border-radius:var(--r);padding:2px;gap:2px}
+.seg label{border-radius:6px}
+.seg button.on,.seg label:has(input:checked){background:var(--surface2);color:var(--text);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+#sMode{border:0;border-bottom:1px solid var(--border);border-radius:0;padding:0;gap:0}
+#sMode label{border-radius:0;padding:9px 4px 10px;font-weight:600}
+#sMode label:has(input:checked){background:none;box-shadow:inset 0 -2px 0 var(--text)}
+.clist button,.clist label,.rlist button,.boxrow,.rrow,.seatrow,.pst,.prow input,select.who{background-color:transparent;border-color:var(--border);border-radius:var(--r)}
+.clist button.on,.clist label:has(input:checked){border-color:var(--gold);background:none}
+.clist .dtag{border:0;padding:0;margin-left:4px;text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--muted)!important}
+.clist .dtag::before{content:"· "}
+.ingame,.rejoin{border-color:var(--border);background:var(--surface2);border-radius:var(--r)}
+.aitag{border:0;padding:0;font-size:11px;letter-spacing:0;color:var(--muted);font-weight:700}
+.sws label:has(input:checked){transform:none;border-color:var(--text)}
+.rmai{border-radius:var(--r)}
 </style>
 <style data-late>
 /* the game's CSS: a separate cached file on the site (build.mjs), inline in the artifact */
@@ -534,6 +562,31 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @keyframes bsIn{from{transform:translateY(-14px) scale(.9);opacity:0}}
 #shell,#overlay,#banner{--display:'Young Serif', Georgia, 'Times New Roman', serif;--ui:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;font-family:var(--ui)}
 html.gameready.boardready #shell{visibility:visible} /* once the game's fonts are in (ui_boot.js) and its board is fitted (fit): no text swaps fonts, no board jumps */
+
+/* ---------- D2-B "quiet dashboard" (game chrome) */
+.brandbox,.pchip,.tbtn,.zoomctl button,#prompt,#hist,.pile .lbl,#banner,.sclose,.bs-x{border-radius:var(--r)}
+.brand{color:var(--text)}
+#roundLbl{letter-spacing:0;text-transform:none;font-size:13px}
+.tbtn{font-weight:600}
+.tbtn.on{border-color:rgba(255,255,255,.28);color:var(--text);background:var(--surface2)}
+#histBtn svg{color:currentColor}
+.pchip.on{box-shadow:inset 0 -2px 0 var(--pc);border-color:var(--border)}
+.pchip .dot{box-shadow:none}
+#prompt{color:var(--text)}
+#prompt b{color:var(--gold2)}
+#hist{background:var(--surface)}
+.fend .fpill{border:0;background:none;padding:0;color:var(--muted);font-weight:700}
+#playLbl{letter-spacing:0;text-transform:none;font-size:12px;font-weight:600}
+#banner .s{letter-spacing:0;text-transform:none;font-size:14px;color:var(--muted)}
+.allc-sect h3 span,.allc-head span{letter-spacing:0;text-transform:none;font-size:13px}
+#rdock,#rside,#lside{background:var(--surface);border-color:var(--border)}
+#rdock button{background:var(--surface2);border-color:var(--border);border-radius:var(--r)}
+#rdock .rgrp button.pri{background:var(--gold);border-color:var(--gold)}
+#rdock .rspd{border-color:var(--border);border-radius:var(--r)}#rdock .rspd button+button{border-left-color:var(--border)}
+#rdock .rspd button.on{background:var(--surface2);color:var(--text)}
+#rdock .rtog.on{background:var(--surface2);border-color:rgba(255,255,255,.28);color:var(--text)}
+.alltile{border-radius:var(--r);border-color:var(--border);background:var(--surface)}
+.cnt{border-color:var(--border);background:var(--surface)}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
