@@ -6,14 +6,14 @@ import { $, setText, setStyle } from './dom.js';
 import { UI, canAct } from './state.js';
 import { geo, onGeo } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
-import { cam, fit } from './board/camera.js';
+import { cam, fitSoon } from './board/camera.js';
 import { affordable, pickFromMarket, payTotal, cancelMode } from './actions.js';
 import { setT, placeAt, buySlotBox } from './hand.js';
 import { sfx } from './sound.js';
 
 const noMkt=()=>$('#app').classList.toggle('nomkt',!UI.mktOpen||$('#mkt').classList.contains('cramped'));
 export function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
-  if(!cam.userZoomed)setTimeout(()=>fit(true),10);}
+  if(!cam.userZoomed)fitSoon(true);}
 export function openAll(open){UI.allOpen=open;$('#allc').hidden=!open;if(open){$('#allc').scrollTop=0;update();}}
 /* size the market column so it always ends above the turn buttons and the discard pile: smaller cards, and more columns
    when that isn't enough (measured when the game area or the buttons change size, never while updating) */
