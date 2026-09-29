@@ -83,3 +83,31 @@ States: `hand` (the hand in place, with four fixed cards: Scout, Giant Machete, 
 - **Trade-offs:** the name is the most legible thing on the card, and the suit shows twice instead of three times; but
   the two round badges (strength and cost) stay, so the confusion D4 started from remains, and the cards lose the
   "count the machetes" look of the physical game.
+
+## D6. State colours
+
+**Problem:** "can buy" is a mint green (`#8fe3a8`) used nowhere else and close to the jungle green; selected is gold;
+danger is salmon/red, close to the Crimson player and the red base-camp spaces. Colour is often the only cue.
+
+States: `mid` (the market with cards you can buy; the reserve is locked), `buying` (a purchase in progress), `allcards`
+(market and the locked reserve), `chips` (the player chips, close-up `@2x`).
+
+| state | before | A | B |
+|---|---|---|---|
+| market, can buy, reserve locked | `D6-before-mid-1440.png`, `D6-before-mid-390.png` | `D6-A-mid-1440.png`, `D6-A-mid-390.png` | |
+| buying | `D6-before-buying-1440.png`, `D6-before-buying-390.png` | `D6-A-buying-1440.png`, `D6-A-buying-390.png` | |
+| All cards | `D6-before-allcards-1440.png`, `D6-before-allcards-390.png` | `D6-A-allcards-1440.png`, `D6-A-allcards-390.png` | |
+| player chips | `D6-before-chips-1440@2x.png` | `D6-A-chips-1440@2x.png` | |
+
+### Option A: one state palette — branch `design/v3-D6-A`
+- **What changed:** state colours are tokens (`--can` = gold, `--danger` = red). Everything that says "you can act on
+  this" is gold: the Can buy ring and tag, the All cards tile, the Market button's ring. The card being bought gets a
+  stronger gold ring and a "Buying" tag. Red is only danger: the salmon used for "these cards are lost" (base camps,
+  removal, the cards a space costs) becomes the danger red, and SINGLE USE is no longer a red pill (dark, parchment
+  text). The Crimson player becomes **Teal** (`#1fbfb8`), so no player is red.
+- **Effort / risk:** small in CSS. The colour swap touches the engine's colour list: records that name the old Crimson
+  hex are refused (the test fixtures were updated; old replays with a Crimson player would be dropped, which the
+  owner allowed on 2026-09-29). `layout ok` at 5 sizes. Overlaps with D7 (player colours), done in another session.
+- **Trade-offs:** fewer colours to learn and the board's red now always means trouble. But gold also marks the coin
+  cards and the selected card, so "can buy" and "chosen" differ only in strength (hence the Buying tag). Colour is
+  still the only cue for affordability.
