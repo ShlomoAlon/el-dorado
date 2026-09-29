@@ -118,9 +118,10 @@ function newGame(o,rnd=Math.random){
 }
 function newCard(t){const id='c'+(S.nid++);S.cards[id]=t;return id;}
 function drawCards(p,n,rnd){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(!p.discard.length)break;p.deck=shuffle(p.discard,rnd);p.discard=[];}const c=p.deck.pop();p.hand.push(c);got.push(c);}return got;}
-/* the journal (S.log): the game's public events worth telling, each with its round; the page words them (dialogs.js).
-   Not the moves' paths or the turn changes (the events carry those for the animations); only the last 120 are kept */
-function log(e){S.log.push({...e,r:S.round});if(S.log.length>120)S.log.shift();}
+/* the journal (S.log): the game's public events, each with its round (all but the turn changes); the page's history panel
+   shows it turn by turn (feed.js). Only the last LOG_MAX are kept */
+const LOG_MAX=200;
+function log(e){S.log.push({...e,r:S.round});if(S.log.length>LOG_MAX)S.log.shift();}
 const tell=(ev,e)=>{ev.push(e);log(e);}; // an event that also goes in the journal
 function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
 /* the standing blockade between spaces a and b (its index), or null. Blockade i sits on connection i (buildCourse deals one per connection) */
@@ -237,7 +238,7 @@ function applyAction(seat,a,rnd=Math.random){
       if(tg.kind==='bl')takeBlock(tg.bl);
       const done=hexAt(pos).type==='g';P.pieces[pi]=done?'done':pos;
       const left=budget-tg.cost;T.active=(left>0&&!done)?{id:a.card,pi,sym:tg.sym,left}:null;
-      if(tg.path.length)ev.push({e:'move',pl:seat,pi,path});
+      if(tg.path.length)tell(ev,{e:'move',pl:seat,pi,path});
       arrive(pi);break;
     }
     case 'native':{
@@ -247,7 +248,7 @@ function applyAction(seat,a,rnd=Math.random){
       T.active=null;rm(P.hand,a.card);P.play.push(a.card);tell(ev,{e:'play',pl:seat,k:'native',ts:['native'],n:tg.kind==='native'?1:0});
       if(tg.bl!=null)takeBlock(tg.bl);
       if(tg.kind==='native'){const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=hexAt(n).type==='g'?'done':n;
-        ev.push({e:'move',pl:seat,pi:a.pi,path:[from,n]});arrive(a.pi);}
+        tell(ev,{e:'move',pl:seat,pi:a.pi,path:[from,n]});arrive(a.pi);}
       break;
     }
     case 'pay':{
@@ -258,7 +259,7 @@ function applyAction(seat,a,rnd=Math.random){
       for(const id of a.cards){rm(P.hand,id);if(trash)S.trash.push(id);else P.play.push(id);}
       if(tg.kind==='blr')takeBlock(tg.bl);
       else{const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=n;
-        ev.push({e:'move',pl:seat,pi:a.pi,path:[from,n]});}
+        tell(ev,{e:'move',pl:seat,pi:a.pi,path:[from,n]});}
       break;
     }
     case 'action':{

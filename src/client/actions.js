@@ -58,7 +58,7 @@ export function syncMode(turnChanged){
 export function playEvents(ev,viewer){
   for(const e of ev){
     sfxEvent(e,viewer);
-    const watched=feedWatch(e.pl); // another player's turn: shown in the row under the prompt (ui_view.js)
+    const watched=feedWatch(e.pl); // another player's turn: followed live in the history panel (feed.js)
     if(e.e==='play'&&!watched)feedClear(); // I (or a pass-and-play human here) act: the last recap goes
     if(watched)feedEvent(e);
     if(e.e==='move')animateMove(e.pl,e.pi,e.path);

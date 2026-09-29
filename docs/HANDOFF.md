@@ -156,8 +156,8 @@ endTriggered, over, places, fullRace, turn{bought, active, pending}, trash[], lo
 - Derived, not stored: winners (place 1), a player's blockades (`blocksOf`), `MAP` (`buildCourse(course, seed)`).
 - `S` is rebuilt from the game record (setup + secret + actions, log v3) everywhere: the local save (`eldorado-game-v2`),
   finished local games (`eldorado-games-v2`), online rooms and replays. The server never writes into `S`.
-- `S.log` is the journal: the public events worth telling (§6.3), each with its round; the page writes the sentences
-  (`dialogs.js` `logLine`). The engine keeps the last 120.
+- `S.log` is the journal: the game's public events (§6.3, all but turn changes), each with its round; the history panel
+  (`feed.js`) shows it turn by turn, newest first, with each step's words on hover. The engine keeps the last 200.
 
 ### 6.3 Actions and events (`applyAction(seat, a, rnd)` → `{ok, err, ev[], reveal}`)
 Full list: `docs/API_SPEC.md` §1.5–1.6. Player actions: `move{card,pi,to}` · `native{card,pi,to}` · `pay{pi,to,cards}` ·
@@ -182,21 +182,29 @@ Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), s
   Pinch keeps the board point under the fingers' midpoint fixed; lifting one finger re-bases the pan (no jump).
   ResizeObserver refits only on width changes. Page-zoom gestures are blocked.
 - Market: the 6 market cards float in a 2-column stack on the right edge (1 column on phones) (`#mkt`, toggled by the Market button, `setMkt`,
-  remembered as `eldorado-mkt`) plus an "All cards" tile that opens a full-screen spread of market + reserve + journal
-  (`#allc`, `openAll`; the journal moved to its own button). Affordable cards are bright with a static "Can buy" tag, the rest are dimmed (owner: no pulsing — it's always on).
+  remembered as `eldorado-mkt`) plus an "All cards" tile that opens a full-screen spread of market + reserve
+  (`#allc`, `openAll`). Affordable cards are bright with a static "Can buy" tag, the rest are dimmed (owner: no pulsing — it's always on).
   The board fit leaves room under the prompt (safeRect measures it).
 - Cards: suit sets frame + scene palette; strength badge uses the suit colour and icon (only coin cards are gold);
   action cards show `face` (short) text, `txt` in tooltips. Full-screen button `#fsBtn` is hidden where unsupported
   (iPhone Safari); home-screen metas make the saved web app full screen there.
-- **Other players' turns** (`FEED`, feed.js): for AI seats (local) and every seat but mine (online), `playEvents` feeds the
-  `play` events into a row of small cards under the prompt text (`#feed` inside `#prompt`): one group per step with a caption
-  ("Explorer · 2 spaces · blockade #3", "Bought Scout for 2½", "Ended turn · kept 1"); played cards fly out of their player chip, a
-  bought/taken card flies out of the market, and their moves leave a dotted trail in their colour (`L.trail`). After their turn the
-  row stays as a recap ("Raleigh's turn") until I act. Oldest steps drop out whole when the row is full. Not in replays (the actor's
-  hand is shown there). In short game areas the prompt also keeps clear of the turn buttons (`--actFoot`, set in `btnWire`).
-  Local AIs act ~0.75 s apart (first action of a turn 1 s) so each card can be followed.
-- **Journal**: its own HUD button (`#jrnBtn`, a book icon alone on phones) opens the game log as a modal (`showJournal`), newest
-  first, grouped by round, live while open (no backdrop blur on it). It used to be a collapsed section of the All-cards spread.
+- **History panel** (`#hist`, feed.js; replaced the Journal, 2026-09-29, owner's request): every turn from `S.hist`, newest first,
+  each a row of small cards with a caption per step ("Explorer · 2 spaces · blockade #3", "Bought Scout for 2½", "Ended turn · kept 1").
+  By default it sits under the prompt, centred in the prompt's band, exactly one turn tall (the list's height follows the newest turn,
+  measured by a ResizeObserver; never less than one full turn); it scrolls to older turns. The bar on its right edge drags it anywhere
+  (it floats: `.free`, placed with a transform; dropped near its old spot it goes back there), the corner resizes it (under the prompt it
+  stays centred, so width grows both ways), ✕ hides it, ↺ puts it back under the prompt one turn tall. Position (as fractions of the room
+  around it), size and hidden are kept on this device (`eldorado-hist`). The History button in the top bar shows/hides it.
+  On large screens (≥ 900 px) it can also be dropped at the left edge (a dashed outline shows where): it becomes a full-height column
+  of its own (`#lside`, a grid cell left of the game, so it covers no control and the game area shrinks), the list scrolls, the corner
+  sets the column's width; dragged out it floats again. Phones: a panel too narrow for a turn to wrap well (≤ 300 px) shows each turn
+  as one row that scrolls sideways; in a replay on a small game area (< 600 px wide) it shows only when asked for (History button).
+  Your own turn in progress isn't listed (it's added when you end it); a watched player's turn (AI seats locally, every seat but mine
+  online) is live: `playEvents` feeds their events to `feedEvent`, so played cards fly out of their player chip, a bought/taken card
+  out of the market, and their moves leave a dotted trail in their colour (`L.trail`) until I act. Replays show it too (their
+  snapshots keep the history apart: `R.turns`/`R.hc`, rebuilt in `replayGo`). When the market is a row of cards (landscape phones) the
+  panel sits just below it and takes the full width; very short game areas use smaller cards. In short game areas the prompt also keeps
+  clear of the turn buttons (`--actFoot`, set in `btnWire`). Local AIs act ~0.75 s apart (first action of a turn 1 s) so each card can be followed.
 - Design: single dark theme by choice. Fonts Young Serif (display) + Figtree (UI). Tokens in `:root` of shell.html.
   Terrain colors in `TFILL`, card frames `.k-g/.k-b/.k-y/.k-x/.k-p`.
 

@@ -5,7 +5,7 @@
 const { chromium, serveStatic, settle } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
 const ALL = [[320, 568], [390, 844], [844, 390], [768, 1024], [1024, 700], [1024, 768], [1280, 720], [1366, 768], [1440, 900], [1920, 1080], [2560, 1440]];
-const SIZES = process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1920, 1080]] : ALL;
+const SIZES = process.env.ONLY ? [process.env.ONLY.split('x').map(Number)] : process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1920, 1080]] : ALL;
 const shots = process.argv.includes('--shots') ? process.argv[process.argv.indexOf('--shots') + 1] : null;
 const log = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/replay.json'), 'utf8'));
 
@@ -29,12 +29,13 @@ const CHECK = () => {
   add('#actBtns button', 'turn button', 'act');
   add('#rdock button, #rdock input, #rdock #rbPos', 'replay control', 'dock');
   add('#rside', 'bot view', 'side');
-  if (!vis(document.querySelector('#jrnBtn'))) bad.push('journal button not visible');
-  // an open journal: the whole panel on screen, with its list and close button
-  const jm = document.querySelector('#overlay .modal.jrn');
-  if (jm) { const r = jm.getBoundingClientRect(); if (r.left < 0 || r.top < 0 || r.right > W || r.bottom > H) bad.push('journal off screen');
-    const lg = vis(jm.querySelector('#log')), cb = vis(jm.querySelector('#jClose')); if (!lg || lg.height < 40) bad.push('journal list too small'); if (!cb) bad.push('journal close button hidden');
-    if (!jm.querySelector('#log .le')) bad.push('journal is empty'); }
+  add('#hist', 'history panel', 'hist');
+  if (!vis(document.querySelector('#histBtn'))) bad.push('history button not visible');
+  // the history panel (in its place under the prompt): the newest turn fits whole, and it can be hidden
+  const hp = document.querySelector('#hist');
+  if (hp && !hp.hidden) { const l = vis(hp.querySelector('#histList')), f = hp.querySelector('#histList > :first-child');
+    if (!l || !f) bad.push('history list not shown'); else { const r = f.getBoundingClientRect(); if (r.bottom > l.bottom + 1 || r.top < l.top - 1) bad.push('the newest turn does not fit in the history panel'); }
+    if (!vis(hp.querySelector('#histX'))) bad.push('history close button hidden'); }
   // 1. fully on screen (the player chips may scroll sideways inside their strip)
   for (const it of items) { const r = it.r; if (it.group === 'chips') continue;
     if (r.left < -0.5 || r.top < -0.5 || r.right > W + 0.5 || r.bottom > H + 0.5) bad.push(`${it.name} off screen (${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)})`); }
@@ -46,7 +47,7 @@ const CHECK = () => {
     if (hit(a.r, b.r)) bad.push(`${a.name} overlaps ${b.name}`); }
   // 3. the hand: every card at least half visible, and never under a control
   document.querySelectorAll('#cards .card:not(.fly):not(.mghost)').forEach((c, i) => { const r = vis(c); if (!r) return; // (cards in flight are animations, not the hand)
-    for (const it of items) if (['dock', 'side', 'act', 'prompt', 'hud'].includes(it.group) && hit(r, it.r)) bad.push(`hand card ${i} under ${it.name}`); });
+    for (const it of items) if (['dock', 'side', 'act', 'prompt', 'hud', 'hist'].includes(it.group) && hit(r, it.r)) bad.push(`hand card ${i} over ${it.name}`); });
   return [...new Set(bad)];
 };
 
@@ -61,15 +62,18 @@ const CHECK = () => {
     await p.goto(url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     // normal play: start a local game from the setup screen
     await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
-    const states = [['play', null], ['journal', async () => { await p.click('#jrnBtn', { timeout: 5000 }); }], ['play, market closed', async () => { await p.click('#mktBtn', { timeout: 5000 }); }],
-      // another player's turn as a recap under the prompt (more steps than fit on a phone), market closed and open
-      ['recap of an AI turn', async () => { await p.evaluate(() => { const E = window.__ED, S = E.S; S.players[1].ai = 'raleigh';
-        E.playEvents([{ e: 'play', pl: 1, k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { e: 'play', pl: 1, k: 'action', ts: ['cartographer'], n: 2 },
+    const states = [['play', null], ['play, market closed', async () => { await p.click('#mktBtn', { timeout: 5000 }); }],
+      // another player's turn in the history panel (more steps than fit on one line on a phone), market closed and open
+      ['history of an AI turn', async () => { await p.evaluate(() => { const E = window.__ED, S = E.S, r = S.round; S.players[1].ai = 'raleigh';
+        S.log.push(...[{ e: 'play', pl: 1, k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { e: 'play', pl: 1, k: 'action', ts: ['cartographer'], n: 2 },
           { e: 'play', pl: 1, k: 'rubble', ts: ['traveler', 'sailor'] }, { e: 'play', pl: 1, k: 'buy', ts: ['traveler', 'traveler', 'explorer'], got: 'scout', paid: 2.5 },
-          { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1 }], 0); E.render(); }); }],
-      ['recap, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await settle(p); const n = await p.evaluate(() => document.querySelectorAll('#feed .fg:not(.gone)').length); if (!n) throw new Error('no recap shown'); }],
-      ['replay journal', async () => { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForFunction(() => window.__ED.G.replay); await settle(p);
-        await p.evaluate(() => { const r = document.querySelector('#rbR'); r.value = Math.floor(r.max * .4); r.dispatchEvent(new Event('input')); }); await p.click('#jrnBtn', { timeout: 5000 }); }],
+          { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1 }].map(e => ({ ...e, r }))); E.render(); }); }],
+      ['history, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await settle(p); const n = await p.evaluate(() => document.querySelectorAll('#hist .fg').length); if (!n) throw new Error('no turn shown'); }],
+      ['history hidden', async () => { await p.click('#histX', { timeout: 5000 }); await p.waitForFunction(() => document.querySelector('#hist').hidden, null, { timeout: 3000 });
+        await p.click('#histBtn', { timeout: 5000 }); }],
+      ['replay history', async () => { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForFunction(() => window.__ED.G.replay); await settle(p);
+        await p.evaluate(() => { const r = document.querySelector('#rbR'); r.value = Math.floor(r.max * .4); r.dispatchEvent(new Event('input')); }); await settle(p);
+        if (!await p.waitForFunction(() => document.querySelectorAll('#hist .ht').length > 3 || document.querySelector('#app').clientWidth < 600 && document.querySelector('#hist').hidden, null, { timeout: 3000 }).then(() => true, () => false)) throw new Error('no turns in the replay\'s history'); }], // (phones: only when asked for)
       ['replay', null],
       ['replay, bot view hidden', async () => { await p.click('#rbA', { timeout: 5000 }); }],
       ['replay, market closed', async () => { await p.click('#rbA', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }]];
