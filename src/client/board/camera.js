@@ -7,6 +7,7 @@ import { $ } from '../dom.js';
 import { UI, cur } from '../state.js';
 import { geo, onGeo, measure } from '../geometry.js';
 import { after } from '../frame.js';
+import { diag } from '../debug.js';
 export const view = { s: 1, x: 0, y: 0 };
 /* userZoomed: the player moved the board (a resize then keeps their view); dragMoved: the current press became a drag
    (its click is not a tap) */
@@ -26,7 +27,7 @@ function settle() {
   if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
   });
 }
 /* the part of the game area the board should fill: under the prompt, left of the market, above the hand */
@@ -41,7 +42,7 @@ export function focusPoint() {
   if (!k) return [MAP.city.x, MAP.city.y]; const h = hexAt(k); return [h.x, h.y];
 }
 export function fit(anim) {
-  if (!MAP) return; const r = safeRect(); if (!r.W) return;
+  if (!MAP) return; const r = safeRect(); if (!r.W) return; diag(`fit${anim ? ' (glide)' : ''} in ${Math.round(r.W)}×${Math.round(r.H)}`);
   const aw = r.r - r.l, ah = r.b - r.t;
   let s = Math.min(aw / MAP.w, ah / MAP.h); view.s = s; view.x = r.l + (aw - MAP.w * s) / 2; view.y = r.t + (ah - MAP.h * s) / 2;
   // too small to play (phones): zoom in on the explorer to move, or (the start screen's preview) on the starting spaces,
@@ -71,7 +72,7 @@ function clampView() {
 export function ensureVisible() {
   if (!MAP || !S) return; const r = safeRect(), c = focusPoint();
   const sx = (c[0] - MAP.minX) * view.s + view.x, sy = (c[1] - MAP.minY) * view.s + view.y, m = 40;
-  if (sx > r.l + m && sx < r.r - m && sy > r.t + m && sy < r.b - m) return;
+  if (sx > r.l + m && sx < r.r - m && sy > r.t + m && sy < r.b - m) return; diag('ensureVisible: glide');
   view.x += (r.l + r.r) / 2 - sx; view.y += (r.t + r.b) / 2 - sy; clampView(); glide(); applyView();
 }
 function zoomAt(px, py, f) { const ns = Math.max(.25, Math.min(3.2, view.s * f)); const k = ns / view.s; view.x = px - (px - view.x) * k; view.y = py - (py - view.y) * k; view.s = ns; applyView(); cam.userZoomed = true; moved(); }
@@ -98,7 +99,7 @@ export function setupPanZoom() {
   v.addEventListener('pointerdown', e => {
     stage().style.transition = ''; gliding = false; ptrs.set(e.pointerId, [e.clientX, e.clientY]); cam.pointers = ptrs.size;
     if (ptrs.size === 1) { cam.dragMoved = false; beginPan(); }
-    else if (ptrs.size === 2) { beginPinch(); cam.dragMoved = true; moved(); }
+    else if (ptrs.size === 2) { beginPinch(); cam.dragMoved = true; moved(); diag('pinch starts'); }
   });
   window.addEventListener('pointermove', e => {
     if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
@@ -123,7 +124,7 @@ export function setupPanZoom() {
     if (!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId);
     if (ptrs.size === 1) { pinch = null; beginPan(); } // one finger left: continue panning from here, no jump
     else if (ptrs.size >= 2) beginPinch();
-    cam.pointers = ptrs.size; if (!ptrs.size) { start = null; pinch = null; v.classList.remove('drag'); setTimeout(() => cam.dragMoved = false, 0); scheduleSettle(); }
+    cam.pointers = ptrs.size; if (ptrs.size) diag(`still down: ${[...ptrs.keys()].join(',')}`); if (!ptrs.size) { start = null; pinch = null; v.classList.remove('drag'); setTimeout(() => cam.dragMoved = false, 0); scheduleSettle(); }
   };
   window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   const mid = f => () => zoomAt(geo.app.width / 2, geo.app.height / 2, f);
@@ -135,6 +136,6 @@ export function setupPanZoom() {
   ['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
   // Safari's trackpad pinch arrives as gesture events (not ctrl+wheel); touch pinches are already handled by the pointers above
   let g0 = 1; v.addEventListener('gesturestart', () => { g0 = view.s; });
-  v.addEventListener('gesturechange', e => { if (ptrs.size >= 2 || !e.scale) return; const [x, y] = local(e.clientX, e.clientY); zoomAt(x, y, g0 * e.scale / view.s); });
+  v.addEventListener('gesturechange', e => { if (ptrs.size >= 2 || !e.scale) return; diag(`gesture zoom ${e.scale.toFixed(2)} with ${ptrs.size} pointers`); const [x, y] = local(e.clientX, e.clientY); zoomAt(x, y, g0 * e.scale / view.s); });
   document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 }

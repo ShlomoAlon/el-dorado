@@ -21,6 +21,7 @@ import { MENU, menuInit, showSetup, showHub, setupSync, prepareGame, startLocal,
 import { netInit, joinRoom, netSend, exitOnline } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
 import { soundInit } from './sound.js';
+import { debugInit } from './debug.js';
 import { cam } from './board/camera.js';
 import { showHover, hideHover } from './board/overlays.js';
 import { drag } from './hand.js';
@@ -30,7 +31,7 @@ for (const p of [derivePart, overlaysPart, piecesPart, hudPart, feedPart, market
 GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); });
 
 function boot() {
-  soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
+  debugInit(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
   if (!document.documentElement.classList.contains('resume')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check)
   $('#deckPile').onclick = () => showPile('deck'); $('#discPile').onclick = () => showPile('discard');
   $('#rulesBtn').onclick = showRules; $('#jrnBtn').onclick = showJournal;

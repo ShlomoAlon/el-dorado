@@ -10,11 +10,14 @@ const safe = (f, what) => { try { f(); } catch (e) { console.error(what, e); } }
 /* timing per part (tests and debugging: set frameStats.on) */
 export const frameStats = { on: false, ms: {} };
 export function render() { if (!raf) raf = requestAnimationFrame(flush); }
+import { diag, DEBUG } from './debug.js';
 export function flush() {
   if (raf) { cancelAnimationFrame(raf); raf = 0; }
+  const t0 = DEBUG ? performance.now() : 0;
   if (frameStats.on) { for (const p of parts) { const t = performance.now(); safe(() => p.update(), 'update'); const k = p.name || '?'; frameStats.ms[k] = (frameStats.ms[k] || 0) + performance.now() - t; } }
   else for (const p of parts) safe(() => p.update(), 'update');
   for (const f of afterQ.splice(0)) safe(f, 'after');
+  if (DEBUG) { const ms = performance.now() - t0; if (ms > 8) diag(`update ${ms.toFixed(0)} ms`); }
 }
 export function after(f) { afterQ.push(f); render(); }
 export function resetView() { for (const p of parts) if (p.reset) safe(() => p.reset(), 'reset'); render(); }
