@@ -20,8 +20,8 @@ const serve = () => { const pub = path.join(__dirname, '..', 'public'); const sr
   const idle = async () => { await p.waitForFunction(() => !window.__ED.UI.anim, null, { timeout: 5000 }); await wait(120); };
   const center = async sel => { const r = await p.evaluate(s => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, sel); if (!r) throw new Error('not found: ' + sel); return r; };
   await p.goto(url); await wait(700);
-  // seat 2 is an AI (Raleigh) for the AI-turn step
-  await p.selectOption('select[name=who1]', 'raleigh'); await wait(300);
+  // seat 2 is an AI (Fawcett: the network, fetched from /ai/first.bin when it first moves) for the AI-turn step
+  await p.selectOption('select[name=who1]', 'fawcett'); await wait(300);
   // 1. Start: the start screen's background is the game itself, so nothing on the board changes
   await p.evaluate(() => { window.__mut = 0; new MutationObserver(l => { window.__mut += l.length; }).observe(document.querySelector('#stage'), { subtree: true, childList: true, attributes: true, characterData: true }); });
   await p.click('#sGo'); await wait(900);

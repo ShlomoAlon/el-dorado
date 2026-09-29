@@ -135,11 +135,11 @@ src/client/*.js           the page: ES modules bundled by esbuild (build.mjs). O
 src/worker.js             Worker routes, auth (Google JWT verify + HMAC session tokens), Lobby DO, Room DO
 test/run.mjs              all checks in one command (quick ~45 s; --full); see CLAUDE.md
 test/flows.cjs            Playwright: a local game played with real clicks and drags (move, drag, undo, buy, AI turn, replay)
+test/online.cjs           Playwright vs its own wrangler dev (test/lib.cjs startServer): rooms, redaction, undo, buy, clock, resign,
+                          ratings, replay, AI rooms (rated / unrated), room lists, quick match
+test/lib.cjs              shared test helpers: static server, game server, pages that collect errors, settle(), report()
 test/frames.cjs           phone profile, CPU ÷4: restyle size and composited animations per interaction
 test/engine.test.mjs      60 random games (--quick: 12): termination, card conservation, placements, zero-sum Elo, no redaction leaks
-test/e2e.cjs              Playwright: 3 dev-signed-in browsers, create/join/start, moves, buys, timer, resigns, ratings
-test/e2e_ai.cjs           Playwright vs wrangler dev: rated room with 2 AI seats plays to the end (AI ratings move), unrated room
-test/ai_local.cjs         Playwright (own static server): local game vs AIs from the setup screen, 1440 and 390 px
 ```
 The browser build wraps everything in one IIFE; engine and UI share scope (`S`, `MAP`, helpers are plain globals
 inside it). The server imports `E` from `engine.gen.js` and sets `E.S`/`E.MAP` before each call (safe: DO calls are
@@ -278,10 +278,7 @@ npm install                      # wrangler (registry access works in the sandbo
 node build.mjs && node test/engine.test.mjs
 printf 'DEV_AUTH=1\n' > .dev.vars
 npx wrangler dev --ip 127.0.0.1 --port 8787 &     # local Worker + DOs + D1 (state in .wrangler/)
-NODE_PATH=$(npm root -g) node test/e2e.cjs        # Playwright is preinstalled globally; Chromium at /opt/pw-browsers
-NODE_PATH=$(npm root -g) node test/e2e_ai.cjs     # AI seats online: rated game to the end, unrated game
-NODE_PATH=$(npm root -g) node test/ai_local.cjs   # local game vs the AIs (no server needed)
-NODE_PATH=$(npm root -g) node test/match.cjs      # quick match + private rooms (use a fresh --persist-to dir)
+node test/run.mjs --online                         # online play end to end (starts its own game server)
 ```
 Performance checks used before: count rAF frames for 1.5 s while panning / sweeping the hand / moving the arrow;
 target ~90 frames and worst frame ≤ 17 ms. Screenshot at 1440×900 and 390×844 (mobile, `hasTouch`) and actually look.

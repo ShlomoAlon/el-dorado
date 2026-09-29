@@ -58,7 +58,7 @@ export function menuOpen(screen){
 }
 export function menuClose(){const d=MENU.dlg;document.documentElement.classList.remove('resume');if(!d||!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
 // after signing in or out: the account bar and whatever depends on it
-export function menuRefresh(){acctRender();if(MENU.screen==='online')onlineRender();}
+export function menuRefresh(){acctRender();if(MENU.screen==='online'){if(NET.user)openLobbyWs();onlineRender();}} // (signed in on the Online screen: its room list goes live at once)
 
 /* ---- the account bar (rebuilt only when who's signed in, or their numbers, change) ---- */
 export function acctRender(){

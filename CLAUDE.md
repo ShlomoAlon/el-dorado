@@ -30,11 +30,11 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
    The site's `index.html` must stay under ~14 KB compressed (one TCP round trip): the start screen's markup + CSS only
    (shell.html's first `<style>`); game CSS goes in the `<style data-late>` block, which becomes the cached app.css.
 3. `node test/run.mjs` → must print `all ok` (~45 s: build, import lint, engine quick tier, layout at 5 sizes, a game played
-   with real clicks and drags, the worker bundle, frame costs on a throttled phone). Board, layout or engine changes:
-   `node test/run.mjs --full` (all 60 engine games + AI on every course, 11 layout sizes, board rendering).
+   with real clicks and drags, the worker bundle, frame costs on a throttled phone). Server or online changes: add `--online`
+   (online play end to end, against a local game server the test starts itself: nothing to set up). Board, layout or engine
+   changes: `--full` (all 60 engine games + AI on every course, 11 layout sizes, online, board rendering).
    (The worker bundle check matters: Cloudflare's bundler rejects some things Node accepts; a failed bundle never deploys.)
 4. UI changes: load `public/index.html` in Playwright (Chromium is preinstalled; `NODE_PATH=$(npm root -g)`), take screenshots, look at them, check for page errors.
-   Online/server changes: `printf 'DEV_AUTH=1\n' > .dev.vars; npx wrangler dev --ip 127.0.0.1 --port 8787` then `node test/e2e.cjs` (3 browsers, full ranked game).
 5. Commit (clear message + the attribution lines your environment asks for) and `git push origin main`.
 6. Tell him in 1–3 sentences what changed and that it's deploying.
 
