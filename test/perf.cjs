@@ -12,7 +12,7 @@ const CPU = +(opt('--cpu') || 4), [W, H] = (opt('--size') || '1440x900').split('
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: W, height: H } });
   const cdp = await p.context().newCDPSession(p);
   await p.goto('file://' + path.resolve(file)); await p.waitForTimeout(700);
-  await p.click('#sGo'); await p.waitForTimeout(1800);
+  await p.click('#tPlay'); await p.waitForTimeout(1800);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU });
   await cdp.send('Performance.enable');
   const metrics = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(m => [m.name, m.value]));

@@ -24,11 +24,17 @@ const SETUP={seed:(Math.random()*1e9)|0,id:null,cur:null,map:null};
 export function menuInit(){
   // (courses, seats, AI and colour choices are written into the page by build.mjs: the start screen needs no script)
   // AI seats chosen before are remembered on this device
-  let ai=[];try{ai=JSON.parse(localStorage.getItem('eldorado-seats')||'[]');}catch(e){}
-  mqa('#seats select').forEach((s,i)=>{if(aiById(ai[i]))s.value=ai[i];});
+  let ai=null;try{ai=JSON.parse(localStorage.getItem('eldorado-seats')||'null');}catch(e){}
+  if(ai)mqa('#seats select').forEach((s,i)=>{s.value=aiById(ai[i])?ai[i]:'';});
+  // the rest of the last setup (Play starts it again at once)
+  let st=null;try{st=JSON.parse(localStorage.getItem('eldorado-setup')||'null');}catch(e){}
+  if(st)try{for(const n of ['np','course','full'])if(st[n]&&mq(`input[name="${n}"][value="${st[n]}"]`))setRadio(n,st[n]);
+    mq('#sPriv').checked=!!st.priv;(st.names||[]).forEach((v,i)=>{const e=mq(`input[name=nm${i}]`);if(e&&v)e.value=v;});
+    (st.cols||[]).forEach((v,i)=>{const e=mq(`input[name=col${i}][value="${v}"]`);if(e)e.checked=true;});}catch(e){}
   MENU.f.addEventListener('submit',e=>e.preventDefault());
   MENU.f.addEventListener('change',menuChange);
   MENU.f.addEventListener('click',menuClick);
+  mq('#sMode label[data-v=local]').addEventListener('click',()=>{if(MENU.screen==='form')showSetup();}); // (This device again: back to the title)
   mq('#jCode').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();mq('#jGo').click();}});
   MENU.dlg.addEventListener('cancel',e=>{e.preventDefault();if(menuDismissible())menuClose();}); // Esc
   MENU.dlg.addEventListener('click',e=>{if(e.target===MENU.dlg&&menuDismissible())menuClose();}); // the backdrop
@@ -39,7 +45,7 @@ export function menuInit(){
 }
 const menuDismissible=()=>inGame()&&MENU.screen!=='room';
 const onlineGame=()=>inGame()&&online(); // an online game in progress: one game at a time, so the menu only offers going back to it
-const MODE={setup:'local',online:'online',room:'online',replays:'replays'};
+const MODE={setup:'local',form:'local',online:'online',room:'online',replays:'replays'};
 /* the menu for where the player is: an online game (in progress, or just finished: its room is left) → Online; else the start screen */
 export function showMenu(){if(online()&&S.over){exitOnline();showHub();}else if(onlineGame())showHub();else showSetup();}
 
@@ -50,7 +56,8 @@ export function menuOpen(screen){
   mq('#ingame').hidden=!ig;
   if(ig){mq('#igTxt').innerHTML=`<b>Game in progress</b> · round ${S.round}${online()?' · online':''}`;const r=mq('#sResign');r.hidden=rs<0;
     r.textContent='Resign'+(rs>=0&&!online()&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');mq('#sEnd').hidden=online();}
-  if(screen==='setup'){const saved=loadSave();mq('#sResume').hidden=!(saved&&!saved.S.over&&!ig);setText(mq('#sGo'),ig?'Start a new game':'Start expedition');}
+  if(screen==='form'){setText(mq('#sGo'),ig?'Start a new game':'Start expedition');}
+  if(screen==='setup'){titleSync();mq('#ingame').hidden=true;} // the title screen: Continue is the way back to the game
   acctRender();
   setRadio('mode',MODE[screen]);mq('#sMode').hidden=screen==='room'||onlineGame(); // in a room, Leave is the way out; in an online game, Back to game
   mq('#acct').classList.toggle('inroom',screen==='room');
@@ -78,7 +85,9 @@ export function menuChange(e){
   const n=e.target.name||e.target.id;
   if(n==='mode'){({local:showSetup,online:showHub,replays:showReplays})[e.target.value]();return;}
   if(n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){setupSync();prepareGame();
-    if(/^who\d$/.test(n))try{localStorage.setItem('eldorado-seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value)));}catch(_){} return;}
+    try{if(/^who\d$/.test(n))localStorage.setItem('eldorado-seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value)));
+      localStorage.setItem('eldorado-setup',JSON.stringify({np:radio('np'),course:radio('course'),full:radio('full'),priv:mq('#sPriv').checked,
+        names:[...mqa('#seats input[name^=nm]')].map(e=>e.value),cols:[...mqa('#seats .seat')].map(r=>r.querySelector('.sws input:checked').value)}));}catch(_){} return;}
   if(n==='otab'){onlineTab();return;}
   if(n==='rlrated'){netSend({t:'rated',v:e.target.value==='1'});return;}
   if(n==='rlcol'){netSend({t:'color',color:e.target.value});return;}
@@ -94,6 +103,12 @@ export function menuClick(e){
     case'sEnd':menuClose();endLocal();return;
     case'sResume':menuClose();resumeSaved();return;
     case'sGo':delete b.dataset.q;startLocal();return;
+    case'tPlay':delete b.dataset.q;startLocal();return;
+    case'tSetup':menuOpen('form');return;
+    case'fCancel':showSetup();return;
+    case'tContinue':if(inGame())menuClose();else{menuClose();resumeSaved();}return;
+    case'tResign':menuClose();online()?resignOnline():resignLocal();return;
+    case'tEnd':menuClose();endLocal();return;
     case'acProfile':NET.viewUser=null;setRadio('otab','me');showHub();return;
     case'acOut':{const was=MENU.screen;leaveRoom();if(online())exitOnline();signOut(was==='room'||was==='online'?showHub:menuRefresh);return;} // signed out: out of any room
     case'devGo':run(async()=>signedIn(await api('/api/auth/dev',{method:'POST',body:JSON.stringify({name:mq('#devName').value||'Tester'})}),menuRefresh));return;
@@ -130,7 +145,22 @@ export function setupSync(){
     if(A){nm.title=A.desc;nm.firstChild.textContent=A.desc;}
     if(i<n&&rows.slice(0,i).some(q=>col(q)===col(r))){const free=COLORS.find(c=>!rows.slice(0,n).some(q=>q!==r&&col(q)===c.id));r.querySelector(`.sws input[value="${free.id}"]`).checked=true;}}); // (4 colours, at most 4 seats: one is free)
   rows.forEach((r,i)=>{for(const x of r.querySelectorAll('.sws input'))x.disabled=rows.slice(0,n).some((q,j)=>j!==i&&col(q)===x.value);});
-  const allAI=rows.slice(0,n).every(r=>r.querySelector('select').value);mq('#allAI').hidden=!allAI;mq('#sGo').disabled=allAI;
+  const allAI=rows.slice(0,n).every(r=>r.querySelector('select').value);mq('#allAI').hidden=!allAI;mq('#sGo').disabled=allAI;mq('#tPlay').disabled=allAI;
+  titleSync();
+}
+/* the title screen's tiles: Continue (a game in progress), Play (the last setup, in one line) */
+const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+function titleSync(){
+  const ig=inGame(),n=+radio('np'),rows=[...mqa('#seats .seat')].slice(0,n);
+  const who=rows.map(r=>{const A=aiById(r.querySelector('select').value);return A?{ai:1,n:A.name}:{n:r.querySelector('input[name^=nm]').value.trim()||'Player'};});
+  const hu=who.filter(w=>!w.ai).map(w=>w.n),ai=who.filter(w=>w.ai).map(w=>w.n),cid=radio('course');
+  const cn=cid==='random'?'Random course':(courseById(cid)||COURSES[0]).name;
+  setText(mq('#tPlayTxt'),(ai.length?andList(hu)+' against '+andList(ai):'Pass and play · '+andList(hu))+' · '+cn);
+  setText(mq('#tPlayT'),ig?'New game':'Play');
+  const g=ig?{S}:(()=>{const x=loadSave();return x&&!x.S.over?x:null;})();
+  mq('#tContinue').hidden=!g;mq('#tIg').hidden=!ig;mq('#tResign').hidden=!(ig&&resignSeat()>=0);mq('#tEnd').hidden=!ig||online();
+  mq('#tPlay').classList.toggle('pri',!g);
+  if(g)setText(mq('#tContTxt'),'Round '+g.S.round+' · '+g.S.players.map(p=>p.name).join(', '));
 }
 /* The start screen's background IS the game about to start: made from the current choices (this deal's seed) and laid
    out exactly as it will be played (board, pieces, hand, top bar). A changed choice remakes it behind the menu; Start

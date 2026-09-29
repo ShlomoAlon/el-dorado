@@ -97,6 +97,23 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 @media (max-width:500px){.pstats{grid-template-columns:repeat(3,1fr)}
 }
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--gold2);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+/* the title screen (This device): the game's name and three big choices; the full setup is one tile away */
+.modal.menu{display:flex;flex-direction:column}.modal.menu>*{flex:none}
+.tview{flex:1 0 auto!important;display:flex;flex-direction:column;justify-content:center;gap:28px;padding:8px 0 24px}
+.thero{text-align:center}.thero .ttl{font-size:44px;line-height:1.1;margin:0 0 12px}.thero .sub{max-width:430px;margin:0 auto;font-size:15px}
+.tch{display:flex;flex-direction:column;gap:12px;width:min(420px,100%);margin:0 auto}
+.tile{display:flex;align-items:center;gap:16px;min-height:76px;padding:12px 20px;box-sizing:border-box;border-radius:16px;border:1px solid var(--line2);background:#16231e;color:var(--text);text-align:left;cursor:pointer;transition:background .15s,border-color .15s,transform .12s}
+.tile:hover{background:#1c2c26;border-color:rgba(233,178,74,.5)}.tile:active{transform:translateY(1px)}
+.tile:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.tile .ti{width:44px;height:44px;flex:none;border-radius:50%;display:grid;place-items:center;background:rgba(233,178,74,.14);color:var(--gold2)}
+.tile .tt{display:flex;flex-direction:column;gap:3px;min-width:0}.tile .tt b{font-family:var(--display);font-weight:400;font-size:22px;line-height:1.15;color:var(--text)}
+.tile .tt span{font-size:13px;color:var(--muted);line-height:1.35}
+.tile.pri{background:linear-gradient(#f3c461,#d99a2b);border-color:#f5cf7c;box-shadow:0 8px 24px rgba(233,178,74,.28)}
+.tile.pri:hover{background:linear-gradient(#f8d27a,#e2a638)}
+.tile.pri .tt b{color:var(--goldInk)}.tile.pri .tt span{color:#5c4410}.tile.pri .ti{background:rgba(58,40,7,.16);color:var(--goldInk)}
+.tile.sec{min-height:64px;background:transparent}.tile.sec .tt b{font-family:var(--ui);font-weight:700;font-size:15px}.tile.sec .ti{background:rgba(255,255,255,.06);color:var(--muted)}
+.tfoot{display:flex;justify-content:center;gap:10px;margin:0;font-size:13px;color:var(--faint)}.tfoot .linkbtn{color:var(--muted)}
+@media (max-width:520px){.thero .ttl{font-size:34px}.tview{gap:22px}.tile{min-height:70px;padding:10px 16px}}
 .prow{display:flex;gap:10px;align-items:center;margin-bottom:8px}
 .prow input{flex:1;min-width:0;height:38px;box-sizing:border-box;background:#0c1512;border:1px solid var(--line2);border-radius:9px;padding:0 12px;font:inherit;font-size:14px;color:var(--text);outline:none;user-select:text;-webkit-user-select:text}
 .prow input:focus{border-color:var(--gold)}
@@ -604,14 +621,23 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
   <div class="acct" id="acct"></div>
   <div class="ingame" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn pri" id="sBack">Back to game</button></span></div>
   <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>This device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label></div>
-  <section data-screen="setup">
-    <h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
+  <section data-screen="setup" class="tview" id="tView">
+    <div class="thero"><h2 class="ttl">El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p></div>
+    <div class="tch">
+      <button type="button" class="tile pri" id="tContinue" data-shot="continue" hidden><span class="ti"><svg viewBox="0 0 20 20" width="22" height="22" fill="currentColor"><path d="M6 3.8v12.4L16 10z"/></svg></span><span class="tt"><b>Continue</b><span id="tContTxt">Your game in progress</span></span></button>
+      <button type="button" class="tile pri" id="tPlay" data-shot="go" onclick="this.dataset.q=1"><span class="ti"><svg viewBox="0 0 20 20" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M10 2.5l2.2 4.6 5 .6-3.7 3.4 1 5-4.5-2.5-4.5 2.5 1-5L2.8 7.7l5-.6z"/></svg></span><span class="tt"><b id="tPlayT">Play</b><span id="tPlayTxt">Ana against Humboldt and Raleigh · First Expedition</span></span></button>
+      <button type="button" class="tile sec" id="tSetup" data-shot="open-setup"><span class="ti"><svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 5h8M15 5h2M3 10h2M9 10h8M3 15h10M17 15h0"/><circle cx="13" cy="5" r="2"/><circle cx="7" cy="10" r="2"/><circle cx="15" cy="15" r="2"/></svg></span><span class="tt"><b>Set up a game…</b><span>Players, AI opponents, course, colours, rules</span></span></button>
+    </div>
+    <p class="tfoot" id="tIg" hidden><button type="button" class="linkbtn" id="tResign">Resign</button><span>·</span><button type="button" class="linkbtn" id="tEnd">End this game</button></p>
+  </section>
+  <section data-screen="form" id="fView" hidden>
+    <h2>Set up a game</h2><p class="sub">Your choices are remembered: next time, <b>Play</b> starts this game at once.</p>
     <div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div><p class="note" id="n2note" hidden>Two players each lead two explorers. Both must reach El Dorado.</p></div>
     <div class="field"><label>Expedition leaders</label><div id="seats"><!--SEATS--></div><p class="note warn" id="allAI" hidden>Seat at least one human player.</p></div>
     <div class="field"><label>Course</label><div class="clist" id="sC"><!--COURSES:course--></div><div class="routeInfo" id="rInfo"><!--ROUTE--></div><div class="aiNote" id="aiNote" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><label data-v="1"><input type="radio" name="full" value="1" checked><span>When all but one arrive</span></label><label data-v="0"><input type="radio" name="full" value="0"><span>At the first arrival (official)</span></label></div></div>
     <div class="field"><label class="chk"><input type="checkbox" name="priv" id="sPriv"> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
-    <div class="mrow"><button type="button" class="btn" id="sResume" hidden>Resume saved game</button><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
+    <div class="mrow"><button type="button" class="btn" id="sResume" hidden>Resume saved game</button><button type="button" class="btn big" id="fCancel">Cancel</button><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
   </section>
   <section data-screen="online" hidden>
     <div id="oOff" hidden><h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p></div>

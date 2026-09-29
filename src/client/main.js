@@ -60,9 +60,9 @@ function boot() {
     const room = (q.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (room && NET.available) { if (NET.user) { joinRoom(room); return; } NET.pendingRoom = room; showHub(); return; }
     if (NET.user && NET.active) { showHub(); return; }
-    if (resumeSaved()) return;
+    if (resumeSaved()) { showSetup(); return; } // a saved game: behind the title screen, Continue first
     if (radio('mode') === 'online') { showHub(); return; } // picked before the script had loaded
-    showSetup(); if ($('#sGo').dataset.q) { delete $('#sGo').dataset.q; startLocal(); } // Start pressed before the script had loaded
+    showSetup(); if ($('#sGo').dataset.q || $('#tPlay').dataset.q) { delete $('#sGo').dataset.q; delete $('#tPlay').dataset.q; startLocal(); } // Start pressed before the script had loaded
   });
 }
 

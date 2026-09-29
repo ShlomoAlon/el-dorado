@@ -23,7 +23,7 @@ const T = report('flows');
   await p.selectOption('select[name=who1]', 'fawcett'); await settle(p);
   // 1. Start: the start screen's background is the game itself, so nothing on the board changes
   await S(() => { window.__mut = 0; new MutationObserver(l => { window.__mut += l.length; }).observe(document.querySelector('#stage'), { subtree: true, childList: true, attributes: true, characterData: true }); });
-  await p.click('#sGo');
+  await p.click('#tPlay');
   await check('game on show', () => { const E = window.__ED; return !!E.S && !E.UI.preview && !document.querySelector('#menu').open && document.querySelectorAll('#cards .card').length === 4 && document.querySelectorAll('#pieces .piece').length === E.S.players.length; });
   await settle(p);
   T.ok('Start: no change on the board', await S(() => window.__mut) === 0, (await S(() => window.__mut)) + ' mutations');

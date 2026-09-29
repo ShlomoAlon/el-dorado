@@ -61,7 +61,7 @@ const CHECK = () => {
     p.on('pageerror', e => errs.push(e.message));
     await p.goto(url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     // normal play: start a local game from the setup screen
-    await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
+    await p.click('#tPlay'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
     const states = [['play', null], ['play, market closed', async () => { await p.click('#mktBtn', { timeout: 5000 }); }],
       // another player's turn in the history panel (more steps than fit on one line on a phone), market closed and open
       ['history of an AI turn', async () => { await p.evaluate(() => { const E = window.__ED, S = E.S, r = S.round; S.players[1].ai = 'raleigh';

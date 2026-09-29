@@ -17,7 +17,7 @@ function summary(T) {
   const b = await chromium.launch(), ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
   const p = await ctx.newPage(), errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + path.join(__dirname, '..', 'public/index.html'));
-  await p.waitForFunction(() => window.__ED && window.__ED.S); await p.click('#sGo');
+  await p.waitForFunction(() => window.__ED && window.__ED.S); await p.click('#tPlay');
   await p.waitForFunction(() => !window.__ED.UI.preview && !window.__ED.UI.anim && document.querySelectorAll('#cards .card').length === 4); await settle(p);
   const cdp = await ctx.newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
   const traced = async (label, f, ms = 900) => { await p.waitForTimeout(300); await b.startTracing(p, { categories: CATS }); await p.evaluate(f); await p.waitForTimeout(ms);
