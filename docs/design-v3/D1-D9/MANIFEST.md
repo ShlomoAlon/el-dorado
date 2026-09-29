@@ -82,3 +82,32 @@ one row, and Sound / Full screen live in the zoom column where nobody looks for 
 - **Trade-offs:** History and Rules are two taps instead of one; leaving a replay is two taps. The chips get the
   space the name and three buttons used (all four names show in full at 1440; phones still truncate them).
   The drop-down floats over the market column while open (it is transient and closes on any outside tap).
+
+### Option B — buttons stay, Sound and Full screen join the Menu (branch `design/v3-D9-B`)
+- **What changed:** the bar keeps "El Dorado · Round 2", the chips, and Market / History / Rules visible on desktop.
+  After a thin divider come **Sound** and **Full screen** as icon buttons, then **Menu** (the same dialog as today:
+  New game, Resign, Online, Replays). The zoom column is only + − ⤢.
+- On phones the two icons don't fit the top row: they sit at the top of the Menu instead, as "Sound on/off" and
+  "Full screen" buttons (`D9-B-menu-ingame-390`).
+- **Effort / risk:** small (markup moved, ≈ 10 lines CSS, 5 JS). Layout test passes unchanged.
+- **Trade-offs:** everything stays one tap away on desktop, but the row is as busy as before (plus two icons); it
+  groups settings with the menu rather than removing anything. On phones Sound/Full screen become two taps.
+
+## Recommendation
+
+- **D1: Option A (title screen).** It answers the actual problem: a first-time player sees the game's name and one gold
+  "Play" that starts a sensible game (you against two AIs), and a returning player sees "Continue · Round 2" first.
+  The full form is still one tap away and unchanged. B is a good, cheaper improvement (Start on the first phone
+  screen, course thumbnails worth keeping either way), but it still opens on a form. If you pick A, I'd also bring
+  over B's course thumbnails into A's setup form.
+- **D9: Option A (round + turn order left, one Menu right)** on phones and desktop alike: the bar reads as the game's
+  state, the chips get room, and the tools live in one predictable place. If History and Rules being two taps away
+  bothers you in play, B is the safe choice: it only tidies Sound and Full screen into the bar.
+
+## Not done / notes
+- A's saved-game change (title with Continue instead of opening straight into the game) is a behaviour change worth
+  a conscious yes: it costs returning players one tap.
+- The shots use AI opponents whose turns are not fully reproducible between runs, so the History panel's contents
+  differ slightly between before/A/B; the top bar and menus line up.
+- Only `test/layout.cjs --quick` was required; on D9-A the menus and flows tests also pass. On D1-A the menus test's
+  "game bar" check no longer applies (the title screen replaces the bar).
