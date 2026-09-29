@@ -14,11 +14,11 @@ import { undo, canUndo, cancelMode, startEndTurn, finishTurn, confirmDiscardFor,
 
 /* ---------- the top bar: round, and one chip per player (cards, blockades held, arrived) ---------- */
 function updateHeader(){
-  const mb=$('#menuBtn');setText(mb,G.replay?'Exit replay':'Menu');
+  const ex=$('#hmExit');if(ex.hidden!==!G.replay)ex.hidden=!G.replay; // (in a replay the menu's first item leaves it)
   const t=(online()&&canAct()&&!S.over?'● Your turn · ':'')+'El Dorado Expedition';if(document.title!==t)document.title=t;
   const box=$('#players');
   if(!S){setHTML(box,'');return;}
-  setText($('#roundLbl'),'Round '+S.round+(S.endTriggered&&!S.over?' · final':''));
+  const fin=S.endTriggered&&!S.over,rb=$('#roundBox');setText($('#roundLbl'),String(S.round));setText(rb.firstChild,fin?'Final':'Round');if(rb.classList.contains('fin')!==fin)rb.classList.toggle('fin',fin);
   while(box.children.length>S.players.length)box.lastChild.remove();
   S.players.forEach((p,i)=>{
     let c=box.children[i];if(!c){c=document.createElement('div');box.appendChild(c);}

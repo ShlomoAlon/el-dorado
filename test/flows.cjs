@@ -99,7 +99,7 @@ const T = report('flows');
   const hbox = sel => S(s => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }, sel);
   await check('history: one turn tall', () => Math.abs(document.querySelector('#histList').offsetHeight - document.querySelector('#histList .ht').offsetHeight) <= 1);
   await p.click('#histX'); await check('history hides', () => document.querySelector('#hist').hidden && !document.querySelector('#histBtn').classList.contains('on'));
-  await p.click('#histBtn'); await check('history comes back', () => !document.querySelector('#hist').hidden); await settle(p);
+  await p.click('#menuBtn'); await p.click('#histBtn'); await p.keyboard.press('Escape'); await check('history comes back', () => !document.querySelector('#hist').hidden); await settle(p);
   const h0 = await hbox('#hist'), hd = await hbox('.hgrip');
   await p.mouse.move(hd.x + hd.w / 2, hd.y + hd.h / 2); await p.mouse.down(); for (let i = 1; i <= 10; i++) { await p.mouse.move(hd.x + hd.w / 2 - 30 * i, hd.y + hd.h / 2 + 30 * i); await frame(); } await p.mouse.up(); await settle(p);
   const h1 = await hbox('#hist'); T.ok('history: drag moves it', Math.abs(h1.x - (h0.x - 300)) < 3 && Math.abs(h1.y - (h0.y + 300)) < 3, JSON.stringify([h0, h1]));
@@ -116,7 +116,7 @@ const T = report('flows');
   await check('history: dragged out of the column, it floats', () => document.querySelector('#hist').parentNode.id === 'app' && document.querySelector('#lside').hidden && document.querySelector('#hist').classList.contains('free'));
   await settle(p); await p.click('#histHome'); await settle(p);
   const h2 = await hbox('#hist'); T.ok('history: back under the prompt', Math.abs(h2.x - h0.x) < 2 && Math.abs(h2.y - h0.y) < 2 && Math.abs(h2.h - h0.h) < 2, JSON.stringify([h0, h2]));
-  await p.click('#menuBtn'); await check('menu opens over the game', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden);
+  await p.click('#menuBtn'); await p.click('#hmExit:not([hidden]), #hmNew >> nth=0'); await check('menu opens over the game', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden);
   await p.click('#sBack'); await check('back to the game', () => !document.querySelector('#menu').open);
   // 10. replay: step forward (a move animates), then exit back to the game
   await S(l => window.__ED.openReplay(l, null), log);
@@ -125,7 +125,7 @@ const T = report('flows');
   await idle(); await check('replay steps', () => window.__ED.G.replay.i === 6);
   await check('replay: its history', () => !document.querySelector('#hist').hidden && document.querySelectorAll('#histList .ht:not(.sys)').length > 0);
   await check('replay: the strongest AI\'s turn from here', () => !!document.querySelector('#rside .rplan li') && /Fawcett/.test(document.querySelector('#rside').textContent), null, 15000);
-  await p.click('#menuBtn');
+  await p.click('#menuBtn'); await p.click('#hmExit:not([hidden]), #hmNew >> nth=0');
   await check('replay exit resumes the game', () => !window.__ED.G.replay && !!window.__ED.S && !window.__ED.S.over && document.querySelectorAll('#cards .card').length > 0);
   // 11. a removal still to choose (Travel Log): the market stays closed until it's answered (a tap there says why, it
   //     doesn't open a purchase), Escape keeps the question up, and once answered buying works again

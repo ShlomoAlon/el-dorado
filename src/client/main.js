@@ -17,7 +17,7 @@ import { hudPart, hudInit } from './hud.js';
 import { feedPart, histInit } from './feed.js';
 import { showRules, showPile, closeModal, modalOpen } from './dialogs.js';
 import { derivePart, act, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, undo, resumeSaved } from './actions.js';
-import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, startLocal, radio } from './menu.js';
+import { MENU, menuInit, showMenu, showSetup, showHub, showReplays, setupSync, prepareGame, startLocal, radio } from './menu.js';
 import { netInit, joinRoom, netSend } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
 import { soundInit } from './sound.js';
@@ -47,7 +47,16 @@ function boot() {
     document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
   }
   // Menu: the start screen, without ending the game in progress (it offers Back to game and Resign)
-  $('#menuBtn').onclick = () => { if (G.replay) exitReplay(); else showMenu(); };
+  // Menu: a drop-down of the tools (History, Rules, Sound, Full screen) and the menu's screens (New game, Replays, Online);
+  // in a replay its first item leaves the replay
+  const hm = $('#hmenu'), mb = $('#menuBtn');
+  const hmShow = on => { if (hm.hidden === !on) return; hm.hidden = !on; mb.setAttribute('aria-expanded', String(on)); if (on) hm.querySelector('.hmi:not([hidden])').focus({ preventScroll: true }); };
+  mb.onclick = () => hmShow(hm.hidden);
+  hm.addEventListener('click', e => { const b = e.target.closest('.hmi'); if (!b) return;
+    if (b.id === 'hmExit') exitReplay(); else if (b.id === 'hmNew') { if (G.replay) exitReplay(); showMenu(); } else if (b.id === 'hmReplays') showReplays(); else if (b.id === 'hmOnline') showHub();
+    if (b.id !== 'histBtn' && b.id !== 'sndBtn') hmShow(false); }); // (the two switches stay open: you see them flip)
+  document.addEventListener('pointerdown', e => { if (!hm.hidden && !hm.contains(e.target) && !mb.contains(e.target)) hmShow(false); }, true);
+  window.addEventListener('keydown', e => { if (e.key === 'Escape' && !hm.hidden) { e.stopImmediatePropagation(); hmShow(false); mb.focus(); } }, true);
   window.addEventListener('keydown', e => {
     if (replayKeys(e)) return; if (e.target.tagName === 'INPUT') return;
     if (e.key === 'Escape' && UI.allOpen) { openAll(false); return; }

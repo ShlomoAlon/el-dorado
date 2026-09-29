@@ -30,7 +30,7 @@ const CHECK = () => {
   add('#rdock button, #rdock input, #rdock #rbPos', 'replay control', 'dock');
   add('#rside', 'bot view', 'side');
   add('#hist', 'history panel', 'hist');
-  if (!vis(document.querySelector('#histBtn'))) bad.push('history button not visible');
+  if (!vis(document.querySelector('#menuBtn'))) bad.push('menu button not visible');
   // the history panel (in its place under the prompt): the newest turn fits whole, and it can be hidden
   const hp = document.querySelector('#hist');
   if (hp && !hp.hidden) { const l = vis(hp.querySelector('#histList')), f = hp.querySelector('#histList > :first-child');
@@ -70,7 +70,7 @@ const CHECK = () => {
           { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1 }].map(e => ({ ...e, r }))); E.render(); }); }],
       ['history, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await settle(p); const n = await p.evaluate(() => document.querySelectorAll('#hist .fg').length); if (!n) throw new Error('no turn shown'); }],
       ['history hidden', async () => { await p.click('#histX', { timeout: 5000 }); await p.waitForFunction(() => document.querySelector('#hist').hidden, null, { timeout: 3000 });
-        await p.click('#histBtn', { timeout: 5000 }); }],
+        await p.click('#menuBtn', { timeout: 5000 }); await p.click('#histBtn', { timeout: 5000 }); await p.keyboard.press('Escape'); }],
       ['replay history', async () => { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForFunction(() => window.__ED.G.replay); await settle(p);
         await p.evaluate(() => { const r = document.querySelector('#rbR'); r.value = Math.floor(r.max * .4); r.dispatchEvent(new Event('input')); }); await settle(p);
         if (!await p.waitForFunction(() => document.querySelectorAll('#hist .ht').length > 3 || document.querySelector('#app').clientWidth < 600 && document.querySelector('#hist').hidden, null, { timeout: 3000 }).then(() => true, () => false)) throw new Error('no turns in the replay\'s history'); }], // (phones: only when asked for)

@@ -20,17 +20,17 @@ const T = report('menus'), LOG = path.join(__dirname, 'fixtures/replay.json');
   // a game log picked from a file opens as a replay; closing it comes back to Replays
   await p.setInputFiles('#rFile', LOG);
   await check('a picked game log opens as a replay', () => !!window.__ED.G.replay && !document.querySelector('#menu').open);
-  await settle(p); await p.click('#menuBtn');
+  await settle(p); await p.click('#menuBtn'); await p.click('#hmExit:not([hidden]), #hmNew >> nth=0');
   await check('closing it comes back to Replays', new Function(`return !window.__ED.G.replay && document.querySelector('#menu').open && ${screen('replays')} && document.querySelector('input[name=mode][value=replays]').checked`));
   // a game: the menu over it has the game bar; a replay watched from there keeps the game
   await p.click('#sMode label[data-v="local"]'); await check('This device tab', new Function(`return ${screen('setup')}`));
   await p.click('#sGo'); await check('the game starts', () => !!window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
   await settle(p);
   const pos = await p.evaluate(() => JSON.stringify(window.__ED.S.players.map(q => q.hand)));
-  await p.click('#menuBtn'); await check('Menu during a game: the game bar and the tabs', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && !document.querySelector('#sMode').hidden);
+  await p.click('#menuBtn'); await p.click('#hmExit:not([hidden]), #hmNew >> nth=0'); await check('Menu during a game: the game bar and the tabs', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && !document.querySelector('#sMode').hidden);
   await p.click('#sMode label[data-v="replays"]'); await p.setInputFiles('#rFile', LOG);
   await check('a replay during a game', () => !!window.__ED.G.replay);
-  await settle(p); await p.click('#menuBtn');
+  await settle(p); await p.click('#menuBtn'); await p.click('#hmExit:not([hidden]), #hmNew >> nth=0');
   await check('closing it comes back to Replays, the game kept', new Function('r', `return !window.__ED.G.replay && ${screen('replays')} && !document.querySelector('#ingame').hidden && JSON.stringify(window.__ED.S.players.map(q => q.hand)) === r`), pos);
   await p.click('#sBack'); await check('Back to game', () => !document.querySelector('#menu').open && !!window.__ED.S && !window.__ED.G.replay);
   // the end of a game: two resign, the third wins, the results come up; New game goes back to the start screen

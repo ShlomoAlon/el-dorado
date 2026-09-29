@@ -36,7 +36,7 @@ const T = report('online');
     const started = await Promise.all([A, B, C].map(p => wait(p, () => __ED.online() && !document.querySelector('#menu').open)));
     T.ok('start: every player is in the game, menu closed', started.every(Boolean));
     // the menu during an online game: the Online screen with the game bar only (no second game to start, no tabs)
-    await B.click('#menuBtn');
+    await B.click('#menuBtn'); await B.click('#hmExit:not([hidden]), #hmNew >> nth=0');
     T.ok('menu during an online game: Back to game, nothing that would leave it', await wait(B, () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.querySelector('#sMode').hidden && document.querySelector('#oPlay').hidden && !document.querySelector('#oBusy').hidden));
     await B.click('#sBack');
     T.ok('back to the online game, still connected', await wait(B, () => !document.querySelector('#menu').open && __ED.NET.connected && !!__ED.S));

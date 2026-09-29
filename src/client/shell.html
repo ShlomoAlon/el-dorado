@@ -174,10 +174,13 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #tip b{color:var(--gold2)}
 #hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:12px 16px;pointer-events:none;z-index:20;--hudH:38px} /* every HUD item is --hudH tall, centred on one line */
 #hud>*{pointer-events:auto}
-.brandbox{display:flex;align-items:baseline;gap:10px;padding:0 14px;height:var(--hudH);box-sizing:border-box;border-radius:12px;white-space:nowrap}
+.rndbox{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:52px;padding:0 10px;height:var(--hudH);box-sizing:border-box;border-radius:12px;white-space:nowrap;line-height:1}
+.rndbox small{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.rndbox b{font-family:var(--display);font-weight:400;font-size:17px;color:var(--gold2);margin-top:2px;font-variant-numeric:tabular-nums}
+.rndbox.fin{border-color:var(--gold)}.rndbox.fin small{color:var(--gold2)}
 .brand{font-family:var(--display);font-size:19px;color:var(--gold2);line-height:calc(var(--hudH) - 2px)}
-#roundLbl{color:var(--muted);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-variant-numeric:tabular-nums}
-#players{display:flex;gap:8px;flex:1;min-width:0;justify-content:safe center;flex-wrap:nowrap;overflow:hidden;container:players/inline-size}
+
+#players{display:flex;gap:8px;flex:1;min-width:0;justify-content:flex-start;flex-wrap:nowrap;overflow:hidden;container:players/inline-size}
 /* short of room, the chips lose the card count first, then the AI tag; the names come last (ellipsis) */
 @container players (max-width:560px){.pchip .st{display:none}}
 @container players (max-width:380px){.pchip .aitag{display:none}.pchip{gap:6px;padding:0 9px 0 7px}}
@@ -195,12 +198,27 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .tbtn.on{border-color:var(--gold);color:var(--gold2)}
 .tbtn.ico{padding:0 10px;display:inline-grid;place-items:center}
 .tbtn.ico svg{display:block}
-#histBtn{display:inline-flex;align-items:center;gap:6px}#histBtn svg{flex:none;color:var(--gold2)}
+#menuBtn{display:inline-flex;align-items:center;gap:7px}#menuBtn svg{flex:none}
+#menuBtn[aria-expanded=true]{border-color:var(--gold);color:var(--gold2)}
+/* the drop-down: opaque (no blur over the board), under the Menu button; tools first, then the menu's screens */
+#hmenu{position:absolute;z-index:30;top:calc(var(--hudTop,12px) + var(--hudH0,38px) + 8px);right:16px;width:236px;padding:6px;box-sizing:border-box;border-radius:14px;background:#111c18;box-shadow:0 18px 44px rgba(0,0,0,.55);transform-origin:top right;animation:hmIn .16s var(--ease)}
+#hmenu[hidden]{display:none}
+#hmenu .ex{color:var(--gold2)}#hmenu .ex:not([hidden])+.hmi{margin-top:0}
+#hmenu hr{border:0;border-top:1px solid var(--line);margin:6px 4px}
+.hmi{display:flex;align-items:center;gap:12px;width:100%;height:42px;padding:0 12px;box-sizing:border-box;border:0;border-radius:9px;background:none;color:var(--text);font-size:14px;font-weight:600;text-align:left;cursor:pointer}
+.hmi[hidden]{display:none}
+.hmi:hover,.hmi:focus-visible{background:rgba(255,255,255,.07);outline:none}
+.hmi svg{flex:none;color:var(--gold2)}.hmi span{flex:1}
+.hmi .sw{flex:none;width:30px;height:18px;border-radius:9px;background:rgba(255,255,255,.14);position:relative;transition:background .15s}
+.hmi .sw::after{content:'';position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#cfd8d2;transition:transform .15s}
+#histBtn.on .sw,#sndBtn:not(.off) .sw{background:var(--gold)}
+#histBtn.on .sw::after,#sndBtn:not(.off) .sw::after{transform:translateX(12px);background:#fff}
+@keyframes hmIn{from{opacity:0;transform:translateY(-4px) scale(.97)}}
 #fsBtn .fs-out,#fsBtn.full .fs-in{display:none}
 #fsBtn.full .fs-out{display:inline}
 #sndBtn .snd-off,#sndBtn.off .snd-on{display:none}
 #sndBtn.off .snd-off{display:inline}
-#sndBtn.off{opacity:.7}
+
 
 /* centred in the space left of the market column (--mktFoot = how far the market reaches in from the right edge) */
 #app{--mw:72px;--mktR:16px;--mktW:152px;--mktFoot:calc(var(--mktR) + var(--mktW) + 10px);--zoomFoot:66px}
@@ -493,10 +511,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 }
 @container game (max-height:520px){#app{--zoomFoot:140px}.zoomctl{top:var(--row2,64px);transform:none;flex-direction:row}.zoomctl button:not(#fsBtn):not(#sndBtn):not(#zfit){display:none}
 }
-@container game (max-width:800px){.brandbox{display:none}}
+
 @container game (max-width:900px){
   #app{--cw:104px}
-  .brandbox .brand{font-size:16px}
   .pchip .st{display:none}
   #players{justify-content:flex-start}
   #prompt{font-size:13px}
@@ -507,10 +524,10 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @container game (max-width:600px){
   #app{--cw:86px}
   #hud{padding:10px 12px;gap:6px;--hudH:34px}
-  .brandbox{display:none}
   .tbtn{padding:0 10px;font-size:12.5px}
-  #rulesBtn{display:none}
-  #histBtn{padding:0 9px}#histBtn span{display:none} /* phones: the icon alone leaves the player chips room */
+  #menuBtn{padding:0 9px}#menuBtn span{display:none} /* phones: the icon alone leaves the player chips room */
+  .rndbox{min-width:40px;padding:0 6px}.rndbox small{font-size:8px;letter-spacing:.08em}.rndbox b{font-size:15px}
+  #hmenu{right:12px;--hudTop:10px;--hudH0:34px}
   #app{--mw:44px;--mktR:6px;--zoomFoot:12px}
   #hist{--fw:34px}.hsteps{column-gap:12px}.fg .fcap{font-size:10px}.ht{padding:5px 8px 6px 10px}.hwho{margin-bottom:4px}
   #app{--row2:58px}
@@ -555,14 +572,24 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div id="tip"></div>
   </div>
   <div id="hud">
-    <div class="brandbox glass"><span class="brand">El Dorado</span><span id="roundLbl"></span></div>
+    <div class="rndbox glass" id="roundBox" title="Round"><small>Round</small><b id="roundLbl"></b></div>
     <div id="players"></div>
     <div class="hbtns">
       <button class="tbtn glass" id="mktBtn">Market</button>
-      <button class="tbtn glass" id="histBtn" title="History: every turn, newest first" aria-label="History" aria-pressed="true"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M3.6 10a6.4 6.4 0 1 0 1.9-4.55"/><path d="M3.3 3.4v2.9h2.9"/><path d="M10 6.6V10l2.3 1.5"/></svg><span>History</span></button>
-      <button class="tbtn glass" id="rulesBtn">Rules</button>
-      <button class="tbtn glass" id="menuBtn">Menu</button>
+      <button class="tbtn glass" id="menuBtn" data-shot="menu" aria-haspopup="menu" aria-expanded="false" aria-controls="hmenu"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13"/></svg><span>Menu</span></button>
     </div>
+  </div>
+  <!-- the top bar's menu (a drop-down under the Menu button): the tools, then the menu's screens -->
+  <div id="hmenu" class="glass" role="menu" aria-label="Menu" hidden>
+    <button role="menuitem" class="hmi ex" id="hmExit" hidden><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4H4.5v12H8M12 6.5L15.5 10 12 13.5M15.5 10H7.5"/></svg><span>Exit replay</span></button>
+    <button role="menuitemcheckbox" class="hmi" id="histBtn" aria-pressed="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M3.6 10a6.4 6.4 0 1 0 1.9-4.55"/><path d="M3.3 3.4v2.9h2.9"/><path d="M10 6.6V10l2.3 1.5"/></svg><span>History</span><i class="sw" aria-hidden="true"></i></button>
+    <button role="menuitem" class="hmi" id="rulesBtn"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M10 5.2C8.4 4 6 3.6 3.2 3.8v11.4c2.8-.2 5.2.2 6.8 1.4 1.6-1.2 4-1.6 6.8-1.4V3.8C14 3.6 11.6 4 10 5.2zM10 5.2v11.4"/></svg><span>Rules</span></button>
+    <button role="menuitemcheckbox" class="hmi" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg><span>Sound</span><i class="sw" aria-hidden="true"></i></button>
+    <button role="menuitem" class="hmi" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg><span>Full screen</span></button>
+    <hr>
+    <button role="menuitem" class="hmi" id="hmNew"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg><span>New game…</span></button>
+    <button role="menuitem" class="hmi" id="hmReplays"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="2.2"/><path d="M8.6 7.8v4.4l3.6-2.2z" fill="currentColor"/></svg><span>Replays</span></button>
+    <button role="menuitem" class="hmi" id="hmOnline"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6.8"/><path d="M3.2 10h13.6M10 3.2c2 2 2.8 4.4 2.8 6.8S12 14.8 10 16.8C8 14.8 7.2 12.4 7.2 10S8 5.2 10 3.2z"/></svg><span>Online</span></button>
   </div>
   <div id="prompt" class="glass"><div id="ptxt"></div></div>
   <section id="hist" class="glass" hidden aria-label="History">
@@ -578,7 +605,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
       <div class="allc-sect"><h3>Reserve <span id="resState"></span></h3><p class="note" id="resNote" style="margin:-6px 0 14px"></p><div id="reserve" class="agrid"></div></div>
     </div>
   </div>
-  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button><button class="glass" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button></div>
+  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button></div>
   <div class="pile" id="deckPile" title="Draw pile — click to view"><div class="pstack" id="deckStack"></div><div class="lbl glass">Deck <b id="deckN">0</b></div></div>
   <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
   <div id="actBtns"></div>

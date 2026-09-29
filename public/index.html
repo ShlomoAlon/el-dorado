@@ -35,14 +35,24 @@
     <div id="tip"></div>
   </div>
   <div id="hud">
-    <div class="brandbox glass"><span class="brand">El Dorado</span><span id="roundLbl"></span></div>
+    <div class="rndbox glass" id="roundBox" title="Round"><small>Round</small><b id="roundLbl"></b></div>
     <div id="players"></div>
     <div class="hbtns">
       <button class="tbtn glass" id="mktBtn">Market</button>
-      <button class="tbtn glass" id="histBtn" title="History: every turn, newest first" aria-label="History" aria-pressed="true"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M3.6 10a6.4 6.4 0 1 0 1.9-4.55"/><path d="M3.3 3.4v2.9h2.9"/><path d="M10 6.6V10l2.3 1.5"/></svg><span>History</span></button>
-      <button class="tbtn glass" id="rulesBtn">Rules</button>
-      <button class="tbtn glass" id="menuBtn">Menu</button>
+      <button class="tbtn glass" id="menuBtn" data-shot="menu" aria-haspopup="menu" aria-expanded="false" aria-controls="hmenu"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13"/></svg><span>Menu</span></button>
     </div>
+  </div>
+  <!-- the top bar's menu (a drop-down under the Menu button): the tools, then the menu's screens -->
+  <div id="hmenu" class="glass" role="menu" aria-label="Menu" hidden>
+    <button role="menuitem" class="hmi ex" id="hmExit" hidden><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4H4.5v12H8M12 6.5L15.5 10 12 13.5M15.5 10H7.5"/></svg><span>Exit replay</span></button>
+    <button role="menuitemcheckbox" class="hmi" id="histBtn" aria-pressed="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M3.6 10a6.4 6.4 0 1 0 1.9-4.55"/><path d="M3.3 3.4v2.9h2.9"/><path d="M10 6.6V10l2.3 1.5"/></svg><span>History</span><i class="sw" aria-hidden="true"></i></button>
+    <button role="menuitem" class="hmi" id="rulesBtn"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M10 5.2C8.4 4 6 3.6 3.2 3.8v11.4c2.8-.2 5.2.2 6.8 1.4 1.6-1.2 4-1.6 6.8-1.4V3.8C14 3.6 11.6 4 10 5.2zM10 5.2v11.4"/></svg><span>Rules</span></button>
+    <button role="menuitemcheckbox" class="hmi" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg><span>Sound</span><i class="sw" aria-hidden="true"></i></button>
+    <button role="menuitem" class="hmi" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg><span>Full screen</span></button>
+    <hr>
+    <button role="menuitem" class="hmi" id="hmNew"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg><span>New game…</span></button>
+    <button role="menuitem" class="hmi" id="hmReplays"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="2.2"/><path d="M8.6 7.8v4.4l3.6-2.2z" fill="currentColor"/></svg><span>Replays</span></button>
+    <button role="menuitem" class="hmi" id="hmOnline"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6.8"/><path d="M3.2 10h13.6M10 3.2c2 2 2.8 4.4 2.8 6.8S12 14.8 10 16.8C8 14.8 7.2 12.4 7.2 10S8 5.2 10 3.2z"/></svg><span>Online</span></button>
   </div>
   <div id="prompt" class="glass"><div id="ptxt"></div></div>
   <section id="hist" class="glass" hidden aria-label="History">
@@ -58,7 +68,7 @@
       <div class="allc-sect"><h3>Reserve <span id="resState"></span></h3><p class="note" id="resNote" style="margin:-6px 0 14px"></p><div id="reserve" class="agrid"></div></div>
     </div>
   </div>
-  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button><button class="glass" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button></div>
+  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button></div>
   <div class="pile" id="deckPile" title="Draw pile — click to view"><div class="pstack" id="deckStack"></div><div class="lbl glass">Deck <b id="deckN">0</b></div></div>
   <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
   <div id="actBtns"></div>
@@ -141,10 +151,10 @@
   </section>
 </form>
 </dialog>
-<link rel="stylesheet" href="app.015bbeb042.css">
+<link rel="stylesheet" href="app.f5207767ac.css">
 
 
 
-<script src="app.5b1f105acd.js" defer></script>
+<script src="app.b306dcb67a.js" defer></script>
 </body>
 </html>
