@@ -26,7 +26,7 @@ export const blPos = {};
 let blSig = '';
 function updateBlockades() {
   const sig = MAP.course + '|' + S.seed + '|' + S.blockades.map(B => B.owner).join(',');
-  if (blSig !== sig || !L.bl.childElementCount) {
+  if (blSig !== sig) { // (a new board comes with a reset: blSig '')
     blSig = sig; L.bl.innerHTML = ''; $('#blabels2').innerHTML = '';
     S.blockades.forEach((B, bi) => drawBlockade(B, bi));
   }
