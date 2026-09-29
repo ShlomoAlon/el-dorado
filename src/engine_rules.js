@@ -110,9 +110,9 @@ function newGame(o){
   const st=MAP.starts;
   if(players.length===2){players[0].pieces=[st[0],st[2]];players[1].pieces=[st[1],st[3]];}
   else players.forEach((p,i)=>p.pieces=[st[i]]);
-  S={v:5,seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
+  S={v:6,seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
      blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,start:0,round:1,endTriggered:false,over:false,winners:null,places:null,
-     fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[],privacy:!!o.privacy,resigns:0};
+     fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[],hist:[],privacy:!!o.privacy,resigns:0};
   players.forEach(p=>drawCards(p,4));
   log(null,'The expedition sets out: '+players.map(p=>p.name).join(', ')+'. Course: '+MAP.name+' ('+MAP.route.join(' · ')+' · El Dorado).');
   return S;
@@ -120,6 +120,25 @@ function newGame(o){
 function newCard(t){const id='c'+(S.nid++);S.cards[id]=t;return id;}
 function drawCards(p,n){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(!p.discard.length)break;p.deck=shuffle(p.discard);p.discard=[];}const c=p.deck.pop();p.hand.push(c);got.push(c);}return got;}
 function log(pi,t){S.log.push({p:pi,t,r:S.round});if(S.log.length>200)S.log.shift();}
+/* The turn history (the table's history panel): the last HIST_MAX turns, oldest first, each {i (a running number), p (seat),
+   r (round), s: steps, end (1 once the turn is over)}. A step is a 'play' event without e/pl, so it names only what is public
+   (see the 'play' events), plus bl (the blockade it took) and arr (reached El Dorado); a move made with leftover strength
+   adds to the step before it. Timeouts and resignations are steps of their own ({k:'timeout'}, {k:'resign'}). */
+const HIST_MAX=60;
+function histTurn(pl){const H=S.hist||(S.hist=[]);let t=H[H.length-1];
+  if(!t||t.p!==pl||t.end){t={i:t?t.i+1:0,p:pl,r:S.round,s:[]};H.push(t);if(H.length>HIST_MAX)H.shift();}
+  return t;}
+function hist(ev){
+  for(const e of ev){
+    if(e.e==='play'){const{e:_e,pl,more,...st}=e,t=histTurn(pl),last=t.s[t.s.length-1];
+      if(st.k==='move'&&more&&last&&last.k==='move'){last.n+=st.n;continue;}
+      if(st.k==='trash'&&!st.ts.length)continue;
+      t.s.push(st);if(st.k==='end')t.end=1;continue;}
+    if(e.e!=='block'&&e.e!=='arrive')continue;
+    const t=S.hist&&S.hist[S.hist.length-1],last=t&&t.p===e.pl&&!t.end&&t.s[t.s.length-1];if(!last)continue;
+    if(e.e==='block')last.bl=e.n;else last.arr=1;
+  }
+}
 function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
 function blockAt(a,b){const c=MAP.edgeConn.get(a+'|'+b);if(c===undefined)return null;const bi=S.blockades.findIndex(x=>x.conn===c);if(bi<0||S.blockades[bi].owner!==null)return null;return bi;}
 function neighbors(k){const nb=MAP._nb||(MAP._nb=new Map());let r=nb.get(k);if(!r){const h=hexAt(k);r=DIRS.map(([dq,dr])=>key(h.q+dq,h.r+dr)).filter(n=>MAP.hexes.has(n));nb.set(k,r);}return r;} // cached per map
@@ -196,7 +215,7 @@ function applyAction(seat,a){
   if(a.t==='resign')return resign(seat);
   if(seat!==S.cur)return fail('It is not your turn.');
   if(a.t==='endgame'){log(seat,'ends the game.');endGame();return{ok:true,ev:[{e:'over'}]};} // local play only (the server refuses it)
-  if(a.t==='timeout'){log(seat,'ran out of time.');if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;
+  if(a.t==='timeout'){log(seat,'ran out of time.');histTurn(seat).s.push({k:'timeout'});if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;
     const r=applyAction(seat,{t:'end',keep:[]});return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}
   const P=S.players[seat],T=S.turn,ev=[];let reveal=false;
   const inHand=id=>typeof id==='string'&&P.hand.includes(id);
@@ -299,6 +318,7 @@ function applyAction(seat,a){
     }
     default:return fail('Unknown action.');
   }
+  hist(ev);
   if(S.over)ev.push({e:'over'});
   return{ok:true,ev,reveal};
 }
@@ -324,6 +344,7 @@ function advance(){
 function resign(seat){
   const P=S.players[seat];if(!P||P.resigned||playerDone(P))return{ok:false,err:'You are not racing.',ev:[]};
   P.resigned=++S.resigns;log(seat,'leaves the expedition.');
+  const ht=histTurn(seat);ht.s.push({k:'resign'});ht.end=1;
   const ev=[{e:'resign',pl:seat}];
   const others=S.players.filter((p,i)=>i!==seat&&!p.resigned);
   if(others.length<=1||!S.players.some(isActive)){endGame();ev.push({e:'over'});return{ok:true,ev};} // nobody left to race: finish now

@@ -1,5 +1,5 @@
-/* Everything that opens over the game: the round banner, toasts, and one modal at a time (rules, results, a pile,
-   the journal). The menu is its own dialog (menu.js); opening a modal closes it. */
+/* Everything that opens over the game: the round banner, toasts, and one modal at a time (rules, results, a pile).
+   The menu is its own dialog (menu.js); opening a modal closes it. */
 import { S, CT, typeOf, playerDone, plural } from '../engine.gen.js';
 import { $, esc } from './dom.js';
 import { UI, NET, online, hp } from './state.js';
@@ -20,24 +20,6 @@ export function modal(html,onMount,dismiss){const o=$('#overlay');if(MENU.dlg&&M
   if(dismiss)sc.onclick=e=>{if(e.target===sc)closeModal();};onMount&&onMount(sc);}
 export function closeModal(){menuClose();const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');const mo=sc.querySelector('.modal');if(mo)mo.className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
 export const modalOpen=()=>!!document.querySelector('#overlay .modal');
-
-/* ---------- journal: the game log, newest first, grouped by round; stays live while open ---------- */
-function journalHTML(){
-  let r=null,out='';const L=S.log.map((e,i)=>{if(e.r!=null)r=e.r;return{...e,r};}); // server-added lines carry no round: they belong to the one before
-  for(let i=L.length-1;i>=0;i--){const e=L[i];
-    if(i===L.length-1||e.r!==L[i+1].r)out+=e.r!=null?`<div class="lr">Round ${e.r}</div>`:'';
-    const p=e.p!=null?S.players[e.p]:null;
-    out+=`<div class="le${p?'':' sys'}">${p?`<i style="background:${p.color}"></i><b>${esc(p.name)}</b> `:''}${esc(e.t)}</div>`;}
-  return out||'<p class="note">Nothing has happened yet.</p>';
-}
-export function showJournal(){
-  if(!S)return;
-  modal(`<h2>Journal <span>newest first</span></h2><div id="log">${journalHTML()}</div><div class="mrow" style="margin-top:14px"><button class="btn pri" id="jClose">Close</button></div>`,
-    sc=>{sc.classList.add('plain');sc.querySelector('.modal').classList.add('jrn');sc.querySelector('#jClose').onclick=closeModal;},true);
-}
-/* the journal's view part: while it is open, it follows the log */
-export const journalPart = { name: 'journal', update(){const l=document.querySelector('#overlay .modal.jrn #log');if(!l||!S)return;const last=S.log[S.log.length-1];
-  if(l.dataset.sig!==S.log.length+'|'+(last?last.t:'')){l.dataset.sig=S.log.length+'|'+(last?last.t:'');l.innerHTML=journalHTML();}}};
 
 export function showRules(){
   modal(`<h2>How to play</h2><div class="rules">

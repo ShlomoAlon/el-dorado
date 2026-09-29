@@ -146,9 +146,9 @@ inside it). The server imports `E` from `engine.gen.js` and sets `E.S`/`E.MAP` b
 synchronous around the engine).
 
 ### 6.2 Game state `S` (JSON, v3)
-`{v:5, seed, course{id,name,p,e,s}, players[{name,color,ai?(AI id),pieces[hexKey|'done'],deck[],hand[],discard[],play[],blocks[blockadeIdx],fin(round|0),resigned(order|0)}],
+`{v:6, seed, course{id,name,p,e,s}, players[{name,color,ai?(AI id),pieces[hexKey|'done'],deck[],hand[],discard[],play[],blocks[blockadeIdx],fin(round|0),resigned(order|0)}],
 cards{id:type}, nid, market[{t,n}], reserve[{t,n}], blockades[{n,k,v,conn,owner}], cur, start, round, endTriggered, over,
-winners[], places[], fullRace, turn{bought, active{id,pi,sym,left}|null, pending{max}|null}, trash[], log[{p,t}], privacy, resigns,
+winners[], places[], fullRace, turn{bought, active{id,pi,sym,left}|null, pending{max}|null}, trash[], log[{p,t}], hist[{i,p,r,s[step],end}], privacy, resigns,
 owners[uid] (online only), room (online only)}`.
 `MAP` is derived from `(course, seed)` by `buildCourse` (seed deals the blockades) — deterministic, never stored.
 Local save key `eldorado-save-v5` (v5 added `players[].ai`); v4 saves still load (`loadSave`); v3 saves are ignored; v3 rooms on the server are closed on load.
@@ -162,6 +162,11 @@ Every action also emits `play{pl,k,ts,…}` (k = move/native/rubble/camp/blr/act
 `got`/`paid` for buy/transmit, `n` spaces or cards drawn, `more` = leftover strength): the same `ev` goes to every seat online, so
 it may only name cards that just became public (in play or removed); `end` carries counts only (`kept`, `disc`). engine.test checks this.
 Log lines are `{p,t,r}` (r = round; lines the server adds have none).
+`S.hist` (v6) is the turn history the history panel shows: the last 60 turns, oldest first, each `{i (running number), p (seat), r (round),
+s: steps, end}`; a step is a `play` event without `e`/`pl` (so public only, like the events), plus `bl`/`arr` from `block`/`arrive`,
+`{k:'timeout'}` and `{k:'resign'}`; a leftover-strength move adds to the step before. Built in `applyAction` (`hist()`), so it
+replays with the record and is the same for every seat after `redact`. `botClone` gives look-ahead copies an empty one (engine.test checks
+it matches the game's `play` events).
 
 ### 6.4 Client UI essentials
 - `act(a)`: local → snapshot for undo, `applyAction`, `playEvents` (animations/toasts; call before render so market DOM
@@ -175,21 +180,29 @@ Log lines are `{p,t,r}` (r = round; lines the server adds have none).
   Pinch keeps the board point under the fingers' midpoint fixed; lifting one finger re-bases the pan (no jump).
   ResizeObserver refits only on width changes. Page-zoom gestures are blocked.
 - Market: the 6 market cards float in a 2-column stack on the right edge (1 column on phones) (`#mkt`, toggled by the Market button, `setMkt`,
-  remembered as `eldorado-mkt`) plus an "All cards" tile that opens a full-screen spread of market + reserve + journal
-  (`#allc`, `openAll`; the journal moved to its own button). Affordable cards are bright with a static "Can buy" tag, the rest are dimmed (owner: no pulsing — it's always on).
+  remembered as `eldorado-mkt`) plus an "All cards" tile that opens a full-screen spread of market + reserve
+  (`#allc`, `openAll`). Affordable cards are bright with a static "Can buy" tag, the rest are dimmed (owner: no pulsing — it's always on).
   The board fit leaves room under the prompt (safeRect measures it).
 - Cards: suit sets frame + scene palette; strength badge uses the suit colour and icon (only coin cards are gold);
   action cards show `face` (short) text, `txt` in tooltips. Full-screen button `#fsBtn` is hidden where unsupported
   (iPhone Safari); home-screen metas make the saved web app full screen there.
-- **Other players' turns** (`FEED`, feed.js): for AI seats (local) and every seat but mine (online), `playEvents` feeds the
-  `play` events into a row of small cards under the prompt text (`#feed` inside `#prompt`): one group per step with a caption
-  ("Explorer · 2 spaces · blockade #3", "Bought Scout for 2½", "Ended turn · kept 1"); played cards fly out of their player chip, a
-  bought/taken card flies out of the market, and their moves leave a dotted trail in their colour (`L.trail`). After their turn the
-  row stays as a recap ("Raleigh's turn") until I act. Oldest steps drop out whole when the row is full. Not in replays (the actor's
-  hand is shown there). In short game areas the prompt also keeps clear of the turn buttons (`--actFoot`, set in `btnWire`).
-  Local AIs act ~0.75 s apart (first action of a turn 1 s) so each card can be followed.
-- **Journal**: its own HUD button (`#jrnBtn`, a book icon alone on phones) opens the game log as a modal (`showJournal`), newest
-  first, grouped by round, live while open (no backdrop blur on it). It used to be a collapsed section of the All-cards spread.
+- **History panel** (`#hist`, feed.js; replaced the Journal, 2026-09-29, owner's request): every turn from `S.hist`, newest first,
+  each a row of small cards with a caption per step ("Explorer · 2 spaces · blockade #3", "Bought Scout for 2½", "Ended turn · kept 1").
+  By default it sits under the prompt, centred in the prompt's band, exactly one turn tall (the list's height follows the newest turn,
+  measured by a ResizeObserver; never less than one full turn); it scrolls to older turns. The bar on its right edge drags it anywhere
+  (it floats: `.free`, placed with a transform; dropped near its old spot it goes back there), the corner resizes it (under the prompt it
+  stays centred, so width grows both ways), ✕ hides it, ↺ puts it back under the prompt one turn tall. Position (as fractions of the room
+  around it), size and hidden are kept on this device (`eldorado-hist`). The History button in the top bar shows/hides it.
+  On large screens (≥ 900 px) it can also be dropped at the left edge (a dashed outline shows where): it becomes a full-height column
+  of its own (`#lside`, a grid cell left of the game, so it covers no control and the game area shrinks), the list scrolls, the corner
+  sets the column's width; dragged out it floats again. Phones: a panel too narrow for a turn to wrap well (≤ 300 px) shows each turn
+  as one row that scrolls sideways; in a replay on a small game area (< 600 px wide) it shows only when asked for (History button).
+  Your own turn in progress isn't listed (it's added when you end it); a watched player's turn (AI seats locally, every seat but mine
+  online) is live: `playEvents` feeds their events to `feedEvent`, so played cards fly out of their player chip, a bought/taken card
+  out of the market, and their moves leave a dotted trail in their colour (`L.trail`) until I act. Replays show it too (their
+  snapshots keep the history apart: `R.turns`/`R.hc`, rebuilt in `replayGo`). When the market is a row of cards (landscape phones) the
+  panel sits just below it and takes the full width; very short game areas use smaller cards. In short game areas the prompt also keeps
+  clear of the turn buttons (`--actFoot`, set in `btnWire`). Local AIs act ~0.75 s apart (first action of a turn 1 s) so each card can be followed.
 - Design: single dark theme by choice. Fonts Young Serif (display) + Figtree (UI). Tokens in `:root` of shell.html.
   Terrain colors in `TFILL`, card frames `.k-g/.k-b/.k-y/.k-x/.k-p`.
 

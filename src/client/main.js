@@ -14,8 +14,8 @@ import { handPart } from './hand.js';
 import { aimPart, aimInit } from './aim.js';
 import { marketPart, buySlotPart, marketInit, openAll } from './market.js';
 import { hudPart, hudInit } from './hud.js';
-import { feedPart } from './feed.js';
-import { journalPart, showJournal, showRules, showPile, closeModal, modalOpen } from './dialogs.js';
+import { feedPart, histInit } from './feed.js';
+import { showRules, showPile, closeModal, modalOpen } from './dialogs.js';
 import { derivePart, act, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, confirmDiscardFor, confirmTrash, cancelMode, undo, resumeSaved } from './actions.js';
 import { MENU, menuInit, showSetup, showHub, setupSync, prepareGame, startLocal, radio } from './menu.js';
 import { netInit, joinRoom, netSend, exitOnline } from './online.js';
@@ -27,14 +27,14 @@ import { showHover, hideHover } from './board/overlays.js';
 import { drag } from './hand.js';
 
 // the order parts update in each frame: first what the selection allows, then the view from back to front
-for (const p of [derivePart, overlaysPart, piecesPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, journalPart, replayPart]) addPart(p);
+for (const p of [derivePart, overlaysPart, piecesPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, replayPart]) addPart(p);
 GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); });
 
 function boot() {
-  debugInit(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
+  debugInit(); soundInit(); aimInit(); marketInit(); hudInit(); histInit(); setupPanZoom(); watchGeometry(); menuInit();
   if (!document.documentElement.classList.contains('resume')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check)
   $('#deckPile').onclick = () => showPile('deck'); $('#discPile').onclick = () => showPile('discard');
-  $('#rulesBtn').onclick = showRules; $('#jrnBtn').onclick = showJournal;
+  $('#rulesBtn').onclick = showRules;
   $('#stage').addEventListener('click', onBoardClick); $('#stage').addEventListener('pointerover', onBoardHover); $('#stage').addEventListener('pointerout', onBoardOut);
   // full screen (hidden where the browser can't do it, e.g. iPhone Safari — there, Add to Home Screen gives a full-screen app)
   const fsEl = document.documentElement, fsOn = () => document.fullscreenElement || document.webkitFullscreenElement;

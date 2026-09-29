@@ -1,6 +1,7 @@
 // Plays the game the way a person does (mouse clicks and drags on the real page) and checks each step:
 // start, select a card, move by clicking a space and by dragging a card onto it, undo, buy (market card, then paying
-// cards), end a turn, an AI's turn (with its recap under the prompt), the journal, the menu, a replay (step, Fawcett's plan, exit), and
+// cards), end a turn, an AI's turn (live in the history panel), the history panel (hide, show, move, resize, back in place), the menu,
+// a replay (step, its history, Fawcett's plan, exit), and
 // the market closed while a Travel Log's removal is still to choose.
 // Also checks that pressing Start changes nothing on the board, and that no step logs an error.
 //   NODE_PATH=$(npm root -g) node test/flows.cjs
@@ -78,14 +79,32 @@ const serve = () => { const pub = path.join(__dirname, '..', 'public'); const sr
   const me = await S(() => window.__ED.S.cur);
   for (let k = 0; k < 4 && await S(m => window.__ED.S.cur === m, me); k++) { const id = await S(() => ['bEndA', 'bEnd2', 'bEnd'].find(i => document.getElementById(i))); if (!id) break; await p.click('#' + id); await wait(400); }
   ok('turn ended', await S(m => window.__ED.S.cur !== m, me));
-  // 8. the AI plays its turn; its steps show in a row under the prompt
+  // 8. the AI plays its turn; its steps show in the history panel, newest turn first
   await p.waitForFunction(() => { const E = window.__ED; return !E.S.players[E.S.cur].ai; }, null, { timeout: 30000 }).catch(() => {});
   await idle();
   ok('the AI played its turn', await S(() => !window.__ED.S.players[window.__ED.S.cur].ai));
-  ok('its recap is shown', await S(() => !document.querySelector('#feed').hidden && document.querySelectorAll('#feed .fg').length > 0));
-  // 9. journal, menu
-  await p.click('#jrnBtn'); await wait(300); ok('journal opens', await S(() => document.querySelectorAll('#overlay .modal.jrn #log .le').length > 3));
-  await p.click('#jClose'); await wait(300);
+  ok('its turn is in the history', await S(() => { const E = window.__ED, t = document.querySelector('#histList .ht'); return !document.querySelector('#hist').hidden && !!t && E.S.players[E.S.hist[E.S.hist.length - 1].p].ai && document.querySelectorAll('#histList .ht:first-child .fg').length > 0; }));
+  ok('my turn is in the history too', await S(() => document.querySelectorAll('#histList .ht').length >= 2));
+  // 9. the history panel: one turn tall, hide and show, move it, make it taller (older turns come into view), put it back; then the menu
+  const hbox = sel => S(s => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }, sel);
+  ok('history: one turn tall', await S(() => Math.abs(document.querySelector('#histList').offsetHeight - document.querySelector('#histList .ht').offsetHeight) <= 1));
+  await p.click('#histX'); await wait(200); ok('history hides', await S(() => document.querySelector('#hist').hidden && !document.querySelector('#histBtn').classList.contains('on')));
+  await p.click('#histBtn'); await wait(300); ok('history comes back', await S(() => !document.querySelector('#hist').hidden));
+  const h0 = await hbox('#hist'), hd = await hbox('.hgrip');
+  await p.mouse.move(hd.x + hd.w / 2, hd.y + hd.h / 2); await p.mouse.down(); for (let i = 1; i <= 10; i++) { await p.mouse.move(hd.x + hd.w / 2 - 30 * i, hd.y + hd.h / 2 + 30 * i); await wait(16); } await p.mouse.up(); await wait(300);
+  const h1 = await hbox('#hist'); ok('history: drag moves it', Math.abs(h1.x - (h0.x - 300)) < 3 && Math.abs(h1.y - (h0.y + 300)) < 3, JSON.stringify([h0, h1]));
+  const g = await hbox('#histSize'); await p.mouse.move(g.x + 11, g.y + 11); await p.mouse.down(); for (let i = 1; i <= 10; i++) { await p.mouse.move(g.x + 11 + 5 * i, g.y + 11 - 20 * i); await wait(16); }
+  for (let i = 1; i <= 10; i++) { await p.mouse.move(g.x + 61, g.y - 189 + 30 * i); await wait(16); } await p.mouse.up(); await wait(300);
+  ok('history: resizing makes it taller and wider', await S(() => { const l = document.querySelector('#histList'); return l.offsetHeight > l.firstElementChild.offsetHeight + 60; }) && (await hbox('#hist')).w > h1.w + 40);
+  ok('history: kept on this device', await S(() => { const v = JSON.parse(localStorage.getItem('eldorado-hist')); return v.fx != null && v.w > 0 && v.h > 0; }));
+  // at the left edge of a large screen it becomes a full-height column of its own (the game area moves over); dragged out, it floats
+  let gr = await hbox('.hgrip'); await p.mouse.move(gr.x + 4, gr.y + 6); await p.mouse.down(); for (let i = 1; i <= 10; i++) { await p.mouse.move(gr.x + 4 - (gr.x - 20) * i / 10, gr.y + 6); await wait(16); }
+  ok('history: the left column shows where it will go', await S(() => !document.querySelector('#histGuide').hidden)); await p.mouse.up(); await wait(500);
+  ok('history: docked left, full height', await S(() => { const h = document.querySelector('#hist').getBoundingClientRect(), a = document.querySelector('#app').getBoundingClientRect(); return document.querySelector('#hist').parentNode.id === 'lside' && h.left === 0 && h.height === innerHeight && a.left >= h.right; }));
+  gr = await hbox('.hgrip'); await p.mouse.move(gr.x + 4, gr.y + 6); await p.mouse.down(); for (let i = 1; i <= 10; i++) { await p.mouse.move(gr.x + 4 + 50 * i, gr.y + 6); await wait(16); } await p.mouse.up(); await wait(500);
+  ok('history: dragged out of the column, it floats', await S(() => document.querySelector('#hist').parentNode.id === 'app' && document.querySelector('#lside').hidden && document.querySelector('#hist').classList.contains('free')));
+  await p.click('#histHome'); await wait(300);
+  const h2 = await hbox('#hist'); ok('history: back under the prompt', Math.abs(h2.x - h0.x) < 2 && Math.abs(h2.y - h0.y) < 2 && Math.abs(h2.h - h0.h) < 2, JSON.stringify([h0, h2]));
   await p.click('#menuBtn'); await wait(300); ok('menu opens over the game', await S(() => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden));
   await p.click('#sBack'); await wait(400); ok('back to the game', await S(() => !document.querySelector('#menu').open));
   // 10. replay: step forward (a move animates), then exit back to the game
@@ -93,6 +112,7 @@ const serve = () => { const pub = path.join(__dirname, '..', 'public'); const sr
   ok('replay open', await S(() => !!window.__ED.G.replay && !document.querySelector('#rdock').hidden));
   for (let k = 0; k < 6; k++) { await p.keyboard.press('ArrowRight'); await wait(250); }
   await idle(); ok('replay steps', await S(() => window.__ED.G.replay.i === 6));
+  ok('replay: its history', await S(() => { const E = window.__ED; return !document.querySelector('#hist').hidden && document.querySelectorAll('#histList .ht').length === E.S.hist.length && E.S.hist.length > 0; }));
   await p.waitForFunction(() => document.querySelector('#rside .rplan li') || /No plan/.test(document.querySelector('#rside').textContent), null, { timeout: 15000 }).catch(() => {});
   ok('replay: the strongest AI\'s turn from here', await S(() => !!document.querySelector('#rside .rplan li') && /Fawcett/.test(document.querySelector('#rside').textContent)));
   await p.click('#menuBtn'); await wait(800);

@@ -81,8 +81,17 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
     for (const t of e.ts) assert(pub[t]-- > 0, 'play event names a card that is not public: ' + e.k + ' ' + t); } };
   const aiGame = (course, ais, check) => {
     E.newGame({ course, seed: (Math.random() * 1e9) | 0, fullRace: true, players: ais.map((a, i) => ({ name: 'P' + i, color: '#fff', ai: a })) });
-    const mem = ais.map(() => ({})); let steps = 0;
-    while (!E.S.over && steps++ < 20000) { if (check) check(); const me = E.S.cur; assert(E.S.players[me].ai === ais[me], 'ai seat kept'); const r = E.aiStep(ais[me], mem[me]); assert(r.ok, 'ai action rejected'); publicEvents(r.ev); }
+    const mem = ais.map(() => ({})); let steps = 0; const all = [];
+    while (!E.S.over && steps++ < 20000) { if (check) check(); const me = E.S.cur; assert(E.S.players[me].ai === ais[me], 'ai seat kept'); const r = E.aiStep(ais[me], mem[me]); assert(r.ok, 'ai action rejected'); publicEvents(r.ev); all.push(...r.ev); }
+    // the turn history (S.hist) is exactly the game's 'play' events, one entry per turn (the AIs' look-ahead leaves it alone),
+    // the same for every seat after redaction
+    const H = []; for (const e of all) { let t = H[H.length - 1];
+      if (e.e === 'play') { if (!t || t.p !== e.pl || t.end) H.push(t = { i: t ? t.i + 1 : 0, p: e.pl, s: [] }); const l = t.s[t.s.length - 1];
+        if (!(e.k === 'move' && e.more && l && l.k === 'move') && !(e.k === 'trash' && !e.ts.length)) { t.s.push({ k: e.k, ...(e.ts ? { ts: e.ts } : {}) }); if (e.k === 'end') t.end = 1; } } }
+    const got = E.S.hist.map(t => ({ i: t.i, p: t.p, s: t.s.map(x => ({ k: x.k, ...(x.ts ? { ts: x.ts } : {}) })), ...(t.end ? { end: 1 } : {}) }));
+    assert(got.length <= 60 && got.length === Math.min(60, H.length), 'history keeps the last 60 turns: ' + got.length + ' of ' + H.length);
+    { const a = JSON.stringify(got), b = JSON.stringify(H.slice(-got.length)); if (a !== b) { let k = 0; while (a[k] === b[k]) k++; console.error(a.slice(k - 200, k + 200) + '\n---\n' + b.slice(k - 200, k + 200)); } assert(a === b, 'history differs from the play events'); }
+    for (let s = 0; s < ais.length; s++) assert(JSON.stringify(E.redact(E.S, s).hist) === JSON.stringify(E.S.hist), 'history redacted differently');
     assert(E.S.over && E.S.places.includes(1), 'AI game did not finish: ' + course.id + ' ' + ais + ' round ' + E.S.round + ' ' + E.S.players.map(p => p.fin ? 'fin' : p.pieces.join('/')).join(' | '));
   };
   E.aiSetNet(half);

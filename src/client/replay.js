@@ -14,8 +14,11 @@ const TERR={j:'jungle',w:'water',v:'village',r:'rubble',c:'base camp',g:'El Dora
 function buildReplay(log,id){
   const err=replayCheck(log);if(err)throw new Error(err);
   replayStart(log);
-  const states=[],lines=[],evs=[null],rem=[],fails=[];
-  const snap=()=>{const L0=S.log;S.log=[];states.push(JSON.stringify(S));S.log=L0;rem.push(S.players.map((_,j)=>botRemaining(j)));};
+  const states=[],lines=[],evs=[null],rem=[],fails=[],turns=new Map(),hc=[];
+  // positions are kept without their log and turn history (replayGo puts them back): the history keeps every turn once
+  // (a turn only changes while it is the newest one), and each position its newest turn as it was then
+  const snap=()=>{const L0=S.log,H0=S.hist||[];S.log=[];S.hist=[];states.push(JSON.stringify(S));S.log=L0;S.hist=H0;rem.push(S.players.map((_,j)=>botRemaining(j)));
+    for(const t of H0)turns.set(t.i,t);const t=H0[H0.length-1];hc.push(t?[H0[0].i,JSON.stringify(t)]:null);};
   try{
     lines.push(S.log.slice());snap();
     for(let i=0;i<log.actions.length;i++){
@@ -27,7 +30,7 @@ function buildReplay(log,id){
   }finally{setRng(null);}
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
   let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}
-  return{log,id,states,lines,evs,rem,fails,i:0,timer:0,speed:sp,side,ev:{},adv:{}};
+  return{log,id,states,lines,evs,rem,fails,turns,hc,i:0,timer:0,speed:sp,side,ev:{},adv:{}};
 }
 /* ---- the evaluation: the shipped network's estimate for the position on screen, and the turn the strongest AI would play
    from it. Only where a network was trained (First Expedition, 3-4 players: aiAllowed); elsewhere the replay shows none. */
@@ -70,6 +73,7 @@ function replayGo(i,anim){
   const R=G.replay;if(!R)return;i=Math.max(0,Math.min(R.states.length-1,i));
   const fwd=anim&&i===R.i+1;R.i=i;
   setS(JSON.parse(R.states[i]));let L=[];for(let k=Math.max(0,i-60);k<=i;k++)L=L.concat(R.lines[k]);S.log=L.slice(-80);
+  const hc=R.hc[i];if(hc){const last=JSON.parse(hc[1]);for(let k=hc[0];k<last.i;k++)S.hist.push(R.turns.get(k));S.hist.push(last);}
   if(!MAP||MAP.course!==S.course.id)setMAP(mapFor(S));
   UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.piece=firstPiece();
   if(fwd&&R.evs[i])playEvents(R.evs[i]);
