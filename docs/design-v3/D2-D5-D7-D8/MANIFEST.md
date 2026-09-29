@@ -36,4 +36,38 @@ States: `start`, `game` (mid-play, a card selected), `history` (History panel dr
 **Recommendation: B.** The game objects are already rich; a strict, quiet frame makes them look better and is far easier to keep
 consistent (it's also what D8's tokens would write down). A's leather-and-brass looks good on the menu but heavy around the board.
 
+## D7. Player colours
+
+**Problem:** Crimson sits next to the red base camps and the danger colour, Violet echoes the purple action cards, and Ivory
+reads as "empty" (nearly invisible when dimmed on the setup screen).
+
+States: `board4` (4 players, everyone has moved once; 1440, 390), `setup` (start screen with 4 players; 1440, 390),
+`setup-colours` (the colour choice, 1440@2x), `chips` (HUD player chips, 1440@2x), `explorers` (the four figures on the board, 1440@2x).
+
+| | files |
+|---|---|
+| before | `D7-before-{board4,setup}-{1440,390}.png`, `D7-before-{setup-colours,chips,explorers}-1440@2x.png` |
+| A | `D7-A-…` (same names) |
+| B | `D7-B-…` (same names) |
+
+**Option A: a new set: magenta, white, teal, black** (branch `design/v3-D7-A`).
+- Chosen away from every terrain and suit hue (no red, gold, green, blue or purple). Every colour dot gets a light outline; the black
+  explorer gets a light rim on the board so it doesn't sink into the shadows.
+- Effort: small (the colour list, the setup defaults, one rule in the figure drawing, a few CSS lines). Risk: medium — colours are
+  stored in game records by value, so shipping it means a log-version bump (old saved games and replays dropped, as the owner allows);
+  the test fixture was recoloured on the branch. The online server picks colours from the same list, so no server change.
+- Trade-offs: magenta and teal pop on the board; white and black are unambiguous names ("I'm black"). But black is the hardest
+  colour to see on this dark board (even outlined it reads as dark grey), and teal is close-ish to the water/jungle mix at a glance.
+
+**Option B: keep the hues; pair every colour with its explorer's hat** (branch `design/v3-D7-B`).
+- The four explorers already wear different hats (pith helmet, wide-brim hat, fedora, headscarf). The hat silhouette, in the player's
+  colour, replaces the plain dot everywhere a player is marked: HUD chips, the prompt, the History panel, the room lobby, replay, and
+  the setup's colour choice (which now reads "choose your explorer"). The figures on the board carry the same hats.
+- Effort: small (one hat list and one helper next to the colours, 5 call sites, CSS). Risk: low; no record change, layout test passes.
+- Trade-offs: colour is never the only cue (colour-blind players can match chip ↔ figure by hat), and it ties the HUD to the
+  figures; but Crimson still sits near the red base camps and Violet near purple cards, and at 16 px the hats need a second look.
+
+**Recommendation: B**, and if the red clash still bothers you, B plus swapping only Crimson for a non-red hue (a one-line change,
+but a record bump). B fixes the accessibility problem without invalidating games; A's black explorer is weak on this board.
+
 (Other decisions are added below as they are finished.)
