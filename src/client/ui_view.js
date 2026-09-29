@@ -802,20 +802,36 @@ function updateMktH(){
 }
 function openAll(open){UI.allOpen=open;$('#allc').hidden=!open;if(open){$('#allc').scrollTop=0;renderMarket();}}
 const ALL_ICON='<svg viewBox="-10 -10 20 20"><rect x="-8.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".45" transform="rotate(-14)"/><rect x="-4.5" y="-7.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".7"/><rect x="-.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" transform="rotate(12)"/></svg>';
+/* market slots are made once and then updated in place (count, highlight, selection): a card's artwork is drawn again
+   only when another card takes its slot (rebuilding every slot on each render re-drew all the art: late pop-ins) */
+function patchSlots(box,specs,before){
+  const have=[...box.children].filter(e=>e.classList.contains('mslot'));
+  have.slice(specs.length).forEach(e=>e.remove());
+  specs.forEach((sp,k)=>{let el=have[k];const key=sp.n>0?'c:'+sp.t:'e:'+sp.src;
+    if(!el||el.dataset.k!==key){const n=document.createElement('div');n.dataset.k=key;
+      n.innerHTML=sp.n>0?`<div class="mcard">${cardHTML(sp.t)}</div><span class="cnt"></span>`:`Sold out${sp.src==='m'?'<br>reserve open':''}`;
+      if(el)el.replaceWith(n);else box.insertBefore(n,before||null);el=n;}
+    if(el.className!==sp.cls)el.className=sp.cls;if(el.dataset.i!==String(sp.i))el.dataset.i=sp.i;
+    if(sp.n>0){if(el.dataset.src!==sp.src)el.dataset.src=sp.src;const t=cardTitle(sp.t);if(el.title!==t)el.title=t;const c=el.querySelector('.cnt');if(c.textContent!==String(sp.n))c.textContent=sp.n;}
+    else delete el.dataset.src;});
+}
 function renderMarket(){
   const canBuy=!S.turn.bought&&!S.over&&!UI.cover,tr=UI.mode==='transmit';
   const openSlot=S.market.some(s=>s.n===0),aff=new Set(tr?[]:affordable().map(a=>a.src+a.idx));
-  const slot=(src,s,i,ok)=>{
-    if(s.n<=0)return`<div class="mslot empty" data-i="${i}">Sold out${src==='m'?'<br>reserve open':''}</div>`;
+  const spec=(src,s,i,ok)=>{if(s.n<=0)return{src,i,n:0,cls:'mslot empty'};
     const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src===src&&UI.buy.idx===i;
-    return`<div class="mslot${ok?'':' no'}${aff.has(src+i)?' can':chosen?'':' dimc'}${chosen?' chosen':''}" data-i="${i}" data-src="${src}" title="${esc(cardTitle(s.t))}"><div class="mcard">${cardHTML(s.t)}</div><span class="cnt">${s.n}</span></div>`;};
+    return{src,i,t:s.t,n:s.n,cls:`mslot${ok?'':' no'}${aff.has(src+i)?' can':chosen?'':' dimc'}${chosen?' chosen':''}`};};
   const mOk=tr||canBuy,rOk=tr||(canBuy&&openSlot),resAff=[...aff].some(k=>k[0]==='r');
-  $('#market').innerHTML=S.market.map((s,i)=>slot('m',s,i,mOk)).join('')+`<button class="alltile${openSlot||tr?' open':''}${resAff?' can':''}" id="allTile" title="See every card, including the reserve">${ALL_ICON}<span>All cards</span><small>${tr?'Pick any card':openSlot?'Reserve open':'Reserve locked'}</small></button>`;
+  const mk=$('#market');let at=$('#allTile');
+  if(!at){mk.insertAdjacentHTML('beforeend',`<button class="alltile" id="allTile" title="See every card, including the reserve">${ALL_ICON}<span>All cards</span><small></small></button>`);at=$('#allTile');}
+  patchSlots(mk,S.market.map((s,i)=>spec('m',s,i,mOk)),at);
+  const ac=`alltile${openSlot||tr?' open':''}${resAff?' can':''}`;if(at.className!==ac)at.className=ac;
+  const sm=at.querySelector('small'),st=tr?'Pick any card':openSlot?'Reserve open':'Reserve locked';if(sm.textContent!==st)sm.textContent=st;
   $('#mktBtn').classList.toggle('canbuy',aff.size>0&&!UI.mktOpen);
   updateMktH();
   if(!UI.allOpen)return;
-  $('#allMarket').innerHTML=S.market.map((s,i)=>slot('m',s,i,mOk)).join('');
-  $('#reserve').innerHTML=S.reserve.map((s,i)=>slot('r',s,i,rOk)).join('');
+  patchSlots($('#allMarket'),S.market.map((s,i)=>spec('m',s,i,mOk)));
+  patchSlots($('#reserve'),S.reserve.map((s,i)=>spec('r',s,i,rOk)));
   $('#resNote').textContent=tr?'Transmitter: take any card for free.':openSlot?'A market slot is empty, so you may buy from the reserve.':'Opens once a market slot sells out.';
   $('#buyState').textContent=S.turn.bought?'bought this turn':'1 purchase per turn';
   $('#resState').textContent=openSlot?'open':'locked';

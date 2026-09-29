@@ -35,6 +35,7 @@ const menuDismissible=()=>inGame()&&MENU.screen!=='room';
 
 /* show a screen (opening the dialog if it isn't open) */
 function menuOpen(screen){
+  $('#overlay').innerHTML=''; // one window at a time: the menu replaces results, rules or the journal (never left underneath it)
   const d=MENU.dlg,ig=inGame(),rs=ig?resignSeat():-1;
   mq('#ingame').hidden=!ig;
   if(ig){mq('#igTxt').innerHTML=`<b>Game in progress</b> · round ${S.round}${online()?' · online':''}`;const r=mq('#sResign');r.hidden=rs<0;
