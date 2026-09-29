@@ -1,13 +1,13 @@
 /* BOOT: wires the modules together, sets the order the view parts update in, and decides what opens first (a replay
    or room link, a game in progress, the Online screen, or the start screen). */
-import { S, MAP, buildCourse, courseById, applyAction, reach, setMAP, assert } from '../engine.gen.js';
+import { S, MAP, buildCourse, courseById, setMAP, assert } from '../engine.gen.js';
 import { $ } from './dom.js';
-import { UI, NET, G, canAct, myId, online } from './state.js';
-import { addPart, render, flush, frameStats } from './frame.js';
+import { UI, NET, G, canAct, online } from './state.js';
+import { addPart, render, flush } from './frame.js';
 import { watchGeometry } from './geometry.js';
 import { GAME_READY } from './ready.js';
 import { buildBoard, relabel } from './board/terrain.js';
-import { setupPanZoom, fit, view } from './board/camera.js';
+import { setupPanZoom, fit } from './board/camera.js';
 import { overlaysPart } from './board/overlays.js';
 import { piecesPart } from './board/pieces.js';
 import { handPart } from './hand.js';
@@ -16,7 +16,7 @@ import { marketPart, buySlotPart, marketInit, openAll } from './market.js';
 import { hudPart, hudInit } from './hud.js';
 import { feedPart } from './feed.js';
 import { journalPart, showJournal, showRules, showPile, closeModal, modalOpen } from './dialogs.js';
-import { derivePart, act, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, confirmDiscardFor, confirmTrash, cancelMode, undo, resumeSaved } from './actions.js';
+import { derivePart, act, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, undo, resumeSaved } from './actions.js';
 import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, startLocal, radio } from './menu.js';
 import { netInit, joinRoom, netSend } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
@@ -80,8 +80,8 @@ function onBoardOut(e) { if (drag) return; if (!e.relatedTarget || !e.relatedTar
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, view, frameStats, myId, canAct, online, reach, applyAction, joinRoom, netSend, assert,
+window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, canAct, online, joinRoom, netSend, assert,
   render() { render(); flush(); },
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },
-  ...Object.fromEntries(Object.entries({ act, playEvents, openReplay, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, confirmDiscardFor, confirmTrash, cancelMode }).map(([k, f]) => [k, now(f)])) };
+  ...Object.fromEntries(Object.entries({ act, playEvents, openReplay, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode }).map(([k, f]) => [k, now(f)])) };
 boot();

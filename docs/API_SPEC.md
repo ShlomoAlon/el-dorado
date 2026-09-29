@@ -434,7 +434,7 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 - The page's state: `S`, `MAP`, `UI`, `NET`, `G`.
 - Its entry points: `act`, `playEvents`, `onHandCard`, `doMove`, `pickFromMarket`, `confirmBuy`, `confirmDiscardFor`, `confirmTrash`,
   `startEndTurn`, `finishTurn`, `cancelMode`, `openReplay`, `joinRoom`, `netSend`, `render`; each call leaves the page updated.
-- Also `view`, `frameStats`, `myId`, `canAct`, `reach`, `applyAction`, and `showCourse` (for `tools/course-check`).
+- Also `canAct` and `showCourse` (for `tools/course-check`).
 
 ---
 

@@ -144,14 +144,14 @@ async function googleKeys() {
   const r = await fetch('https://www.googleapis.com/oauth2/v3/certs'); const j = await r.json();
   jwksCache = { at: Date.now(), keys: j.keys || [] }; return jwksCache.keys;
 }
-export async function verifyGoogleToken(cred, clientId, keysFn = googleKeys) {
+async function verifyGoogleToken(cred, clientId) {
   const [h, p, s] = String(cred || '').split('.'); if (!s) throw new Error('bad token');
   const header = JSON.parse(new TextDecoder().decode(b64uDecode(h)));
   const payload = JSON.parse(new TextDecoder().decode(b64uDecode(p)));
   if (payload.aud !== clientId) throw new Error('token not for this app');
   if (!['accounts.google.com', 'https://accounts.google.com'].includes(payload.iss)) throw new Error('bad issuer');
   if (payload.exp * 1000 < Date.now()) throw new Error('token expired');
-  const jwk = (await keysFn()).find(k => k.kid === header.kid); if (!jwk) throw new Error('unknown key');
+  const jwk = (await googleKeys()).find(k => k.kid === header.kid); if (!jwk) throw new Error('unknown key');
   const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
   const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64uDecode(s), enc.encode(h + '.' + p));
   if (!ok) throw new Error('bad signature');

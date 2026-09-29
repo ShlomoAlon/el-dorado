@@ -15,7 +15,6 @@ for (let g = 0; g < +G; g++) {
     const me = S.cur, P = S.players[me];
     if (!cur || cur.me !== me || cur.round !== S.round) { close();
       // terrain of the next space along the cheapest route
-      const bd = E.botDist ? null : null;
       cur = { me, round: S.round, left: E.botRemaining(me), hand: P.hand.map(T), moved: false, bought: false, ahead: nextTerrain(me) }; }
     const a = E.botChoose({ mode: POL }).a, r = E.applyAction(me, a);
     if (r.ok && (a.t === 'move' || a.t === 'pay' || a.t === 'native')) cur.moved = true;
