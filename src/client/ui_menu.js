@@ -126,6 +126,7 @@ function preview(){
   setHTML(mq('#rInfo'),`Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random`);
 }
 function startLocal(){
+  if(!GAME_READY.done){GAME_READY.then(startLocal);return;} // the game's fonts are still on their way: start the moment they're in
   const n=+radio('np'),rows=[...mqa('#seats .seat')].slice(0,n);if(rows.every(r=>r.querySelector('select').value))return;
   if(online())exitOnline(); // an online game goes on without you (rejoin it from Online)
   for(const[,el]of cardEls)el.remove();cardEls.clear();aiReset();

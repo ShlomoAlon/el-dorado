@@ -7,8 +7,10 @@
   --bg:#0a1310; --glass:rgba(12,21,18,.9); --glass2:rgba(22,34,29,.92); --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
   --text:#ecf1ec; --muted:#98aa9f; --faint:#62756a;
   --gold:#e9b24a; --gold2:#f8dc97; --goldInk:#3a2807; --danger:#e8634f;
-  --display:'Young Serif', Georgia, 'Times New Roman', serif;
-  --ui:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* the menu and anything shown before the game uses the device's own fonts: nothing to download, drawn at once, the
+     same on every visit. The game (its CSS below) uses Figtree and Young Serif, loaded in the background. */
+  --display:ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  --ui:system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --ease:cubic-bezier(.2,.8,.2,1);
   --cw:132px;
 }
@@ -481,7 +483,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @keyframes pulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.4}}
 @keyframes fgIn{from{opacity:0;transform:translateY(-6px) scale(.94)}}
 @keyframes bsIn{from{transform:translateY(-14px) scale(.9);opacity:0}}
-#shell{visibility:visible}
+#shell,#overlay,#banner{--display:'Young Serif', Georgia, 'Times New Roman', serif;--ui:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;font-family:var(--ui)}
+html.gameready #shell{visibility:visible} /* once the game's fonts are in (ui_boot.js): its text never swaps fonts */
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">

@@ -1,6 +1,10 @@
 /* =========================================================
    BOOT
    ========================================================= */
+/* the game appears once its fonts have loaded (they come with its CSS; the menu uses the device's fonts), so no text in it
+   ever changes font; at most 4 s (a font that can't load then falls back) */
+const GAME_READY=Promise.race([document.fonts?Promise.allSettled(["400 1em Figtree","800 1em Figtree","1em 'Young Serif'"].map(f=>document.fonts.load(f))):null,new Promise(r=>setTimeout(r,4000))])
+  .then(()=>{document.documentElement.classList.add('gameready');GAME_READY.done=true;});
 function boot(){
   setupPanZoom();menuInit();
   const pick=e=>{if(!S||UI.cover||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;

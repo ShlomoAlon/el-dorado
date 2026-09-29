@@ -46,8 +46,9 @@ let minCss = c => c; try { const es = (await import('esbuild')).default || (awai
 const LATE = /<style data-late>([\s\S]*?)<\/style>/, late = shell.match(LATE)[1];
 const hashed = (ext, text) => { const n = `app.${createHash('sha256').update(text).digest('hex').slice(0, 10)}.${ext}`; writeFileSync(new URL('./public/' + n, import.meta.url), text); return n; };
 for (const f of readdirSync(new URL('./public/', import.meta.url))) if (/^app\.[0-9a-f]{10}\.(js|css)$/.test(f)) unlinkSync(new URL('./public/' + f, import.meta.url));
-const cssFile = hashed('css', minCss(late)), jsFile = hashed('js', js(`{url:'/ai/first.bin'}`));
-const siteShell = withFonts(shell, siteFonts).replace(LATE, '').replace(/<style>([\s\S]*?)<\/style>/, (m, c) => `<style>${minCss(c)}</style>`)
+const faceCss = siteFonts.replace(/<\/?style>/g, ''); // the game's fonts are declared in the game's CSS: the start screen never fetches them
+const cssFile = hashed('css', minCss(faceCss + late)), jsFile = hashed('js', js(`{url:'/ai/first.bin'}`));
+const siteShell = withFonts(shell, '').replace(LATE, '').replace(/<style>([\s\S]*?)<\/style>/, (m, c) => `<style>${minCss(c)}</style>`)
   .replace('</dialog>', `</dialog>\n<link rel="stylesheet" href="${cssFile}">`);
 const body = siteShell + `\n<script src="${jsFile}" defer></script>\n`;
 mkdirSync(new URL('./public/', import.meta.url), { recursive: true });
