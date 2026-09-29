@@ -181,6 +181,8 @@ const fmt=n=>(n%1?(Math.floor(n)?Math.floor(n)+'½':'½'):String(n));
 function rm(arr,id){const i=arr.indexOf(id);assert(i>=0,'rm: the item is in the list');arr.splice(i,1);}
 function playerDone(p){return p.pieces.every(k=>k==='done');}
 function isActive(p){return !playerDone(p)&&!p.resigned;}
+/* the blockades player pl has taken (by index), and how many */
+function blocksOf(pl){const out=[];S.blockades.forEach((B,i)=>{if(B.owner===pl)out.push(i);});return out;}
 
 function mapFor(st){return buildCourse(st.course,st.seed);}
 /* where a card type is sold: every type has exactly one stack, in the market or the reserve. {src:'m'|'r', i, s} or null */
@@ -219,7 +221,7 @@ function replayCheck(log){
   if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
   return null;}
 function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry32(log.rng>>>0);setRng(g);
-  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,privacy:rec&&!!log.privacy,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:rec&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:rec?p.bot:undefined}))});
+  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:rec&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:rec?p.bot:undefined}))});
   // training exploration: every player starts with the same extra card, shuffled into the draw pile
   if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(RNG()*(p.deck.length+1)),0,newCard(log.gift));
   if(rec)setRng(null);
@@ -242,7 +244,8 @@ function recNewGame(o){
   // the secret: from the platform's cryptographic generator where there is one (Math.random's state could be guessed)
   const rng=crypto.getRandomValues(new Uint32Array(1))[0],r0=RNG;setRng(recRng(rng,-1));
   try{newGame(o);}finally{RNG=r0;}
-  return{kind:'eldorado-replay',v:3,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(S.privacy?{privacy:true}:{}),
+  // (privacy: the page's pass-and-play cover, a setting of the table rather than of the game: kept in the record only)
+  return{kind:'eldorado-replay',v:3,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(o.privacy?{privacy:true}:{}),
     players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0};
 }
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
@@ -273,16 +276,16 @@ function newGame(o){
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
     const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
-    const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck),hand:[],discard:[],play:[],blocks:[],fin:0,resigned:0};
+    const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck),hand:[],discard:[],play:[],fin:0,resigned:0};
     if(p.ai&&aiById(p.ai))pl.ai=p.ai; // a named AI plays this seat (engine_ai.js)
     return pl;
   });
   const st=MAP.starts;
   if(players.length===2){players[0].pieces=[st[0],st[2]];players[1].pieces=[st[1],st[3]];}
   else players.forEach((p,i)=>p.pieces=[st[i]]);
-  S={v:5,seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
-     blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,start:0,round:1,endTriggered:false,over:false,winners:null,places:null,
-     fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[],privacy:!!o.privacy,resigns:0};
+  S={seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
+     blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,round:1,endTriggered:false,over:false,places:null,
+     fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[]};
   players.forEach(p=>drawCards(p,4));
   log(null,'The expedition sets out: '+players.map(p=>p.name).join(', ')+'. Course: '+MAP.name+' ('+MAP.route.join(' · ')+' · El Dorado).');
   return S;
@@ -386,7 +389,7 @@ function applyAction(seat,a){
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
   const pieceOk=pi=>Number.isInteger(pi)&&pi>=0&&pi<P.pieces.length&&P.pieces[pi]!=='done';
   if(T.pending&&a.t!=='trash')return fail('Choose which cards to remove first.');
-  const takeBlock=b=>{const B=S.blockades[b];assert(B.owner===null,'a blockade is taken once');B.owner=seat;P.blocks.push(b);log(seat,'tears down blockade #'+B.n+' and keeps it.');ev.push({e:'block',pl:seat,n:B.n});};
+  const takeBlock=b=>{const B=S.blockades[b];assert(B.owner===null,'a blockade is taken once');B.owner=seat;log(seat,'tears down blockade #'+B.n+' and keeps it.');ev.push({e:'block',pl:seat,n:B.n});};
   const arrive=pi=>{if(P.pieces[pi]!=='done')return;log(seat,'reaches El Dorado!');ev.push({e:'arrive',pl:seat,pi});
     if(playerDone(P)){P.fin=S.round;checkEnd();}};
   const passTurn=()=>{S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});};
@@ -436,7 +439,7 @@ function applyAction(seat,a){
       const n={cartographer:2,compass:3,scientist:1,travellog:2}[t];if(!n)return fail('That card has no draw effect.');
       T.active=null;rm(P.hand,a.card);if(CT[t].once)S.trash.push(a.card);else P.play.push(a.card);
       const got=drawCards(P,n);reveal=true;ev.push({e:'play',pl:seat,k:'action',ts:[t],n:got.length});
-      log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');ev.push({e:'draw',pl:seat,n:got.length});
+      log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');
       if(t==='scientist'||t==='travellog')T.pending={max:t==='scientist'?1:2};
       break;
     }
@@ -452,7 +455,7 @@ function applyAction(seat,a){
       const st=stackOf(a.type),stack=st&&st.s;if(!stack||stack.n<=0)return fail('That card is sold out.');
       T.active=null;rm(P.hand,a.card);S.trash.push(a.card);
       stack.n--;P.discard.push(newCard(stack.t));ev.push({e:'play',pl:seat,k:'transmit',ts:['transmitter'],got:stack.t});
-      log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');ev.push({e:'gain',pl:seat,t:stack.t});
+      log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');
       break;
     }
     case 'buy':{
@@ -466,7 +469,7 @@ function applyAction(seat,a){
       const t=stack.t;
       if(st.src==='r'){const slot=S.market.findIndex(s=>s.n===0);S.market[slot]={t,n:stack.n};S.reserve.splice(st.i,1);stack=S.market[slot];}
       stack.n--;P.discard.push(newCard(t));T.bought=true;
-      log(seat,'buys '+CT[t].n+' for '+fmt(total)+' coin'+(total===1?'':'s')+'.');ev.push({e:'gain',pl:seat,t});
+      log(seat,'buys '+CT[t].n+' for '+fmt(total)+' coin'+(total===1?'':'s')+'.');
       break;
     }
     case 'end':{
@@ -488,16 +491,17 @@ function applyAction(seat,a){
   return{ok:true,ev,reveal};
 }
 /* who still races */
+/* the race's end is set off (the round is still finished): in a full race once at most one player is racing, under the
+   official rule at the first arrival */
 function checkEnd(){
-  if(S.fullRace){if(S.players.filter(isActive).length<=1&&!S.endTriggered){S.endTriggered=true;log(null,'Only one expedition is still racing. The round will be finished.');}}
-  else if(S.players.some(playerDone)&&!S.endTriggered){S.endTriggered=true;log(null,'The final round has begun.');}
-  if(S.players.every(p=>!isActive(p))&&S.fullRace)S.endTriggered=true;
+  if(S.endTriggered||!(S.fullRace?S.players.filter(isActive).length<=1:S.players.some(playerDone)))return;
+  S.endTriggered=true;log(null,S.fullRace?'Only one expedition is still racing. The round will be finished.':'The final round has begun.');
 }
 function advance(){
   const n=S.players.length;let i=S.cur;
   for(let step=0;step<n*2+2;step++){
     i=(i+1)%n;
-    if(i===S.start){if(S.endTriggered){endGame();return;}S.round++;}
+    if(i===0){if(S.endTriggered){endGame();return;}S.round++;} // (player 0 starts every round)
     const p=S.players[i];
     if(S.fullRace?isActive(p):!p.resigned){S.cur=i;return;}
   }
@@ -506,7 +510,8 @@ function advance(){
 /* A player leaves a game for good (online): placed below everyone still racing. */
 function resign(seat){
   const P=S.players[seat];if(P.resigned||playerDone(P))return{ok:false,err:'You are not racing.',ev:[]};
-  P.resigned=++S.resigns;log(seat,'leaves the expedition.');
+  P.resigned=1+Math.max(...S.players.map(p=>p.resigned)); // the order of resigning (the first to leave places last)
+  log(seat,'leaves the expedition.');
   const ev=[{e:'resign',pl:seat}];
   const others=S.players.filter((p,i)=>i!==seat&&!p.resigned);
   if(others.length<=1||!S.players.some(isActive)){endGame();ev.push({e:'over'});return{ok:true,ev};} // nobody left to race: finish now
@@ -526,15 +531,15 @@ function progress(p){ // lower = closer: sum of shortest step counts from each e
 }
 function endGame(){
   S.over=true;
-  const mb=p=>Math.max(0,...p.blocks.map(b=>S.blockades[b].n));
-  const keyOf=(p)=>playerDone(p)?[0,p.fin,-p.blocks.length,-mb(p)]:p.resigned?[2,-p.resigned,0,0]:[1,progress(p),-p.blocks.length,-mb(p)];
+  const bk=p=>blocksOf(S.players.indexOf(p)),mb=p=>Math.max(0,...bk(p).map(b=>S.blockades[b].n));
+  const keyOf=(p)=>playerDone(p)?[0,p.fin,-bk(p).length,-mb(p)]:p.resigned?[2,-p.resigned,0,0]:[1,progress(p),-bk(p).length,-mb(p)];
   const idx=S.players.map((p,i)=>({i,k:keyOf(p)}));
   const cmp=(a,b)=>{for(let j=0;j<4;j++)if(a.k[j]!==b.k[j])return a.k[j]-b.k[j];return 0;};
   idx.sort(cmp);
   const places=new Array(S.players.length);
   idx.forEach((x,j)=>{places[x.i]=j>0&&cmp(x,idx[j-1])===0?places[idx[j-1].i]:j+1;});
-  S.places=places;S.winners=places.map((p,i)=>p===1?i:-1).filter(i=>i>=0);
-  log(null,S.winners.map(i=>S.players[i].name).join(' & ')+' win'+(S.winners.length>1?'':'s')+' the race to El Dorado.');
+  S.places=places;const w=S.players.filter((p,i)=>places[i]===1);
+  log(null,w.map(p=>p.name).join(' & ')+' win'+(w.length>1?'':'s')+' the race to El Dorado.');
 }
 /* ---------- multiplayer Elo from a finishing order ---------- */
 function eloDeltas(ratings,places,games){
@@ -649,10 +654,10 @@ function botFeatures(me,into){ // into: write the summary at the start of this (
   for(let o=0;o<BOT_BINS*9;o+=9){const c=bins[o]||1;put(bins[o]/10);for(let t=1;t<=5;t++)put(bins[o+t]/c);put(bins[o+6]/c/3);put(bins[o+7]/2);put(bins[o+8]/2);}
   // 2. me: where I am and what's ahead
   const pieceCost=p=>p.pieces.reduce((a,k)=>a+botCost(k),0)/p.pieces.length,pieceSteps=p=>p.pieces.reduce((a,k)=>a+stepsOf(k),0)/p.pieces.length;
-  const myCost=pieceCost(P);put(myCost/40);put(pieceSteps(P)/40);put(Math.min(...P.pieces.map(stepsOf))/40);put(playerDone(P)?1:0);put(P.blocks.length/3);
+  const myCost=pieceCost(P);put(myCost/40);put(pieceSteps(P)/40);put(Math.min(...P.pieces.map(stepsOf))/40);put(playerDone(P)?1:0);put(blocksOf(me).length/3);
   const mix={j:0,w:0,v:0,r:0,c:0};for(const k of P.pieces){if(k==='done')continue;const m=bd.mix.get(k);if(m)for(const s in mix)mix[s]+=m[s];}
   for(const s of'jwvrc')put(mix[s]/P.pieces.length/20);
-  put(myTurn?1:0);put(((me-S.start+n)%n)/3);put(S.turn&&S.cur===me&&S.turn.bought?1:0);put(n===2?1:0);
+  put(myTurn?1:0);put(me/3);put(S.turn&&S.cur===me&&S.turn.bought?1:0);put(n===2?1:0);
   // 3. my cards: hand (only meaningful on my turn), draw pile, discard, in play
   // hand: my cards on my turn; in the end-of-turn view, the cards I kept
   putArr(myTurn||endView?botCounts(P.hand):new Float32Array(BOT_NT),1/3);putArr(botCounts(P.deck),1/4);putArr(botCounts(P.discard),1/4);putArr(botCounts(P.play),1/3);
@@ -667,7 +672,7 @@ function botFeatures(me,into){ // into: write the summary at the start of this (
   // 5. opponents in turn order after me: all cards they own, their discard pile, position, blockades
   for(let k=1;k<=3;k++){const j=(me+k)%n;const p=k<n?S.players[j]:null;if(!p){i+=BOT_NT*2+8;continue;}
     putArr(botCounts([...p.deck,...p.hand,...p.discard,...p.play]),1/4);putArr(botCounts(p.discard),1/4);
-    put(pieceCost(p)/40);put(pieceSteps(p)/40);put(playerDone(p)?1:0);put(p.resigned?1:0);put(p.blocks.length/3);put(p.hand.length/6);put(j===S.cur?1:0);put((pieceCost(p)-myCost)/20);}
+    put(pieceCost(p)/40);put(pieceSteps(p)/40);put(playerDone(p)?1:0);put(p.resigned?1:0);put(blocksOf(j).length/3);put(p.hand.length/6);put(j===S.cur?1:0);put((pieceCost(p)-myCost)/20);}
   // 6. market and reserve (cards left of each type) + reserve open
   const mk=new Float32Array(BOT_NT),rs=new Float32Array(BOT_NT);S.market.forEach(s=>{mk[BOT_TYPES.indexOf(s.t)]+=s.n;});S.reserve.forEach(s=>{rs[BOT_TYPES.indexOf(s.t)]+=s.n;});
   putArr(mk,1/3);putArr(rs,1/3);put(S.market.some(s=>s.n===0)?1:0);put(S.market.filter(s=>s.n>0).length/6);
@@ -686,7 +691,7 @@ function botHeuristic(me){ // hand-tuned: be close to the goal, own a strong dec
   const own=[...P.deck,...P.hand,...P.discard,...P.play],tot=own.length||1;let pw=0;
   for(const id of own){const d=CT[S.cards[id]];if(d.c!=='p')pw+=d.p*(d.c==='x'?1.2:1);else pw+=1.2;}
   let v=-P.pieces.reduce((a,k)=>a+botCost(k),0)/P.pieces.length;
-  v+=pw/tot*9-Math.max(0,tot-12)*.35+P.blocks.length*1.5;
+  v+=pw/tot*9-Math.max(0,tot-12)*.35+blocksOf(S.players.indexOf(P)).length*1.5;
   if(S.cur===me&&!S.over&&S._endView!==me){let sumRed=0;
     for(const id of P.hand){const d=def(id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(pk);for(const[k]of reach(me,pi,d.s==='*'?['j','w','v']:[d.s],d.p))if(k[0]!=='B')r=Math.max(r,base-botCost(k));});sumRed+=r;}
     const a=S.turn.active;if(a&&P.pieces[a.pi]!=='done'){const base=botCost(P.pieces[a.pi]);let r=0;for(const[k]of reach(me,a.pi,[a.sym],a.left))if(k[0]!=='B')r=Math.max(r,base-botCost(k));sumRed+=r;}
@@ -714,7 +719,7 @@ function botHeuristic2(me){
     for(const id of P.hand){const d=def(id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const b=botCost(pk);for(const[k]of reach(me,pi,d.s==='*'?['j','w','v']:[d.s],d.p))if(k[0]!=='B')r=Math.max(r,b-botCost(k));});handRed+=r;}
     const a=S.turn.active;if(a&&P.pieces[a.pi]!=='done'){const b=botCost(P.pieces[a.pi]);let r=0;for(const[k]of reach(me,a.pi,[a.sym],a.left))if(k[0]!=='B')r=Math.max(r,b-botCost(k));handRed+=r;}}
   const turns=Math.max(0,cost-handRed*.9)/(4*speed);
-  return -turns*10+P.blocks.length*.3;
+  return -turns*10+blocksOf(S.players.indexOf(P)).length*.3;
 }
 /* Planner heuristic (candidate benchmark, mode 'plan'): search this turn's movement exactly, then buy.
    1. draw cards first (Scientist / Travel Log remove weak starting cards);
@@ -732,7 +737,7 @@ function botPlanMoves(me){
     // El Dorado can only be entered by paddling: removing my last paddle card (base camp) would strand me for good
     const stranded=P.pieces.some(k=>k!=='done')&&botPaddles(P,st)<1;
     let ahead=0;if(O.blockAhead)for(const B of st.blockades)if(B.owner===null)for(const k of P.pieces)if(k!=='done'&&hexAt(k).tile<=B.conn){ahead+=B.v;break;}
-    return -(c+ahead*O.blockAhead)*10+coin+P.blocks.length*O.blockW-(stranded&&O.guard?1e4:0);};
+    return -(c+ahead*O.blockAhead)*10+coin+blocksOf(S.players.indexOf(P)).length*O.blockW-(stranded&&O.guard?1e4:0);};
   const dfs=(st,path,depth)=>{
     if(++nodes>4000)return;
     const sc=score(st);if(!best||sc>best.sc)best={sc,path:path.slice()};
@@ -858,8 +863,8 @@ const botNetReady=()=>!!(BOT_NET&&MAP&&(botMulti()?BOT_NET.courses.includes(MAP.
    (3 players: 1, ¼, 0 · 4 players: 1, ¼, ⅛, 0). Training targets use the same values (tools/ai/gen.mjs). */
 const BOT_FIRST_RATIO=4;
 function botPlaceValue(pl,n){return pl>=n?0:pl<=1?1:1/BOT_FIRST_RATIO/2**(pl-2);}
-// my place is final once no one still racing moves after me in this round (turn order runs from S.start)
-function botPlaceSettled(me){const n=S.players.length;for(let i=(me+1)%n;i!==S.start;i=(i+1)%n)if(isActive(S.players[i]))return false;return true;}
+// my place is final once no one still racing moves after me in this round (every round starts with player 0)
+function botPlaceSettled(me){const n=S.players.length;for(let i=(me+1)%n;i!==0;i=(i+1)%n)if(isActive(S.players[i]))return false;return true;}
 function botValue(me,mode){
   if(S.over){const pl=S.places[me],n=S.players.length;return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
   const P=S.players[me];
@@ -869,8 +874,8 @@ function botValue(me,mode){
     // once it has been trained on such positions (net.unsettled); older networks get the place as if settled (optimistic)
     if(mode==='net'&&botNetReady()&&BOT_NET.unsettled&&!botPlaceSettled(me))return botNetValue(botNetFeatures(me,true));
     // settled: only players who arrived earlier, or in the same round with a better tie-break, are ahead of me (as endGame ranks)
-    const n=S.players.length,mb=p=>Math.max(0,...p.blocks.map(b=>S.blockades[b].n));
-    const pl=1+S.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&(q.blocks.length>P.blocks.length||q.blocks.length===P.blocks.length&&mb(q)>mb(P)))).length;
+    const n=S.players.length,bk=p=>blocksOf(S.players.indexOf(p)),mb=p=>Math.max(0,...bk(p).map(b=>S.blockades[b].n));
+    const pl=1+S.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&(bk(q).length>bk(P).length||bk(q).length===bk(P).length&&mb(q)>mb(P)))).length;
     return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
   return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me,true)):mode==='heur2'?botHeuristic2(me):botHeuristic(me);
 }
@@ -881,10 +886,10 @@ function botClone(st){
   // cards (id → type) gets its own copy: buying or transmitting creates a card, and look-ahead copies that each bought
   // something different must not overwrite each other's new card (they reuse the same next id)
   return{...st,cards:{...st.cards},log:[],trash:st.trash.slice(),
-    players:st.players.map(p=>({...p,pieces:p.pieces.slice(),deck:p.deck.slice(),hand:p.hand.slice(),discard:p.discard.slice(),play:p.play.slice(),blocks:p.blocks.slice()})),
+    players:st.players.map(p=>({...p,pieces:p.pieces.slice(),deck:p.deck.slice(),hand:p.hand.slice(),discard:p.discard.slice(),play:p.play.slice()})),
     market:st.market.map(x=>({...x})),reserve:st.reserve.map(x=>({...x})),blockades:st.blockades.map(b=>({...b})),
     turn:{...t,active:t.active&&{...t.active},pending:t.pending&&{...t.pending}},
-    winners:st.winners&&st.winners.slice(),places:st.places&&st.places.slice()};
+    places:st.places&&st.places.slice()};
 }
 /* "My turn is over, next hand not drawn yet": played and unkept cards go to the discard pile.
    Scoring "end turn" here (instead of after the real draw) values it as an expectation over the draw, without peeking. */
@@ -1172,5 +1177,5 @@ function aiStep(id,mem,rec){
 
 export const E={assert,AssertionError,setAssertMode,AIS,COLORS,aiById,aiCourseOK,aiAllowed,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,replayStep,recNewGame,recApply,recCanUndo,recUndo,recState,recFinal,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botActionValue,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
 // for the page's modules: every name (live bindings), and setters for the game on show
-export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,RNG,setRng,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,aiById,drawCards,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botWorth,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_ACT_SPEED,botHeuristic2,BOT_STARTER,BOT_PLANS,BOT_PLAN_CUR,BOT_PLAN_DEF,botPlanMoves,botPaddles,botClone,botCardWorth,BOT_PADDLE,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botDeepChoose,botRolloutChoose,botTurnSearch,botScoreActions,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botDeepPlayout,botTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiPlan,aiFinishCard,aiStep};
+export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,RNG,setRng,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,aiById,drawCards,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botWorth,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_ACT_SPEED,botHeuristic2,BOT_STARTER,BOT_PLANS,BOT_PLAN_CUR,BOT_PLAN_DEF,botPlanMoves,botPaddles,botClone,botCardWorth,BOT_PADDLE,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botDeepChoose,botRolloutChoose,botTurnSearch,botScoreActions,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botDeepPlayout,botTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiPlan,aiFinishCard,aiStep};
 export const setS=v=>{S=v},setMAP=v=>{MAP=v};

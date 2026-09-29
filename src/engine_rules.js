@@ -12,6 +12,8 @@ const fmt=n=>(n%1?(Math.floor(n)?Math.floor(n)+'½':'½'):String(n));
 function rm(arr,id){const i=arr.indexOf(id);assert(i>=0,'rm: the item is in the list');arr.splice(i,1);}
 function playerDone(p){return p.pieces.every(k=>k==='done');}
 function isActive(p){return !playerDone(p)&&!p.resigned;}
+/* the blockades player pl has taken (by index), and how many */
+function blocksOf(pl){const out=[];S.blockades.forEach((B,i)=>{if(B.owner===pl)out.push(i);});return out;}
 
 function mapFor(st){return buildCourse(st.course,st.seed);}
 /* where a card type is sold: every type has exactly one stack, in the market or the reserve. {src:'m'|'r', i, s} or null */
@@ -50,7 +52,7 @@ function replayCheck(log){
   if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
   return null;}
 function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry32(log.rng>>>0);setRng(g);
-  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,privacy:rec&&!!log.privacy,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:rec&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:rec?p.bot:undefined}))});
+  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:rec&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:rec?p.bot:undefined}))});
   // training exploration: every player starts with the same extra card, shuffled into the draw pile
   if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(RNG()*(p.deck.length+1)),0,newCard(log.gift));
   if(rec)setRng(null);
@@ -73,7 +75,8 @@ function recNewGame(o){
   // the secret: from the platform's cryptographic generator where there is one (Math.random's state could be guessed)
   const rng=crypto.getRandomValues(new Uint32Array(1))[0],r0=RNG;setRng(recRng(rng,-1));
   try{newGame(o);}finally{RNG=r0;}
-  return{kind:'eldorado-replay',v:3,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(S.privacy?{privacy:true}:{}),
+  // (privacy: the page's pass-and-play cover, a setting of the table rather than of the game: kept in the record only)
+  return{kind:'eldorado-replay',v:3,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(o.privacy?{privacy:true}:{}),
     players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0};
 }
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
@@ -104,16 +107,16 @@ function newGame(o){
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
     const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
-    const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck),hand:[],discard:[],play:[],blocks:[],fin:0,resigned:0};
+    const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck),hand:[],discard:[],play:[],fin:0,resigned:0};
     if(p.ai&&aiById(p.ai))pl.ai=p.ai; // a named AI plays this seat (engine_ai.js)
     return pl;
   });
   const st=MAP.starts;
   if(players.length===2){players[0].pieces=[st[0],st[2]];players[1].pieces=[st[1],st[3]];}
   else players.forEach((p,i)=>p.pieces=[st[i]]);
-  S={v:5,seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
-     blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,start:0,round:1,endTriggered:false,over:false,winners:null,places:null,
-     fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[],privacy:!!o.privacy,resigns:0};
+  S={seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
+     blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,round:1,endTriggered:false,over:false,places:null,
+     fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[]};
   players.forEach(p=>drawCards(p,4));
   log(null,'The expedition sets out: '+players.map(p=>p.name).join(', ')+'. Course: '+MAP.name+' ('+MAP.route.join(' · ')+' · El Dorado).');
   return S;
@@ -217,7 +220,7 @@ function applyAction(seat,a){
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
   const pieceOk=pi=>Number.isInteger(pi)&&pi>=0&&pi<P.pieces.length&&P.pieces[pi]!=='done';
   if(T.pending&&a.t!=='trash')return fail('Choose which cards to remove first.');
-  const takeBlock=b=>{const B=S.blockades[b];assert(B.owner===null,'a blockade is taken once');B.owner=seat;P.blocks.push(b);log(seat,'tears down blockade #'+B.n+' and keeps it.');ev.push({e:'block',pl:seat,n:B.n});};
+  const takeBlock=b=>{const B=S.blockades[b];assert(B.owner===null,'a blockade is taken once');B.owner=seat;log(seat,'tears down blockade #'+B.n+' and keeps it.');ev.push({e:'block',pl:seat,n:B.n});};
   const arrive=pi=>{if(P.pieces[pi]!=='done')return;log(seat,'reaches El Dorado!');ev.push({e:'arrive',pl:seat,pi});
     if(playerDone(P)){P.fin=S.round;checkEnd();}};
   const passTurn=()=>{S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});};
@@ -267,7 +270,7 @@ function applyAction(seat,a){
       const n={cartographer:2,compass:3,scientist:1,travellog:2}[t];if(!n)return fail('That card has no draw effect.');
       T.active=null;rm(P.hand,a.card);if(CT[t].once)S.trash.push(a.card);else P.play.push(a.card);
       const got=drawCards(P,n);reveal=true;ev.push({e:'play',pl:seat,k:'action',ts:[t],n:got.length});
-      log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');ev.push({e:'draw',pl:seat,n:got.length});
+      log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');
       if(t==='scientist'||t==='travellog')T.pending={max:t==='scientist'?1:2};
       break;
     }
@@ -283,7 +286,7 @@ function applyAction(seat,a){
       const st=stackOf(a.type),stack=st&&st.s;if(!stack||stack.n<=0)return fail('That card is sold out.');
       T.active=null;rm(P.hand,a.card);S.trash.push(a.card);
       stack.n--;P.discard.push(newCard(stack.t));ev.push({e:'play',pl:seat,k:'transmit',ts:['transmitter'],got:stack.t});
-      log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');ev.push({e:'gain',pl:seat,t:stack.t});
+      log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');
       break;
     }
     case 'buy':{
@@ -297,7 +300,7 @@ function applyAction(seat,a){
       const t=stack.t;
       if(st.src==='r'){const slot=S.market.findIndex(s=>s.n===0);S.market[slot]={t,n:stack.n};S.reserve.splice(st.i,1);stack=S.market[slot];}
       stack.n--;P.discard.push(newCard(t));T.bought=true;
-      log(seat,'buys '+CT[t].n+' for '+fmt(total)+' coin'+(total===1?'':'s')+'.');ev.push({e:'gain',pl:seat,t});
+      log(seat,'buys '+CT[t].n+' for '+fmt(total)+' coin'+(total===1?'':'s')+'.');
       break;
     }
     case 'end':{
@@ -319,16 +322,17 @@ function applyAction(seat,a){
   return{ok:true,ev,reveal};
 }
 /* who still races */
+/* the race's end is set off (the round is still finished): in a full race once at most one player is racing, under the
+   official rule at the first arrival */
 function checkEnd(){
-  if(S.fullRace){if(S.players.filter(isActive).length<=1&&!S.endTriggered){S.endTriggered=true;log(null,'Only one expedition is still racing. The round will be finished.');}}
-  else if(S.players.some(playerDone)&&!S.endTriggered){S.endTriggered=true;log(null,'The final round has begun.');}
-  if(S.players.every(p=>!isActive(p))&&S.fullRace)S.endTriggered=true;
+  if(S.endTriggered||!(S.fullRace?S.players.filter(isActive).length<=1:S.players.some(playerDone)))return;
+  S.endTriggered=true;log(null,S.fullRace?'Only one expedition is still racing. The round will be finished.':'The final round has begun.');
 }
 function advance(){
   const n=S.players.length;let i=S.cur;
   for(let step=0;step<n*2+2;step++){
     i=(i+1)%n;
-    if(i===S.start){if(S.endTriggered){endGame();return;}S.round++;}
+    if(i===0){if(S.endTriggered){endGame();return;}S.round++;} // (player 0 starts every round)
     const p=S.players[i];
     if(S.fullRace?isActive(p):!p.resigned){S.cur=i;return;}
   }
@@ -337,7 +341,8 @@ function advance(){
 /* A player leaves a game for good (online): placed below everyone still racing. */
 function resign(seat){
   const P=S.players[seat];if(P.resigned||playerDone(P))return{ok:false,err:'You are not racing.',ev:[]};
-  P.resigned=++S.resigns;log(seat,'leaves the expedition.');
+  P.resigned=1+Math.max(...S.players.map(p=>p.resigned)); // the order of resigning (the first to leave places last)
+  log(seat,'leaves the expedition.');
   const ev=[{e:'resign',pl:seat}];
   const others=S.players.filter((p,i)=>i!==seat&&!p.resigned);
   if(others.length<=1||!S.players.some(isActive)){endGame();ev.push({e:'over'});return{ok:true,ev};} // nobody left to race: finish now
@@ -357,15 +362,15 @@ function progress(p){ // lower = closer: sum of shortest step counts from each e
 }
 function endGame(){
   S.over=true;
-  const mb=p=>Math.max(0,...p.blocks.map(b=>S.blockades[b].n));
-  const keyOf=(p)=>playerDone(p)?[0,p.fin,-p.blocks.length,-mb(p)]:p.resigned?[2,-p.resigned,0,0]:[1,progress(p),-p.blocks.length,-mb(p)];
+  const bk=p=>blocksOf(S.players.indexOf(p)),mb=p=>Math.max(0,...bk(p).map(b=>S.blockades[b].n));
+  const keyOf=(p)=>playerDone(p)?[0,p.fin,-bk(p).length,-mb(p)]:p.resigned?[2,-p.resigned,0,0]:[1,progress(p),-bk(p).length,-mb(p)];
   const idx=S.players.map((p,i)=>({i,k:keyOf(p)}));
   const cmp=(a,b)=>{for(let j=0;j<4;j++)if(a.k[j]!==b.k[j])return a.k[j]-b.k[j];return 0;};
   idx.sort(cmp);
   const places=new Array(S.players.length);
   idx.forEach((x,j)=>{places[x.i]=j>0&&cmp(x,idx[j-1])===0?places[idx[j-1].i]:j+1;});
-  S.places=places;S.winners=places.map((p,i)=>p===1?i:-1).filter(i=>i>=0);
-  log(null,S.winners.map(i=>S.players[i].name).join(' & ')+' win'+(S.winners.length>1?'':'s')+' the race to El Dorado.');
+  S.places=places;const w=S.players.filter((p,i)=>places[i]===1);
+  log(null,w.map(p=>p.name).join(' & ')+' win'+(w.length>1?'':'s')+' the race to El Dorado.');
 }
 /* ---------- multiplayer Elo from a finishing order ---------- */
 function eloDeltas(ratings,places,games){

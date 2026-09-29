@@ -24,7 +24,7 @@ import { diag } from './debug.js';
 export function showGame(){aiReset();buildBoard();resetView();fitSoon();}
 /* continue the saved local game (first visit, or back from a replay). Returns false if there is none in progress. */
 export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
-  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);render();aiKick();
+  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!G.rec.privacy;syncMode(false);render();aiKick();
   if(!UI.cover)banner(cur().name,'Round '+S.round);return true;}
 /* after a bug (boundary.js): the game on show again from its source, with nothing selected. Online: a new connection
    brings the server's state. A local game: rebuilt from its record (the action that failed was never recorded) */
@@ -64,7 +64,7 @@ export function playEvents(ev,viewer){
     if(e.e==='move')animateMove(e.pl,e.pi,e.path);
     else if(e.e==='block'){if(!watched)toast(S.players[e.pl].name+' claims blockade #'+e.n);}
     else if(e.e==='arrive')toast(S.players[e.pl].name+' reaches El Dorado!',2200);
-    else if(e.e==='gain'&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.t,takeBuyFrom()||marketRectOf(e.t));
+    else if(e.e==='play'&&e.got&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.got,takeBuyFrom()||marketRectOf(e.got));
     else if(e.e==='timeout')toast(S.players[e.pl].name+' ran out of time');
     else if(e.e==='resign')toast(S.players[e.pl].name+' left the game');
   }
@@ -85,7 +85,7 @@ export function afterLocalChange(turnChanged){
   else{
     syncMode(true);
     // hide the hand between human players only (pass-and-play); AI turns never need it
-    if(S.privacy&&!S.over&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
+    if(G.rec.privacy&&!S.over&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
     render();
     if(!UI.cover&&!S.over){banner(cur().name,isAI(S.cur)?'AI · Round '+S.round:'Round '+S.round);ensureVisible();}
   }

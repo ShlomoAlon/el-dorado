@@ -49,7 +49,7 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
   Never put rules logic in UI code or the worker.
 - The server is authoritative online: validate everything in `applyAction`; never trust client state.
 - `redact(S, seat)` must never expose other players' hands, deck contents, or anyone's deck order.
-- State shape changes: bump `S.v`. Saved games (`eldorado-game-v2`), finished local games and online replays are game records
+- `S` is never stored: saved games (`eldorado-game-v2`), finished local games and online replays are game records
   (setup + actions, log v3): they are replayed through the engine. A rules change that old records can't replay bumps the log
   version, and old games are dropped (owner, 2026-09-29: no compatibility code for old games yet; deleting old replays is fine).
 - New/renamed Durable Object classes need a new `migrations` entry in `wrangler.jsonc` (never edit old tags).

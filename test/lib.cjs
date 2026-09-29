@@ -40,7 +40,7 @@ async function startServer() {
 async function openPage(browser, name, opts = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...opts }), page = await ctx.newPage();
   page.errors = [];
-  page.on('pageerror', e => page.errors.push(`${name}: ${e.message}`));
+  page.on('pageerror', e => page.errors.push(`${name}: ${e.message}` + (process.env.STACK ? '\n' + e.stack : '')));
   // (Google's sign-in script and the fonts can't load in the test sandbox: not the page's errors)
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_CERT|ERR_TUNNEL|gsi|fonts/.test(m.text())) page.errors.push(`${name} console: ${m.text()}`); });
   return page;

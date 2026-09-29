@@ -1,6 +1,6 @@
 /* Everything that opens over the game: the round banner, toasts, and one modal at a time (rules, results, a pile,
    the journal). The menu is its own dialog (menu.js); opening a modal closes it. */
-import { S, CT, typeOf, playerDone, plural, assert } from '../engine.gen.js';
+import { S, CT, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
 import { $, esc } from './dom.js';
 import { UI, NET, online, hp } from './state.js';
 import { cardHTML } from './cards.js';
@@ -53,10 +53,10 @@ export function showRules(){
 }
 export function showGameOver(){
   assert(S.over,'showGameOver: the game is over');
-  const w=S.winners,fin=S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i]));
+  const w=S.players.map((p,i)=>i).filter(i=>S.places[i]===1),fin=S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i]));
   const res=online()&&NET.room.results,ord=S.players.map((p,i)=>i).sort((a,b)=>S.places[a]-S.places[b]);
   const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
-  const rows=ord.map(i=>[S.players[i],i]).map(([p,i])=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:${w.includes(i)?'rgba(233,178,74,.14)':'#0c1512'};border:1px solid ${w.includes(i)?'var(--gold)':'var(--line)'}"><span style="display:flex;align-items:center;gap:8px"><b style="color:var(--gold2);min-width:34px">${ordn(S.places[i])}</b><i style="width:12px;height:12px;border-radius:50%;background:${p.color};display:inline-block"></i><b>${esc(p.name)}</b></span><span style="color:var(--muted);font-size:13px">${playerDone(p)?'Reached El Dorado (round '+p.fin+')':p.resigned?'Left the game':'Still in the jungle'} · ${plural(p.blocks.length,'blockade')}${p.blocks.length?' (biggest #'+Math.max(...p.blocks.map(b=>S.blockades[b].n))+')':''}${res&&res.deltas?` · <b style="color:${res.deltas[i]>=0?'#8fe3a8':'#ff9c8a'}">${res.deltas[i]>=0?'+':''}${res.deltas[i]}</b> → ${Math.round(res.before[i]+res.deltas[i])}`:''}</span></div>`).join('');
+  const rows=ord.map(i=>[S.players[i],i]).map(([p,i])=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:${w.includes(i)?'rgba(233,178,74,.14)':'#0c1512'};border:1px solid ${w.includes(i)?'var(--gold)':'var(--line)'}"><span style="display:flex;align-items:center;gap:8px"><b style="color:var(--gold2);min-width:34px">${ordn(S.places[i])}</b><i style="width:12px;height:12px;border-radius:50%;background:${p.color};display:inline-block"></i><b>${esc(p.name)}</b></span><span style="color:var(--muted);font-size:13px">${playerDone(p)?'Reached El Dorado (round '+p.fin+')':p.resigned?'Left the game':'Still in the jungle'} · ${plural(blocksOf(i).length,'blockade')}${blocksOf(i).length?' (biggest #'+Math.max(...blocksOf(i).map(b=>S.blockades[b].n))+')':''}${res&&res.deltas?` · <b style="color:${res.deltas[i]>=0?'#8fe3a8':'#ff9c8a'}">${res.deltas[i]>=0?'+':''}${res.deltas[i]}</b> → ${Math.round(res.before[i]+res.deltas[i])}`:''}</span></div>`).join('');
   const rid=res&&res.replay||null;
   const tie=fin.length>1?'<p class="sub" style="margin:10px 0 0">Explorers arriving in the same round are split by blockades held, then the highest-numbered blockade.</p>':'';
   modal(`<h2>${w.length?w.map(i=>esc(S.players[i].name)).join(' & ')+' win'+(w.length>1?'':'s'):'Expedition over'}</h2><p class="sub">The race ended in round ${S.round}.${res&&res.deltas?' Ratings updated.':res&&res.unrated?' Unrated game: ratings unchanged.':''}</p>${rows}${tie}<div class="mrow">${rid||UI.lastReplay&&!online()?'<button class="btn" id="gRep">Watch replay</button>':''}<button class="btn" id="gClose">View board</button><button class="btn pri" id="gNew">New game</button></div>`,

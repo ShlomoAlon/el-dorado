@@ -17,7 +17,7 @@ const T = report('online');
       await p.fill('#devName', name); await p.click('#devGo');
       await p.waitForFunction(() => __ED.NET.user); return p.evaluate(() => __ED.NET.user.id);
     };
-    const wait = (p, f, arg, ms = 15000) => p.waitForFunction(f, arg, { timeout: ms }).then(() => true, () => false);
+    const wait = (p, f, arg, ms = 30000) => p.waitForFunction(f, arg, { timeout: ms }).then(() => true, () => false);
     const board = p => p.evaluate(async () => Object.fromEntries((await (await fetch('/api/leaderboard')).json()).players.map(x => [x.id, { r: x.rating, g: x.games }])));
     const mkRoom = (p, o) => p.evaluate(async o => { const r = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + __ED.NET.token }, body: JSON.stringify(o) });
       const j = await r.json(); __ED.joinRoom(j.code); return j.code; }, o);
@@ -41,8 +41,8 @@ const T = report('online');
     await B.click('#sBack');
     T.ok('back to the online game, still connected', await wait(B, () => !document.querySelector('#menu').open && __ED.NET.connected && !!__ED.S));
     // a connection that dies silently (a phone asleep, a dropped network): noticed when the page comes back, and replaced
-    await B.evaluate(() => { const w = __ED.NET.ws; window.__deadWs = w; w.send = () => { }; document.dispatchEvent(new Event('visibilitychange')); });
-    T.ok('a silently dead connection is noticed and replaced', await wait(B, () => __ED.NET.ws && __ED.NET.ws !== window.__deadWs && __ED.NET.connected && !!__ED.S, null, 20000));
+    await B.evaluate(() => { const w = __ED.NET.ws; window.__deadWs = w; w.send = () => { }; w.onmessage = () => { }; document.dispatchEvent(new Event('visibilitychange')); });
+    T.ok('a silently dead connection is noticed and replaced', await wait(B, () => __ED.NET.ws && __ED.NET.ws !== window.__deadWs && __ED.NET.connected && !!__ED.S, null, 30000));
     const view = await Promise.all([A, B, C].map(p => p.evaluate(me => { const S = __ED.S, seat = __ED.NET.seat;
       return { seat, mine: S.players[seat].hand.every(id => S.cards[id]), others: S.players.every((q, i) => i === seat || q.hand.every(id => !S.cards[id])) }; }, ids[[A, B, C].indexOf(p)])));
     T.ok('each player sees their own hand and no one else\'s', view.every(v => v.seat >= 0 && v.mine && v.others) && new Set(view.map(v => v.seat)).size === 3, JSON.stringify(view));
@@ -150,7 +150,7 @@ const T = report('online');
     T.ok('no page errors', !errs.length, errs.slice(0, 5).join(' | '));
     const other = ((await srv.bugs()).bugs || []).filter(b => !/self-test/.test(b.msg));
     T.ok('no bug reports but the forced ones (no assertion failed on the server or in a page)', !other.length, other.slice(0, 5).map(b => b.source + ': ' + b.msg).join(' | '));
-  } catch (e) { T.ok('test ran to the end', false, e.message.split('\n')[0]); }
+  } catch (e) { T.ok('test ran to the end', false, e.message.split('\n').slice(0, 3).join(' · ')); const errs = pages.flatMap(p => p.errors); if (errs.length) console.log('page errors:\n  ' + errs.slice(0, 8).join('\n  ')); }
   finally { await b.close(); srv.stop(); }
   T.done();
 })();

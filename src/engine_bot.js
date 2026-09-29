@@ -87,10 +87,10 @@ function botFeatures(me,into){ // into: write the summary at the start of this (
   for(let o=0;o<BOT_BINS*9;o+=9){const c=bins[o]||1;put(bins[o]/10);for(let t=1;t<=5;t++)put(bins[o+t]/c);put(bins[o+6]/c/3);put(bins[o+7]/2);put(bins[o+8]/2);}
   // 2. me: where I am and what's ahead
   const pieceCost=p=>p.pieces.reduce((a,k)=>a+botCost(k),0)/p.pieces.length,pieceSteps=p=>p.pieces.reduce((a,k)=>a+stepsOf(k),0)/p.pieces.length;
-  const myCost=pieceCost(P);put(myCost/40);put(pieceSteps(P)/40);put(Math.min(...P.pieces.map(stepsOf))/40);put(playerDone(P)?1:0);put(P.blocks.length/3);
+  const myCost=pieceCost(P);put(myCost/40);put(pieceSteps(P)/40);put(Math.min(...P.pieces.map(stepsOf))/40);put(playerDone(P)?1:0);put(blocksOf(me).length/3);
   const mix={j:0,w:0,v:0,r:0,c:0};for(const k of P.pieces){if(k==='done')continue;const m=bd.mix.get(k);if(m)for(const s in mix)mix[s]+=m[s];}
   for(const s of'jwvrc')put(mix[s]/P.pieces.length/20);
-  put(myTurn?1:0);put(((me-S.start+n)%n)/3);put(S.turn&&S.cur===me&&S.turn.bought?1:0);put(n===2?1:0);
+  put(myTurn?1:0);put(me/3);put(S.turn&&S.cur===me&&S.turn.bought?1:0);put(n===2?1:0);
   // 3. my cards: hand (only meaningful on my turn), draw pile, discard, in play
   // hand: my cards on my turn; in the end-of-turn view, the cards I kept
   putArr(myTurn||endView?botCounts(P.hand):new Float32Array(BOT_NT),1/3);putArr(botCounts(P.deck),1/4);putArr(botCounts(P.discard),1/4);putArr(botCounts(P.play),1/3);
@@ -105,7 +105,7 @@ function botFeatures(me,into){ // into: write the summary at the start of this (
   // 5. opponents in turn order after me: all cards they own, their discard pile, position, blockades
   for(let k=1;k<=3;k++){const j=(me+k)%n;const p=k<n?S.players[j]:null;if(!p){i+=BOT_NT*2+8;continue;}
     putArr(botCounts([...p.deck,...p.hand,...p.discard,...p.play]),1/4);putArr(botCounts(p.discard),1/4);
-    put(pieceCost(p)/40);put(pieceSteps(p)/40);put(playerDone(p)?1:0);put(p.resigned?1:0);put(p.blocks.length/3);put(p.hand.length/6);put(j===S.cur?1:0);put((pieceCost(p)-myCost)/20);}
+    put(pieceCost(p)/40);put(pieceSteps(p)/40);put(playerDone(p)?1:0);put(p.resigned?1:0);put(blocksOf(j).length/3);put(p.hand.length/6);put(j===S.cur?1:0);put((pieceCost(p)-myCost)/20);}
   // 6. market and reserve (cards left of each type) + reserve open
   const mk=new Float32Array(BOT_NT),rs=new Float32Array(BOT_NT);S.market.forEach(s=>{mk[BOT_TYPES.indexOf(s.t)]+=s.n;});S.reserve.forEach(s=>{rs[BOT_TYPES.indexOf(s.t)]+=s.n;});
   putArr(mk,1/3);putArr(rs,1/3);put(S.market.some(s=>s.n===0)?1:0);put(S.market.filter(s=>s.n>0).length/6);
@@ -124,7 +124,7 @@ function botHeuristic(me){ // hand-tuned: be close to the goal, own a strong dec
   const own=[...P.deck,...P.hand,...P.discard,...P.play],tot=own.length||1;let pw=0;
   for(const id of own){const d=CT[S.cards[id]];if(d.c!=='p')pw+=d.p*(d.c==='x'?1.2:1);else pw+=1.2;}
   let v=-P.pieces.reduce((a,k)=>a+botCost(k),0)/P.pieces.length;
-  v+=pw/tot*9-Math.max(0,tot-12)*.35+P.blocks.length*1.5;
+  v+=pw/tot*9-Math.max(0,tot-12)*.35+blocksOf(S.players.indexOf(P)).length*1.5;
   if(S.cur===me&&!S.over&&S._endView!==me){let sumRed=0;
     for(const id of P.hand){const d=def(id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(pk);for(const[k]of reach(me,pi,d.s==='*'?['j','w','v']:[d.s],d.p))if(k[0]!=='B')r=Math.max(r,base-botCost(k));});sumRed+=r;}
     const a=S.turn.active;if(a&&P.pieces[a.pi]!=='done'){const base=botCost(P.pieces[a.pi]);let r=0;for(const[k]of reach(me,a.pi,[a.sym],a.left))if(k[0]!=='B')r=Math.max(r,base-botCost(k));sumRed+=r;}
@@ -152,7 +152,7 @@ function botHeuristic2(me){
     for(const id of P.hand){const d=def(id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const b=botCost(pk);for(const[k]of reach(me,pi,d.s==='*'?['j','w','v']:[d.s],d.p))if(k[0]!=='B')r=Math.max(r,b-botCost(k));});handRed+=r;}
     const a=S.turn.active;if(a&&P.pieces[a.pi]!=='done'){const b=botCost(P.pieces[a.pi]);let r=0;for(const[k]of reach(me,a.pi,[a.sym],a.left))if(k[0]!=='B')r=Math.max(r,b-botCost(k));handRed+=r;}}
   const turns=Math.max(0,cost-handRed*.9)/(4*speed);
-  return -turns*10+P.blocks.length*.3;
+  return -turns*10+blocksOf(S.players.indexOf(P)).length*.3;
 }
 /* Planner heuristic (candidate benchmark, mode 'plan'): search this turn's movement exactly, then buy.
    1. draw cards first (Scientist / Travel Log remove weak starting cards);
@@ -170,7 +170,7 @@ function botPlanMoves(me){
     // El Dorado can only be entered by paddling: removing my last paddle card (base camp) would strand me for good
     const stranded=P.pieces.some(k=>k!=='done')&&botPaddles(P,st)<1;
     let ahead=0;if(O.blockAhead)for(const B of st.blockades)if(B.owner===null)for(const k of P.pieces)if(k!=='done'&&hexAt(k).tile<=B.conn){ahead+=B.v;break;}
-    return -(c+ahead*O.blockAhead)*10+coin+P.blocks.length*O.blockW-(stranded&&O.guard?1e4:0);};
+    return -(c+ahead*O.blockAhead)*10+coin+blocksOf(S.players.indexOf(P)).length*O.blockW-(stranded&&O.guard?1e4:0);};
   const dfs=(st,path,depth)=>{
     if(++nodes>4000)return;
     const sc=score(st);if(!best||sc>best.sc)best={sc,path:path.slice()};
@@ -296,8 +296,8 @@ const botNetReady=()=>!!(BOT_NET&&MAP&&(botMulti()?BOT_NET.courses.includes(MAP.
    (3 players: 1, ¼, 0 · 4 players: 1, ¼, ⅛, 0). Training targets use the same values (tools/ai/gen.mjs). */
 const BOT_FIRST_RATIO=4;
 function botPlaceValue(pl,n){return pl>=n?0:pl<=1?1:1/BOT_FIRST_RATIO/2**(pl-2);}
-// my place is final once no one still racing moves after me in this round (turn order runs from S.start)
-function botPlaceSettled(me){const n=S.players.length;for(let i=(me+1)%n;i!==S.start;i=(i+1)%n)if(isActive(S.players[i]))return false;return true;}
+// my place is final once no one still racing moves after me in this round (every round starts with player 0)
+function botPlaceSettled(me){const n=S.players.length;for(let i=(me+1)%n;i!==0;i=(i+1)%n)if(isActive(S.players[i]))return false;return true;}
 function botValue(me,mode){
   if(S.over){const pl=S.places[me],n=S.players.length;return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
   const P=S.players[me];
@@ -307,8 +307,8 @@ function botValue(me,mode){
     // once it has been trained on such positions (net.unsettled); older networks get the place as if settled (optimistic)
     if(mode==='net'&&botNetReady()&&BOT_NET.unsettled&&!botPlaceSettled(me))return botNetValue(botNetFeatures(me,true));
     // settled: only players who arrived earlier, or in the same round with a better tie-break, are ahead of me (as endGame ranks)
-    const n=S.players.length,mb=p=>Math.max(0,...p.blocks.map(b=>S.blockades[b].n));
-    const pl=1+S.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&(q.blocks.length>P.blocks.length||q.blocks.length===P.blocks.length&&mb(q)>mb(P)))).length;
+    const n=S.players.length,bk=p=>blocksOf(S.players.indexOf(p)),mb=p=>Math.max(0,...bk(p).map(b=>S.blockades[b].n));
+    const pl=1+S.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&(bk(q).length>bk(P).length||bk(q).length===bk(P).length&&mb(q)>mb(P)))).length;
     return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
   return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me,true)):mode==='heur2'?botHeuristic2(me):botHeuristic(me);
 }
@@ -319,10 +319,10 @@ function botClone(st){
   // cards (id → type) gets its own copy: buying or transmitting creates a card, and look-ahead copies that each bought
   // something different must not overwrite each other's new card (they reuse the same next id)
   return{...st,cards:{...st.cards},log:[],trash:st.trash.slice(),
-    players:st.players.map(p=>({...p,pieces:p.pieces.slice(),deck:p.deck.slice(),hand:p.hand.slice(),discard:p.discard.slice(),play:p.play.slice(),blocks:p.blocks.slice()})),
+    players:st.players.map(p=>({...p,pieces:p.pieces.slice(),deck:p.deck.slice(),hand:p.hand.slice(),discard:p.discard.slice(),play:p.play.slice()})),
     market:st.market.map(x=>({...x})),reserve:st.reserve.map(x=>({...x})),blockades:st.blockades.map(b=>({...b})),
     turn:{...t,active:t.active&&{...t.active},pending:t.pending&&{...t.pending}},
-    winners:st.winners&&st.winners.slice(),places:st.places&&st.places.slice()};
+    places:st.places&&st.places.slice()};
 }
 /* "My turn is over, next hand not drawn yet": played and unkept cards go to the discard pile.
    Scoring "end turn" here (instead of after the real draw) values it as an expectation over the draw, without peeking. */

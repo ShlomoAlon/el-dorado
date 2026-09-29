@@ -69,8 +69,8 @@ export function sfxEvent(e,viewer){
   if(e.e==='move'){sfx('move',e.path.length-1);SND.moveEnd=performance.now()+(reduceMotion?0:e.path.length*STEP);}
   else if(e.e==='block')sfx('block');
   else if(e.e==='arrive')setTimeout(()=>sfx('arrive'),Math.max(0,SND.moveEnd-performance.now()));
-  else if(e.e==='gain')sfx('buy');
-  else if(e.e==='draw'&&(viewer===undefined||viewer===e.pl))sfx('draw',e.n);
+  else if(e.e==='play'&&e.got)sfx('buy'); // (a purchase, or the Transmitter's card)
+  else if(e.e==='play'&&e.k==='action'&&(viewer===undefined||viewer===e.pl))sfx('draw',e.n);
   else if(e.e==='over')setTimeout(()=>sfx('win'),350);
   else if(e.e==='turn'&&!S.over){
     // the player whose turn just ended drew a fresh hand; the new player gets a chime

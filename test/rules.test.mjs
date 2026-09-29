@@ -3,7 +3,7 @@
 // the reserve, the Transmitter, action cards, single-use cards, the end of a turn, both end-of-game rules and their
 // tie-break, two explorers each, resigning, what undo may take back, and what each player is shown.
 //   node test/rules.test.mjs
-import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cardTargets, cantBuy, buyOptions, COURSES, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck, setAssertMode } from '../src/engine.gen.js';
+import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cardTargets, blocksOf, cantBuy, buyOptions, COURSES, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck, setAssertMode } from '../src/engine.gen.js';
 setAssertMode({ debug: true }); // a broken invariant fails the run
 let checks = 0; const failures = [];
 const ok = (cond, what) => { checks++; if (!cond) failures.push(what); };
@@ -78,7 +78,7 @@ game(['s j1 j1 j1'], { blockades: [['1,0', '2,0', { k: 'j', v: 1, n: 5 }]] }); S
 [ex, sc] = give(0, 'explorer', 'scout');
 ok(!targets(0, 0, 'explorer').has('2,0'), 'a blockade adds its cost to the space behind it');
 ok(targets(0, 0, 'scout').has('2,0'), 'a card that covers both crosses it');
-ok(act({ t: 'move', card: sc, pi: 0, to: '2,0' }).ok && S.blockades[0].owner === 0 && S.players[0].blocks.includes(0), 'the first explorer across takes the blockade');
+ok(act({ t: 'move', card: sc, pi: 0, to: '2,0' }).ok && S.blockades[0].owner === 0 && blocksOf(0).join() === '0', 'the first explorer across takes the blockade');
 S.players[0].pieces[0] = key(7, 4); S.cur = 1; S.players[1].pieces[0] = '1,0'; give(1, 'explorer');
 ok(targets(1, 0, 'explorer').has('2,0'), 'a taken blockade is open for everyone after');
 game(['s j1 j1'], { blockades: [['1,0', '2,0', { k: 'w', v: 1 }]] }); S.players[0].pieces[0] = '1,0'; give(0, 'trailblazer');
@@ -169,7 +169,7 @@ game(['s gw', '. .', 's gw'], { players: 3 }); S.players[1].pieces[0] = '0,2';
 give(0, 'sailor'); act({ t: 'move', card: S.players[0].hand[0], pi: 0, to: '1,0' });
 ok(S.players[0].pieces[0] === 'done' && S.players[0].fin === 1 && !S.over, 'full race: the first arrival doesn\'t end the game');
 ok(S.cur === 1 && !S.players[0].play.length && !S.players[0].hand.length, 'arriving with your last explorer ends your turn at once (nothing left to draw for)');
-S.blockades = [{ n: 1, k: 'j', v: 1, conn: 9, owner: 1 }]; S.players[1].blocks = [0];
+S.blockades = [{ n: 1, k: 'j', v: 1, conn: 9, owner: 1 }];
 give(1, 'sailor'); act({ t: 'move', card: S.players[1].hand[0], pi: 0, to: '1,2' });
 ok(S.cur === 2 && !S.over, 'full race: with one left racing, the round is still finished');
 act({ t: 'end', keep: [] });
@@ -178,15 +178,15 @@ game(['s gw'], { players: 3, fullRace: false }); S.cur = 1; S.players[1].pieces[
 act({ t: 'move', card: S.players[1].hand[0], pi: 0, to: '1,0' }, 1);
 ok(!S.over && S.cur === 2, 'first-arrival rule: the round is finished first');
 act({ t: 'end', keep: [] }, 2);
-ok(S.over && S.winners.join() === '1', 'first-arrival rule: over at the end of that round');
+ok(S.over && S.places[1] === 1 && S.places.filter(p => p === 1).length === 1, 'first-arrival rule: over at the end of that round');
 game(['s gw'], { players: 3 });
-for (const [i, blocks] of [[0, [1]], [1, [0, 2]], [2, []]]) { S.players[i].pieces = ['done']; S.players[i].fin = 1; S.players[i].blocks = blocks; }
+for (const i of [0, 1, 2]) { S.players[i].pieces = ['done']; S.players[i].fin = 1; }
 S.endTriggered = true; // (as the arrivals would have: checkEnd)
 S.blockades = [{ n: 2, k: 'j', v: 1, conn: 0, owner: 1 }, { n: 6, k: 'r', v: 2, conn: 1, owner: 0 }, { n: 1, k: 'j', v: 1, conn: 2, owner: 1 }];
 act({ t: 'end', keep: [] }); act({ t: 'end', keep: [] }, 1); act({ t: 'end', keep: [] }, 2);
 ok(S.over && S.places.join() === '2,1,3', 'tie-break: most blockades first');
 game(['s gw'], { players: 3 });
-for (const [i, blocks] of [[0, [1]], [1, [0]], [2, []]]) { S.players[i].pieces = ['done']; S.players[i].fin = 1; S.players[i].blocks = blocks; }
+for (const i of [0, 1, 2]) { S.players[i].pieces = ['done']; S.players[i].fin = 1; }
 S.endTriggered = true; // (as the arrivals would have: checkEnd)
 S.blockades = [{ n: 3, k: 'j', v: 1, conn: 0, owner: 1 }, { n: 5, k: 'r', v: 2, conn: 1, owner: 0 }];
 act({ t: 'end', keep: [] }); act({ t: 'end', keep: [] }, 1); act({ t: 'end', keep: [] }, 2);

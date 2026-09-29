@@ -1,6 +1,6 @@
 /* The heads-up display: the top bar (round, one chip per player), the prompt (what to do now, the online turn clock)
    and the turn buttons. Each piece is rewritten only when its text changes. */
-import { S, CT, SYMNAME, SYMCOL, typeOf, def, fmt, plural } from '../engine.gen.js';
+import { S, CT, SYMNAME, SYMCOL, typeOf, def, fmt, plural, blocksOf } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle } from './dom.js';
 import { UI, NET, G, cur, canAct, online, isAI } from './state.js';
 import { onGeo, geo } from './geometry.js';
@@ -24,7 +24,7 @@ function updateHeader(){
     let c=box.children[i];if(!c){c=document.createElement('div');box.appendChild(c);}
     const fin=p.pieces.filter(k=>k==='done').length;
     // blockades held: one diamond each, then how many and the biggest (what breaks a tie: most blockades, then the biggest one)
-    const bmax=Math.max(0,...p.blocks.map(b=>S.blockades[b].n)),bk=p.blocks.length?p.blocks.map(b=>`<i style="background:${SYMCOL[S.blockades[b].k]}"></i>`).join('')+`<b title="${plural(p.blocks.length,'blockade')}, biggest #${bmax} (ties go to the most blockades, then the biggest one)">${p.blocks.length} · #${bmax}</b>`:'';
+    const held=blocksOf(i),bmax=Math.max(0,...held.map(b=>S.blockades[b].n)),bk=held.length?held.map(b=>`<i style="background:${SYMCOL[S.blockades[b].k]}"></i>`).join('')+`<b title="${plural(held.length,'blockade')}, biggest #${bmax} (ties go to the most blockades, then the biggest one)">${held.length} · #${bmax}</b>`:'';
     const you=online()&&i===NET.seat,off=online()&&!NET.room.seats[i].online; // (the room's seats are in the game's seat order)
     const cls='pchip glass'+(i===S.cur&&!S.over?' on':'');if(c.className!==cls)c.className=cls;
     setStyle(c,'--pc',p.color);setStyle(c,'opacity',off?.55:1);c.title=off?'offline':'';

@@ -97,18 +97,17 @@ exists from the start. It throws if any check fails. It returns:
 ### 1.4 The state `S` (`v: 5`)
 
 ```
-{ v: 5, seed, course: <course object>, fullRace, privacy,
+{ seed, course: <course object>, fullRace,
   players: [P], cards: {id: type}, nid,            // card ids are 'c1', 'c2', …; nid is the next number
   market: [{t, n}], reserve: [{t, n}],             // n = cards left in the stack
   blockades: [{n, k, v, conn, owner: seat|null}],
-  cur, start, round, endTriggered, over, winners: [seat]|null, places: [place per seat]|null, resigns,
+  cur, round, endTriggered, over, places: [place per seat]|null,          // player 0 starts every round
   turn: { bought, active: {id, pi, sym, left}|null, pending: {max}|null },
   trash: [id], log: [{p: seat|null, t: text, r: round}] }       // the log keeps the last 200 lines
 P = { name, color, ai?: AI id, pieces: [key|'done'], deck: [id], hand: [id], discard: [id], play: [id],
-      blocks: [blockade index], fin: round arrived|0, resigned: 0|order of resigning }
+      fin: round arrived|0, resigned: 0|order of resigning }             // blockades held: blocksOf(seat)
 ```
 
-- **`v`:** the state format (nothing reads it); **`start`:** the first player (always 0).
 - **`turn.active`:** the card whose leftover strength can keep moving the same explorer.
 - **`turn.pending`:** a Scientist or Travel Log is waiting for its `trash` action.
 - **Online:** the server never writes into `S` (who plays each seat is the room's `seats`, in seat order); it keeps only the last 120 log lines.
@@ -152,7 +151,7 @@ discard pile, nothing is drawn, and the next player moves (`turn` event). With t
 | still racing | `[1, progress, −blockades, −highest]`, where progress is the step distance to El Dorado |
 | resigned | `[2, −resign order]` |
 
-Equal keys share a place. `winners` are the players in place 1.
+Equal keys share a place; the winners are the players in place 1.
 
 ### 1.6 Events
 
@@ -164,8 +163,6 @@ Equal keys share a place. `winners` are the players in place 1.
 | `{e:'move', pl, pi, path: [key…]}` | The explorer's path, including where it started. |
 | `{e:'block', pl, n}` | A blockade was taken. |
 | `{e:'arrive', pl, pi}` | The explorer reached El Dorado. |
-| `{e:'draw', pl, n}` | A card's effect drew `n` cards (not emitted for the draw at the end of a turn). |
-| `{e:'gain', pl, t}` | A card was bought or taken. |
 | `{e:'turn', pl}` | The turn passed to `pl`. |
 | `{e:'timeout', pl}`, `{e:'resign', pl}`, `{e:'over'}` | |
 
@@ -178,6 +175,7 @@ Equal keys share a place. `winners` are the players in place 1.
 | `nativeTargets(seat, pi)` | `Map<key or 'B'+i, {kind: 'native'\|'nativebl', path, cost: 0, pi, bl}>` |
 | `payTargets(seat, pi)` | `Map<key or 'B'+i, {kind: 'rubble'\|'camp'\|'blr', need, path?, pi, bl?}>` (only those the hand can pay) |
 | `cardTargets(seat, pi, id)` | Where that card can go now: a movement card's reach plus the rubble / camps / rubble blockades it could be given up for; the card in play: its leftover strength's reach; the Native: `nativeTargets`. The page's targets and "card usable" come from it. |
+| `blocksOf(seat)` | the blockades that player has taken (indexes; each blockade's `owner` is the one record of it) |
 | `stackOf(type)` | `{src: 'm'\|'r', i, s}` or `null` |
 | `cantBuy(seat, type)` | Why `seat` can't buy that card now, payment aside (`''` if it can): not their turn, a removal still to choose, already bought this turn, sold out, reserve closed. The buy action and the page's market both use it. |
 | `buyOptions(seat)` | `[{src, i, t}]`: what `seat` can buy now with the coins in hand (market first) |
@@ -220,7 +218,7 @@ A game is its setup plus its list of actions; any position is rebuilt by replayi
 They may give every player one extra card (`gift`) shuffled into the deck. `replayStart` leaves their generator installed for the
 steps that follow. Tool logs also carry `notes` and `result: {capped, arrived}`.
 
-`newGame({course, seed, players: [{name, color, ai?}], fullRace?, privacy?})` starts a game without a record (tools and tests).
+`newGame({course, seed, players: [{name, color, ai?}], fullRace?})` starts a game without a record (tools and tests). (`privacy`, the page's pass-and-play cover, goes to `recNewGame` and lives in the record only.)
 
 ### 1.9 AI players
 
