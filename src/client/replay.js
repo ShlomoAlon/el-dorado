@@ -14,18 +14,18 @@ const TERR={j:'jungle',w:'water',v:'village',r:'rubble',c:'base camp',g:'El Dora
 function buildReplay(log,id){
   const err=replayCheck(log);if(err)throw new Error(err);
   const g=replayStart(log);
-  const states=[],lines=[],evs=[null],rem=[],fails=[];
+  const states=[],lines=[],evs=[null],rem=[];
   const snap=()=>{const L0=S.log;S.log=[];states.push(JSON.stringify(S));S.log=L0;rem.push(S.players.map((_,j)=>botRemaining(j)));};
   lines.push(S.log.slice());snap();
   for(let i=0;i<log.actions.length;i++){
     S.log=[];
-    let r=replayStep(log,i,g);
-    if(!r.ok){fails.push(i+1);r=applyAction(S.cur,{t:'end',keep:[]},g);} // (an uploaded log can hold moves that don't fit)
+    const r=replayStep(log,i,g);
+    if(!r.ok)throw new Error(`move ${i+1} doesn't fit the game (${r.err})`); // (an uploaded log can be anything)
     lines.push(S.log.slice());evs.push(r.ev);snap();
   }
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
   let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}
-  return{log,id,states,lines,evs,rem,fails,i:0,timer:0,speed:sp,side,ev:{},adv:{}};
+  return{log,id,states,lines,evs,rem,i:0,timer:0,speed:sp,side,ev:{},adv:{}};
 }
 /* ---- the evaluation: the shipped network's estimate for the position on screen, and the turn the strongest AI would play
    from it. Only where a network was trained (First Expedition, 3-4 players: aiAllowed); elsewhere the replay shows none. */
@@ -62,7 +62,6 @@ function startReplay(log,id){
   setS(JSON.parse(R.states[0]));setMAP(mapFor(S));showGame();replayGo(0,false);
   banner(log.title||'Replay',`${log.players.length} players · ${log.actions.length} moves`);
   if(replayEvalOK()&&!AIX.net)aiNetLoad().then(()=>{if(G.replay===R)render();});
-  if(R.fails.length)toast(`${R.fails.length} move${R.fails.length>1?'s':''} in this log didn't fit the game (first: move ${R.fails[0]}); those turns were ended instead.`,4200);
 }
 /* show position i (after i actions). anim: play the moves of action i-1 → i */
 function replayGo(i,anim){
