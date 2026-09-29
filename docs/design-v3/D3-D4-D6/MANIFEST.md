@@ -94,10 +94,11 @@ States: `mid` (the market with cards you can buy; the reserve is locked), `buyin
 
 | state | before | A | B |
 |---|---|---|---|
-| market, can buy, reserve locked | `D6-before-mid-1440.png`, `D6-before-mid-390.png` | `D6-A-mid-1440.png`, `D6-A-mid-390.png` | |
-| buying | `D6-before-buying-1440.png`, `D6-before-buying-390.png` | `D6-A-buying-1440.png`, `D6-A-buying-390.png` | |
-| All cards | `D6-before-allcards-1440.png`, `D6-before-allcards-390.png` | `D6-A-allcards-1440.png`, `D6-A-allcards-390.png` | |
-| player chips | `D6-before-chips-1440@2x.png` | `D6-A-chips-1440@2x.png` | |
+| market, can buy, reserve locked | `D6-before-mid-1440.png`, `D6-before-mid-390.png` | `D6-A-mid-1440.png`, `D6-A-mid-390.png` | `D6-B-mid-1440.png`, `D6-B-mid-390.png` |
+| buying | `D6-before-buying-1440.png`, `D6-before-buying-390.png` | `D6-A-buying-1440.png`, `D6-A-buying-390.png` | `D6-B-buying-1440.png`, `D6-B-buying-390.png` |
+| All cards | `D6-before-allcards-1440.png`, `D6-before-allcards-390.png` | `D6-A-allcards-1440.png`, `D6-A-allcards-390.png` | `D6-B-allcards-1440.png`, `D6-B-allcards-390.png` |
+| player chips | `D6-before-chips-1440@2x.png` | `D6-A-chips-1440@2x.png` | `D6-B-chips-1440@2x.png` |
+| market close-up (B) | `D3-before-market-1440@2x.png` | | `D6-B-market-1440@2x.png`, `D6-B-market-390@2x.png` |
 
 ### Option A: one state palette — branch `design/v3-D6-A`
 - **What changed:** state colours are tokens (`--can` = gold, `--danger` = red). Everything that says "you can act on
@@ -111,3 +112,31 @@ States: `mid` (the market with cards you can buy; the reserve is locked), `buyin
 - **Trade-offs:** fewer colours to learn and the board's red now always means trouble. But gold also marks the coin
   cards and the selected card, so "can buy" and "chosen" differ only in strength (hence the Buying tag). Colour is
   still the only cue for affordability.
+
+### Option B: shapes as well as colours — branch `design/v3-D6-B`
+- **What changed:** colours stay as they are. The Can buy tag carries a coin (on phones the mint dot becomes a small
+  coin), the Market button gets a coin at its corner when it is closed and something is affordable, and the locked
+  reserve shows a lock everywhere: on the All cards tile ("🔒 Reserve locked"), next to the Reserve heading, and on
+  every reserve card in All cards. Player chips are unchanged (same as before).
+- **Effort / risk:** very small (CSS with two inline SVG icons, one class toggle in market.js). `layout ok` at 5 sizes.
+  No engine change, no records affected.
+- **Trade-offs:** fixes the accessibility problem (colour is no longer the only cue) and makes "why can't I buy the
+  reserve?" answer itself. It does not fix the palette itself: mint still sits near the jungle green and the Crimson
+  player still shares red with danger and base camps (that part belongs with D7).
+
+## Recommendation
+
+- **D3 → A (the drawer).** It is the only option where the market shows real, readable cards, and it looks
+  purpose-built rather than a strip of thumbnails. The cost is ~200 px more board width on desktop, which the board
+  absorbs well at 1440. On phones the sheet starts closed; if you want the market glanceable on phones too, B's compact
+  rows could later be used for the phone sheet's closed state.
+- **D4 → A (price tag, quiet count, bookmark).** It removes the actual confusion (two round gold badges) and the
+  heaviest mark on the market cards. B's larger name is nice but leaves both badges; the two could be combined later
+  (A's corners with B's body) if you like B's name.
+- **D6 → B (shapes), plus the "no red player" part of A handled in D7.** B is tiny, risk-free, and fixes the real
+  accessibility gap; A's gold-for-everything makes "can buy" and "being bought" look alike, and its colour swap reaches
+  into the engine and old records.
+
+What I could not do: the deal is identical per viewport and option, but the 1440 and 390 games drift apart a little
+(the page's own timing uses the seeded random too), so compare shots within one viewport. The `hand` shots use a fixed
+four-card hand injected before shooting; `handcards` lays the same cards flat so the whole face shows.
