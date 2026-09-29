@@ -15,7 +15,7 @@ if (!isMainThread) {
     E.newGame({ course: E.COURSES[0], seed: 30000 + g, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
     const rnd = E.mulberry32(99 + g); let capped = false, cpu = 0, turns = 0, last = -1, lastR = -1;
     let acts = 0;
-    while (!E.S.over) { E.S.log.length = 0; if (E.S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
+    while (!E.S.over) { if (E.S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
       const me = E.S.cur, deep = pols[me] === 'deep'; if (deep && (me !== last || E.S.round !== lastR)) turns++; last = me; lastR = E.S.round;
       const t0 = process.cpuUsage();
       const c = E.botChoose({ mode: 'net', rnd, search: deep ? { kind: 'deep', beam: 3, depth, budget, cands: 3 } : { kind: 'plan', beam: 3 } });

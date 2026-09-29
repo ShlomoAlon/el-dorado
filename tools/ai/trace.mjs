@@ -7,7 +7,7 @@ for (let g = 0; g < +MAX; g++) {
   const n = g % 2 ? 4 : 3;
   E.newGame({ course: E.COURSES[0], seed: +SEED + g, fullRace: true, players: [...Array(n)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
   const log = [...Array(n)].map(() => []); let acts = 0, capped = false;
-  while (!E.S.over) { const S = E.S; S.log.length = 0; if (S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
+  while (!E.S.over) { const S = E.S; if (S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
     const me = S.cur, P = S.players[me];
     if (!S.turn.active && !S.turn.pending && !P.play.length && !S.turn.bought) log[me].push(`R${S.round} at ${P.pieces} left ${E.botRemaining(me).toFixed(1)} hand [${P.hand.map(T)}] deck ${P.deck.length + P.hand.length + P.discard.length + P.play.length}`);
     const a = E.botChoose({ mode: POL }).a, d = { ...a };

@@ -11,7 +11,7 @@ for (let g = 0; g < +G; g++) {
   const close = () => { if (!cur) return; turns++; const P = E.S.players[cur.me], d = cur.left - E.botRemaining(cur.me);
     const k = cur.moved ? 'moved' : cur.bought ? 'no move, bought' : 'no move, no buy'; inc(kinds, k); gain.push(d);
     if (!cur.moved) inc(still, `${cur.hand.map(t => ({ explorer: 'M1', traveler: 'C1', sailor: 'P1' })[t] || t).sort().join(' ')} → ${cur.ahead}`); cur = null; };
-  while (!E.S.over) { const S = E.S; S.log.length = 0; if (S.round > 25 || acts++ > 20000) { E.endGame(); break; }
+  while (!E.S.over) { const S = E.S; if (S.round > 25 || acts++ > 20000) { E.endGame(); break; }
     const me = S.cur, P = S.players[me];
     if (!cur || cur.me !== me || cur.round !== S.round) { close();
       // terrain of the next space along the cheapest route

@@ -11,7 +11,7 @@ if (!isMainThread) {
   for (let g = from; g < to; g++) {
     const seat = g % 3; E.newGame({ course: E.COURSES[0], seed: 70000 + g, fullRace: true, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) });
     const rnd = E.mulberry32(5000 + g); let fin = null;
-    while (!E.S.over && E.S.round <= 30) { E.S.log.length = 0; const me = E.S.cur;
+    while (!E.S.over && E.S.round <= 30) { const me = E.S.cur;
       const c = me === seat ? E.botChoose({ mode: 'net', rnd, search: search ? { kind: 'plan', beam: 3 } : undefined }) : E.botChoose({ mode: 'plan', rnd });
       if (!E.applyAction(me, c.a).ok) E.applyAction(me, { t: 'end', keep: [] });
       if (E.S.players[seat].fin) { fin = E.S.players[seat].fin; break; } }

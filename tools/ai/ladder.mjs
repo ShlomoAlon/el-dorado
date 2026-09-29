@@ -16,7 +16,7 @@ if (!isMainThread) {
     const n = g % 2 ? 4 : 3, k = g >> 1, base = n === 4 ? POLS : POLS.filter((_, i) => i !== k % 4), pols = base.map((_, i) => base[(i + (k >> 2)) % n]);
     E.newGame({ course: E.COURSES[0], seed: seed0 + g, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
     let capped = false, acts = 0; const rnd = E.mulberry32(seed0 * 7 + g);
-    while (!E.S.over) { E.S.log.length = 0; if (E.S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
+    while (!E.S.over) { if (E.S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
       const me = E.S.cur, p = pols[me], s = p.endsWith('+s'); E.setNet(nets[s ? p.slice(0, -2) : p]);
       const c = E.botChoose({ mode: 'net', rnd, search: s ? { kind: 'plan', beam: 3 } : undefined });
       if (!E.applyAction(me, c.a).ok) E.applyAction(me, { t: 'end', keep: [] }); }

@@ -9,7 +9,7 @@ export function playGame(pols, seed, cap = 60, opts = {}, course = E.COURSES[0])
   E.newGame({ course, seed, fullRace: true, players: pols.map((_, i) => ({ name: 'B' + i, color: '#fff' })) });
   let acts = 0;
   while (!E.S.over) {
-    const S = E.S; S.log.length = 0;
+    const S = E.S;
     if (S.round > cap) { E.endGame(); break; }
     const me = S.cur, p = pols[me];
     let a;

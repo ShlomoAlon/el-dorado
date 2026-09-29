@@ -11,7 +11,7 @@ for (let g = 0; g < +G; g++) {
   const seed = +SEED + g, gen = E.mulberry32(seed * 7 + 1);
   E.newGame({ course: E.COURSES[0], seed, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
   let acts = 0, cap = false;
-  while (!E.S.over) { E.S.log.length = 0; if (E.S.round > 25 || acts++ > 20000) { cap = true; E.endGame(); break; }
+  while (!E.S.over) { if (E.S.round > 25 || acts++ > 20000) { cap = true; E.endGame(); break; }
     const me = E.S.cur; const c = E.botChoose({ mode: pols[me] });
     const r = E.applyAction(me, c.a, gen); if (!r.ok) E.applyAction(me, { t: 'end', keep: [] }, gen); }
   if (cap) capped++;

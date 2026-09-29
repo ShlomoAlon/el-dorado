@@ -112,12 +112,15 @@ function newGame(o,rnd=Math.random){
      blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,round:1,endTriggered:false,over:false,places:null,
      fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[]};
   players.forEach(p=>drawCards(p,4,rnd));
-  log(null,'The expedition sets out: '+players.map(p=>p.name).join(', ')+'. Course: '+MAP.name+' ('+MAP.route.join(' · ')+' · El Dorado).');
+  log({e:'start'});
   return S;
 }
 function newCard(t){const id='c'+(S.nid++);S.cards[id]=t;return id;}
 function drawCards(p,n,rnd){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(!p.discard.length)break;p.deck=shuffle(p.discard,rnd);p.discard=[];}const c=p.deck.pop();p.hand.push(c);got.push(c);}return got;}
-function log(pi,t){S.log.push({p:pi,t,r:S.round});if(S.log.length>200)S.log.shift();}
+/* the journal (S.log): the game's public events worth telling, each with its round; the page words them (dialogs.js).
+   Not the moves' paths or the turn changes (the events carry those for the animations); only the last 120 are kept */
+function log(e){S.log.push({...e,r:S.round});if(S.log.length>120)S.log.shift();}
+const tell=(ev,e)=>{ev.push(e);log(e);}; // an event that also goes in the journal
 function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
 /* the standing blockade between spaces a and b (its index), or null. Blockade i sits on connection i (buildCourse deals one per connection) */
 function blockAt(a,b){const c=MAP.edgeConn.get(a+'|'+b);return c===undefined||S.blockades[c].owner!==null?null:c;}
@@ -207,17 +210,17 @@ function applyAction(seat,a,rnd=Math.random){
   if(!a||typeof a!=='object')return fail('Bad action.');
   if(a.t==='resign')return resign(seat);
   if(seat!==S.cur)return fail('It is not your turn.');
-  if(a.t==='endgame'){log(seat,'ends the game.');endGame();return{ok:true,ev:[{e:'over'}]};} // local play only (the server refuses it)
-  if(a.t==='timeout'){log(seat,'ran out of time.');if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]},rnd);S.turn.active=null;
+  if(a.t==='endgame'){const ev=[];tell(ev,{e:'endgame',pl:seat});endGame();return{ok:true,ev:[...ev,{e:'over'}]};} // local play only (the server refuses it)
+  if(a.t==='timeout'){log({e:'timeout',pl:seat});if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]},rnd);S.turn.active=null;
     const r=applyAction(seat,{t:'end',keep:[]},rnd);return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}
   const P=S.players[seat],T=S.turn,ev=[];let reveal=false;
   const inHand=id=>typeof id==='string'&&P.hand.includes(id);
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
   const pieceOk=pi=>Number.isInteger(pi)&&pi>=0&&pi<P.pieces.length&&P.pieces[pi]!=='done';
   if(T.pending&&a.t!=='trash')return fail('Choose which cards to remove first.');
-  const takeBlock=b=>{const B=S.blockades[b];assert(B.owner===null,'a blockade is taken once');B.owner=seat;log(seat,'tears down blockade #'+B.n+' and keeps it.');ev.push({e:'block',pl:seat,n:B.n});};
-  const arrive=pi=>{if(P.pieces[pi]!=='done')return;log(seat,'reaches El Dorado!');ev.push({e:'arrive',pl:seat,pi});
-    if(playerDone(P)){P.fin=S.round;checkEnd();}};
+  const takeBlock=b=>{const B=S.blockades[b];assert(B.owner===null,'a blockade is taken once');B.owner=seat;tell(ev,{e:'block',pl:seat,n:B.n});};
+  const arrive=pi=>{if(P.pieces[pi]!=='done')return;tell(ev,{e:'arrive',pl:seat,pi});
+    if(playerDone(P)){P.fin=S.round;checkEnd(ev);}};
   const passTurn=()=>{S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});};
   switch(a.t){
     case 'move':{
@@ -227,36 +230,34 @@ function applyAction(seat,a,rnd=Math.random){
       const pi=act?act.pi:a.pi;if(!pieceOk(pi))return fail('Choose one of your explorers.');
       const syms=act?[act.sym]:(d.s==='*'?['j','w','v']:[d.s]);const budget=act?act.left:d.p;
       const tg=reach(seat,pi,syms,budget).get(a.to);if(!tg)return fail('That space is out of reach.');
-      ev.push({e:'play',pl:seat,k:'move',ts:[typeOf(a.card)],more:!!act,n:tg.path.length,sym:tg.sym});
+      tell(ev,{e:'play',pl:seat,k:'move',ts:[typeOf(a.card)],more:!!act,n:tg.path.length,sym:tg.sym});
       if(!act){T.active=null;rm(P.hand,a.card);if(d.once)S.trash.push(a.card);else P.play.push(a.card);} // single-use (Giant Machete, Prop Plane, Treasure Chest): removed from the game
       const from=P.pieces[pi];let pos=from;const path=[from];
       for(const st of tg.path){const b=blockAt(pos,st);if(b!==null)takeBlock(b);pos=st;path.push(st);}
       if(tg.kind==='bl')takeBlock(tg.bl);
       const done=hexAt(pos).type==='g';P.pieces[pi]=done?'done':pos;
       const left=budget-tg.cost;T.active=(left>0&&!done)?{id:a.card,pi,sym:tg.sym,left}:null;
-      if(tg.path.length){log(seat,'moves '+plural(tg.path.length,'space')+' with '+d.n+(d.s==='*'?' (as '+SYMNAME[tg.sym]+')':'')+'.');ev.push({e:'move',pl:seat,pi,path});}
+      if(tg.path.length)ev.push({e:'move',pl:seat,pi,path});
       arrive(pi);break;
     }
     case 'native':{
       if(!inHand(a.card)||typeOf(a.card)!=='native')return fail('You need the Native.');
       if(!pieceOk(a.pi))return fail('Choose one of your explorers.');
       const tg=nativeTargets(seat,a.pi).get(a.to);if(!tg)return fail('The Native can only reach an adjacent free space.');
-      T.active=null;rm(P.hand,a.card);P.play.push(a.card);ev.push({e:'play',pl:seat,k:'native',ts:['native'],n:tg.kind==='native'?1:0});
+      T.active=null;rm(P.hand,a.card);P.play.push(a.card);tell(ev,{e:'play',pl:seat,k:'native',ts:['native'],n:tg.kind==='native'?1:0});
       if(tg.bl!=null)takeBlock(tg.bl);
       if(tg.kind==='native'){const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=hexAt(n).type==='g'?'done':n;
-        log(seat,'plays the Native and moves to an adjacent space.');ev.push({e:'move',pl:seat,pi:a.pi,path:[from,n]});arrive(a.pi);}
-      else log(seat,'plays the Native to tear down a blockade.');
+        ev.push({e:'move',pl:seat,pi:a.pi,path:[from,n]});arrive(a.pi);}
       break;
     }
     case 'pay':{
       if(!pieceOk(a.pi))return fail('Choose one of your explorers.');
       const tg=payTargets(seat,a.pi).get(a.to);if(!tg)return fail('You cannot enter there.');
       if(!distinctHand(a.cards)||a.cards.length!==tg.need)return fail('Choose exactly '+plural(tg.need,'card')+'.');
-      T.active=null;const trash=tg.kind==='camp';ev.push({e:'play',pl:seat,k:tg.kind,ts:a.cards.map(typeOf)});
+      T.active=null;const trash=tg.kind==='camp';tell(ev,{e:'play',pl:seat,k:tg.kind,ts:a.cards.map(typeOf)});
       for(const id of a.cards){rm(P.hand,id);if(trash)S.trash.push(id);else P.play.push(id);}
-      if(tg.kind==='blr'){takeBlock(tg.bl);log(seat,'discards '+plural(tg.need,'card')+' to clear the blockade.');}
+      if(tg.kind==='blr')takeBlock(tg.bl);
       else{const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=n;
-        log(seat,trash?'removes '+plural(tg.need,'card')+' from the game to enter a base camp.':'discards '+plural(tg.need,'card')+' to cross rubble.');
         ev.push({e:'move',pl:seat,pi:a.pi,path:[from,n]});}
       break;
     }
@@ -264,24 +265,22 @@ function applyAction(seat,a,rnd=Math.random){
       const t=inHand(a.card)&&typeOf(a.card);
       const n={cartographer:2,compass:3,scientist:1,travellog:2}[t];if(!n)return fail('That card has no draw effect.');
       T.active=null;rm(P.hand,a.card);if(CT[t].once)S.trash.push(a.card);else P.play.push(a.card);
-      const got=drawCards(P,n,rnd);reveal=true;ev.push({e:'play',pl:seat,k:'action',ts:[t],n:got.length});
-      log(seat,'plays '+CT[t].n+' and draws '+plural(got.length,'card')+'.');
+      const got=drawCards(P,n,rnd);reveal=true;tell(ev,{e:'play',pl:seat,k:'action',ts:[t],n:got.length});
       if(t==='scientist'||t==='travellog')T.pending={max:t==='scientist'?1:2};
       break;
     }
     case 'trash':{
       if(!T.pending)return fail('Nothing to remove.');
       if(!distinctHand(a.cards)||a.cards.length>T.pending.max)return fail('Choose up to '+plural(T.pending.max,'card')+'.');
-      ev.push({e:'play',pl:seat,k:'trash',ts:a.cards.map(typeOf)});
-      if(a.cards.length){for(const id of a.cards){rm(P.hand,id);S.trash.push(id);}log(seat,'removes '+a.cards.map(i=>def(i).n).join(', ')+' from the game.');}
+      tell(ev,{e:'play',pl:seat,k:'trash',ts:a.cards.map(typeOf)});
+      for(const id of a.cards){rm(P.hand,id);S.trash.push(id);}
       T.pending=null;break;
     }
     case 'transmit':{
       if(!inHand(a.card)||typeOf(a.card)!=='transmitter')return fail('You need the Transmitter.');
       const st=stackOf(a.type),stack=st&&st.s;if(!stack||stack.n<=0)return fail('That card is sold out.');
       T.active=null;rm(P.hand,a.card);S.trash.push(a.card);
-      stack.n--;P.discard.push(newCard(stack.t));ev.push({e:'play',pl:seat,k:'transmit',ts:['transmitter'],got:stack.t});
-      log(seat,'uses the Transmitter to take '+CT[stack.t].n+'.');
+      stack.n--;P.discard.push(newCard(stack.t));tell(ev,{e:'play',pl:seat,k:'transmit',ts:['transmitter'],got:stack.t});
       break;
     }
     case 'buy':{
@@ -290,23 +289,21 @@ function applyAction(seat,a,rnd=Math.random){
       if(!distinctHand(a.cards))return fail('Pay with cards from your hand.');
       const total=a.cards.reduce((s,id)=>s+coinVal(id),0),cost=CT[stack.t].cost;
       if(total<cost)return fail('Not enough coins.');
-      T.active=null;ev.push({e:'play',pl:seat,k:'buy',ts:a.cards.map(typeOf),got:stack.t,paid:total});
+      T.active=null;tell(ev,{e:'play',pl:seat,k:'buy',ts:a.cards.map(typeOf),got:stack.t,paid:total});
       for(const id of a.cards){rm(P.hand,id);const d=def(id);if(d.once&&(d.c==='y'||d.c==='x'))S.trash.push(id);else P.play.push(id);}
       const t=stack.t;
       if(st.src==='r'){const slot=S.market.findIndex(s=>s.n===0);S.market[slot]={t,n:stack.n};S.reserve.splice(st.i,1);stack=S.market[slot];}
       stack.n--;P.discard.push(newCard(t));T.bought=true;
-      log(seat,'buys '+CT[t].n+' for '+fmt(total)+' coin'+(total===1?'':'s')+'.');
       break;
     }
     case 'end':{
       const keep=Array.isArray(a.keep)?a.keep:[];
       if(!keep.every(inHand)||new Set(keep).size!==keep.length)return fail('Bad cards to keep.');
       // the kept cards stay; the rest of the hand and the cards played are discarded; draw up to 4
-      const toDisc=P.hand.filter(id=>!keep.includes(id));ev.push({e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length}); // counts only: the hand is private
+      const toDisc=P.hand.filter(id=>!keep.includes(id));tell(ev,{e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length}); // counts only: the hand is private
       for(const id of toDisc){rm(P.hand,id);P.discard.push(id);}
       P.discard.push(...P.play);P.play=[];
       drawCards(P,4-P.hand.length,rnd);reveal=true;
-      log(seat,'ends the turn'+(toDisc.length?', discarding '+toDisc.length:'')+(keep.length?(toDisc.length?' and':'')+' keeping '+keep.length:'')+'.');
       passTurn();break;
     }
     default:return fail('Unknown action.');
@@ -319,9 +316,9 @@ function applyAction(seat,a,rnd=Math.random){
 /* who still races */
 /* the race's end is set off (the round is still finished): in a full race once at most one player is racing, under the
    official rule at the first arrival */
-function checkEnd(){
+function checkEnd(ev){
   if(S.endTriggered||!(S.fullRace?S.players.filter(isActive).length<=1:S.players.some(playerDone)))return;
-  S.endTriggered=true;log(null,S.fullRace?'Only one expedition is still racing. The round will be finished.':'The final round has begun.');
+  S.endTriggered=true;tell(ev,{e:'final'});
 }
 function advance(){
   const n=S.players.length;let i=S.cur;
@@ -337,11 +334,10 @@ function advance(){
 function resign(seat){
   const P=S.players[seat];if(P.resigned||playerDone(P))return{ok:false,err:'You are not racing.',ev:[]};
   P.resigned=1+Math.max(...S.players.map(p=>p.resigned)); // the order of resigning (the first to leave places last)
-  log(seat,'leaves the expedition.');
-  const ev=[{e:'resign',pl:seat}];
+  const ev=[];tell(ev,{e:'resign',pl:seat});
   const others=S.players.filter((p,i)=>i!==seat&&!p.resigned);
   if(others.length<=1||!S.players.some(isActive)){endGame();ev.push({e:'over'});return{ok:true,ev};} // nobody left to race: finish now
-  checkEnd();
+  checkEnd(ev);
   if(seat===S.cur){S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});}
   if(S.over)ev.push({e:'over'});
   return{ok:true,ev};
@@ -364,8 +360,7 @@ function endGame(){
   idx.sort(cmp);
   const places=new Array(S.players.length);
   idx.forEach((x,j)=>{places[x.i]=j>0&&cmp(x,idx[j-1])===0?places[idx[j-1].i]:j+1;});
-  S.places=places;const w=S.players.filter((p,i)=>places[i]===1);
-  log(null,w.map(p=>p.name).join(' & ')+' win'+(w.length>1?'':'s')+' the race to El Dorado.');
+  S.places=places;log({e:'over'});
 }
 /* ---------- multiplayer Elo from a finishing order ---------- */
 function eloDeltas(ratings,places,games){

@@ -18,7 +18,7 @@ if (!isMainThread) {
     while (!E.S.over) {
       if (E.S.round > 25 || steps++ > 30000) { capped = true; E.endGame(); break; }
       const me = E.S.cur, k = me + ':' + E.S.round, id = ids[me], e0 = E.BOT_EVALS, t0 = performance.now();
-      E.aiStep(id, mem[me], null); E.S.log.length = 0;
+      E.aiStep(id, mem[me], null);
       t[id][0] += performance.now() - t0; t[id][1] += E.BOT_EVALS - e0; if (k !== turnKey) { t[id][2]++; turnKey = k; }
     }
     parentPort.postMessage({ n, seats: ids.map((id, i) => ({ id, place: capped && !E.S.players[i].fin ? n : E.S.places[i] })), t });

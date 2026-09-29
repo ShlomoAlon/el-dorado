@@ -103,14 +103,14 @@ exists from the start. It throws if any check fails. It returns:
   blockades: [{n, k, v, conn, owner: seat|null}],
   cur, round, endTriggered, over, places: [place per seat]|null,          // player 0 starts every round
   turn: { bought, active: {id, pi, sym, left}|null, pending: {max}|null },
-  trash: [id], log: [{p: seat|null, t: text, r: round}] }       // the log keeps the last 200 lines
+  trash: [id], log: [{...event, r: round}] }  // the journal: the last 120 journal events (§1.6)
 P = { name, color, ai?: AI id, pieces: [key|'done'], deck: [id], hand: [id], discard: [id], play: [id],
       fin: round arrived|0, resigned: 0|order of resigning }             // blockades held: blocksOf(seat)
 ```
 
 - **`turn.active`:** the card whose leftover strength can keep moving the same explorer.
 - **`turn.pending`:** a Scientist or Travel Log is waiting for its `trash` action.
-- **Online:** the server never writes into `S` (who plays each seat is the room's `seats`, in seat order); it keeps only the last 120 log lines.
+- **Online:** the server never writes into `S` (who plays each seat is the room's `seats`, in seat order).
 
 ### 1.5 Actions — `applyAction(seat, a, rnd = Math.random)` → `{ok, err?, ev: [event], reveal?}`
 
@@ -164,7 +164,12 @@ Equal keys share a place; the winners are the players in place 1.
 | `{e:'block', pl, n}` | A blockade was taken. |
 | `{e:'arrive', pl, pi}` | The explorer reached El Dorado. |
 | `{e:'turn', pl}` | The turn passed to `pl`. |
-| `{e:'timeout', pl}`, `{e:'resign', pl}`, `{e:'over'}` | |
+| `{e:'final'}` | The end of the race is set off: this round is the last (§1.5 Game end). |
+| `{e:'timeout', pl}`, `{e:'resign', pl}`, `{e:'endgame', pl}`, `{e:'over'}` | |
+
+**The journal** (`S.log`) is the game's history in the same words: every event above except `move` and `turn` (the
+animations' paths and the turn changes), plus `{e:'start'}` when the game is set up, each with the round it happened
+in (`r`). The engine keeps the last 120; the page writes the sentences (`dialogs.js`). It is as public as the events are.
 
 
 ### 1.7 Queries

@@ -541,7 +541,6 @@ export class Room extends DurableObject {
     await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll();
   }
   async afterChange(ev) {
-    if (this.S.log.length > 120) this.S.log = this.S.log.slice(-120);
     if (this.S.over && this.d.status === 'playing') await this.finish();
     await this.persist(); this.sendAll(ev);
   }

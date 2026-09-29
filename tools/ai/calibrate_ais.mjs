@@ -29,7 +29,7 @@ if (!isMainThread) {
     const ai = table(g), gen = E.mulberry32(SEED0 + g); // the game's shuffles; the AIs' look-ahead runs with its own (aiChoose)
     E.newGame({ course: E.COURSES[0], seed: SEED0 + g, fullRace: true, players: ai.map((id, i) => ({ name: 'P' + i, color: '#fff', ai: id })) }, gen);
     const mem = ai.map(() => ({})); let acts = 0, capped = false;
-    while (!E.S.over) { E.S.log.length = 0; if (E.S.round > CAP || acts++ > 20000) { capped = true; E.endGame(); break; }
+    while (!E.S.over) { if (E.S.round > CAP || acts++ > 20000) { capped = true; E.endGame(); break; }
       const me = E.S.cur; E.aiStep(ai[me], mem[me], null, gen); }
     parentPort.postMessage({ g, ai, places: E.S.places.slice(), fin: E.S.players.map(p => p.fin || 0), round: E.S.round, capped });
   }

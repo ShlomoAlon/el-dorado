@@ -78,7 +78,7 @@ if (!isMainThread) {
     const shuf = E.replayStart(glog); // (the game's shuffles; the bots' look-ahead uses its own)
     const traj = pols.map(() => []), trajU = pols.map(() => []), trajB = pols.map(() => []), lastPush = pols.map(() => null); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
     while (!E.S.over) {
-      const S = E.S; S.log.length = 0;
+      const S = E.S;
       if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(); break; }
       const me = S.cur, isNet = pols[me] === 'net';
       if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && !lotemp && !ANNEAL && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceBuy: false && mode === 'self' && isNet && rnd() < buyEps, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }

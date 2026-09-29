@@ -30,7 +30,7 @@ for (let g = 0; g < G; g++) {
   const gen = E.replayStart(log);
   let acts = 0, capped = false;
   while (!E.S.over) {
-    const S = E.S; S.log.length = 0;
+    const S = E.S;
     if (S.round > 25 || acts++ > 20000) { capped = true; break; }
     const me = S.cur, pol = pols[me];
     const c = E.botChoose(optsOf(pol) || { mode: pol, explain: true }); // (its look-ahead has its own randomness: the game's stream is for the game)

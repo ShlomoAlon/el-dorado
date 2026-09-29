@@ -84,7 +84,7 @@ const T = report('online');
     T.ok('end turn: the next player moves', await wait(A, c => __ED.S.cur !== c, cur0));
     // the turn clock: nobody acts, the turn ends by itself
     const cur1 = await A.evaluate(() => __ED.S.cur);
-    T.ok('turn clock: the turn passes when time runs out', await wait(A, c => __ED.S.cur !== c && __ED.S.log.some(l => /ran out of time/.test(l.t)), cur1, 20000));
+    T.ok('turn clock: the turn passes when time runs out', await wait(A, c => __ED.S.cur !== c && __ED.S.log.some(l => l.e === 'timeout'), cur1, 20000));
     // two resign: the game is over for the third, rated
     await B.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } })); await C.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('game over after two resign', await wait(A, () => __ED.S.over && __ED.NET.room.results));

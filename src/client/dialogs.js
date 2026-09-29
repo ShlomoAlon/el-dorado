@@ -1,7 +1,7 @@
 /* Everything that opens over the game: the round banner, toasts, and one modal at a time (rules, results, a pile,
    the journal). The menu is its own dialog (menu.js); opening a modal closes it. */
-import { S, CT, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
-import { $, esc } from './dom.js';
+import { S, CT, MAP, SYMNAME, typeOf, playerDone, plural, fmt, blocksOf, assert } from '../engine.gen.js';
+import { $, esc, setHTML } from './dom.js';
 import { UI, NET, online, hp } from './state.js';
 import { cardHTML } from './cards.js';
 import { MENU, menuClose, showSetup, showHub } from './menu.js';
@@ -21,13 +21,39 @@ export function modal(html,onMount,dismiss){const o=$('#overlay');if(MENU.dlg.op
 export function closeModal(){menuClose();const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');sc.querySelector('.modal').className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
 export const modalOpen=()=>!!document.querySelector('#overlay .modal');
 
-/* ---------- journal: the game log, newest first, grouped by round; stays live while open ---------- */
+/* ---------- journal: the game log (S.log: the engine's journal events), newest first, grouped by round; stays live while open ---------- */
+function logLine(e){
+  const n=CT[e.ts?.[0]]?.n,cards=k=>plural(k,'card');
+  switch(e.e){
+    case 'start':return`The expedition sets out: ${S.players.map(p=>p.name).join(', ')}. Course: ${MAP.name} (${[...MAP.route,'El Dorado'].join(' · ')}).`;
+    case 'play':switch(e.k){
+      case 'move':return e.n?`moves ${plural(e.n,'space')} with ${n}${CT[e.ts[0]].s==='*'?` (as ${SYMNAME[e.sym]})`:''}.`:'';
+      case 'native':return e.n?'plays the Native and moves to an adjacent space.':'plays the Native to tear down a blockade.';
+      case 'blr':return`discards ${cards(e.ts.length)} to clear the blockade.`;
+      case 'rubble':return`discards ${cards(e.ts.length)} to cross rubble.`;
+      case 'camp':return`removes ${cards(e.ts.length)} from the game to enter a base camp.`;
+      case 'action':return`plays ${n} and draws ${cards(e.n)}.`;
+      case 'trash':return e.ts.length?`removes ${e.ts.map(t=>CT[t].n).join(', ')} from the game.`:'';
+      case 'transmit':return`uses the Transmitter to take ${CT[e.got].n}.`;
+      case 'buy':return`buys ${CT[e.got].n} for ${fmt(e.paid)} coin${e.paid===1?'':'s'}.`;
+      case 'end':return`ends the turn${e.disc?', discarding '+e.disc:''}${e.kept?(e.disc?' and':'')+' keeping '+e.kept:''}.`;
+    }break;
+    case 'block':return`tears down blockade #${e.n} and keeps it.`;
+    case 'arrive':return'reaches El Dorado!';
+    case 'final':return S.fullRace?'Only one expedition is still racing. The round will be finished.':'The final round has begun.';
+    case 'resign':return'leaves the expedition.';
+    case 'timeout':return'ran out of time.';
+    case 'endgame':return'ends the game.';
+    case 'over':{const w=S.players.filter((p,i)=>S.places[i]===1);return`${w.map(p=>p.name).join(' & ')} win${w.length>1?'':'s'} the race to El Dorado.`;}
+  }
+  assert(false,'logLine: a journal event '+e.e+'/'+e.k);
+}
 function journalHTML(){
-  let r=null,out='';const L=S.log.map((e,i)=>{if(e.r!=null)r=e.r;return{...e,r};}); // server-added lines carry no round: they belong to the one before
-  for(let i=L.length-1;i>=0;i--){const e=L[i];
-    if(i===L.length-1||e.r!==L[i+1].r)out+=e.r!=null?`<div class="lr">Round ${e.r}</div>`:'';
-    const p=e.p!=null?S.players[e.p]:null;
-    out+=`<div class="le${p?'':' sys'}">${p?`<i style="background:${p.color}"></i><b>${esc(p.name)}</b> `:''}${esc(e.t)}</div>`;}
+  let out='';
+  for(let i=S.log.length-1;i>=0;i--){const e=S.log[i],t=logLine(e);if(!t)continue;
+    if(e.r!==S.log[i+1]?.r)out+=`<div class="lr">Round ${e.r}</div>`;
+    const p=e.pl!=null?S.players[e.pl]:null;
+    out+=`<div class="le${p?'':' sys'}">${p?`<i style="background:${p.color}"></i><b>${esc(p.name)}</b> `:''}${esc(t)}</div>`;}
   return out||'<p class="note">Nothing has happened yet.</p>';
 }
 export function showJournal(){
@@ -35,8 +61,7 @@ export function showJournal(){
     sc=>{sc.classList.add('plain');sc.querySelector('.modal').classList.add('jrn');sc.querySelector('#jClose').onclick=closeModal;},true);
 }
 /* the journal's view part: while it is open, it follows the log */
-export const journalPart = { name: 'journal', update(){const l=document.querySelector('#overlay .modal.jrn #log');if(!l||!S)return;const last=S.log[S.log.length-1];
-  if(l.dataset.sig!==S.log.length+'|'+(last?last.t:'')){l.dataset.sig=S.log.length+'|'+(last?last.t:'');l.innerHTML=journalHTML();}}};
+export const journalPart = { name: 'journal', update(){const l=document.querySelector('#overlay .modal.jrn #log');if(l&&S)setHTML(l,journalHTML());}};
 
 export function showRules(){
   modal(`<h2>How to play</h2><div class="rules">

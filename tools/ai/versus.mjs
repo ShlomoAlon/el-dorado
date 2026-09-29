@@ -13,7 +13,7 @@ if (!isMainThread) {
     const pols = base.map((_, i) => base[(i + (k >> 2)) % n]);
     E.newGame({ course: E.COURSES[0], seed: 90000 + g, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
     let capped = false; const rnd = E.mulberry32(777 + g);
-    while (!E.S.over) { E.S.log.length = 0; if (E.S.round > 25) { capped = true; E.endGame(); break; }
+    while (!E.S.over) { if (E.S.round > 25) { capped = true; E.endGame(); break; }
       const me = E.S.cur, p = pols[me]; E.setNet(p.startsWith('old') ? nets.old : nets.new);
       const c = E.botChoose({ mode: 'net', rnd, search: p.endsWith('+search') ? { kind: 'plan', beam: 3 } : undefined });
       if (!E.applyAction(me, c.a).ok) E.applyAction(me, { t: 'end', keep: [] }); }
