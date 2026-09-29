@@ -13,7 +13,7 @@ export const view = { s: 1, x: 0, y: 0 };
    (its click is not a tap) */
 export const cam = { userZoomed: false, dragMoved: false, pointers: 0 };
 const stage = () => $('#stage');
-let viewRaf = 0, baked = 1, settleT = 0, gliding = false;
+let viewRaf = 0, baked = 1, settleT = 0, gliding = false, drags = 0;
 const hoverHooks = [];
 /* things drawn over the board in screen space (the hover tip) hide when the board moves */
 export function onViewMove(f) { hoverHooks.push(f); }
@@ -124,7 +124,7 @@ export function setupPanZoom() {
     if (!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId);
     if (ptrs.size === 1) { pinch = null; beginPan(); } // one finger left: continue panning from here, no jump
     else if (ptrs.size >= 2) beginPinch();
-    cam.pointers = ptrs.size; if (ptrs.size) diag(`still down: ${[...ptrs.keys()].join(',')}`); if (!ptrs.size) { start = null; pinch = null; v.classList.remove('drag'); setTimeout(() => cam.dragMoved = false, 0); scheduleSettle(); }
+    cam.pointers = ptrs.size; if (ptrs.size) diag(`still down: ${[...ptrs.keys()].join(',')}`); if (!ptrs.size && cam.dragMoved) diag(`———— drag ${++drags} ended`); if (!ptrs.size) { start = null; pinch = null; v.classList.remove('drag'); setTimeout(() => cam.dragMoved = false, 0); scheduleSettle(); }
   };
   window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   const mid = f => () => zoomAt(geo.app.width / 2, geo.app.height / 2, f);
