@@ -320,8 +320,12 @@ function fit(anim){
   if(!MAP)return;const r=safeRect();if(!r.W)return;
   const aw=r.r-r.l,ah=r.b-r.t;
   let s=Math.min(aw/MAP.w,ah/MAP.h);view.s=s;view.x=r.l+(aw-MAP.w*s)/2;view.y=r.t+(ah-MAP.h*s)/2;
-  if(s*R<13&&S){s=Math.min(ah/MAP.h,13/R*1.6);view.s=s;const c=focusPoint();view.x=(r.l+r.r)/2-(c[0]-MAP.minX)*s;view.y=r.t+(ah-MAP.h*s)/2;clampView();}
-  if(anim)glide();applyView();userZoomed=false;
+  // too small to play (phones): zoom in on the explorer to move, or (the start screen's preview) on the starting spaces,
+  // so the game starts in exactly the view the preview showed
+  if(s*R<13){s=Math.min(ah/MAP.h,13/R*1.6);view.s=s;const c=S?focusPoint():MAP.starts.map(k=>hexAt(k)).reduce((a,h,i,A)=>[a[0]+h.x/A.length,a[1]+h.y/A.length],[0,0]);view.x=(r.l+r.r)/2-(c[0]-MAP.minX)*s;view.y=r.t+(ah-MAP.h*s)/2;clampView();}
+  // not animated: drawn sharp at this scale right away (no blurry frame, no later redraw once it's on screen)
+  if(anim)glide();else{baked=view.s;$('#bscale').style.transform=`scale(${baked})`;}applyView();userZoomed=false;
+  document.documentElement.classList.add('boardready'); // the game area may show now (with its fonts): never an unfitted board
 }
 function glide(){stage().style.transition='transform .45s cubic-bezier(.2,.8,.2,1)';gliding=true;clearTimeout(glide.t);glide.t=setTimeout(()=>{stage().style.transition='';gliding=false;scheduleSettle();},480);}
 function focusPoint(){const pl=cur();const k=pl.pieces[UI.piece]&&pl.pieces[UI.piece]!=='done'?pl.pieces[UI.piece]:pl.pieces.find(x=>x!=='done');if(!k)return[MAP.city.x,MAP.city.y];const h=hexAt(k);return[h.x,h.y];}
@@ -356,7 +360,7 @@ function setupPanZoom(){
       const m=local((p[0][0]+p[1][0])/2,(p[0][1]+p[1][1])/2);
       const ns=Math.max(.25,Math.min(3.2,pinch.s*d/pinch.d));
       view.s=ns;view.x=m[0]-pinch.bx*ns;view.y=m[1]-pinch.by*ns;applyView();userZoomed=true;return;}
-    if(start){const dx=e.clientX-start.x,dy=e.clientY-start.y;if(!dragMoved&&Math.hypot(dx,dy)>5){dragMoved=true;v.classList.add('drag');hideHover();try{v.setPointerCapture(e.pointerId);}catch(_){}}
+    if(start){const dx=e.clientX-start.x,dy=e.clientY-start.y;if(!dragMoved&&Math.hypot(dx,dy)>5){dragMoved=true;if(e.pointerType==='mouse')v.classList.add('drag');hideHover(); /* the grabbing cursor (mouse only: the class change restyles every board element, a stall at the start of a touch drag) */try{v.setPointerCapture(e.pointerId);}catch(_){}}
       // follow the pointer from the first pixel (a 5 px dead zone made the board jump when the drag began); 5 px still tells a drag from a click
       view.x=start.vx+dx;view.y=start.vy+dy;applyView();if(dragMoved)userZoomed=true;}});
   const up=e=>{if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);

@@ -135,7 +135,7 @@ function startLocal(){
     players:rows.map((r,i)=>{const A=aiById(who[i]),k=who.slice(0,i).filter(x=>x===who[i]).length;
       return{name:A?A.name+(k?' '+(k+1):''):r.querySelector('input[name^=nm]').value.trim()||('Player '+(i+1)),color:COLORS.find(c=>c.id===r.querySelector('.sws input:checked').value).hex,ai:A?A.id:undefined};})});
   if(S.players.some(p=>p.ai&&aiUsesNet(p.ai)))aiNetLoad();
-  buildBoard();UI.mode='idle';UI.piece=0;UI.viewer=null;UI.cover=S.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;lastPlayer=-1;menuClose();render();fit();
+  buildBoard();UI.mode='idle';UI.piece=0;UI.viewer=null;UI.cover=S.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;lastPlayer=-1;menuClose();render();fit(!!SETUP.map&&MAP===SETUP.map); // from the preview: glide the few pixels the hand now takes
   if(!UI.cover)banner(cur().name,isAI(S.cur)?'AI · Round 1':'Round 1');
   SETUP.seed=(Math.random()*1e9)|0;SETUP.map=null;SETUP.cur=null;
 }
