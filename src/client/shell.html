@@ -178,11 +178,14 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .brandbox{display:flex;align-items:baseline;gap:10px;padding:0 14px;height:var(--hudH);box-sizing:border-box;border-radius:12px;white-space:nowrap}
 .brand{font-family:var(--display);font-size:19px;color:var(--gold2);line-height:calc(var(--hudH) - 2px)}
 #roundLbl{color:var(--muted);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-variant-numeric:tabular-nums}
-#players{display:flex;gap:8px;flex:1;min-width:0;justify-content:safe center;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
-.pchip{display:flex;align-items:center;gap:8px;padding:0 11px 0 8px;height:var(--hudH);box-sizing:border-box;flex:none;border-radius:12px;white-space:nowrap;font-size:13px;transition:border-color .3s,box-shadow .3s,transform .3s var(--ease)}
+#players{display:flex;gap:8px;flex:1;min-width:0;justify-content:safe center;flex-wrap:nowrap;overflow:hidden;container:players/inline-size}
+/* short of room, the chips lose the card count first, then the AI tag; the names come last (ellipsis) */
+@container players (max-width:560px){.pchip .st{display:none}}
+@container players (max-width:380px){.pchip .aitag{display:none}.pchip{gap:6px;padding:0 9px 0 7px}}
+.pchip{display:flex;align-items:center;gap:8px;padding:0 11px 0 8px;height:var(--hudH);box-sizing:border-box;flex:0 1 auto;min-width:0;border-radius:12px;white-space:nowrap;font-size:13px;transition:border-color .3s,box-shadow .3s,transform .3s var(--ease)}
 .pchip.on{border-color:var(--pc);box-shadow:0 0 0 1px var(--pc) inset,0 10px 30px rgba(0,0,0,.35)}
 .pchip .dot{width:14px;height:14px;border-radius:50%;background:var(--pc);box-shadow:0 0 0 2px rgba(0,0,0,.45) inset}
-.pchip .nm{font-weight:700}
+.pchip>*{flex:none}.pchip .nm{font-weight:700;flex:0 1 auto;min-width:1.5em;overflow:hidden;text-overflow:ellipsis} /* short of room, chips shrink: the name gives way (never a chip cut in half) */
 .pchip .st{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
 .pchip .bk{display:flex;gap:4px;align-items:center}.pchip .bk b{margin-left:3px;font-size:12px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
 .pchip .bk i{width:9px;height:9px;border-radius:2px;display:block;transform:rotate(45deg);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
@@ -459,6 +462,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 }
 @container game (max-height:520px){#app{--zoomFoot:140px}.zoomctl{top:var(--row2,64px);transform:none;flex-direction:row}.zoomctl button:not(#fsBtn):not(#sndBtn):not(#zfit){display:none}
 }
+@container game (max-width:800px){.brandbox{display:none}}
 @container game (max-width:900px){
   #app{--cw:104px}
   .brandbox .brand{font-size:16px}
