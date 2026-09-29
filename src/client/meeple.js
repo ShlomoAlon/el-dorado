@@ -214,7 +214,7 @@ function meepleVariant(color){
 }
 // The art is drawn in roles; every role is a shade of the player colour, so the whole
 // figure is made of its colour (like a miniature cast in one resin). Roles: l2 l1 c d1 d2 d3.
-function meepleSVG(color,num,style,variant){
+export function meepleSVG(color,num,style,variant){
   const c=/^#[0-9a-f]{6}$/i.test(color)?color:'#9aa39c',v=variant==null?meepleVariant(c):((variant|0)%4+4)%4;
   const P={m1:meepleMix(c,'#000000',.18),l2:meepleMix(c,'#ffffff',.55),l1:meepleMix(c,'#ffffff',.28),c,d1:meepleMix(c,'#000000',.3),d2:meepleMix(c,'#000000',.5),d3:meepleMix(c,'#000000',.68)};
   const K={c:'@c',num,lt:'@l1',dk:'@d1',dk2:'@d2',skin:'@l2',skinDk:'@l1',hair:'@d2'};

@@ -1,12 +1,19 @@
-/* =========================================================
-   REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
-   The log holds the seeds and every action; the engine rebuilds each position (replayStart),
-   so a replay is exactly the game that was played. Nothing here changes any rules.
-   ========================================================= */
+/* REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
+   The log holds the seeds and every action; the engine rebuilds each position (replayStart), so a replay is exactly the
+   game that was played. Nothing here changes any rules. */
+import { S, MAP, CT, RNG, hexAt, mapFor, setS, setMAP, setRng, replayCheck, replayStart, replayStep, applyAction, botRemaining, botCost, botValue, botScoreActions, botNetReady, aiAllowed, aiSetNet, mulberry32 } from '../engine.gen.js';
+import { $, esc, setHTML } from './dom.js';
+import { UI, G, online } from './state.js';
+import { render, resetView } from './frame.js';
+import { toast, banner, closeModal } from './dialogs.js';
+import { showGame, resumeSaved, playEvents, firstPiece } from './actions.js';
+import { AIX, aiNetLoad, aiReset } from './ai.js';
+import { exitOnline } from './online.js';
+import { showSetup, MENU } from './menu.js';
 const TERR={j:'jungle',w:'water',v:'village',r:'rubble',c:'base camp',g:'El Dorado',s:'start'};
 function buildReplay(log,id){
   const err=replayCheck(log);if(err)throw new Error(err);
-  const gen=replayStart(log);
+  replayStart(log);
   const states=[],lines=[],evs=[null],rem=[],fails=[];
   const snap=()=>{const L0=S.log;S.log=[];states.push(JSON.stringify(S));S.log=L0;rem.push(S.players.map((_,j)=>botRemaining(j)));};
   try{
@@ -26,57 +33,56 @@ function buildReplay(log,id){
 /* ---- the evaluation: the shipped network's estimate for the position on screen ----
    Only where a network was trained (First Expedition, 3-4 players: aiAllowed); elsewhere the replay shows none.
    By default one line per explorer (the position itself); expanded, every option of the player to move is scored too. */
-const replayEvalOK=()=>!!(REPLAY&&S&&aiAllowed(S.course.id,S.players.length)&&!AIX.failed);
+const replayEvalOK=()=>!!(G.replay&&S&&aiAllowed(S.course.id,S.players.length)&&!AIX.failed);
 function replayNet(){if(!AIX.net)return false;aiSetNet(AIX.net);return botNetReady();}
-function replayEval(){const R=REPLAY;if(R.ev[R.i])return R.ev[R.i];if(!replayNet())return null;
+function replayEval(){const R=G.replay;if(R.ev[R.i])return R.ev[R.i];if(!replayNet())return null;
   // the network scores each explorer on its own (its expected result: 1st = 1, 2nd = ¼, …); shown as shares of the
   // winning chances, so they add up to 100%
   const raw=S.players.map((p,j)=>p.resigned?0:Math.max(0,botValue(j,'net'))),tot=raw.reduce((a,x)=>a+x,0)||1;
   return R.ev[R.i]={raw,share:raw.map((x,j)=>S.players[j].resigned?null:x/tot)};}
-function replayAlts(){const R=REPLAY;if(R.alts[R.i])return R.alts[R.i];if(!replayNet()||S.over)return null;
+function replayAlts(){const R=G.replay;if(R.alts[R.i])return R.alts[R.i];if(!replayNet()||S.over)return null;
   const g=mulberry32(R.i*7919+1),r0=RNG;let sc;
-  try{sc=botScoreActions(S.cur,g,8);}finally{RNG=r0;}
+  try{sc=botScoreActions(S.cur,g,8);}finally{setRng(r0);}
   // each option's score for the player to move, as a share against the others' current scores (same scale as above)
   const ev=replayEval(),me=S.cur,others=ev.raw.reduce((a,x,j)=>j===me?a:a+x,0);
   return R.alts[R.i]=sc.filter(x=>x.v>-Infinity).map(x=>({a:x.a,v:Math.max(0,x.v)/((Math.max(0,x.v)+others)||1)}));}
 function startReplay(log,id){
   if(online())exitOnline(); // an online game in progress goes on (rejoin it from Online)
   aiReset();let R;try{R=buildReplay(log,id);}catch(e){console.error(e);toast('Could not load that replay: '+e.message,3500);showSetup();return;}
-  closeModal();REPLAY=R;UI.preview=false;
-  for(const[,el]of cardEls)el.remove();cardEls.clear();
-  S=JSON.parse(R.states[0]);MAP=mapFor(S);buildBoard();lastPlayer=-1;replayGo(0,false);fit();
+  closeModal();G.replay=R;UI.preview=false;
+  setS(JSON.parse(R.states[0]));setMAP(mapFor(S));showGame();replayGo(0,false);
   banner(log.title||'Replay',`${log.players.length} players · ${log.actions.length} moves`);
-  if(replayEvalOK()&&!AIX.net)aiNetLoad().then(()=>{if(REPLAY===R)replayBar();});
+  if(replayEvalOK()&&!AIX.net)aiNetLoad().then(()=>{if(G.replay===R)render();});
   if(R.fails.length)toast(`${R.fails.length} move${R.fails.length>1?'s':''} in this log didn't fit the game (first: move ${R.fails[0]}); those turns were ended instead.`,4200);
 }
 /* show position i (after i actions). anim: play the moves of action i-1 → i */
 function replayGo(i,anim){
-  const R=REPLAY;if(!R)return;i=Math.max(0,Math.min(R.states.length-1,i));
+  const R=G.replay;if(!R)return;i=Math.max(0,Math.min(R.states.length-1,i));
   const fwd=anim&&i===R.i+1;R.i=i;
-  S=JSON.parse(R.states[i]);let L=[];for(let k=Math.max(0,i-60);k<=i;k++)L=L.concat(R.lines[k]);S.log=L.slice(-80);
-  if(!MAP||MAP.course!==S.course.id)MAP=mapFor(S);
+  setS(JSON.parse(R.states[i]));let L=[];for(let k=Math.max(0,i-60);k<=i;k++)L=L.concat(R.lines[k]);S.log=L.slice(-80);
+  if(!MAP||MAP.course!==S.course.id)setMAP(mapFor(S));
   UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.piece=firstPiece();
   if(fwd&&R.evs[i])playEvents(R.evs[i]);
   render();
 }
-const replayNext=()=>REPLAY&&REPLAY.log.actions[REPLAY.i];
+export const replayNext=()=>G.replay&&G.replay.log.actions[G.replay.i];
 /* jump to the start of the next / previous turn */
-function replayTurn(dir){const R=REPLAY;if(!R)return;let i=R.i;
+function replayTurn(dir){const R=G.replay;if(!R)return;let i=R.i;
   const turnAt=k=>{const s=JSON.parse(R.states[k]);return s.round*8+s.cur;};const t0=turnAt(i);
   if(dir>0){while(i<R.states.length-1&&turnAt(i)===t0)i++;}
   else{while(i>0&&turnAt(i-1)===t0)i--;if(i>0){i--;const t1=turnAt(i);while(i>0&&turnAt(i-1)===t1)i--;}}
   replayStop();replayGo(i,false);}
-function replayPlay(){const R=REPLAY;if(!R)return;if(R.timer){replayStop();return;}
+function replayPlay(){const R=G.replay;if(!R)return;if(R.timer){replayStop();return;}
   if(R.i>=R.states.length-1)replayGo(0,false);
   // one move every ~1.3 s at Normal, with an extra pause when a turn ends
-  const tick=()=>{if(!REPLAY)return;if(REPLAY.i>=REPLAY.states.length-1){replayStop();return;}
-    const endTurn=(replayNext()||[])[1]&&replayNext()[1].t==='end';replayGo(REPLAY.i+1,true);
-    REPLAY.timer=setTimeout(tick,(1300+(endTurn?900:0))/REPLAY.speed);};
-  R.timer=setTimeout(tick,50);replayBar();}
-function replayStop(){const R=REPLAY;if(R&&R.timer){clearTimeout(R.timer);R.timer=0;}replayBar();}
-function exitReplay(){replayStop();REPLAY=null;$('#app').classList.remove('replaying');$('#rdock').hidden=true;$('#rside').hidden=true;$('#rdock').innerHTML='';
+  const tick=()=>{const R=G.replay;if(!R)return;if(R.i>=R.states.length-1){replayStop();return;}
+    const endTurn=(replayNext()||[])[1]&&replayNext()[1].t==='end';replayGo(R.i+1,true);
+    R.timer=setTimeout(tick,(1300+(endTurn?900:0))/R.speed);};
+  R.timer=setTimeout(tick,50);render();}
+function replayStop(){const R=G.replay;if(R&&R.timer){clearTimeout(R.timer);R.timer=0;}render();}
+export function exitReplay(){replayStop();G.replay=null;$('#app').classList.remove('replaying');$('#rdock').hidden=true;$('#rside').hidden=true;$('#rdock').innerHTML='';
   try{const u=new URL(location.href);u.searchParams.delete('replay');history.replaceState(null,'',u);}catch(e){}
-  for(const[,el]of cardEls)el.remove();cardEls.clear();S=null;if(!resumeSaved())showSetup();} // back to the local game in progress, if any
+  setS(null);resetView();if(!resumeSaved())showSetup();} // back to the local game in progress, if any
 
 /* words for one action, read against the position before it */
 function describeAction(a,st){
@@ -96,13 +102,10 @@ function describeAction(a,st){
   return esc(a.t);
 }
 /* the next action's space and card, marked on the board and in the hand */
-function replayDecorate(){const a=replayNext();if(!a||!S||S.over)return;const x=a[1];
+export function replayDecorate(){if(G.replay.hover){UI.targets=new Map([[G.replay.hover,{kind:'move'}]]);return;}const a=replayNext();if(!a||!S||S.over)return;const x=a[1];
   if(x.to&&x.to[0]!=='B'&&hexAt(x.to))UI.targets=new Map([[x.to,{kind:x.t==='pay'?(hexAt(x.to).type==='c'?'camp':'rubble'):'move'}]]);}
-function replayAfterRender(){const a=replayNext();for(const[,el]of cardEls)el.classList.remove('rnext','rpay');if(!a||!S||S.over)return;const x=a[1];
-  if(x.card&&cardEls.has(x.card))cardEls.get(x.card).classList.add('rnext');
-  for(const id of x.cards||x.keep||[])if(cardEls.has(id))cardEls.get(id).classList.add('rpay');}
-function replayPromptHTML(){
-  const R=REPLAY,n=R.log.actions.length,a=replayNext();
+export function replayPromptHTML(){
+  const R=G.replay,a=replayNext();
   if(!a)return`<b>End of the replay.</b> ${S.over?'The game is over.':'The log stops here'+(R.log.result&&R.log.result.capped?' (it hit the 25-round cap).':'.')}`;
   const pl=S.players[a[0]],st=JSON.parse(R.states[R.i]);
   const r0=R.rem[R.i][a[0]];
@@ -114,7 +117,7 @@ const fmtR=x=>Math.round(x*10)/10;
    the space it gets (container queries). Nothing here measures other elements, so nothing can overlap. */
 const RSPEEDS=[['Slow','½×',.5],['Normal','1×',1],['Fast','2×',2],['Faster','4×',4]];
 function replayBar(){
-  const R=REPLAY;if(!R)return;const d=$('#rdock'),side=$('#rside');
+  const R=G.replay;if(!R)return;const d=$('#rdock'),side=$('#rside');
   if(!d.firstChild){
     d.innerHTML=`<div class="rgrp"><button id="rbS" class="ends" title="Start (Home)" aria-label="Start">⏮</button><button id="rbT0" title="Previous turn (↑)" aria-label="Previous turn">«</button><button id="rbP" title="Back one move (←)" aria-label="Back one move">‹</button><button id="rbGo" class="pri" title="Play / pause (space)" aria-label="Play">▶</button><button id="rbN" title="Forward one move (→)" aria-label="Forward one move">›</button><button id="rbT1" title="Next turn (↓)" aria-label="Next turn">»</button><button id="rbE" class="ends" title="End (End)" aria-label="End">⏭</button></div>
       <div class="rspd" role="group" aria-label="Replay speed">${RSPEEDS.map(([t,s,v])=>`<button data-v="${v}" aria-label="${t}" title="${t}"><span class="lg">${t}</span><span class="sm">${s}</span></button>`).join('')}</div>
@@ -122,11 +125,11 @@ function replayBar(){
       <button id="rbA" class="rtog" title="Show or hide the evaluation">Evaluation</button><div id="rbTxt" aria-live="polite"></div>`;
     const go=(i,an)=>{replayStop();replayGo(i,an);};
     d.querySelector('#rbS').onclick=()=>go(0);d.querySelector('#rbE').onclick=()=>go(1e9);
-    d.querySelector('#rbP').onclick=()=>go(REPLAY.i-1);d.querySelector('#rbN').onclick=()=>go(REPLAY.i+1,true);
+    d.querySelector('#rbP').onclick=()=>go(G.replay.i-1);d.querySelector('#rbN').onclick=()=>go(G.replay.i+1,true);
     d.querySelector('#rbT0').onclick=()=>replayTurn(-1);d.querySelector('#rbT1').onclick=()=>replayTurn(1);
     d.querySelector('#rbGo').onclick=replayPlay;
-    d.querySelectorAll('.rspd button').forEach(b=>b.onclick=()=>{REPLAY.speed=+b.dataset.v;try{localStorage.setItem('eldorado-rspeed2',b.dataset.v);}catch(e){}replayBar();});
-    d.querySelector('#rbA').onclick=()=>{REPLAY.side=!REPLAY.side;try{localStorage.setItem('eldorado-rside',REPLAY.side?'1':'0');}catch(e){}replayBar();};
+    d.querySelectorAll('.rspd button').forEach(b=>b.onclick=()=>{G.replay.speed=+b.dataset.v;try{localStorage.setItem('eldorado-rspeed2',b.dataset.v);}catch(e){}render();});
+    d.querySelector('#rbA').onclick=()=>{G.replay.side=!G.replay.side;try{localStorage.setItem('eldorado-rside',G.replay.side?'1':'0');}catch(e){}render();};
     const rr=d.querySelector('#rbR');rr.oninput=()=>go(+rr.value);}
   d.hidden=false;side.hidden=!R.side;$('#app').classList.add('replaying');d.querySelector('#rbTxt').innerHTML=replayPromptHTML()+`<span class="rpos"> · move ${R.i} / ${R.states.length-1} · round ${S.round}</span>`;
   const n=R.states.length-1,gb=d.querySelector('#rbGo');gb.textContent=R.timer?'❚❚':'▶';gb.setAttribute('aria-label',R.timer?'Pause':'Play');
@@ -144,25 +147,28 @@ function replayBar(){
   if(ev&&!S.over)h+=`<button id="rbX" class="rexp" aria-expanded="${R.ex}">${R.ex?'Hide':'Show'} every option for ${esc(S.players[S.cur].name)}</button>`;
   if(alts){const chosen=nx?JSON.stringify(nx[1]):'';
     h+=alts.map((o,j)=>`<div class="ralt${JSON.stringify(o.a)===chosen?' on':''}" data-j="${j}"><b>${pc(o.v)}</b><span>${describeAction(o.a,st)}</span></div>`).join('');}
-  side.innerHTML=h;
-  const xb=side.querySelector('#rbX');if(xb)xb.onclick=()=>{R.ex=!R.ex;try{localStorage.setItem('eldorado-rexp',R.ex?'1':'0');}catch(e){}replayBar();};
+  if(side.__h===h)return;setHTML(side,h); // (rewritten only when it changes: hovering an option redraws the board, not this list)
+  const xb=side.querySelector('#rbX');if(xb)xb.onclick=()=>{R.ex=!R.ex;try{localStorage.setItem('eldorado-rexp',R.ex?'1':'0');}catch(e){}render();};
   // hovering an option marks its space on the board
   side.querySelectorAll('.ralt').forEach(el=>{const o=alts[+el.dataset.j].a;
-    el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(o.to)){UI.targets=new Map([[o.to,{kind:'move'}]]);renderTargets();}};
-    el.onpointerleave=()=>{computeTargets();replayDecorate();renderTargets();};});
+    el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(o.to)){R.hover=o.to;render();}};
+    el.onpointerleave=()=>{R.hover=null;render();};});
 }
-function openReplay(log,id){
+export function openReplay(log,id){
   try{const u=new URL(location.href);u.searchParams.delete('room');if(id)u.searchParams.set('replay',id);else u.searchParams.delete('replay');history.replaceState(null,'',u);}catch(e){}
   startReplay(log,id);
 }
-async function loadReplayId(id){
+export async function loadReplayId(id){
   try{const r=await fetch('/api/replays/'+encodeURIComponent(id));const j=await r.json();if(!r.ok)throw new Error(j.error||'not found');openReplay(j,id);}
   catch(e){toast('Could not load replay '+id+': '+e.message,3500);showSetup();}
 }
-function replayKeys(e){if(!REPLAY||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||document.querySelector('#overlay .modal')||MENU.dlg.open)return false;
-  const R=REPLAY,k=e.key;
+export function replayKeys(e){if(!G.replay||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||document.querySelector('#overlay .modal')||MENU.dlg.open)return false;
+  const R=G.replay,k=e.key;
   if(k==='ArrowRight'){replayStop();replayGo(R.i+1,true);}else if(k==='ArrowLeft'){replayStop();replayGo(R.i-1);}
   else if(k==='ArrowDown')replayTurn(1);else if(k==='ArrowUp')replayTurn(-1);
   else if(k===' ')replayPlay();else if(k==='Home'){replayStop();replayGo(0);}else if(k==='End'){replayStop();replayGo(1e9);}
   else return false;
   e.preventDefault();return true;}
+
+/* the replay's view part: the dock and the evaluation panel follow the position on show */
+export const replayPart = { name: 'replay', update(){if(G.replay&&S)replayBar();}};

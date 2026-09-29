@@ -158,8 +158,19 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .tgt.dis:hover .ring,.tgt.dis.hot .ring{fill:rgba(255,255,255,.22)}
 .bl-badge.tgt .bl-halo{stroke:var(--gold2);stroke-width:3}
 .bl-badge.hot .bl-halo{stroke-width:5;animation:none}
-.piece{cursor:pointer}
-.piece .turnfx{opacity:0;transition:opacity .3s ease}.piece.turn .turnfx{opacity:1}
+/* explorers (board/pieces.js): HTML over the board, in board units; a move is a compositor animation */
+#pieces,#bfx{position:absolute;left:0;top:0;pointer-events:none}
+.piece{position:absolute;left:0;top:0;width:0;height:0}
+.piece>div{position:absolute}.piece svg{display:block;overflow:visible}
+.psel{opacity:0}.piece.sel .psel{opacity:1}
+.pglow,.pmark{opacity:0;transition:opacity .3s ease}.piece.turn .pglow,.piece.turn .pmark{opacity:1}
+.pshadow{transform-origin:15px 13.5px}
+.pin{left:-32px;top:-50px;width:64px;height:72px;transform-origin:32px 61px;pointer-events:auto;cursor:pointer}
+.pin .pmark{position:absolute}
+/* rubble / base camp being paid: a dot per card */
+.dpips{position:absolute;left:0;top:0;display:flex;gap:6.6px;padding:7.6px 7px;border-radius:14px;background:#0b120f;border:1.5px solid #d8dcd6}
+.dpips i{width:12.8px;height:12.8px;border-radius:50%;box-sizing:border-box;border:2px solid #d8dcd6}.dpips i.on{background:#eef2ec}
+.dpips.camp{border-color:#e08a74}.dpips.camp i{border-color:#e08a74}.dpips.camp i.on{background:#e08a74}
 #tip{position:absolute;pointer-events:none;background:rgba(8,14,12,.95);border:1px solid var(--line2);border-radius:9px;padding:6px 10px;font-size:12.5px;white-space:nowrap;opacity:0;transform:translate(-50%,-135%);transition:opacity .12s;z-index:3;box-shadow:0 8px 20px rgba(0,0,0,.4)}
 #tip b{color:var(--gold2)}
 #hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:12px 16px;pointer-events:none;z-index:20;--hudH:38px} /* every HUD item is --hudH tall, centred on one line */
@@ -192,7 +203,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* centred in the space left of the market column (--mktFoot = how far the market reaches in from the right edge) */
 #app{--mw:72px;--mktR:16px;--mktW:152px;--mktFoot:calc(var(--mktR) + var(--mktW) + 10px);--zoomFoot:66px}
 #app.replaying #prompt{display:none}
-#app:has(#mkt.hid),#app:has(#mkt.cramped){--mktFoot:16px}
+#app.nomkt{--mktFoot:16px} /* (a class set by market.js, not :has(): every insertion anywhere in the game area would re-check a :has() and restyle the whole board) */
 #mkt.cramped{display:none}
 #prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;width:max-content;box-sizing:border-box;top:var(--row2,64px);max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:9px 16px;border-radius:12px;font-size:14px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
 #prompt b{color:var(--gold2)}
@@ -205,8 +216,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #feed .fwho{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.04em;color:var(--text);white-space:nowrap;flex:none}
 #feed .fwho[hidden]{display:none}
 #feed .fwho i{width:9px;height:9px;border-radius:50%}
-#feed .frow{display:flex;align-items:flex-end;justify-content:flex-end;gap:18px;min-width:0;overflow:hidden;padding:2px 2px 0}
-#feed .fg.gone{display:none}
+#feed .frow{display:flex;flex-direction:row-reverse;flex-wrap:wrap;align-items:flex-end;justify-content:flex-start;column-gap:18px;row-gap:60px;min-width:0;overflow:hidden;padding:2px 2px 0;height:calc(var(--fw)*1.4 + 22px);box-sizing:border-box}
 .fg{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
 .fg.new{animation:fgIn .32s var(--ease) backwards}
 .fg .frc{display:flex;align-items:center}
@@ -288,10 +298,11 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .back.b2{transform:translate(3px,-3px);opacity:.9}
 .back.b3{transform:translate(6px,-6px);opacity:.8}
 .empty-slot{position:absolute;inset:0;border-radius:8px;border:1.5px dashed var(--line2)}
+#discStack .mcard{--cw:74px;position:absolute;inset:0}
 #actBtns{position:absolute;right:16px;bottom:calc(16px + 104px + 34px);z-index:13;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .btn[disabled]{opacity:.35;pointer-events:none}
 .brow{display:flex;gap:8px}
-#playLbl{position:absolute;z-index:11;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);pointer-events:none;transition:opacity .2s}
+#playLbl{position:absolute;left:0;top:0;z-index:11;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);pointer-events:none;transition:opacity .2s}
 .zoomctl{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:12}
 .zoomctl button{width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:17px;font-weight:700;display:grid;place-items:center}
 
@@ -313,9 +324,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .mghost{pointer-events:none!important;z-index:300!important;filter:drop-shadow(0 12px 18px rgba(0,0,0,.55))}
 #mkt .mslot{touch-action:none}
 #allc .mslot{touch-action:pan-y}
-.card{position:absolute;left:0;top:0;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1);transform-origin:50% 50%;will-change:transform;pointer-events:auto;cursor:pointer;touch-action:none}
-.card.anim{transition:transform .32s var(--ease),opacity .3s}
-.card.fast{transition:transform .16s var(--ease)}
+.card{position:absolute;left:0;top:0;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1);transform-origin:50% 50%;will-change:transform;pointer-events:auto;cursor:pointer;touch-action:none;transition:transform .32s var(--ease),opacity .3s}
+.card.fly{pointer-events:none;z-index:200;transition:none}
 .cface{position:absolute;inset:0;border-radius:.75em;background:var(--frame);box-shadow:0 .1em 0 rgba(255,255,255,.15) inset,0 .25em .6em rgba(0,0,0,.45),0 .1em .15em rgba(0,0,0,.5);overflow:hidden;transition:box-shadow .2s,filter .2s;color:#fff}
 .cface::after{content:"";position:absolute;inset:.28em;border-radius:.55em;border:.08em solid rgba(255,226,160,.55);pointer-events:none;box-shadow:inset 0 0 0 .06em rgba(0,0,0,.35)}
 .k-g{--frame:linear-gradient(155deg,#5aa56c,#23583a 60%,#18402a);--body:#132a1d;--acc:#6fcf8a}
@@ -441,8 +451,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @media (max-height:500px){#rside{width:250px;padding:10px 12px}
 }
 /* short game areas (landscape phones): the zoom column keeps fit / full screen / sound and sits clear of the piles */
-/* short game areas: the prompt (with another player's cards under it) also keeps clear of the turn buttons' column (--actFoot) */
-@container game (max-height:520px){#app{--mktFoot2:max(var(--mktFoot),var(--actFoot,16px))}#prompt{right:var(--mktFoot2);max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot2)))}#feed{--fw:34px;margin-top:5px;padding-top:5px}
+/* short game areas: the prompt (with another player's cards under it) also keeps clear of the turn buttons' column (--actFoot, set on the
+   prompt itself by hud.js: a variable set on #app would restyle the whole board) */
+@container game (max-height:520px){#prompt{--mktFoot2:max(var(--mktFoot),var(--actFoot,16px));right:var(--mktFoot2);max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot2)))}#feed{--fw:34px;margin-top:5px;padding-top:5px}
 }
 @container game (max-height:520px){#app{--zoomFoot:140px}.zoomctl{top:var(--row2,64px);transform:none;flex-direction:row}.zoomctl button:not(#fsBtn):not(#sndBtn):not(#zfit){display:none}
 }
@@ -464,7 +475,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   #rulesBtn{display:none}
   #jrnBtn{padding:0 9px}#jrnBtn span{display:none} /* phones: the book icon alone leaves the player chips room */
   #app{--mw:44px;--mktR:6px;--zoomFoot:12px}
-  #feed{--fw:34px;flex-direction:column;gap:5px}#feed .frow{gap:12px;max-width:100%}.fg .fcap{font-size:10px}#feed .fwho{font-size:10px}
+  #feed{--fw:34px;flex-direction:column;gap:5px}#feed .frow{column-gap:12px;max-width:100%}.fg .fcap{font-size:10px}#feed .fwho{font-size:10px}
   #app{--row2:58px}
   #market{gap:7px}
   #mkt .mslot:hover{transform:none}
@@ -475,7 +486,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   #mkt .cnt{min-width:15px;height:15px;font-size:8.5px;top:-5px;right:-4px;padding:0 3px}
   .agrid{--mw:98px;gap:18px 12px;justify-content:center}
   .allc-in{padding:58px 12px 30px}
-  .pstack{width:54px;height:76px}
+  .pstack{width:54px;height:76px}#discStack .mcard{--cw:54px}
   #actBtns{bottom:calc(16px + 76px + 34px)}
   .zoomctl{top:auto;bottom:calc(16px + 76px + 34px);transform:none;left:12px}
   .zoomctl button:not(#fsBtn):not(#sndBtn){display:none}
@@ -503,7 +514,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <div id="shell"><div id="gamecell">
 <div id="app">
   <div id="vp">
-    <div id="stage"><div id="bscale"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels"></div><svg id="board2" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels2"></div></div></div>
+    <div id="stage"><div id="bscale"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels"></div><svg id="board2" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels2"></div><div id="pieces"></div><div id="bfx"></div></div></div>
     <div id="tip"></div>
   </div>
   <div id="hud">

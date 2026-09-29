@@ -1,3 +1,4 @@
+import { CT } from '../engine.gen.js';
 /* =========================================================
    CARD ART — one background scene per card type (viewBox 100×70).
    The scene sits behind the card's emblem, so it stays soft: the suit sets the palette
@@ -5,6 +6,14 @@
    and each card adds its own subject near the edges (the emblem covers the middle).
    Pure SVG strings; gradients use shared ids, identical wherever they repeat.
    ========================================================= */
+/* the scene of a card without its own art: one per suit */
+const SCENE={
+ g:`<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd19b"/><stop offset=".55" stop-color="#2f7a48"/><stop offset="1" stop-color="#123821"/></linearGradient></defs><rect width="100" height="70" fill="url(#sg)"/><path d="M0 40 Q20 30 40 38 T80 34 T100 36 V70 H0Z" fill="#1f5a35" opacity=".8"/><path d="M-5 70 Q5 30 22 18 Q14 40 18 70Z M105 70 Q95 26 76 14 Q86 40 82 70Z" fill="#0f3320"/><path d="M-4 16 Q14 12 26 26 Q10 26 -4 30Z M104 10 Q84 8 72 22 Q90 22 104 26Z" fill="#185c34"/><path d="M40 0 L52 0 L70 70 L30 70Z" fill="#fff" opacity=".07"/>`,
+ b:`<defs><linearGradient id="sb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe3fb"/><stop offset=".45" stop-color="#4d9ad6"/><stop offset="1" stop-color="#143e66"/></linearGradient></defs><rect width="100" height="70" fill="url(#sb)"/><path d="M0 30 Q25 26 50 30 T100 30 V36 H0Z" fill="#2e6a3f" opacity=".85"/><path d="M0 44 Q12 40 25 44 T50 44 T75 44 T100 44" stroke="#fff" stroke-opacity=".35" stroke-width="1.6" fill="none"/><path d="M0 54 Q12 50 25 54 T50 54 T75 54 T100 54" stroke="#fff" stroke-opacity=".25" stroke-width="1.6" fill="none"/><path d="M0 63 Q12 59 25 63 T50 63 T75 63 T100 63" stroke="#fff" stroke-opacity=".18" stroke-width="1.6" fill="none"/>`,
+ y:`<defs><linearGradient id="sy" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe7a8"/><stop offset=".5" stop-color="#f0a948"/><stop offset="1" stop-color="#8f4f16"/></linearGradient></defs><rect width="100" height="70" fill="url(#sy)"/><circle cx="72" cy="24" r="12" fill="#fff4c9" opacity=".8"/><path d="M0 50 L10 50 L16 40 L22 50 L34 50 L42 38 L50 50 L64 50 L70 42 L76 50 L100 50 V70 H0Z" fill="#6b3a10" opacity=".85"/><path d="M0 58 Q50 52 100 58 V70 H0Z" fill="#4d290a"/>`,
+ x:`<defs><radialGradient id="sx" cx=".5" cy=".4" r=".8"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#c4b38b"/></radialGradient></defs><rect width="100" height="70" fill="url(#sx)"/><g stroke="#8a7a55" stroke-opacity=".35" fill="none"><circle cx="50" cy="35" r="26"/><circle cx="50" cy="35" r="18"/><path d="M50 3 V67 M18 35 H82 M27 12 L73 58 M73 12 L27 58"/></g>`,
+ p:`<defs><linearGradient id="sp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#261646"/><stop offset=".7" stop-color="#5a3a91"/><stop offset="1" stop-color="#7d5bb8"/></linearGradient></defs><rect width="100" height="70" fill="url(#sp)"/><g fill="#fff"><circle cx="12" cy="10" r=".9"/><circle cx="30" cy="18" r=".7"/><circle cx="84" cy="12" r="1"/><circle cx="70" cy="28" r=".6"/><circle cx="20" cy="34" r=".6"/><circle cx="90" cy="38" r=".8"/><circle cx="45" cy="8" r=".6"/></g><circle cx="82" cy="18" r="7" fill="#f3ecff" opacity=".8"/><circle cx="85" cy="16" r="6" fill="#2b1a4d"/><path d="M0 58 Q30 50 60 56 T100 54 V70 H0Z" fill="#170d2c"/>`,
+};
 const ART_SKY={
   g:['#dff3c9','#7cbf82','#1d5233'],
   b:['#e6f5ff','#86c0ea','#1f5f96'],
@@ -108,4 +117,4 @@ const CARD_BG={
     +'<path d="M30 70 Q44 60 58 58 T92 52" stroke="#d7c2ff" stroke-width="3" fill="none" opacity=".18"/>'
     +artPerson(86,66,1.15,'#140b2b','none','<path d="M-1 -19.4 L-.6 -23 M.6 -19.4 L1.4 -22.6" stroke-width=".8"/><path d="M3.4 -22 L3.4 1" stroke-width=".8"/><path d="M-2.4 -13 L-8 -15.6" stroke-width="1.1"/>'),
 };
-function cardBg(t){const d=CT[t];const f=CARD_BG[t];return f?f():SCENE[d.c];}
+export function cardBg(t){const d=CT[t];const f=CARD_BG[t];return f?f():SCENE[d.c];}

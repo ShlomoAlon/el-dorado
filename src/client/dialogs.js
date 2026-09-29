@@ -1,0 +1,72 @@
+/* Everything that opens over the game: the round banner, toasts, and one modal at a time (rules, results, a pile,
+   the journal). The menu is its own dialog (menu.js); opening a modal closes it. */
+import { S, CT, typeOf, playerDone, plural } from '../engine.gen.js';
+import { $, esc } from './dom.js';
+import { UI, NET, online, hp } from './state.js';
+import { cardHTML } from './cards.js';
+import { MENU, menuClose, showSetup, showHub } from './menu.js';
+import { exitOnline } from './online.js';
+import { loadReplayId, openReplay } from './replay.js';
+
+export function banner(t,s){const b=$('#banner');b.querySelector('.t').textContent=t;b.querySelector('.s').textContent=s||'';
+  b.getAnimations().forEach(a=>a.cancel());
+  b.animate([{opacity:0,transform:'translate(-50%,-44%) scale(.96)'},{opacity:1,transform:'translate(-50%,-50%) scale(1)',offset:.18},{opacity:1,transform:'translate(-50%,-50%) scale(1)',offset:.75},{opacity:0,transform:'translate(-50%,-56%) scale(1)'}],{duration:1400,easing:'ease-out'});}
+let toastT=0;
+export function toast(t,ms){const e=$('#toast');const host=MENU.dlg&&MENU.dlg.open?MENU.dlg:document.body;if(e.parentNode!==host)host.appendChild(e); /* over the menu while it's open */
+  e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),ms||1700);}
+/* one overlay at a time (the menu is its own dialog: menu.js; it closes when another overlay opens) */
+export function modal(html,onMount,dismiss){const o=$('#overlay');if(MENU.dlg&&MENU.dlg.open)MENU.dlg.close();
+  o.innerHTML=`<div class="scrim"><div class="modal">${html}</div></div>`;const sc=o.firstChild;
+  if(dismiss)sc.onclick=e=>{if(e.target===sc)closeModal();};onMount&&onMount(sc);}
+export function closeModal(){menuClose();const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');const mo=sc.querySelector('.modal');if(mo)mo.className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
+export const modalOpen=()=>!!document.querySelector('#overlay .modal');
+
+/* ---------- journal: the game log, newest first, grouped by round; stays live while open ---------- */
+function journalHTML(){
+  let r=null,out='';const L=S.log.map((e,i)=>{if(e.r!=null)r=e.r;return{...e,r};}); // server-added lines carry no round: they belong to the one before
+  for(let i=L.length-1;i>=0;i--){const e=L[i];
+    if(i===L.length-1||e.r!==L[i+1].r)out+=e.r!=null?`<div class="lr">Round ${e.r}</div>`:'';
+    const p=e.p!=null?S.players[e.p]:null;
+    out+=`<div class="le${p?'':' sys'}">${p?`<i style="background:${p.color}"></i><b>${esc(p.name)}</b> `:''}${esc(e.t)}</div>`;}
+  return out||'<p class="note">Nothing has happened yet.</p>';
+}
+export function showJournal(){
+  if(!S)return;
+  modal(`<h2>Journal <span>newest first</span></h2><div id="log">${journalHTML()}</div><div class="mrow" style="margin-top:14px"><button class="btn pri" id="jClose">Close</button></div>`,
+    sc=>{sc.classList.add('plain');sc.querySelector('.modal').classList.add('jrn');sc.querySelector('#jClose').onclick=closeModal;},true);
+}
+/* the journal's view part: while it is open, it follows the log */
+export const journalPart = { name: 'journal', update(){const l=document.querySelector('#overlay .modal.jrn #log');if(!l||!S)return;const last=S.log[S.log.length-1];
+  if(l.dataset.sig!==S.log.length+'|'+(last?last.t:'')){l.dataset.sig=S.log.length+'|'+(last?last.t:'');l.innerHTML=journalHTML();}}};
+
+export function showRules(){
+  modal(`<h2>How to play</h2><div class="rules">
+  <p>Race to El Dorado: move onto one of the three finishing spaces on the El Dorado tile at the end of the route. Your explorer then steps into the city, freeing the space.</p><p><b>Game end.</b> Online games (and local games by default) continue until all but one expedition has arrived, then the round is finished; this gives every player a place. Players arriving in the same round are split by blockades held. The official rule, where the game ends after the round in which the first player arrives, is available for local games.</p><p><b>Online.</b> Each player has a clock: every turn adds the room's turn time to it, and time you don't use carries over to your later turns. When it runs out the turn ends and leftover cards are discarded. Missing 3 turns in a row forfeits. Rated games (the default) change Elo ratings; whoever creates a room can make it unrated.</p><p><b>AI players.</b> Any seat can be an AI: <b>Humboldt</b> (Master: a neural network that plans each whole turn) or <b>Raleigh</b> (Steady: a hand-written route planner); the same AI can take several seats. Online, AIs play on the server and have ratings of their own. The network was trained on First Expedition; on other courses the AIs use the route planner.</p>
+  <h4>Your turn</h4><ul><li><b>Play cards</b> in any order: move, play action cards, and buy <b>at most one</b> card.</li><li><b>End turn</b>: played cards go to your discard pile. You may discard any cards left in hand or keep them.</li><li><b>Draw</b> back up to 4 cards. An empty deck is refilled by shuffling your discard pile.</li></ul>
+  <h4>Moving</h4><ul><li><b>Drag</b> a card onto a highlighted space, or tap the card and then the space.</li><li>A jungle, water or village space needs one card of that symbol with at least the shown strength. Cards can't be combined for one space.</li><li>Leftover strength keeps moving the same explorer over further spaces of that type. It's lost once you do something else.</li><li>Jokers (white) count as any one symbol, chosen when played.</li><li><b>Rubble</b> (grey): discard as many cards as shown — drag cards onto it one by one; you move once enough are in. <b>Base camp</b> (red): remove that many cards from the game.</li><li>Mountains are impassable. Occupied spaces can't be entered or crossed.</li></ul>
+  <h4>Blockades</h4><p>At the start, a random blockade from #1–6 is placed on each connection between two boards. The first explorer to cross pays its cost (a matching card, or discards for grey ones) and keeps it; the Native can also tear one down. Ties at the end go to whoever holds the most blockades, then the highest-numbered one.</p>
+  <h4>Buying</h4><ul><li>Coin cards and jokers pay their value; every other card pays ½ coin. No change.</li><li>Drag a market card toward your hand (or tap it), then drag or tap cards from your hand to pay. The purchase completes as soon as it's covered.</li><li>Bought cards go to your discard pile.</li><li>The reserve opens once a market slot is empty; that stack moves into the slot.</li></ul>
+  <h4>Single-use cards</h4><p>Cards marked <b>Single use</b> are removed from the game after their effect. Spent only as ½ coin, they're discarded normally.</p>
+  <h4>Two players</h4><p>Each player leads two explorers (starting spaces 1 & 3, and 2 & 4) and wins only when both reach El Dorado. Each card moves one of them.</p>
+  <h4>About the boards</h4><p>Courses are fixed routes, starting with the rulebook's route for a first game (B · C · N · I · K), laid out as on the official setup sheet. Tiles B, C, I, K and N are copied space by space from the printed tiles; darker spaces are harder to cross.</p>
+  <h4>Controls</h4><ul><li>Drag or scroll to pan, pinch or ctrl+scroll to zoom. <b>Esc</b> cancels, <b>Ctrl+Z</b> undoes until new cards are drawn.</li></ul>
+  </div><div class="mrow"><button class="btn pri" id="rClose">Close</button></div>`,sc=>sc.querySelector('#rClose').onclick=closeModal,true);
+}
+export function showGameOver(){
+  const w=S.winners||[];const fin=S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i]));
+  const res=online()&&NET.room&&NET.room.results;const ord=S.players.map((p,i)=>i).sort((a,b)=>(S.places?S.places[a]-S.places[b]:0));
+  const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
+  const rows=ord.map(i=>[S.players[i],i]).map(([p,i])=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:${w.includes(i)?'rgba(233,178,74,.14)':'#0c1512'};border:1px solid ${w.includes(i)?'var(--gold)':'var(--line)'}"><span style="display:flex;align-items:center;gap:8px">${S.places?`<b style="color:var(--gold2);min-width:34px">${ordn(S.places[i])}</b>`:''}<i style="width:12px;height:12px;border-radius:50%;background:${p.color};display:inline-block"></i><b>${esc(p.name)}</b></span><span style="color:var(--muted);font-size:13px">${playerDone(p)?'Reached El Dorado (round '+p.fin+')':p.resigned?'Left the game':'Still in the jungle'} · ${plural(p.blocks.length,'blockade')}${p.blocks.length?' (biggest #'+Math.max(...p.blocks.map(b=>S.blockades[b].n))+')':''}${res&&res.deltas?` · <b style="color:${res.deltas[i]>=0?'#8fe3a8':'#ff9c8a'}">${res.deltas[i]>=0?'+':''}${res.deltas[i]}</b> → ${Math.round(res.before[i]+res.deltas[i])}`:''}</span></div>`).join('');
+  const rid=res&&res.replay||null;
+  const tie=fin.length>1?'<p class="sub" style="margin:10px 0 0">Explorers arriving in the same round are split by blockades held, then the highest-numbered blockade.</p>':'';
+  modal(`<h2>${w.length?w.map(i=>esc(S.players[i].name)).join(' & ')+' win'+(w.length>1?'':'s'):'Expedition over'}</h2><p class="sub">The race ended in round ${S.round}.${res&&res.deltas?' Ratings updated.':res&&res.unrated?' Unrated game: ratings unchanged.':''}</p>${rows}${tie}<div class="mrow">${rid||UI.lastReplay&&!online()?'<button class="btn" id="gRep">Watch replay</button>':''}<button class="btn" id="gClose">View board</button><button class="btn pri" id="gNew">New game</button></div>`,
+    sc=>{sc.querySelector('#gClose').onclick=closeModal;
+      const gr=sc.querySelector('#gRep');if(gr)gr.onclick=()=>{closeModal();if(online()){exitOnline();loadReplayId(rid);}else openReplay(UI.lastReplay,null);};sc.querySelector('#gNew').onclick=()=>{if(online()){exitOnline();showHub();}else showSetup();};},true);
+}
+export function showPile(which){
+  if(!S||UI.cover)return;const pl=hp();
+  const ids=which==='deck'?pl.deck.slice():pl.discard.slice();
+  const order=Object.keys(CT);const sorted=ids.map(typeOf).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+  const all=pl.deck.length+pl.hand.length+pl.discard.length+pl.play.length;
+  modal(`<h2>${which==='deck'?'Draw pile':'Discard pile'}</h2><p class="sub">${plural(ids.length,'card')}${which==='deck'?', sorted (the real order is hidden)':''}. ${all} cards in your expedition.</p><div class="deckgrid">${sorted.map(t=>`<div class="mcard">${cardHTML(t)}</div>`).join('')||'<p class="note">Empty.</p>'}</div><div class="mrow"><button class="btn pri" id="pClose">Close</button></div>`,sc=>sc.querySelector('#pClose').onclick=closeModal,true);
+}

@@ -1,9 +1,11 @@
+import { S } from '../engine.gen.js';
+import { UI, canAct, online, myId } from './state.js';
 /* =========================================================
    SOUND: tiny synthesized UI effects (Web Audio, no files).
    sfx(name[,n]) plays one; everything is short, soft and low-passed.
    The AudioContext is created on the first user gesture; any failure is silent.
    ========================================================= */
-const SND={ctx:null,out:null,noise:null,muted:false,last:{},prevCur:null,moveEnd:0};
+export const SND={ctx:null,out:null,noise:null,muted:false,last:{},prevCur:null,moveEnd:0};
 try{SND.muted=localStorage.getItem('eldorado-sound')==='0';}catch(e){}
 const sndStill=(()=>{try{return matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){return false;}})();
 function sndInit(){
@@ -49,7 +51,7 @@ const SFX={
 };
 const SND_TUNED={turn:1,arrive:1,win:1};
 /* sfx(name) plays a sound; for 'move' and 'draw', n is the number of steps / cards (staggered) */
-function sfx(name,n){
+export function sfx(name,n){
   try{
     const c=SND.ctx;if(SND.muted||!c||c.state!=='running'||!SFX[name==='move'?'step':name==='draw'?'tick':name])return;
     const now=performance.now();if(now-(SND.last[name]||0)<40)return;SND.last[name]=now;
@@ -61,7 +63,7 @@ function sfx(name,n){
   }catch(e){}
 }
 /* engine events → sounds (called from playEvents) */
-function sfxEvent(e,viewer){
+export function sfxEvent(e,viewer){
   const mine=pl=>!online()||(S.owners&&S.owners[pl]===myId());
   if(e.e==='move'){sfx('move',e.path.length-1);SND.moveEnd=performance.now()+(sndStill?0:e.path.length*200);}
   else if(e.e==='block')sfx('block');
@@ -77,11 +79,11 @@ function sfxEvent(e,viewer){
   }
   if(e.e==='turn')SND.prevCur=e.pl;
 }
-function setSound(on){
+export function setSound(on){
   SND.muted=!on;try{localStorage.setItem('eldorado-sound',on?'1':'0');}catch(e){}
   const b=document.getElementById('sndBtn');if(b){b.classList.toggle('off',!on);b.title=b.ariaLabel=on?'Mute sounds':'Unmute sounds';}
 }
-(()=>{
+export function soundInit(){
   // first gesture unlocks audio; then a soft tick for every button, a paper swish for picking a card
   const down=e=>{
     sndInit();
@@ -97,4 +99,4 @@ function setSound(on){
   document.addEventListener('keydown',()=>sndInit(),true);
   const b=document.getElementById('sndBtn');
   if(b){setSound(!SND.muted);b.onclick=()=>{setSound(SND.muted);if(!SND.muted)sfx('tap');};}
-})();
+}

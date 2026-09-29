@@ -1,0 +1,23 @@
+/* Sizes and positions the views need, measured only when something resized (ResizeObserver callbacks run after layout,
+   so reading there is free). Views read these instead of measuring the DOM while they update. */
+import { $ } from './dom.js';
+export const geo = { app: { left: 0, top: 0, width: 0, height: 0 }, cw: 132, promptBottom: 0, mktW: 0, actW: 0, deck: null, disc: null };
+const subs = [];
+/* f(sized): after every measurement; sized = the game area itself changed size */
+export function onGeo(f) { subs.push(f); }
+const rect = e => { const r = e.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom }; };
+export function measure() {
+  const app = $('#app'), a = rect(app);
+  const sized = a.width !== geo.app.width || a.height !== geo.app.height;
+  geo.app = a;
+  geo.cw = parseFloat(getComputedStyle(app).getPropertyValue('--cw')) || 132; // set per game-area size (container queries)
+  const pr = $('#prompt'); geo.promptBottom = pr.offsetHeight ? pr.getBoundingClientRect().bottom - a.top : 0;
+  geo.mktW = $('#mkt').offsetWidth; geo.actW = $('#actBtns').offsetWidth;
+  geo.deck = rect($('#deckStack')); geo.disc = rect($('#discStack'));
+  return sized;
+}
+export function watchGeometry() {
+  measure(); for (const f of subs) f(true);
+  const ro = new ResizeObserver(() => { const sized = measure(); for (const f of subs) f(sized); });
+  for (const s of ['#app', '#prompt', '#mkt', '#actBtns']) ro.observe($(s));
+}

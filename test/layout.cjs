@@ -1,9 +1,11 @@
 // Layout regression test: at many screen sizes, in normal play and in replay mode, every control is fully on screen
 // and no two controls overlap (the board may sit under things: it pans). Run after any UI change:
-//   NODE_PATH=$(npm root -g) node test/layout.cjs [--shots dir]
+//   NODE_PATH=$(npm root -g) node test/layout.cjs [--quick] [--shots dir]
+// --quick: five sizes (phone portrait and landscape, tablet, laptop, desktop). Sizes run in parallel.
 const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
-const SIZES = [[320, 568], [390, 844], [844, 390], [768, 1024], [1024, 700], [1024, 768], [1280, 720], [1366, 768], [1440, 900], [1920, 1080], [2560, 1440]];
+const ALL = [[320, 568], [390, 844], [844, 390], [768, 1024], [1024, 700], [1024, 768], [1280, 720], [1366, 768], [1440, 900], [1920, 1080], [2560, 1440]];
+const SIZES = process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1920, 1080]] : ALL;
 const shots = process.argv.includes('--shots') ? process.argv[process.argv.indexOf('--shots') + 1] : null;
 const log = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/replay.json'), 'utf8'));
 
@@ -43,7 +45,7 @@ const CHECK = () => {
     if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
     if (hit(a.r, b.r)) bad.push(`${a.name} overlaps ${b.name}`); }
   // 3. the hand: every card at least half visible, and never under a control
-  document.querySelectorAll('#cards .card').forEach((c, i) => { const r = vis(c); if (!r) return;
+  document.querySelectorAll('#cards .card:not(.fly):not(.mghost)').forEach((c, i) => { const r = vis(c); if (!r) return; // (cards in flight are animations, not the hand)
     for (const it of items) if (['dock', 'side', 'act', 'prompt', 'hud'].includes(it.group) && hit(r, it.r)) bad.push(`hand card ${i} under ${it.name}`); });
   return [...new Set(bad)];
 };
@@ -57,7 +59,8 @@ const CHECK = () => {
     r.writeHead(200, { 'content-type': f.endsWith('.html') ? 'text/html' : f.endsWith('.css') ? 'text/css' : f.endsWith('.js') ? 'text/javascript' : f.endsWith('.woff2') ? 'font/woff2' : 'application/octet-stream' }); r.end(fs.readFileSync(f)); });
   await new Promise(res => srv.listen(0, '127.0.0.1', res));
   const url = `http://127.0.0.1:${srv.address().port}/`;
-  for (const [w, h] of SIZES) {
+  const one = async ([w, h]) => {
+    const out = [];
     const p = await b.newPage({ viewport: { width: w, height: h } }); const errs = [];
     p.on('pageerror', e => errs.push(e.message));
     await p.goto(url); await p.waitForTimeout(600);
@@ -77,16 +80,18 @@ const CHECK = () => {
       ['replay, market closed', async () => { await p.click('#rbA', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }]];
     for (const [name, setup] of states) {
       await p.keyboard.press('Escape').catch(() => {}); // close any overlay a previous step opened
-      try { if (setup) await setup(); } catch (e) { fails++; console.log(`FAIL ${w}×${h} ${name}: could not set up (${e.message.split('\n')[0]})`); continue; }
+      try { if (setup) await setup(); } catch (e) { fails++; out.push(`FAIL ${w}×${h} ${name}: could not set up (${e.message.split('\n')[0]})`); continue; }
       await p.mouse.move(w / 2, 1); // park the pointer away from the hand (hovered cards lift by design)
       await p.waitForTimeout(900);
       const bad = await p.evaluate(CHECK); checks++;
-      if (bad.length) { fails++; console.log(`FAIL ${w}×${h} ${name}:\n   ` + bad.join('\n   ')); }
+      if (bad.length) { fails++; out.push(`FAIL ${w}×${h} ${name}:\n   ` + bad.join('\n   ')); }
       if (shots) await p.screenshot({ path: `${shots}/layout_${w}x${h}_${name.replace(/[^a-z]+/g, '-')}.png` });
     }
-    if (errs.length) { fails++; console.log(`FAIL ${w}×${h} page errors: ${errs.join('; ')}`); }
-    await p.close();
-  }
+    if (errs.length) { fails++; out.push(`FAIL ${w}×${h} page errors: ${errs.join('; ')}`); }
+    await p.close(); if (out.length) console.log(out.join('\n'));
+  };
+  // a few sizes at a time (each page waits on its own animations: parallel pages don't slow each other much)
+  const queue = SIZES.slice(); await Promise.all([...Array(4)].map(async () => { while (queue.length) await one(queue.shift()); }));
   await b.close(); srv.close();
   console.log(fails ? `layout: ${fails} failing of ${checks} checks` : `layout ok: ${checks} checks at ${SIZES.length} sizes`);
   process.exit(fails ? 1 : 0);
