@@ -1,6 +1,7 @@
 // Plays the game the way a person does (mouse clicks and drags on the real page) and checks each step:
 // start, select a card, move by clicking a space and by dragging a card onto it, undo, buy (market card, then paying
-// cards), end a turn, an AI's turn (with its recap under the prompt), the journal, the menu, a replay (step, exit).
+// cards), end a turn, an AI's turn (with its recap under the prompt), the journal, the menu, a replay (step, exit), and
+// the market closed while a Travel Log's removal is still to choose.
 // Also checks that pressing Start changes nothing on the board, and that no step logs an error.
 //   NODE_PATH=$(npm root -g) node test/flows.cjs
 const { chromium } = require('playwright');
@@ -94,6 +95,19 @@ const serve = () => { const pub = path.join(__dirname, '..', 'public'); const sr
   await idle(); ok('replay steps', await S(() => window.__ED.G.replay.i === 6));
   await p.click('#menuBtn'); await wait(800);
   ok('replay exit resumes the game', await S(() => !window.__ED.G.replay && !!window.__ED.S && !window.__ED.S.over && document.querySelectorAll('#cards .card').length > 0));
+  // 11. a removal still to choose (Travel Log): the market stays closed until it's answered (a tap there says why, it
+  //     doesn't open a purchase), Escape keeps the question up, and once answered buying works again
+  //     (a Travel Log put in the hand for the test: the saved game can't be replayed after this, so it comes last)
+  await S(() => { const E = window.__ED, S = E.S; S.cards.c900 = 'travellog'; S.players[S.cur].hand.push('c900'); E.render(); }); await wait(500);
+  c = await cardPos(await S(() => window.__ED.S.players[window.__ED.S.cur].hand.indexOf('c900'))); await p.mouse.click(c.x, c.y); await wait(600);
+  ok('Travel Log: which cards to remove?', await S(() => window.__ED.UI.mode === 'trashPick' && !!document.querySelector('#bOk')));
+  ok('the market offers nothing meanwhile', await S(() => !document.querySelector('#market .mslot.can') && !!document.querySelector('#market .mslot.no')));
+  await p.click('#market .mslot[data-src]'); await wait(300);
+  ok('a market tap says why and opens no purchase', await S(() => window.__ED.UI.mode === 'trashPick' && document.querySelector('#buySlot').hidden && /remove/.test(document.querySelector('#toast').textContent)));
+  await p.keyboard.press('Escape'); await wait(200);
+  ok('Escape keeps the question', await S(() => window.__ED.UI.mode === 'trashPick' && !!document.querySelector('#bOk')));
+  await p.click('#bOk'); await wait(500);
+  ok('answered: the market opens again', await S(() => window.__ED.UI.mode === 'idle' && !window.__ED.S.turn.pending && !document.querySelector('#market .mslot.no')));
   ok('no page errors', !errs.length, errs.slice(0, 5).join(' | '));
   await b.close(); srv.close();
   console.log(fails ? `flows: ${fails} failing` : 'flows ok'); process.exit(fails ? 1 : 0);

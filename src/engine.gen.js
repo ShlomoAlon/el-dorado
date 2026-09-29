@@ -178,6 +178,26 @@ function isActive(p){return !playerDone(p)&&!p.resigned;}
 function mapFor(st){return buildCourse(st.course,st.seed);}
 /* where a card type is sold: every type has exactly one stack, in the market or the reserve. {src:'m'|'r', i, s} or null */
 function stackOf(t){let i=S.market.findIndex(s=>s.t===t);if(i>=0)return{src:'m',i,s:S.market[i]};i=S.reserve.findIndex(s=>s.t===t);return i>=0?{src:'r',i,s:S.reserve[i]}:null;}
+/* the reserve can be bought from once a market slot is empty */
+function reserveOpen(){return S.market.some(s=>s.n===0);}
+/* why seat can't buy a card of type t now, payment aside ('' if it can). The purchase rules live here: the buy action and
+   the page's market both ask */
+function cantBuy(seat,t){
+  if(!S||S.over)return'The game is over.';
+  if(seat!==S.cur)return'It is not your turn.';
+  if(S.turn.pending)return'Choose which cards to remove first.';
+  if(S.turn.bought)return'You can buy only one card per turn.';
+  const st=stackOf(t);if(!st||st.s.n<=0)return'That card is sold out.';
+  if(st.src==='r'&&!reserveOpen())return'The reserve opens once a market slot is empty.';
+  return'';
+}
+/* what seat can buy now with the coins in its hand: [{src:'m'|'r', i, t}], market first */
+function buyOptions(seat){
+  const P=S&&S.players[seat];if(!P)return[];
+  const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),out=[];
+  for(const[src,list]of[['m',S.market],['r',S.reserve]])list.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash&&!cantBuy(seat,s.t))out.push({src,i,t:s.t});});
+  return out;
+}
 /* ---- game logs (replays) ----
    {kind:'eldorado-replay', v:1 (training logs) or 2 (game records, below), title, course, seed, rng, fullRace, players:[{name,color,bot}], actions:[[seat,action],…], notes:[…]}
    Every shuffle draws from a generator seeded with log.rng, so re-applying the same actions rebuilds the identical game. */
@@ -414,11 +434,8 @@ function applyAction(seat,a){
       break;
     }
     case 'buy':{
-      if(T.bought)return fail('You can buy only one card per turn.');
-      const open=S.market.some(s=>s.n===0);
-      const st=stackOf(a.type);let stack=st&&st.s;
-      if(!stack||stack.n<=0)return fail('That card is sold out.');
-      if(st.src==='r'&&!open)return fail('The reserve opens once a market slot is empty.');
+      const no=cantBuy(seat,a.type);if(no)return fail(no);
+      const st=stackOf(a.type);let stack=st.s;
       if(!distinctHand(a.cards))return fail('Pay with cards from your hand.');
       const total=a.cards.reduce((s,id)=>s+coinVal(id),0),cost=CT[stack.t].cost;
       if(total<cost)return fail('Not enough coins.');
@@ -1126,5 +1143,5 @@ function aiStep(id,mem,rec){
 
 export const E={AIS,COLORS,aiById,aiCourseOK,aiAllowed,aiUsesNet,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiStep,get MAPX(){return MAP},get BOT_EVALS(){return BOT_EVALS},botScoreActions,botPlaceValue,botPlaceSettled,setRng,replayCheck,replayStart,replayStep,recNewGame,recApply,recCanUndo,recUndo,recState,recFinal,mulberry32,botCost,botRemaining,botEndFeatures,botClone,botRandomCourse,botNetFeatures,botNetNF,botNetValue,botChoose,botActionValue,botTurn,botActions,botFeatures,botValue,endGame,BOT_NF,BOT_FLAGS,setNet(n){BOT_NET=n},setPlan(k,o){BOT_PLANS[k]=o},get BOT_PLANS(){return BOT_PLANS},buildCourse,mapFor,COURSES,courseById,newGame,applyAction,eloDeltas,redact,reach,payTargets,nativeTargets,playerDone,CT,get S(){return S},set S(v){S=v},get MAP(){return MAP},set MAP(v){MAP=v}};
 // for the page's modules: every name (live bindings), and setters for the game on show
-export {CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,RNG,setRng,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,mapFor,stackOf,REPLAY_MAX_ACTIONS,replayCheck,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,aiById,drawCards,occupied,blockAt,neighbors,coinVal,blkLabel,reach,nativeTargets,payTargets,endGame,checkEnd,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botWorth,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_ACT_SPEED,botHeuristic2,BOT_STARTER,BOT_PLANS,BOT_PLAN_CUR,BOT_PLAN_DEF,botPlanMoves,botPaddles,botClone,botCardWorth,BOT_PADDLE,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botDeepChoose,botRolloutChoose,botTurnSearch,botScoreActions,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botDeepPlayout,botTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiFinishCard,aiStep};
+export {CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,RNG,setRng,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,aiById,drawCards,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,payTargets,endGame,checkEnd,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botWorth,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_ACT_SPEED,botHeuristic2,BOT_STARTER,BOT_PLANS,BOT_PLAN_CUR,BOT_PLAN_DEF,botPlanMoves,botPaddles,botClone,botCardWorth,BOT_PADDLE,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botDeepChoose,botRolloutChoose,botTurnSearch,botScoreActions,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botDeepPlayout,botTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiNetFits,aiChoose,aiFinishCard,aiStep};
 export const setS=v=>{S=v},setMAP=v=>{MAP=v};

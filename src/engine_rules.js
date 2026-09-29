@@ -16,6 +16,26 @@ function isActive(p){return !playerDone(p)&&!p.resigned;}
 function mapFor(st){return buildCourse(st.course,st.seed);}
 /* where a card type is sold: every type has exactly one stack, in the market or the reserve. {src:'m'|'r', i, s} or null */
 function stackOf(t){let i=S.market.findIndex(s=>s.t===t);if(i>=0)return{src:'m',i,s:S.market[i]};i=S.reserve.findIndex(s=>s.t===t);return i>=0?{src:'r',i,s:S.reserve[i]}:null;}
+/* the reserve can be bought from once a market slot is empty */
+function reserveOpen(){return S.market.some(s=>s.n===0);}
+/* why seat can't buy a card of type t now, payment aside ('' if it can). The purchase rules live here: the buy action and
+   the page's market both ask */
+function cantBuy(seat,t){
+  if(!S||S.over)return'The game is over.';
+  if(seat!==S.cur)return'It is not your turn.';
+  if(S.turn.pending)return'Choose which cards to remove first.';
+  if(S.turn.bought)return'You can buy only one card per turn.';
+  const st=stackOf(t);if(!st||st.s.n<=0)return'That card is sold out.';
+  if(st.src==='r'&&!reserveOpen())return'The reserve opens once a market slot is empty.';
+  return'';
+}
+/* what seat can buy now with the coins in its hand: [{src:'m'|'r', i, t}], market first */
+function buyOptions(seat){
+  const P=S&&S.players[seat];if(!P)return[];
+  const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),out=[];
+  for(const[src,list]of[['m',S.market],['r',S.reserve]])list.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash&&!cantBuy(seat,s.t))out.push({src,i,t:s.t});});
+  return out;
+}
 /* ---- game logs (replays) ----
    {kind:'eldorado-replay', v:1 (training logs) or 2 (game records, below), title, course, seed, rng, fullRace, players:[{name,color,bot}], actions:[[seat,action],…], notes:[…]}
    Every shuffle draws from a generator seeded with log.rng, so re-applying the same actions rebuilds the identical game. */
@@ -252,11 +272,8 @@ function applyAction(seat,a){
       break;
     }
     case 'buy':{
-      if(T.bought)return fail('You can buy only one card per turn.');
-      const open=S.market.some(s=>s.n===0);
-      const st=stackOf(a.type);let stack=st&&st.s;
-      if(!stack||stack.n<=0)return fail('That card is sold out.');
-      if(st.src==='r'&&!open)return fail('The reserve opens once a market slot is empty.');
+      const no=cantBuy(seat,a.type);if(no)return fail(no);
+      const st=stackOf(a.type);let stack=st.s;
       if(!distinctHand(a.cards))return fail('Pay with cards from your hand.');
       const total=a.cards.reduce((s,id)=>s+coinVal(id),0),cost=CT[stack.t].cost;
       if(total<cost)return fail('Not enough coins.');

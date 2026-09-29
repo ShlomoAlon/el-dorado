@@ -1,7 +1,7 @@
 /* Turning what the player does into engine actions. Every rules change goes through act(): locally it runs the shared
    engine (and is recorded: G.rec); online it is sent to the server, which runs the same engine and sends back the new
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
-import { S, CT, typeOf, def, coinVal, rm, reach, payTargets, nativeTargets, isActive, recApply, recUndo, recCanUndo, setS, setMAP } from '../engine.gen.js';
+import { S, CT, typeOf, def, coinVal, rm, reach, payTargets, nativeTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, setS, setMAP } from '../engine.gen.js';
 import { esc } from './dom.js';
 import { UI, NET, G, cur, canAct, online, isAI, myId, viewIdx, save, keepLocalReplay, loadSave } from './state.js';
 import { replayDecorate } from './replay.js';
@@ -135,27 +135,21 @@ export function pickFromMarket(src,idx){
   if(!canAct()){sfx('error');toast('Wait for your turn to buy.');return;}
   const stack=src==='m'?S.market[idx]:S.reserve[idx];if(!stack||stack.n<=0)return;
   if(UI.mode==='transmit'){openAll(false);act({t:'transmit',card:UI.card,type:stack.t});return;}
-  if(S.turn.bought){sfx('error');toast('You can buy only one card per turn.');return;}
-  if(src==='r'&&!S.market.some(s=>s.n===0)){sfx('error');toast('The reserve opens once a market slot is empty.');return;}
   if(UI.mode==='pay'&&UI.buy.src===src&&UI.buy.idx===idx){cancelMode();return;}
+  const no=cantBuy(S.cur,stack.t);if(no){sfx('error');toast(no);return;}
   UI.mode='pay';UI.buy={src,idx,t:stack.t};UI.picks=[];UI.card=null;
   render();
 }
 export function payTotal(){return UI.picks.reduce((a,id)=>a+coinVal(id),0);}
 let buyFrom=null;const takeBuyFrom=()=>{const r=buyFrom;buyFrom=null;return r&&Date.now()-r.at<3000?r:null;};
 export function confirmBuy(){const B=UI.buy;if(!B||payTotal()<CT[B.t].cost)return;{const e=document.querySelector('#buySlot .mcard');if(e){const r=e.getBoundingClientRect();buyFrom={left:r.left,top:r.top,width:r.width,height:r.height,at:Date.now()};}}act({t:'buy',type:B.t,cards:UI.picks.slice()});}
+/* drop the selection. A removal still to choose (Scientist, Travel Log) stays asked: nothing else can happen before it */
 export function cancelMode(){
-  if(S&&S.turn.pending)return;
-  UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;render();
+  if(!S)return;
+  UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.mode=S.turn.pending?'trashPick':'idle';render();
 }
-/* cards the player to act could buy right now with the cards in hand */
-export function affordable(){
-  if(!S||S.over||UI.cover||!canAct()||S.turn.bought)return[];
-  const cash=cur().hand.reduce((a,id)=>a+coinVal(id),0),open=S.market.some(s=>s.n===0),out=[];
-  S.market.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash)out.push({src:'m',idx:i,t:s.t});});
-  if(open)S.reserve.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash)out.push({src:'r',idx:i,t:s.t});});
-  return out;
-}
+/* what the player to act could buy right now with the cards in hand ([{src, i, t}]: the engine's rule) */
+export function affordable(){return !S||UI.cover||!canAct()?[]:buyOptions(S.cur);}
 export function startEndTurn(){
   if(!canAct()||S.turn.pending)return;
   if(UI.mode!=='buyWarn'&&affordable().length){UI.mode='buyWarn';UI.card=null;UI.picks=[];UI.buy=null;render();return;} // nudge before skipping a purchase

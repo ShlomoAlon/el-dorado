@@ -1,5 +1,5 @@
 // Every check in one command. Independent checks run side by side; the timing measurements run afterwards, alone.
-//   node test/run.mjs            build, import lint, engine (quick), layout (5 sizes), game flows, worker bundle, frame costs  (~45 s)
+//   node test/run.mjs            build, import lint, rules, engine (quick), layout (5 sizes), game flows, worker bundle, frame costs  (~45 s)
 //   node test/run.mjs --online   also online play end to end, against a game server the test starts itself  (+~45 s)
 //   node test/run.mjs --full     everything: engine (60 games + AI on every course), layout (11 sizes), online, board rendering
 import { spawn, execSync } from 'node:child_process';
@@ -14,6 +14,7 @@ const run = ([name, cmd]) => new Promise(res => { const t = Date.now(); let out 
   c.on('close', code => res({ name, code, out, s: ((Date.now() - t) / 1000).toFixed(0) })); });
 const res = await Promise.all([
   ['lint', 'node test/lint.mjs'],
+  ['rules', 'node test/rules.test.mjs'],
   ['engine', 'node test/engine.test.mjs' + (full ? '' : ' --quick')],
   ['layout', 'node test/layout.cjs' + (full ? '' : ' --quick')],
   ['flows', 'node test/flows.cjs'],

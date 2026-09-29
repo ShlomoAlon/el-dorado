@@ -1,7 +1,7 @@
 /* The market: six cards floating at the top right (plus an "All cards" tile), the All cards spread (market and
    reserve), the purchase slot above the hand, and dragging a market card down to buy it. Slots are made once and
    updated in place; a card's artwork is drawn again only when another card takes its slot. */
-import { S, CT, stackOf, fmt } from '../engine.gen.js';
+import { S, CT, stackOf, reserveOpen, cantBuy, fmt } from '../engine.gen.js';
 import { $, setText, setStyle } from './dom.js';
 import { UI, canAct } from './state.js';
 import { geo, onGeo } from './geometry.js';
@@ -48,21 +48,21 @@ function patchSlots(box,specs,before){
 }
 function update(){
   if(!S)return;
-  const canBuy=!S.turn.bought&&!S.over&&!UI.cover,tr=UI.mode==='transmit';
-  const openSlot=S.market.some(s=>s.n===0),aff=new Set(tr?[]:affordable().map(a=>a.src+a.idx));
-  const spec=(src,s,i,ok)=>{if(s.n<=0)return{src,i,n:0,cls:'mslot empty'};
-    const chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src===src&&UI.buy.idx===i;
+  const tr=UI.mode==='transmit',openSlot=reserveOpen(),aff=new Set(tr?[]:affordable().map(a=>a.src+a.i));
+  // a slot is 'no' when the player to act can't buy it now whatever they pay (the engine's rule), 'can' when they can afford it
+  const spec=(src,s,i)=>{if(s.n<=0)return{src,i,n:0,cls:'mslot empty'};
+    const ok=tr||(!UI.cover&&!cantBuy(S.cur,s.t)),chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src===src&&UI.buy.idx===i;
     return{src,i,t:s.t,n:s.n,cls:`mslot${ok?'':' no'}${aff.has(src+i)?' can':chosen?'':' dimc'}${chosen?' chosen':''}`};};
-  const mOk=tr||canBuy,rOk=tr||(canBuy&&openSlot),resAff=[...aff].some(k=>k[0]==='r');
+  const resAff=[...aff].some(k=>k[0]==='r');
   const mk=$('#market');let at=$('#allTile');
   if(!at){mk.insertAdjacentHTML('beforeend',`<button class="alltile" id="allTile" title="See every card, including the reserve">${ALL_ICON}<span>All cards</span><small></small></button>`);at=$('#allTile');}
-  patchSlots(mk,S.market.map((s,i)=>spec('m',s,i,mOk)),at);
+  patchSlots(mk,S.market.map((s,i)=>spec('m',s,i)),at);
   const ac=`alltile${openSlot||tr?' open':''}${resAff?' can':''}`;if(at.className!==ac)at.className=ac;
   const sm=at.querySelector('small'),st=tr?'Pick any card':openSlot?'Reserve open':'Reserve locked';if(sm.textContent!==st)sm.textContent=st;
   $('#mktBtn').classList.toggle('canbuy',aff.size>0&&!UI.mktOpen);
   if(!UI.allOpen)return;
-  patchSlots($('#allMarket'),S.market.map((s,i)=>spec('m',s,i,mOk)));
-  patchSlots($('#reserve'),S.reserve.map((s,i)=>spec('r',s,i,rOk)));
+  patchSlots($('#allMarket'),S.market.map((s,i)=>spec('m',s,i)));
+  patchSlots($('#reserve'),S.reserve.map((s,i)=>spec('r',s,i)));
   $('#resNote').textContent=tr?'Transmitter: take any card for free.':openSlot?'A market slot is empty, so you may buy from the reserve.':'Opens once a market slot sells out.';
   $('#buyState').textContent=S.turn.bought?'bought this turn':'1 purchase per turn';
   $('#resState').textContent=openSlot?'open':'locked';
