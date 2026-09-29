@@ -167,12 +167,14 @@ function payTargets(pl,pi){
      {t:'end', keep}                 end the turn, keeping these hand cards
      {t:'timeout'}                   the turn ends without the player (turn clock, or an AI's illegal choice)
      {t:'resign'}                    the player leaves the game (any time, in or out of turn)
+     {t:'endgame'}                   (local play) the game ends now for everyone: arrivals first, then who is closest
    ========================================================= */
 function applyAction(seat,a){
   const fail=err=>({ok:false,err,ev:[]});
   if(!S||S.over)return fail('The game is over.');
   if(!a||typeof a!=='object')return fail('Bad action.');
   if(a.t==='resign')return resign(seat);
+  if(a.t==='endgame'){log(seat,'ends the game.');endGame();return{ok:true,ev:[{e:'over'}]};} // local play only (the server refuses it)
   if(seat!==S.cur)return fail('It is not your turn.');
   if(a.t==='timeout'){log(seat,'ran out of time.');if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]});S.turn.active=null;
     const r=applyAction(seat,{t:'end',keep:[]});return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}

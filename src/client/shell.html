@@ -134,6 +134,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @keyframes fade{from{opacity:0}}
 @keyframes rise{from{transform:translateY(14px) scale(.98);opacity:0}}
 #acct{min-height:32px} /* its line is there before the script fills it: nothing below moves */
+#shell{isolation:isolate} /* nothing in the game can stack above the menu, whatever its z-index */
 #shell{visibility:hidden} /* the game shows once its CSS (the late block) has arrived */
 </style>
 <style data-late>
@@ -547,7 +548,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <dialog id="menu" aria-label="Menu" open>
 <form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
   <div class="acct" id="acct"></div>
-  <div class="ingame" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn pri" id="sBack">Back to game</button></span></div>
+  <div class="ingame" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn pri" id="sBack">Back to game</button></span></div>
   <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>On this device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label></div>
   <section data-screen="setup">
     <h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>

@@ -423,6 +423,8 @@ export class Room extends DurableObject {
     }
     if (m.t === 'act') {
       if (seat < 0) return err('You are watching this game.');
+      if (!m.a || typeof m.a !== 'object') return err('Bad action.');
+      if (m.a.t === 'endgame') return err('Online games end when the race is over.'); // local play only
       const eng = this.engine(); const prevCur = this.S.cur; let r;
       try { r = eng.recApply(this.rec, seat, m.a); } catch (e) { r = { ok: false, err: 'Bad action.' }; }
       // a refused action (or an engine exception) must never leave the game half-changed: rebuild it from the record

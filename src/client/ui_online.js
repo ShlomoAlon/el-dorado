@@ -67,7 +67,7 @@ function onRoomMsg(m){
   if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.deadline=m.deadline;NET.skew=m.now-Date.now();NET.busy=false;applyServerState(m.S,m.ev);}
 }
 function applyServerState(S2,ev){
-  const old=S;const fresh=!old||!old.owners||old.seed!==S2.seed||old.room!==S2.room;
+  const old=S;const fresh=!old||!old.owners||old.seed!==S2.seed||old.room!==S2.room;UI.preview=false;
   S=S2;
   if(fresh){for(const[,el]of cardEls)el.remove();cardEls.clear();MAP=mapFor(S);buildBoard();closeModal();lastPlayer=-1;UI.cover=false;fit();setTimeout(()=>{if(!userZoomed)fit();},0);} // again once render() has sized the market (--mktFoot), as local games do
   const turnChanged=fresh||old.cur!==S.cur||old.round!==S.round;

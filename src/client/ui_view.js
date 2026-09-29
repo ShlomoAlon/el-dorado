@@ -144,7 +144,13 @@ function drawMountain(g,h){
 }
 function edgeSeg(a,b){const A=hexAt(a),B=hexAt(b);const mx=(A.x+B.x)/2,my=(A.y+B.y)/2;let dx=B.x-A.x,dy=B.y-A.y;const l=Math.hypot(dx,dy);dx/=l;dy/=l;const px=-dy*R/2,py=dx*R/2;return[mx-px,my-py,mx+px,my+py];}
 const blPos={};
+/* blockade badges: rebuilt only when a blockade is taken (building them, with their text turned into HTML labels, forces
+   a layout: done on every render it stalled each card selection); otherwise only their 'can be targeted' mark changes */
 function renderBlockades(){
+  const sig=MAP.course+'|'+S.seed+'|'+S.blockades.map(B=>B.owner).join(',');
+  if(renderBlockades.sig===sig&&L.bl.childElementCount){for(const bg of L.bl.querySelectorAll('.bl-badge')){const k='B'+bg.dataset.bi,tg=UI.targets.has(k);
+    bg.classList.toggle('tgt',tg);bg.setAttribute('data-t',tg?k:'');}return;}
+  renderBlockades.sig=sig;
   L.bl.innerHTML='';
   S.blockades.forEach((B,bi)=>{
     if(B.owner!==null){delete blPos[bi];return;}
@@ -158,7 +164,7 @@ function renderBlockades(){
     for(const[x1,y1,x2,y2]of segs){const mx=(x1+x2)/2,my=(y1+y2)/2,dd=Math.hypot(mx-sx,my-sy);if(dd<bd){bd=dd;best=[mx,my];}}
     blPos[bi]=best;
     const tg=UI.targets.get('B'+bi);
-    const bg=sv('g',{class:'bl-badge'+(tg?' tgt':''),transform:`translate(${best[0]},${best[1]})`,'data-t':tg?'B'+bi:''},g);
+    const bg=sv('g',{class:'bl-badge'+(tg?' tgt':''),transform:`translate(${best[0]},${best[1]})`,'data-t':tg?'B'+bi:'','data-bi':bi},g);
     sv('circle',{r:27,fill:'rgba(0,0,0,0)',class:'bl-halo',stroke:'transparent'},bg);
     sv('rect',{x:-17,y:-17,width:34,height:34,rx:7,transform:'rotate(45)',fill:'#0b120f'},bg);
     sv('rect',{x:-15,y:-15,width:30,height:30,rx:6,transform:'rotate(45)',fill:col,stroke:'rgba(255,255,255,.45)','stroke-width':1.2},bg);
@@ -665,10 +671,12 @@ function wireCard(el,id){
     const dx=e.clientX-drag.x0,dy=e.clientY-drag.y0;
     if(!drag.started){if(Math.hypot(dx,dy)<8||drag.kind==='none')return;drag.started=true;UI.hover=null;
       if(drag.kind==='aim'){if(!(UI.mode==='card'&&UI.card===id)){UI.mode='card';UI.card=id;if(S.turn.active&&S.turn.active.id===id)UI.piece=S.turn.active.pi;UI.picks=[];render();}else layoutCards();}
-      else{el.classList.add('free');el.classList.remove('anim');}}
+      else{el.classList.add('free');el.classList.remove('anim');}
+      // where the game area and the board are: measured once (reading them after moving the card would force a layout per move)
+      drag.A=appRect();drag.V=vp().getBoundingClientRect();}
     if(drag.kind==='aim'){drag.cx=e.clientX;drag.cy=e.clientY;startAim();}
-    else{const A=appRect(),cw=cardW(),ch=cw*1.4;setT(el,e.clientX-A.left-cw/2,e.clientY-A.top-ch*.4,dx*.02,1.08);el.style.zIndex=150;
-      const k=targetAt(e.clientX,e.clientY),dk=k&&isDisc(UI.targets.get(k))?k:null;setHot(dk);
+    else{const A=drag.A,cw=cardW(),ch=cw*1.4;setT(el,e.clientX-A.left-cw/2,e.clientY-A.top-ch*.4,dx*.02,1.08);el.style.zIndex=150;
+      const k=targetAt(e.clientX,e.clientY,drag.V),dk=k&&isDisc(UI.targets.get(k))?k:null;setHot(dk);
       el.classList.toggle('go',!!dk||(UI.mode!=='discardFor'&&e.clientY<A.top+A.height-ch*1.25));if(UI.mode==='pay')$('#buySlot').classList.toggle('hot',e.clientY<A.top+A.height-ch*1.25);}
   });
   const end=e=>{
@@ -689,11 +697,11 @@ function wireCard(el,id){
   };
   el.addEventListener('pointerup',end);el.addEventListener('pointercancel',e=>{if(drag&&drag.id===id){setHot(null);end(e);}});
 }
-function boardPoint(cx,cy){const r=vp().getBoundingClientRect();return[(cx-r.left-view.x)/view.s+MAP.minX,(cy-r.top-view.y)/view.s+MAP.minY];}
+function boardPoint(cx,cy,r=vp().getBoundingClientRect()){return[(cx-r.left-view.x)/view.s+MAP.minX,(cy-r.top-view.y)/view.s+MAP.minY];}
 function hexRound(x,y){const q=(SQ3/3*x-y/3)/R,r=(2/3*y)/R;let rx=q,rz=r,ry=-q-r;let a=Math.round(rx),b=Math.round(ry),c=Math.round(rz);
   const dx=Math.abs(a-rx),dy=Math.abs(b-ry),dz=Math.abs(c-rz);if(dx>dy&&dx>dz)a=-b-c;else if(dy>dz)b=-a-c;else c=-a-b;return key(a,c);}
-function targetAt(cx,cy){
-  const[x,y]=boardPoint(cx,cy);
+function targetAt(cx,cy,r){
+  const[x,y]=boardPoint(cx,cy,r);
   for(const bi in blPos){const p=blPos[bi];if(UI.targets.has('B'+bi)&&Math.hypot(p[0]-x,p[1]-y)<24)return'B'+bi;}
   const k=hexRound(x,y);return UI.targets.has(k)?k:null;
 }

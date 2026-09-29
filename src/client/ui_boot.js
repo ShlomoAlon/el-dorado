@@ -7,7 +7,7 @@ const GAME_READY=Promise.race([document.fonts?Promise.allSettled(["400 1em Figtr
   .then(()=>{document.documentElement.classList.add('gameready');GAME_READY.done=true;});
 function boot(){
   setupPanZoom();menuInit();
-  if(!document.documentElement.classList.contains('resume')){setupSync();preview();} // the start screen's board, at once (not after the server check)
+  if(!document.documentElement.classList.contains('resume')){setupSync();prepareGame();} // the start screen's game, at once (not after the server check)
   const pick=e=>{if(!S||UI.cover||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;
     const inAll=!!e.target.closest('#allc');pickFromMarket(s.dataset.src,+s.dataset.i);if(inAll&&UI.mode==='pay')openAll(false);};
   for(const c of['#market','#allMarket','#reserve']){$(c).addEventListener('click',e=>{if(mdragJustEnded){mdragJustEnded=false;return;}pick(e);});$(c).addEventListener('pointerdown',marketDown);}

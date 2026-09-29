@@ -18,10 +18,11 @@ const hp=()=>S.players[viewIdx()];
 /* the local save is the game's record (the state is rebuilt from it): {rec, S, MAP} or null */
 const SAVE_KEY='eldorado-game-v1';
 function loadSave(){try{const rec=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');if(!rec||replayCheck(rec))return null;return{rec,...recState(rec)};}catch(e){return null;}}
-function save(){if(online()||REPLAY)return;try{if(REC)localStorage.setItem(SAVE_KEY,JSON.stringify(REC));else localStorage.removeItem(SAVE_KEY);}catch(e){}}
+function save(){if(online()||REPLAY||UI.preview)return; // (a game not started yet is never saved)
+  try{if(REC)localStorage.setItem(SAVE_KEY,JSON.stringify(REC));else localStorage.removeItem(SAVE_KEY);}catch(e){}}
 /* continue the saved local game (first visit, or back from a replay). Returns false if there is none in progress. */
 function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
-  try{aiReset();UI.viewer=null;REC=g.rec;S=g.S;MAP=g.MAP;buildBoard();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);lastPlayer=-1;render();requestAnimationFrame(()=>fit());
+  try{aiReset();UI.preview=false;UI.viewer=null;REC=g.rec;S=g.S;MAP=g.MAP;buildBoard();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!S.privacy;syncMode(false);lastPlayer=-1;render();requestAnimationFrame(()=>fit());
     if(!UI.cover)banner(cur().name,'Round '+S.round);return true;}catch(e){console.error(e);S=null;return false;}}
 /* resign: online the server does it; locally the player whose turn it is (or, while an AI moves, the human watching) leaves.
    Everyone else plays on; with no human left racing, the AIs finish the game quickly. */
@@ -33,6 +34,11 @@ function resignLocal(){const seat=resignSeat();if(seat<0)return;
     sc.querySelector('#rsNo').onclick=closeModal;
     sc.querySelector('#rsYes').onclick=()=>{closeModal();if(!S||S.over||online())return;const prevCur=S.cur,prevRound=S.round;
       const r=recApply(REC,seat,{t:'resign'});if(!r.ok)return;playEvents(r.ev);afterLocalChange(S.cur!==prevCur||S.round!==prevRound);};},true);}
+/* End game (local play): the game ends now for everyone; places as they stand (arrivals first, then who is closest) */
+function endLocal(){if(!S||S.over||online()||REPLAY)return;
+  modal(`<h2>End the game?</h2><p class="sub">The race stops now for everyone. Places go by who has arrived, then who is closest to El Dorado.</p><div class="mrow"><button class="btn" id="egNo">Keep playing</button><button class="btn pri" id="egYes">End game</button></div>`,sc=>{
+    sc.querySelector('#egNo').onclick=closeModal;
+    sc.querySelector('#egYes').onclick=()=>{closeModal();if(!S||S.over)return;const r=recApply(REC,S.cur,{t:'endgame'});if(!r.ok)return;playEvents(r.ev);afterLocalChange(true);};},true);}
 const humanRacing=()=>S.players.some(p=>!p.ai&&isActive(p));
 /* finished local games are kept on this device (newest first, up to 20) to watch again from Replays */
 const MYGAMES='eldorado-games-v1';
@@ -207,7 +213,7 @@ function aiNetLoad(){ // the neural network (~340 KB) is only fetched once a net
 function aiReset(){clearTimeout(AIX.timer);AIX.timer=0;AIX.mem={};AIX.gen++;} // a new game (or a loaded one) starts
 /* called after every render: if an AI is to move in a local game, schedule its next action */
 function aiKick(){
-  if(AIX.timer||!S||S.over||online()||REPLAY||!isAI(S.cur))return;
+  if(AIX.timer||!S||S.over||online()||REPLAY||UI.preview||!isAI(S.cur))return;
   const seat=S.cur,round=S.round,gen=AIX.gen,first=!S.turn.active&&!S.players[seat].play.length&&!S.turn.bought;
   const go=async()=>{
     if(gen!==AIX.gen)return;
