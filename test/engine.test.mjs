@@ -1,6 +1,8 @@
 // Plays many random games with the shared rules engine and checks invariants:
 // every game ends, no cards are created or lost, placements and Elo are sane,
 // and redaction never leaks another player's hand or deck order.
+//   node test/engine.test.mjs [--quick]   (--quick: 12 random games, and AI games on First Expedition only)
+const QUICK = process.argv.includes('--quick');
 import { E } from '../src/engine.gen.js';
 const assert = (c, m) => { if (!c) { console.error('FAIL:', m); process.exit(1); } };
 const t0 = performance.now(); for (let i = 0; i < 200; i++) E.buildCourse(E.COURSES[i % E.COURSES.length], i);
@@ -19,7 +21,7 @@ for (const C of E.COURSES) {
   assert(deals.size > 5, C.id + ': blockades not random');
 }
 let games = 0, maxAct = 0;
-for (let g = 0; g < 60; g++) {
+for (let g = 0; g < (QUICK ? 12 : 60); g++) {
   const np = 2 + (g % 3);
   E.newGame({ course: E.COURSES[g % E.COURSES.length], seed: (Math.random() * 1e9) | 0, fullRace: g % 5 !== 0, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
   const M = E.MAP, goals = M.goals.map(k => M.hexes.get(k));
@@ -94,7 +96,7 @@ for (let g = 0; g < 60; g++) {
   e0 = E.BOT_EVALS; aiGame(rc, ['humboldt', 'raleigh'], () => assert(!E.aiNetFits(), 'network used on a course it was not trained for'));
   assert(E.BOT_EVALS === e0, 'network evaluated on another course');
   // every other official course: full 3- and 4-player AI games finish; the network AIs play there as the route planner
-  for (const C of E.COURSES.filter(c => c.id !== 'first')) for (const ais of [['raleigh', 'humboldt', 'humboldt'], ['humboldt', 'raleigh', 'raleigh', 'humboldt']]) {
+  if (!QUICK) for (const C of E.COURSES.filter(c => c.id !== 'first')) for (const ais of [['raleigh', 'humboldt', 'humboldt'], ['humboldt', 'raleigh', 'raleigh', 'humboldt']]) {
     e0 = E.BOT_EVALS; aiGame(C, ais, () => assert(!E.aiNetFits(), 'network used on ' + C.id));
     assert(E.BOT_EVALS === e0, 'network evaluated on ' + C.id);
     assert(E.S.players.filter(p => p.fin).length >= ais.length - 1, C.id + ': AIs did not reach El Dorado');

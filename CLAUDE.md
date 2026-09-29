@@ -21,16 +21,19 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
 ## Change loop (every time)
 1. Edit **sources only**:
    - rules: `src/engine_data.js` (cards, boards, map generation), `src/engine_rules.js` (state, actions, turn order, end of game, Elo, redaction), `src/engine_ai.js` (named AI players; `engine_bot.js` belongs to the AI training code)
-   - page: `src/client/shell.html` (markup + CSS), `src/client/ui_state.js` (UI state + `act()`), `src/client/ui_view.js` (board, cards, drag/aim, HUD, modals), `src/client/ui_online.js` (sign-in, hub, rooms, sockets, timer), `src/client/ui_boot.js`
+   - page: `src/client/shell.html` (markup + CSS) and the ES modules in `src/client/` (bundled by esbuild; map in
+     `docs/FRONTEND_REFACTOR.md`): `state.js` (UI/NET/G), `actions.js` (`act()`, modes, targets), `frame.js` (render loop),
+     `geometry.js`, `board/*` (terrain, camera, overlays, pieces), `hand.js`, `aim.js`, `market.js`, `hud.js`, `feed.js`,
+     `dialogs.js`, `menu.js`, `online.js`, `replay.js`, `main.js` (boot)
    - server: `src/worker.js`
 2. `node build.mjs` → regenerates `public/index.html`, `public/app.<hash>.js/.css`, `src/engine.gen.js`, `build/artifact.html` (all committed; never hand-edit them).
    The site's `index.html` must stay under ~14 KB compressed (one TCP round trip): the start screen's markup + CSS only
    (shell.html's first `<style>`); game CSS goes in the `<style data-late>` block, which becomes the cached app.css.
-3. `node test/engine.test.mjs` → must print `ok: 60 games …`.
-   Also `npx wrangler deploy --dry-run --outdir /tmp/wdry` — Cloudflare's bundler (esbuild) rejects some things Node accepts
-   (e.g. assigning to a `const`); a failed bundle means the push never deploys.
+3. `node test/run.mjs` → must print `all ok` (~45 s: build, import lint, engine quick tier, layout at 5 sizes, a game played
+   with real clicks and drags, the worker bundle, frame costs on a throttled phone). Board, layout or engine changes:
+   `node test/run.mjs --full` (all 60 engine games + AI on every course, 11 layout sizes, board rendering).
+   (The worker bundle check matters: Cloudflare's bundler rejects some things Node accepts; a failed bundle never deploys.)
 4. UI changes: load `public/index.html` in Playwright (Chromium is preinstalled; `NODE_PATH=$(npm root -g)`), take screenshots, look at them, check for page errors.
-   Always run `NODE_PATH=$(npm root -g) node test/layout.cjs` → must print `layout ok` (11 screen sizes, play + replay: every control on screen, no two controls overlapping).
    Online/server changes: `printf 'DEV_AUTH=1\n' > .dev.vars; npx wrangler dev --ip 127.0.0.1 --port 8787` then `node test/e2e.cjs` (3 browsers, full ranked game).
 5. Commit (clear message + the attribution lines your environment asks for) and `git push origin main`.
 6. Tell him in 1–3 sentences what changed and that it's deploying.
@@ -60,10 +63,14 @@ architecture, protocols, known gaps, and how to test. This file is the short ver
   gestures only change its transform, and once zooming stops the scale is baked into #bscale (one sharp redraw);
   board text is HTML (#blabels*), wheel deltas normalised as d3-zoom, Safari pinch via gesture events.
   The brief blur while zooming in, before the bake, is accepted by the owner — don't trade smoothness for it.
+- View code (docs/FRONTEND_REFACTOR.md): anything that changes state calls `render()`; each view part updates in the next frame
+  and writes only what changed. Never read layout while updating (sizes come from `geometry.js`; measuring after an update
+  goes in `after()`). Never set a CSS variable on `#app` or use `:has()` on it at runtime: either restyles all ~3,800 board
+  elements (set it on the element that uses it). `test/frames.cjs` checks this.
 - Respect `prefers-reduced-motion`. Keep it working at 390 px wide (phone) and 1440 px.
 - Menus (start screen, Online, room lobby, Replays) are one native `<dialog id="menu">` in shell.html: every screen is
   written there once and shown with `hidden`; choices are native radios/selects/checkboxes (the browser keeps their state,
-  tabs are CSS `:has()`); ui_menu.js only reads them and fills data boxes (via setHTML, which skips unchanged content).
+  tabs are CSS `:has()`); menu.js only reads them and fills data boxes (via setHTML, which skips unchanged content).
   Never rebuild a screen's HTML on a click, and never put `backdrop-filter` behind it (owner: no flicker, a click changes
   only what it's about).
 - Layout: page = CSS grid (`#shell`): the game cell (`#gamecell` > `#app`) plus replay dock/side cells. Never float new UI over

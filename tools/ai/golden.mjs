@@ -2,7 +2,7 @@
 // network's input features and value at many positions. Engine refactors must reproduce them exactly, so trained
 // networks keep working. Writes test/fixtures/features.json:  node tools/ai/golden.mjs [engine module]
 import fs from 'node:fs';
-const { E } = await import(process.argv[2] || '../../src/engine.gen.js');
+const { E } = await import(/\.m?js$/.test(process.argv[2] || '') ? process.argv[2] : '../../src/engine.gen.js'); // (an engine to check can be given: node golden.mjs path/to/engine.gen.js)
 const net = E.aiNetDecode(fs.readFileSync(new URL('../../src/ai/first.bin', import.meta.url)));
 const fnv = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return (h >>> 0).toString(16); };
 export function golden(E, net) {

@@ -28,8 +28,11 @@ const serve = () => { const pub = path.join(__dirname, '..', 'public'); const sr
   ok('Start: no change on the board', await S(() => window.__mut) === 0, (await S(() => window.__mut)) + ' mutations');
   ok('game on show', await S(() => { const E = window.__ED; return !!E.S && !E.UI.preview && document.querySelectorAll('#cards .card').length === 4 && document.querySelectorAll('#pieces .piece').length === E.S.players.length; }));
   // 2. select a card with a click: it lifts, its targets appear
-  const pick = await S(() => { const E = window.__ED, S = E.S, P = S.players[S.cur];
+  // (a deal can start a player with no card that moves an explorer: then pass until someone has one; the AI seat plays its own turn)
+  const findMove = () => S(() => { const E = window.__ED, S = E.S, P = S.players[S.cur];
     for (const id of P.hand) { E.onHandCard(id); E.render(); const ks = [...E.UI.targets].filter(([k, t]) => k[0] !== 'B' && t.kind === 'move').map(([k]) => k); E.cancelMode(); E.render(); if (ks.length) return { id, ks }; } return null; });
+  let pick = await findMove();
+  for (let k = 0; k < 6 && !pick; k++) { await S(() => { window.__ED.act({ t: 'end', keep: [] }); }); await p.waitForFunction(() => { const E = window.__ED; return !E.S.players[E.S.cur].ai; }, null, { timeout: 30000 }); await idle(); pick = await findMove(); }
   ok('a playable card', !!pick);
   // (hand.js keeps no id on the element: find the card by its position in the hand)
   const handIdx = await S(id => window.__ED.S.players[window.__ED.S.cur].hand.indexOf(id), pick.id);

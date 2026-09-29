@@ -111,7 +111,7 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
   (or its deck down to 2 cards) and then waited next to El Dorado forever. The named AIs now keep one card that can enter
   El Dorado, never trash below 4 cards, and buy such a card before ending a turn without one. engine_bot.js untouched.
 - Blockade costs 1,1,1,1,2,2 are still a guess (BoardGameHelpers has blockade images too).
-- Board rendering: harder spaces are darker (`TSHADE` in ui_view.js), icons laid out 1 / 2 side by side / 3 triangle /
+- Board rendering: harder spaces are darker (`TSHADE` in board/terrain.js), icons laid out 1 / 2 side by side / 3 triangle /
   4 square — owner's request, mirrors the printed tiles.
 
 ## 6. Architecture
@@ -127,17 +127,16 @@ src/ai/first.bin          the shipped network (tools/ai/pack.mjs from tools/ai/m
 src/engine_rules.js       S/MAP globals, newGame, reach/nativeTargets/payTargets, applyAction, advance, resign,
                           endGame (placements), eloDeltas, redact
 src/client/shell.html     <title>, fonts, all CSS (design tokens in :root), SVG symbol defs, DOM skeleton
-src/client/ui_state.js    UI object, NET object, canAct/viewIdx/hp, computeTargets, act(), UI action builders
-src/client/ui_art.js      per-card background scenes (CARD_BG: 21 hand-made SVG scenes behind the emblem; the owner
-                          likes this silhouette/travel-poster style; no image generator available — match it for new cards)
-src/client/ui_view.js     board SVG render, pieces + animation, pan/zoom/pinch, card art/markup, card layout (fan),
-                          drag + aim arrow, market/side panel, HUD/prompt/buttons, banner/toast/modal, setup,
-                          rules, game-over, pile viewer
-src/client/ui_online.js   api(), Google Identity Services sign-in, hub (play / leaderboard / profile),
-                          lobby socket, room socket + reconnect, applyServerState, room lobby modal, timer display
-src/client/ui_boot.js     wiring + startup routing (?room=CODE links, rejoin, local save resume)
+src/client/*.js           the page: ES modules bundled by esbuild (build.mjs). One module per area; the full map and the
+                          rules for view code (render() → one update per frame, no layout reads, compositor animations)
+                          are in docs/FRONTEND_REFACTOR.md. art.js: per-card background scenes (CARD_BG: 21 hand-made SVG
+                          scenes behind the emblem; the owner likes this silhouette/travel-poster style; no image generator
+                          available — match it for new cards)
 src/worker.js             Worker routes, auth (Google JWT verify + HMAC session tokens), Lobby DO, Room DO
-test/engine.test.mjs      60 random games: termination, card conservation, placements, zero-sum Elo, no redaction leaks
+test/run.mjs              all checks in one command (quick ~45 s; --full); see CLAUDE.md
+test/flows.cjs            Playwright: a local game played with real clicks and drags (move, drag, undo, buy, AI turn, replay)
+test/frames.cjs           phone profile, CPU ÷4: restyle size and composited animations per interaction
+test/engine.test.mjs      60 random games (--quick: 12): termination, card conservation, placements, zero-sum Elo, no redaction leaks
 test/e2e.cjs              Playwright: 3 dev-signed-in browsers, create/join/start, moves, buys, timer, resigns, ratings
 test/e2e_ai.cjs           Playwright vs wrangler dev: rated room with 2 AI seats plays to the end (AI ratings move), unrated room
 test/ai_local.cjs         Playwright (own static server): local game vs AIs from the setup screen, 1440 and 390 px
@@ -182,7 +181,7 @@ Log lines are `{p,t,r}` (r = round; lines the server adds have none).
 - Cards: suit sets frame + scene palette; strength badge uses the suit colour and icon (only coin cards are gold);
   action cards show `face` (short) text, `txt` in tooltips. Full-screen button `#fsBtn` is hidden where unsupported
   (iPhone Safari); home-screen metas make the saved web app full screen there.
-- **Other players' turns** (`FEED`, ui_view.js): for AI seats (local) and every seat but mine (online), `playEvents` feeds the
+- **Other players' turns** (`FEED`, feed.js): for AI seats (local) and every seat but mine (online), `playEvents` feeds the
   `play` events into a row of small cards under the prompt text (`#feed` inside `#prompt`): one group per step with a caption
   ("Explorer · 2 spaces · blockade #3", "Bought Scout for 2½", "Ended turn · kept 1"); played cards fly out of their player chip, a
   bought/taken card flies out of the market, and their moves leave a dotted trail in their colour (`L.trail`). After their turn the
@@ -257,7 +256,7 @@ incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning
   can't consume the game's shuffle stream.
 - Server: `POST /api/replays` (public, ≤1.9 MB, `replayCheck` validation, newest 1000 kept in D1 `replays`), `GET /api/replays`,
   `GET /api/replays/<id>`. Page: `/?replay=<id>`, or "Replays" on the start screen (upload + recent list).
-  Viewer: `src/client/ui_replay.js`; `REPLAY` non-null makes `canAct()` false and disables saving.
+  Viewer: `src/client/replay.js`; `G.replay` non-null makes `canAct()` false and disables saving.
   Its controls live in grid cells beside/under the game (`#rdock`, `#rside`), never on top of it; the game area shrinks.
 
 ### Layout (why it is built this way)

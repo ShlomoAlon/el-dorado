@@ -74,8 +74,11 @@ function onBoardHover(e) {
 }
 function onBoardOut(e) { if (drag) return; if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('[data-t]')) hideHover(); }
 
-// for tests and debugging: the game, the page's state and its main entry points
-window.__ED = { NET, UI, G, act, playEvents, openReplay, applyAction, render() { render(); flush(); }, get S() { return S }, get MAP() { return MAP },
+// for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
+// a frame would after a click)
+const now = f => (...a) => { const r = f(...a); flush(); return r; };
+window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, view, frameStats, myId, canAct, reach, applyAction, joinRoom, netSend,
+  render() { render(); flush(); },
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },
-  joinRoom, netSend, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, confirmDiscardFor, confirmTrash, cancelMode, reach, myId, canAct, view, frameStats };
+  ...Object.fromEntries(Object.entries({ act, playEvents, openReplay, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, confirmDiscardFor, confirmTrash, cancelMode }).map(([k, f]) => [k, now(f)])) };
 boot();
