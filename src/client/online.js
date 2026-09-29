@@ -56,22 +56,32 @@ export function joinRoom(code){
 export function leaveRoomSocket(){if(NET.ws){const w=NET.ws;NET.ws=null;try{w.close();}catch(e){}}clearTimeout(NET.retryT);NET.connected=false;}
 export function connectRoom(){
   const code=NET.code;if(!code)return;
-  const ws=new WebSocket(wsUrl('/api/rooms/'+code+'/ws'));NET.ws=ws;
-  ws.onopen=()=>{NET.connected=true;NET.retries=0;NET.status='';if(S)render();};
-  ws.onmessage=e=>{if(e.data==='pong')return;let m;try{m=JSON.parse(e.data);}catch(_){return;}onRoomMsg(m);};
-  ws.onclose=ev=>{
-    if(NET.ws!==ws)return;NET.connected=false;NET.ws=null;
-    if(ev.code===1000||!NET.code){return;}
-    NET.status='Connection lost. Reconnecting…';if(S)render();renderRoomLobby();
-    NET.retries++;if(NET.retries>8&&!S){NET.status='Could not reach this room. It may have closed.';renderRoomLobby();return;}
-    NET.retryT=setTimeout(connectRoom,Math.min(8000,800*NET.retries));
-  };
-  clearInterval(NET.pingT);NET.pingT=setInterval(()=>{if(NET.ws&&NET.ws.readyState===1)NET.ws.send('ping');},25000);
+  const ws=new WebSocket(wsUrl('/api/rooms/'+code+'/ws'));NET.ws=ws;NET.heard=Date.now();
+  ws.onopen=()=>{NET.connected=true;NET.retries=0;NET.status='';NET.heard=Date.now();if(S)render();};
+  ws.onmessage=e=>{NET.heard=Date.now();if(e.data==='pong')return;let m;try{m=JSON.parse(e.data);}catch(_){return;}onRoomMsg(m);};
+  ws.onclose=()=>lostConnection(ws);
+  // heartbeat: the server answers every ping, so a connection that hears nothing for 40 s is dead (a network that dropped
+  // without closing it): give it up and reconnect, which brings the room's current state
+  clearInterval(NET.pingT);NET.pingT=setInterval(()=>{const w=NET.ws;if(!w||w.readyState!==1)return;if(Date.now()-NET.heard>40000)lostConnection(w);else w.send('ping');},15000);
 }
+/* the connection to the room is gone (closed, silent, or not answering): unless we left, reconnect (backing off) */
+function lostConnection(ws){
+  if(NET.ws!==ws)return;NET.ws=null;NET.connected=false;NET.busy=false;clearTimeout(NET.busyT);try{ws.close();}catch(e){}
+  if(!NET.code)return; // we left, or the room closed
+  NET.status='Connection lost. Reconnecting…';if(S)render();renderRoomLobby();
+  NET.retries++;if(NET.retries>8&&!S){NET.status='Could not reach this room. It may have closed.';renderRoomLobby();return;}
+  clearTimeout(NET.retryT);NET.retryT=setTimeout(connectRoom,Math.min(8000,800*NET.retries));
+}
+/* a move or an undo: the server answers with the new state or an error; no answer in 10 s means the connection is gone */
+export function netAct(m){NET.busy=true;netSend(m);const ws=NET.ws;clearTimeout(NET.busyT);if(ws)NET.busyT=setTimeout(()=>{if(NET.busy)lostConnection(ws);},10000);}
+// a phone waking up (or a tab coming back): check the connection at once instead of waiting for the next heartbeat
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible'||!NET.code)return;const ws=NET.ws;
+  if(!ws){clearTimeout(NET.retryT);connectRoom();return;}
+  if(ws.readyState!==1)return;const t=Date.now();try{ws.send('ping');}catch(e){}setTimeout(()=>{if(NET.ws===ws&&NET.heard<t)lostConnection(ws);},5000);});
 export function onRoomMsg(m){
-  if(m.t==='error'){NET.busy=false;sfx('error');toast(m.msg);if(S)render();return;}
+  if(m.t==='error'){NET.busy=false;clearTimeout(NET.busyT);sfx('error');toast(m.msg);if(S)render();return;}
   if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}renderRoomLobby();return;}
-  if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.deadline=m.deadline;NET.skew=m.now-Date.now();NET.busy=false;applyServerState(m.S,m.ev);}
+  if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.deadline=m.deadline;NET.skew=m.now-Date.now();NET.busy=false;clearTimeout(NET.busyT);applyServerState(m.S,m.ev);}
 }
 export function applyServerState(S2,ev){
   const old=S;const fresh=!old||!old.owners||old.seed!==S2.seed||old.room!==S2.room;UI.preview=false;

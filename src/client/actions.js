@@ -16,7 +16,7 @@ import { openAll, marketRectOf } from './market.js';
 import { feedWatch, feedEvent, feedClear } from './feed.js';
 import { sfx, sfxEvent } from './sound.js';
 import { aiKick, aiReset } from './ai.js';
-import { netSend } from './online.js';
+import { netAct } from './online.js';
 
 /* a different game is on show (a new deal, a loaded save, a replay, an online game): draw its board, drop the old one's
    elements, fit it */
@@ -79,8 +79,8 @@ export function playEvents(ev,viewer){
   }
 }
 export function act(a){
-  if(!S||!canAct())return;
-  if(online()){NET.busy=true;netSend({t:'act',a});render();return;}
+  if(!S||!canAct()){if(online()&&S&&!S.over&&S.owners[S.cur]===myId())toast('Reconnecting… your move wasn’t sent.');return;}
+  if(online()){netAct({t:'act',a});render();return;}
   const prevCur=S.cur,prevRound=S.round;
   const r=recApply(G.rec,S.cur,a);
   if(!r.ok){sfx('error');toast(r.err);render();return;}
@@ -159,7 +159,7 @@ export function startEndTurn(){
 export function finishTurn(){act({t:'end',keep:UI.mode==='endTurn'?UI.picks.slice():[]});}
 export function undo(){
   if(!canAct())return;
-  if(online()){if(NET.canUndo){NET.busy=true;netSend({t:'undo'});}return;}
+  if(online()){if(NET.canUndo)netAct({t:'undo'});return;}
   if(!recUndo(G.rec))return;
   UI.picks=[];UI.buy=null;UI.pending=null;UI.mode='idle';UI.card=null;
   syncMode(false);render();save();

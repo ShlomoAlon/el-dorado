@@ -40,6 +40,9 @@ const T = report('online');
     T.ok('menu during an online game: Back to game, nothing that would leave it', await wait(B, () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.querySelector('#sMode').hidden && document.querySelector('#oPlay').hidden && !document.querySelector('#oBusy').hidden));
     await B.click('#sBack');
     T.ok('back to the online game, still connected', await wait(B, () => !document.querySelector('#menu').open && __ED.NET.connected && !!__ED.S));
+    // a connection that dies silently (a phone asleep, a dropped network): noticed when the page comes back, and replaced
+    await B.evaluate(() => { const w = __ED.NET.ws; window.__deadWs = w; w.send = () => { }; document.dispatchEvent(new Event('visibilitychange')); });
+    T.ok('a silently dead connection is noticed and replaced', await wait(B, () => __ED.NET.ws && __ED.NET.ws !== window.__deadWs && __ED.NET.connected && !!__ED.S, null, 20000));
     const view = await Promise.all([A, B, C].map(p => p.evaluate(me => { const S = __ED.S, seat = S.owners.indexOf(me);
       return { seat, mine: S.players[seat].hand.every(id => S.cards[id]), others: S.players.every((q, i) => i === seat || q.hand.every(id => !S.cards[id])) }; }, ids[[A, B, C].indexOf(p)])));
     T.ok('each player sees their own hand and no one else\'s', view.every(v => v.seat >= 0 && v.mine && v.others) && new Set(view.map(v => v.seat)).size === 3, JSON.stringify(view));

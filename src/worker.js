@@ -432,7 +432,7 @@ export class Room extends DurableObject {
       }
       return;
     }
-    if (d.status !== 'playing' || !this.S) return;
+    if (d.status !== 'playing' || !this.S) { if (m.t === 'act' || m.t === 'undo') err('This game is not running any more.'); return; }
     const seat = this.S.owners.indexOf(uid);
     if (m.t === 'undo') {
       if (seat !== this.S.cur || !E.recCanUndo(this.rec)) return err('Nothing to undo.');
