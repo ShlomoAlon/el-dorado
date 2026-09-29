@@ -17,7 +17,7 @@ const moving = new Set(); // explorers walking now
 const tf = (x, y) => `translate(${(x - MAP.minX).toFixed(1)}px,${(y - MAP.minY).toFixed(1)}px)`;
 /* a small SVG drawn in board units around the explorer's spot (inside a box whose own corner is at ox, oy) */
 const svg = (cls, box, body, ox = 0, oy = 0) => { const [x, y, w, h] = box.split(' ').map(Number);
-  return `<div class="${cls}" style="left:${x - ox}px;top:${y - oy}px;width:${w}px;height:${h}px"><svg viewBox="${box}" width="${w}" height="${h}">${body}</svg></div>`; };
+  return `<div class="${cls} pb" style="--x:${x - ox}px;--y:${y - oy}px;--w:${w}px;--h:${h}px"><svg viewBox="${box}" width="${w}" height="${h}">${body}</svg></div>`; };
 function make(pl, i) {
   const p = S.players[pl], el = document.createElement('div'); el.className = 'piece';
   el.innerHTML = svg('psel', '-30 -30 60 60', `<circle r="${R * .8}" fill="none" stroke="#f8dc97" stroke-width="3" stroke-dasharray="5 4"/>`)

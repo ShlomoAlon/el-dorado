@@ -21,7 +21,7 @@ export const L={};
 const baseCache={};
 function baselineOf(font){if(baseCache[font]!=null)return baseCache[font];
   const s=document.createElement('span');s.style.cssText=`position:absolute;visibility:hidden;font:${font};line-height:1;white-space:pre`;
-  s.innerHTML='Hg<i style="display:inline-block;width:0;height:0;vertical-align:baseline"></i>';document.body.appendChild(s);
+  s.innerHTML='Hg<i class="probe"></i>';document.body.appendChild(s);
   const b=s.querySelector('i').offsetTop;s.remove();return baseCache[font]=b;}
 const labels=[];
 function placeLabel(e){e.style.top=(e.__y-baselineOf(e.__f))+'px';}

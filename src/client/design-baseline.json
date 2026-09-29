@@ -1,0 +1,17 @@
+{
+ "shell.html": {
+  "hex": 2,
+  "fontpx": 60,
+  "style": 0
+ },
+ "aim.js": {
+  "hex": 2,
+  "fontpx": 0,
+  "style": 0
+ },
+ "debug.js": {
+  "hex": 4,
+  "fontpx": 0,
+  "style": 4
+ }
+}

@@ -34,6 +34,28 @@ const shell = r('./src/client/shell.html').replace('<!--COURSES:course-->', cour
   .replace('<!--AILIST-->', E.AIS.map(a => `<button type="button" data-addai="${a.id}"><b>${esc(a.name)} <span class="aitag">AI</span></b><span>${esc(a.tier)} · ${esc(a.desc)}</span></button>`).join(''))
   .replace('<!--ROOMCOLS-->', sw('rlcol', -1, c => c.hex))
   .replace('<!--ROUTE-->', (M => `Boards <b>${M.route.join(' · ')}</b> · El Dorado (${M.endSym === 'j' ? 'jungle' : 'water'} side) · ${M.blockDefs.length} blockades, dealt at random`)(E.buildCourse(E.courseById('first'), 1)));
+/* The design check (docs/DESIGN.md): new UI takes its values from the tokens in shell.html's :root. Counted in the chrome's CSS
+   (the tokens themselves and the art rules left out: card faces, deck back, board background) and in the UI scripts (art modules
+   left out): raw hex colours, px font sizes, inline styles (style="…" other than custom properties carrying data, --x:…, and
+   .style.cssText). What is left from before the tokens is the baseline (src/client/design-baseline.json): a build with more
+   anywhere fails; a build with fewer lowers the baseline, so the count only goes down. */
+{
+  const ART = /^\s*(\.k-|\.c-|\.cface|\.back|#vp|\.mcard|\.card\.dpick)/, ARTJS = /^(art|meeple|cards|icons|train)\.js$|^board\//;
+  const HEX = /#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b(?![0-9a-fA-F])/g, FPX = /font-size:\s*[\d.]+px|font:\s*\d+\s+[\d.]+px/g, STY = /style="(?!--)|\.style\.cssText\s*=/g;
+  const n = (t, re) => (t.match(re) || []).length, found = {};
+  const sh = r('./src/client/shell.html').replace(/\/\*TOKENS\*\/[\s\S]*?\/\*END TOKENS\*\//, '').replace(/<svg width="0"[\s\S]*?<\/svg>/, '');
+  const css = [...sh.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n').split('\n').filter(l => !ART.test(l)).join('\n');
+  found['shell.html'] = { hex: n(css, HEX), fontpx: n(css, FPX), style: n(sh.replace(/<style[^>]*>[\s\S]*?<\/style>/g, ''), STY) };
+  const walk = d => readdirSync(new URL(d, import.meta.url), { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(d + e.name + '/') : [d + e.name]);
+  for (const f of walk('./src/client/').filter(f => f.endsWith('.js'))) { const k = f.slice('./src/client/'.length); if (ARTJS.test(k)) continue;
+    const t = r(f); found[k] = { hex: n(t, HEX), fontpx: n(t, FPX), style: n(t, STY) }; }
+  const BL = new URL('./src/client/design-baseline.json', import.meta.url); let base = {}; try { base = JSON.parse(readFileSync(BL, 'utf8')); } catch (e) { }
+  const over = [];
+  for (const [k, v] of Object.entries(found)) for (const [kind, c] of Object.entries(v)) { const b = base[k] ? base[k][kind] : 0; if (c > b) over.push(`${k}: ${c} ${kind} (allowed ${b})`); }
+  if (over.length) { console.error('design check failed (docs/DESIGN.md: use the tokens in shell.html :root, classes instead of inline styles):\n  ' + over.join('\n  ')); process.exit(1); }
+  const lean = Object.fromEntries(Object.entries(found).filter(([, v]) => v.hex || v.fontpx || v.style));
+  if (JSON.stringify(lean) !== JSON.stringify(base)) writeFileSync(BL, JSON.stringify(lean, null, 1) + '\n'); // (fewer than before: the baseline goes down)
+}
 // the AI's neural network (tools/ai/pack.mjs): the site loads it from /ai/first.bin only when an AI needs it;
 // the artifact (no network access there) carries it inline
 const netBin = readFileSync(new URL('./src/ai/first.bin', import.meta.url));

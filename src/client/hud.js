@@ -24,11 +24,11 @@ function updateHeader(){
     let c=box.children[i];if(!c){c=document.createElement('div');box.appendChild(c);}
     const fin=p.pieces.filter(k=>k==='done').length;
     // blockades held: one diamond each, then how many and the biggest (what breaks a tie: most blockades, then the biggest one)
-    const held=blocksOf(i),bmax=Math.max(0,...held.map(b=>S.blockades[b].n)),bk=held.length?held.map(b=>`<i style="background:${SYMCOL[S.blockades[b].k]}"></i>`).join('')+`<b title="${plural(held.length,'blockade')}, biggest #${bmax} (ties go to the most blockades, then the biggest one)">${held.length} · #${bmax}</b>`:'';
+    const held=blocksOf(i),bmax=Math.max(0,...held.map(b=>S.blockades[b].n)),bk=held.length?held.map(b=>`<i style="--pc:${SYMCOL[S.blockades[b].k]}"></i>`).join('')+`<b title="${plural(held.length,'blockade')}, biggest #${bmax} (ties go to the most blockades, then the biggest one)">${held.length} · #${bmax}</b>`:'';
     const you=online()&&i===NET.seat,off=online()&&!NET.room.seats[i].online; // (the room's seats are in the game's seat order)
     const cls='pchip glass'+(i===S.cur&&!S.over?' on':'');if(c.className!==cls)c.className=cls;
     setStyle(c,'--pc',p.color);setStyle(c,'opacity',off?.55:1);c.title=off?'offline':'';
-    setHTML(c,`<span class="dot"></span><span class="nm">${esc(p.name)}${you?' <span style="color:var(--muted);font-weight:600">(you)</span>':''}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}<span class="st">${p.deck.length+p.hand.length+p.discard.length+p.play.length} cards</span>${bk?`<span class="bk">${bk}</span>`:''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}`);
+    setHTML(c,`<span class="dot"></span><span class="nm">${esc(p.name)}${you?' <span class="you">(you)</span>':''}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}<span class="st">${p.deck.length+p.hand.length+p.discard.length+p.play.length} cards</span>${bk?`<span class="bk">${bk}</span>`:''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}`);
   });
 }
 
@@ -36,7 +36,7 @@ function updateHeader(){
 function updatePrompt(){
   if(!S){setHTML($('#ptxt'),'');btnWire($('#actBtns'),[]);return;}
   const pl=cur();const P=$('#ptxt'),B=$('#actBtns');
-  const who=`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>`;
+  const who=`<span class="who"><i class="pdot" style="--pc:${pl.color}"></i>${esc(pl.name)}</span>`;
   let txt='',btns=[];
   if(G.replay){setHTML(P,replayPromptHTML());btnWire(B,[]);return;}
   const tm=online()&&!S.over?'<span id="turnTimer" class="timer" hidden></span>':'';
