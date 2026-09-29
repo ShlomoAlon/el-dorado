@@ -2,7 +2,7 @@
    and the turn buttons. Each piece is rewritten only when its text changes. */
 import { S, CT, SYMNAME, SYMCOL, typeOf, def, fmt, plural, playerDone } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle } from './dom.js';
-import { UI, NET, G, cur, canAct, online, isAI, myId } from './state.js';
+import { UI, NET, G, cur, canAct, online, isAI } from './state.js';
 import { onGeo, geo } from './geometry.js';
 import { render } from './frame.js';
 import { banner, showGameOver } from './dialogs.js';
@@ -25,7 +25,7 @@ function updateHeader(){
     const fin=p.pieces.filter(k=>k==='done').length;
     // blockades held: one diamond each, then how many and the biggest (what breaks a tie: most blockades, then the biggest one)
     const bmax=Math.max(0,...p.blocks.map(b=>S.blockades[b].n)),bk=p.blocks.length?p.blocks.map(b=>`<i style="background:${SYMCOL[S.blockades[b].k]}"></i>`).join('')+`<b title="${plural(p.blocks.length,'blockade')}, biggest #${bmax} (ties go to the most blockades, then the biggest one)">${p.blocks.length} · #${bmax}</b>`:'';
-    const you=online()&&S.owners[i]===myId(),seat=online()&&NET.room&&NET.room.seats?NET.room.seats.find(x=>x.uid===S.owners[i]):null,off=!!(seat&&!seat.online);
+    const you=online()&&i===NET.seat,off=online()&&!NET.room.seats[i].online; // (the room's seats are in the game's seat order)
     const cls='pchip glass'+(i===S.cur&&!S.over?' on':'');if(c.className!==cls)c.className=cls;
     setStyle(c,'--pc',p.color);setStyle(c,'opacity',off?.55:1);c.title=off?'offline':'';
     setHTML(c,`<span class="dot"></span><span class="nm">${esc(p.name)}${you?' <span style="color:var(--muted);font-weight:600">(you)</span>':''}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}<span class="st">${p.deck.length+p.hand.length+p.discard.length+p.play.length} cards</span>${bk?`<span class="bk">${bk}</span>`:''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}`);
@@ -41,7 +41,7 @@ function updatePrompt(){
   if(G.replay){setHTML(P,replayPromptHTML());btnWire(B,[]);return;}
   const tm=online()&&!S.over?'<span id="turnTimer" class="timer" hidden></span>':'';
   if(S.over){setHTML(P,'The expedition is over.');btnWire(B,[{t:'Results',id:'bRes',fn:()=>showGameOver(S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i])))},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
-  if(!canAct()){setHTML(P,tm+who+(online()&&S.owners[S.cur]===myId()?'<span class="m">Reconnecting…</span>':(isAI(S.cur)?'is playing…':'is taking their turn…'))+(NET.status?` <span class="m">${esc(NET.status)}</span>`:''));btnWire(B,[]);renderTimer();return;}
+  if(!canAct()){setHTML(P,tm+who+(online()&&S.cur===NET.seat?'<span class="m">Reconnecting…</span>':(isAI(S.cur)?'is playing…':'is taking their turn…'))+(NET.status?` <span class="m">${esc(NET.status)}</span>`:''));btnWire(B,[]);renderTimer();return;}
   if(UI.cover){setHTML(P,who+'is up next. Pass the device, then reveal the hand.');btnWire(B,[{t:'Reveal hand',id:'bRev',pri:1,big:1,fn:()=>{UI.cover=false;render();banner(cur().name,'Round '+S.round);}}]);return;}
   const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};
   switch(UI.mode){
@@ -88,7 +88,7 @@ function btnWire(B,btns){
 }
 
 /* ---------- the online turn clock (in the prompt) ---------- */
-function timeLeft(){if(!online()||!NET.deadline||S.over)return null;return Math.max(0,Math.round((NET.deadline-(Date.now()+NET.skew))/1000));}
+function timeLeft(){if(!online()||NET.clockEnd==null||S.over)return null;return Math.max(0,Math.round((NET.clockEnd-Date.now())/1000));}
 export function renderTimer(){
   const el=document.getElementById('turnTimer');if(!el)return;
   const t=timeLeft();if(t===null){el.hidden=true;return;}

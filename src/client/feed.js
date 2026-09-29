@@ -5,7 +5,7 @@
    cards that became public (played, spent, removed, taken) and just counts for the cards kept at the end of a turn. */
 import { S, CT, fmt } from '../engine.gen.js';
 import { $, esc, setHTML, reduceMotion, EASE } from './dom.js';
-import { UI, G, online, isAI, myId } from './state.js';
+import { UI, NET, G, online, isAI } from './state.js';
 import { render, after } from './frame.js';
 import { cardHTML, cardTitle } from './cards.js';
 import { rectT } from './hand.js';
@@ -13,7 +13,7 @@ import { marketRectOf } from './market.js';
 import { setTrail } from './board/overlays.js';
 const FEED={pl:-1,ended:false,groups:[],seq:0,fly:[],trail:[]};
 /* whose actions get shown: the AIs (local), everyone but me (online); never in replays, where the actor's own hand is shown */
-export function feedWatch(pl){if(!S||G.replay||pl==null||!S.players[pl])return false;return online()?S.owners[pl]!==myId():isAI(pl);}
+export function feedWatch(pl){if(!S||G.replay||pl==null||!S.players[pl])return false;return online()?pl!==NET.seat:isAI(pl);}
 function feedReset(){FEED.pl=-1;FEED.ended=false;FEED.groups=[];FEED.fly=[];FEED.trail=[];}
 export function feedClear(){if(FEED.pl<0&&!FEED.groups.length)return;feedReset();render();}
 function chipRect(pl){const c=document.querySelectorAll('#players .pchip')[pl];return c?c.getBoundingClientRect():null;}

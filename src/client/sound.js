@@ -1,5 +1,5 @@
 import { S } from '../engine.gen.js';
-import { UI, canAct, online, myId } from './state.js';
+import { UI, NET, canAct, online } from './state.js';
 import { STEP } from './board/pieces.js';
 /* =========================================================
    SOUND: tiny synthesized UI effects (Web Audio, no files).
@@ -65,7 +65,7 @@ export function sfx(name,n){
 }
 /* engine events → sounds (called from playEvents) */
 export function sfxEvent(e,viewer){
-  const mine=pl=>!online()||(S.owners&&S.owners[pl]===myId());
+  const mine=pl=>!online()||pl===NET.seat;
   if(e.e==='move'){sfx('move',e.path.length-1);SND.moveEnd=performance.now()+(sndStill?0:e.path.length*STEP);}
   else if(e.e==='block')sfx('block');
   else if(e.e==='arrive')setTimeout(()=>sfx('arrive'),Math.max(0,(SND.moveEnd||0)-performance.now()));

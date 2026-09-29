@@ -177,7 +177,7 @@ export function openReplay(log,id){
   startReplay(log,id);
 }
 export async function loadReplayId(id){
-  try{const r=await fetch('/api/replays/'+encodeURIComponent(id));const j=await r.json();if(!r.ok)throw new Error(j.error||'not found');openReplay(j,id);}
+  try{const r=await fetch('/api/replays/'+encodeURIComponent(id));const j=await r.json();if(!r.ok)throw new Error(j.err||'not found');openReplay(j,id);}
   catch(e){toast('Could not load replay '+id+': '+e.message,3500);showSetup();}
 }
 export function replayKeys(e){if(!G.replay||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||document.querySelector('#overlay .modal')||MENU.dlg.open)return false;
