@@ -22,7 +22,7 @@ function sizeMarket(){
   let avail=H-(parseFloat(getComputedStyle(ab).bottom)||0)-150-top; // room for up to three stacked buttons below
   if(avail<60)avail=ab.getBoundingClientRect().top-at-top-12; // very short screens: just stay above the current ones
   avail=Math.min(avail,$('#discPile').getBoundingClientRect().top-at-top-10); // and above the discard pile
-  const def=phone?44:72,min=phone?34:56,gap=phone?7:10,cg=phone?7:8,n=MARKET0.length+1; // (the market always has its 6 slots, and All cards)
+  const def=phone?44:72,min=phone?34:56,gap=phone?15:20,cg=phone?7:8,n=MARKET0.length+1; // (the market always has its 6 slots, and All cards)
   // every column count against the room below (height) and beside (width: at most ~55% of the game area); the largest cards win
   let pick=null;
   for(let cols=phone?1:2;cols<=n;cols++){const rows=Math.ceil(n/cols),mw=Math.min(def,(avail-(rows-1)*gap-8)/(rows*1.4),(W*.55-(cols-1)*cg)/cols);if(!pick||mw>pick.mw+.5)pick={cols,mw};}
@@ -43,7 +43,7 @@ function patchSlots(box,specs,before){
       n.innerHTML=sp.n>0?`<div class="mcard">${cardHTML(sp.t)}</div><span class="cnt"></span>`:`Sold out${sp.src==='m'?'<br>reserve open':''}`;
       if(el)el.replaceWith(n);else box.insertBefore(n,before||null);el=n;}
     if(el.className!==sp.cls)el.className=sp.cls;if(el.dataset.i!==String(sp.i))el.dataset.i=sp.i;
-    if(sp.n>0){if(el.dataset.src!==sp.src)el.dataset.src=sp.src;const t=cardTitle(sp.t);if(el.title!==t)el.title=t;const c=el.querySelector('.cnt');if(c.textContent!==String(sp.n))c.textContent=sp.n;}
+    if(sp.n>0){if(el.dataset.src!==sp.src)el.dataset.src=sp.src;const t=cardTitle(sp.t);if(el.title!==t)el.title=t;const c=el.querySelector('.cnt');const cn='×'+sp.n;if(c.textContent!==cn)c.textContent=cn;}
     else delete el.dataset.src;});
 }
 function update(){

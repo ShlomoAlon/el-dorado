@@ -272,7 +272,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* ---------- market: six cards floating over the top of the board, plus an "all cards" spread */
 #mkt{position:absolute;right:var(--mktR);top:var(--row2,64px);z-index:16;transition:transform .35s var(--ease),opacity .25s}
 #mkt.hid{transform:translateX(30px);opacity:0;pointer-events:none}
-#market{display:grid;grid-template-columns:repeat(2,var(--mw));gap:10px 8px}
+#market{display:grid;grid-template-columns:repeat(2,var(--mw));gap:20px 8px}
 #mkt .mslot{filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
 #mkt .mslot{transform-origin:100% 25%}
 #mkt .mslot:hover{transform:scale(1.9);z-index:6}
@@ -282,7 +282,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* affordable cards are bright with a small tag; everything else sits back (static, no animation) */
 .mslot.dimc .mcard{filter:brightness(.55) saturate(.7)}
 .mslot.can .cface{box-shadow:0 0 0 2px #8fe3a8,0 .25em .6em rgba(0,0,0,.45)}
-.mslot.can::after{content:'Can buy';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);background:#8fe3a8;color:#0d2a18;font-size:9.5px;font-weight:800;letter-spacing:.04em;padding:1px 7px;border-radius:9px;white-space:nowrap;z-index:4;pointer-events:none}
+.mslot.can::after{content:'Can buy';position:absolute;left:50%;bottom:5px;transform:translateX(-50%);background:#8fe3a8;color:#0d2a18;font-size:9.5px;font-weight:800;letter-spacing:.04em;padding:1px 7px;border-radius:9px;white-space:nowrap;z-index:4;pointer-events:none}
 .mslot.chosen .cface{box-shadow:0 0 0 2px var(--gold2),0 0 20px rgba(233,178,74,.5)}
 .mslot.empty{width:var(--mw);height:calc(var(--mw)*1.4);border:1.5px dashed var(--line2);border-radius:9px;display:grid;place-items:center;color:var(--faint);font-size:10.5px;text-align:center;cursor:default;line-height:1.3;background:rgba(8,14,12,.45)}
 .alltile{width:var(--mw);height:calc(var(--mw)*1.4);border-radius:9px;border:1.5px solid var(--line2);background:rgba(10,18,15,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--text);font:800 12px var(--ui);cursor:pointer;text-align:center;line-height:1.2;padding:4px;position:relative;transition:border-color .15s,background .15s}
@@ -294,7 +294,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .alltile.can small{color:#8fe3a8}
 #mktBtn.canbuy{box-shadow:0 0 0 1.5px #8fe3a8}
 .mcard{--cw:86px;position:relative;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1)}
-.cnt{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;border-radius:11px;background:#0a1210;border:1px solid var(--line2);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;font-variant-numeric:tabular-nums;z-index:4}
+/* how many are left: small text under the card (design option D4-A), not a badge on it */
+.cnt{position:absolute;left:0;right:0;top:100%;margin-top:3px;text-align:center;font-size:12px;line-height:1.2;font-weight:700;color:#c3cfc7;font-variant-numeric:tabular-nums;pointer-events:none}
 #allc{position:absolute;inset:0;z-index:40;background:rgba(4,9,7,.86);overflow-y:auto;overscroll-behavior:contain;animation:fade .2s}
 #allc[hidden]{display:none}
 .allc-in{max-width:1080px;margin:0 auto;padding:64px 20px 40px}
@@ -379,9 +380,17 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .c-icons.many{gap:.04em;flex-wrap:nowrap}
 .c-icons.many svg{width:1.08em;height:1.08em}
 .c-sub{font-size:.72em;color:rgba(255,255,255,.6);margin-top:.35em;letter-spacing:.06em;text-transform:uppercase;font-weight:700;text-align:center}
-.c-foot{position:absolute;left:.5em;right:.5em;bottom:.45em;display:flex;align-items:center;justify-content:space-between}
-.c-cost{display:inline-flex;align-items:center;justify-content:center;width:1.9em;height:1.9em;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffeeb8,#e0a53a 55%,#9a6414);color:#3a2505;font-weight:800;font-size:.9em;box-shadow:0 .08em .2em rgba(0,0,0,.6),inset 0 0 0 .08em rgba(90,55,5,.5)}
-.c-once{font-size:.62em;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#ffd0c4;background:rgba(160,40,20,.55);border:.1em solid rgba(255,190,170,.55);border-radius:.4em;padding:.15em .45em}
+/* the price tag (design option D4-A): parchment, notched towards the card like a shop tag, in the frame's top right corner;
+   a different shape and colour from the round strength badge */
+.c-price{position:absolute;top:.45em;right:.4em;z-index:3;height:1.5em;min-width:1.9em;box-sizing:border-box;padding:0 .4em 0 .66em;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(#fbf1d6,#e6d3a6);color:#3a2806;font-weight:800;font-size:1.2em;line-height:1;font-variant-numeric:tabular-nums;border-radius:0 .2em .2em 0;
+  clip-path:polygon(.55em 0,100% 0,100% 100%,.55em 100%,0 50%);filter:drop-shadow(0 .08em .12em rgba(0,0,0,.55))}
+.c-price::before{content:"";position:absolute;left:.36em;top:50%;width:.22em;height:.22em;margin-top:-.11em;border-radius:50%;background:rgba(58,40,6,.55)}
+.c-price b{font-weight:800}
+/* single use: a red bookmark hanging over the top edge, left of the price tag */
+.c-mark{position:absolute;top:0;right:3.1em;z-index:3;width:.95em;height:2.1em;background:linear-gradient(90deg,#b8321f,#e0533a 55%,#b8321f);clip-path:polygon(0 0,100% 0,100% 100%,50% 76%,0 100%);filter:drop-shadow(0 .08em .1em rgba(0,0,0,.5))}
+.k-p .c-mark{right:3.1em}
+
 .card.sel .cface{box-shadow:0 0 0 .18em var(--gold2),0 0 1.8em rgba(248,220,151,.55),0 .6em 1.4em rgba(0,0,0,.5)}
 .card.dpick::after{content:attr(data-pk);position:absolute;top:-.95em;left:50%;transform:translateX(-50%);background:#eef2ec;color:#14201a;font-weight:800;font-size:.95em;border-radius:1em;padding:.18em .7em;white-space:nowrap;z-index:5;box-shadow:0 .2em .5em rgba(0,0,0,.4)}
 .card.pick .cface{box-shadow:0 0 0 .18em #fff,0 0 1.6em rgba(255,255,255,.45),0 .6em 1.4em rgba(0,0,0,.5)}
@@ -514,13 +523,13 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   #app{--mw:44px;--mktR:6px;--zoomFoot:12px}
   #hist{--fw:34px}.hsteps{column-gap:12px}.fg .fcap{font-size:10px}.ht{padding:5px 8px 6px 10px}.hwho{margin-bottom:4px}
   #app{--row2:58px}
-  #market{gap:7px}
+  #market{gap:15px 7px}
   #mkt .mslot:hover{transform:none}
-  .mslot.can::after{content:'';width:8px;height:8px;padding:0;bottom:-4px}
+  .mslot.can::after{content:'';width:8px;height:8px;padding:0;bottom:3px}
   .alltile{font-size:9px;gap:2px;padding:2px}
   .alltile svg{width:16px;height:16px}
   .alltile small{font-size:8px}
-  #mkt .cnt{min-width:15px;height:15px;font-size:8.5px;top:-5px;right:-4px;padding:0 3px}
+  #mkt .cnt{font-size:9.5px;margin-top:2px}
   .agrid{--mw:98px;gap:18px 12px;justify-content:center}
   .allc-in{padding:58px 12px 30px}
   .pstack{width:54px;height:76px}#discStack .mcard{--cw:54px}
