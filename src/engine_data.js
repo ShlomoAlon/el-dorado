@@ -1,4 +1,15 @@
 /* =========================================================
+   ASSERTIONS. A broken invariant is a bug: assert() stops the operation with an AssertionError instead of carrying on
+   with a state that can't be. One boundary per entry point catches it, logs it and rebuilds the game from its record
+   (the page: its error handler; the server: each request, message and alarm). Debug mode (setAssertMode({debug:true}):
+   the page with ?debug, a server with DEV_AUTH=1, the tests) stops in the debugger first. See docs/ASSERTIONS.md.
+   ========================================================= */
+class AssertionError extends Error{constructor(m){super('assertion failed: '+m);this.name='AssertionError';}}
+let ASSERT_DEBUG=false;
+function setAssertMode(o){ASSERT_DEBUG=!!o.debug;}
+function assert(c,m){if(c)return;if(ASSERT_DEBUG){debugger;}throw new AssertionError(m);} // (m: a constant string, so a passing assert costs nothing)
+
+/* =========================================================
    CARD DATA (base game)
    ========================================================= */
 const CT={
@@ -57,14 +68,14 @@ const BOARDS={
  N:['j1 j1 j1 j1','v1 j1 j2 j1 w1','v1 v2 j1 w1 w1 w1','w1 w1 v3 v4 v3 v2 v1','w1 w1 w1 j1 v2 v1','j1 j1 j2 j1 j1','j1 j1 j1 j1'],
 };
 function parseTok(t){
-  if(t==='mm')return{type:'m',val:0};if(t[0]==='s')return{type:'s',val:0,num:+t[1]||0}; // s1–s4: numbered start spaces
+  if(t==='mm')return{type:'m',val:0};if(t[0]==='s')return{type:'s',val:0,num:+t[1]}; // s1–s4: numbered start spaces
   if(t[0]==='g')return{type:'g',sym:t[1],val:1};
   return{type:t[0],val:+t[1]};
 }
 function parseTpl(rows){
   const cells=[];
   rows.forEach((row,i)=>{const r=i-3,toks=row.trim().split(/\s+/),qmin=Math.max(-3,-r-3),qmax=Math.min(3,-r+3);
-    if(toks.length!==qmax-qmin+1)throw new Error('bad tile row '+row);
+    assert(toks.length===qmax-qmin+1,'every board row has the right number of spaces');
     toks.forEach((t,j)=>cells.push({q:qmin+j,r,d:parseTok(t)}));});
   return cells;
 }
@@ -111,42 +122,38 @@ const courseById=id=>COURSES.find(c=>c.id===id)||null;
 function buildCourse(C,seed){
   const hexes=new Map(),tiles=[];
   C.p.forEach(([name,cq,cr,k],ti)=>{
-    const tpl=TPL[name];if(!tpl)throw new Error('Unknown board '+name);
-    if((ti===0)!==(name==='A'||name==='B'))throw new Error('A route starts with board A or B, and only there.');
+    const tpl=TPL[name];assert(tpl,'a course names an unknown board');
+    assert((ti===0)===(name==='A'||name==='B'),'a route starts with board A or B, and only there');
     let sx=0,sy=0;
     for(const cell of tpl){const[lq,lr]=rot(cell.q,cell.r,k);const q=cq+lq,r=cr+lr,K=key(q,r);
-      if(hexes.has(K))throw new Error('Boards '+tiles[hexes.get(K).tile].name+' and '+name+' overlap.');
+      assert(!hexes.has(K),'two boards of a course overlap');
       const[x,y]=pxOf(q,r);hexes.set(K,{...cell.d,q,r,k:K,tile:ti,x,y});sx+=x;sy+=y;}
     tiles.push({c:[cq,cr],name,k,x:sx/tpl.length,y:sy/tpl.length});
   });
   const nT=tiles.length;
   // El Dorado tile: the given space plus its two neighbours along the last board's edge
   const touch=(q,r)=>!hexes.has(key(q,r))&&DIRS.some(([a,b])=>{const n=hexes.get(key(q+a,r+b));return n&&n.tile===nT-1&&n.type!=='m';});
-  const[eq,er]=C.e;if(!touch(eq,er))throw new Error('El Dorado must sit against the last board.');
+  const[eq,er]=C.e;assert(touch(eq,er),'El Dorado sits against the last board');
   let side=null;
   for(let d=0;d<3&&!side;d++){const a=[eq+DIRS[d][0],er+DIRS[d][1]],b=[eq-DIRS[d][0],er-DIRS[d][1]];if(touch(...a)&&touch(...b))side=[a,b];}
-  if(!side){const fr=DIRS.map(([a,b])=>[eq+a,er+b]).filter(c=>touch(...c));if(fr.length<2)throw new Error('No room for El Dorado there.');side=fr.slice(0,2);}
+  if(!side){const fr=DIRS.map(([a,b])=>[eq+a,er+b]).filter(c=>touch(...c));assert(fr.length>=2,'there is room for El Dorado');side=fr.slice(0,2);}
   for(const[q,r]of[[eq,er],...side]){const K=key(q,r),[x,y]=pxOf(q,r);hexes.set(K,{type:'g',sym:C.s,val:1,q,r,k:K,tile:nT,x,y});}
   // connections between consecutive boards (only these carry blockades; other touching boards are open)
   const conns=[];const edgeConn=new Map();
   for(let i=0;i<nT-1;i++)conns.push({a:i,b:i+1,edges:[]});
   for(const h of hexes.values())for(const[dq,dr]of DIRS){const n=hexes.get(key(h.q+dq,h.r+dr));
     if(n&&n.tile===h.tile+1&&n.tile<nT){conns[h.tile].edges.push([h.k,n.k]);edgeConn.set(h.k+'|'+n.k,h.tile);edgeConn.set(n.k+'|'+h.k,h.tile);}}
-  conns.forEach((c,i)=>{if(c.edges.filter(([a,b])=>hexes.get(a).type!=='m'&&hexes.get(b).type!=='m').length<2)throw new Error('Boards '+tiles[i].name+' and '+tiles[i+1].name+' are not properly connected.');});
+  for(const c of conns)assert(c.edges.filter(([a,b])=>hexes.get(a).type!=='m'&&hexes.get(b).type!=='m').length>=2,'consecutive boards are properly connected');
   const starts=[...hexes.values()].filter(h=>h.type==='s');
   const goals=[...hexes.values()].filter(h=>h.type==='g');
   const seen=new Set(starts.map(s=>s.k)),q=[...starts];let found=false;
   while(q.length){const h=q.shift();if(h.type==='g'){found=true;break;}
     for(const[dq,dr]of DIRS){const n=hexes.get(key(h.q+dq,h.r+dr));if(!n||seen.has(n.k)||n.type==='m'||n.type==='s')continue;seen.add(n.k);q.push(n);}}
-  if(!found)throw new Error('There is no path from the start to El Dorado.');
-  // start spaces numbered along their edge
-  const sc=starts.reduce((a,h)=>[a[0]+h.x/starts.length,a[1]+h.y/starts.length],[0,0]);
-  const ang=Math.atan2(tiles[1].y-tiles[0].y,tiles[1].x-tiles[0].x)+Math.PI/2;
-  const proj=h=>(h.x-sc[0])*Math.cos(ang)+(h.y-sc[1])*Math.sin(ang);
-  if(starts.every(s=>s.num))starts.sort((a,b)=>a.num-b.num);else{starts.sort((a,b)=>proj(a)-proj(b));starts.forEach((s,i)=>s.num=i+1);}
+  assert(found,'there is a path from the start to El Dorado');
+  starts.sort((a,b)=>a.num-b.num); // (the start boards print their numbers: s1–s4)
   // a random blockade on each connection
   const deal=shuffle(BLOCKADES.slice(),mulberry32(seed^0x2c1b3c6d));
-  if(conns.length>deal.length)throw new Error('Too many connections for 6 blockades.');
+  assert(conns.length<=deal.length,'at most 6 connections (one blockade each)');
   const blockDefs=conns.map((c,i)=>({...deal[i],conn:i}));
   const gc=goals.reduce((a,h)=>[a[0]+h.x/3,a[1]+h.y/3],[0,0]);
   const last=tiles[nT-1];let dx=gc[0]-last.x,dy=gc[1]-last.y;const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;

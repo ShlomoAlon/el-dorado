@@ -111,7 +111,7 @@ P = { name, color, ai?: AI id, pieces: [key|'done'], deck: [id], hand: [id], dis
 - **`v`:** the state format (nothing reads it); **`start`:** the first player (always 0).
 - **`turn.active`:** the card whose leftover strength can keep moving the same explorer.
 - **`turn.pending`:** a Scientist or Travel Log is waiting for its `trash` action.
-- **Online additions:** the server adds `owners: [uid per seat]` and `room: code`, and keeps only the last 120 log lines.
+- **Online:** the server never writes into `S` (who plays each seat is the room's `seats`, in seat order); it keeps only the last 120 log lines.
 
 ### 1.5 Actions — `applyAction(seat, a)` → `{ok, err?, ev: [event], reveal?}`
 
@@ -345,13 +345,13 @@ The trained networks work only if a port keeps these exactly:
 | `POST rooms {max 2–4, course\|'random', turn ∈ 60/90/120/180/300, pub, rated}` | yes | `{code}` |
 | `POST match` | yes | `{code}`: the room the player is already in (of any kind), else the fullest open quick match, else a new one |
 | `GET rooms/:code/ws` | yes | WebSocket to the Room (§2.5) |
-| `GET lobby/ws` | yes | WebSocket: `{t: 'rooms', rooms: [summary]}` on connect and on every change |
+| `GET lobby/ws` | yes | WebSocket: `{t: 'rooms', rooms: [room]}` (the room shape of §2.5) on connect and on every change |
 | `POST replays <log>` | | `{id}`: any valid log, up to 1.9 MB; the latest 1000 uploads are kept |
 | `GET replays` | | `{replays: [{id, created, title, players, actions}]}`: the latest 50 listed |
 | `GET replays/:id` | | the log |
 | `POST train` / `GET train` | token / | training progress for `/train.html`: `POST` stores a status (`{ok: true}`); `GET` returns `{updated, now, status}` |
 
-A room summary is `{code, host, names, count, max, status, course, turn, rated, ai, auto}`, public rooms only. A room leaves the list when
+Errors are `{err}` with an HTTP status. The lobby lists public rooms only. A room leaves the list when
 it closes or ends, or after 2 h in the lobby or 12 h in play.
 
 ### 2.4 Room: lifecycle
@@ -366,7 +366,7 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
     "start now". A seat is given up when its player closes the page before the start.
 - **Turn clock (time bank):** each turn adds `turn` seconds to the player's bank; unused time carries over, and undo doesn't change it.
   - When the bank runs out, the turn ends (`timeout`). The third timeout in a row is a `resign`.
-  - `deadline` is sent with every state.
+  - `left` (ms on the clock) is sent with every state.
 - **AI seats** move on the server, one action per alarm (0.9 s before an AI's turn, then 0.7 s per action). When no racing person has
   the page open, they play without pauses (~0.3 s of moves per alarm).
 - **Game over:**
@@ -393,8 +393,8 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 | message | |
 |---|---|
 | `{t: 'room', room}` | In the lobby, after every change. |
-| `{t: 'state', S, ev, seat, undo, deadline, now, room}` | In play, after every change, to every socket. `S` is `redact(S, seat)`; `seat` is −1 for watchers (the page finds its seat in `S.owners`); `undo` says whether this seat may undo now; `now` lets the page correct for clock skew. |
-| `{t: 'error', msg}` | |
+| `{t: 'state', S, ev, seat, undo, left, room}` | In play, after every change, to every socket. `S` is `redact(S, seat)`; `seat` is the receiver's seat (−1 for watchers); `undo` says whether this seat may undo now; `left` is the ms left on the turn clock (null when none runs; the page counts down from when the message arrives). |
+| `{t: 'error', err}` | The receiver's message was refused (the game is untouched). |
 
 `room = {code, host, status, opts: {max, course, turn, pub, rated, auto}, seats: [{uid, name, color, now, ai, online}], results}`
 

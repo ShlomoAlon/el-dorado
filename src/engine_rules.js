@@ -9,7 +9,7 @@ const typeOf=id=>S.cards[id];
 const def=id=>CT[S.cards[id]];
 const plural=(n,w)=>n+' '+w+(n===1?'':'s');
 const fmt=n=>(n%1?(Math.floor(n)?Math.floor(n)+'½':'½'):String(n));
-function rm(arr,id){const i=arr.indexOf(id);if(i>=0)arr.splice(i,1);}
+function rm(arr,id){const i=arr.indexOf(id);assert(i>=0,'rm: the item is in the list');arr.splice(i,1);}
 function playerDone(p){return p.pieces.every(k=>k==='done');}
 function isActive(p){return !playerDone(p)&&!p.resigned;}
 
@@ -21,7 +21,7 @@ function reserveOpen(){return S.market.some(s=>s.n===0);}
 /* why seat can't buy a card of type t now, payment aside ('' if it can). The purchase rules live here: the buy action and
    the page's market both ask */
 function cantBuy(seat,t){
-  if(!S||S.over)return'The game is over.';
+  if(S.over)return'The game is over.';
   if(seat!==S.cur)return'It is not your turn.';
   if(S.turn.pending)return'Choose which cards to remove first.';
   if(S.turn.bought)return'You can buy only one card per turn.';
@@ -31,8 +31,7 @@ function cantBuy(seat,t){
 }
 /* what seat can buy now with the coins in its hand: [{src:'m'|'r', i, t}], market first */
 function buyOptions(seat){
-  const P=S&&S.players[seat];if(!P)return[];
-  const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),out=[];
+  const P=S.players[seat],cash=P.hand.reduce((a,id)=>a+coinVal(id),0),out=[];
   for(const[src,list]of[['m',S.market],['r',S.reserve]])list.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash&&!cantBuy(seat,s.t))out.push({src,i,t:s.t});});
   return out;
 }
@@ -72,7 +71,7 @@ function replayStep(log,i){
 function recRng(rng,k){return mulberry32(((rng>>>0)+Math.imul(k+2,0x9E3779B1))>>>0);}
 function recNewGame(o){
   // the secret: from the platform's cryptographic generator where there is one (Math.random's state could be guessed)
-  const c=globalThis.crypto,rng=c&&c.getRandomValues?c.getRandomValues(new Uint32Array(1))[0]:(Math.random()*4294967296)>>>0,r0=RNG;setRng(recRng(rng,-1));
+  const rng=crypto.getRandomValues(new Uint32Array(1))[0],r0=RNG;setRng(recRng(rng,-1));
   try{newGame(o);}finally{RNG=r0;}
   return{kind:'eldorado-replay',v:3,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(S.privacy?{privacy:true}:{}),
     players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0};
@@ -84,18 +83,18 @@ function recApply(rec,seat,a){
   if(r.ok&&rec){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||S.cur!==prev||S.over)rec.mark=rec.actions.length;}
   return r;
 }
-const recCanUndo=rec=>!!rec&&rec.actions.length>(rec.mark||0);
+const recCanUndo=rec=>rec.actions.length>rec.mark;
 /* the state a record leads to, as {S, MAP} (the module's S and MAP are left as they were) */
 function recState(rec){const s0=S,m0=MAP,r0=RNG;
   try{replayStart(rec);for(let i=0;i<rec.actions.length;i++)replayStep(rec,i);return{S,MAP};}finally{S=s0;MAP=m0;RNG=r0;}}
-/* take back the last action (S becomes the rebuilt state). false: nothing to undo */
-function recUndo(rec){if(!recCanUndo(rec))return false;rec.actions.pop();({S,MAP}=recState(rec));return true;}
-/* the finished log, ready to save and watch, with a title */
+/* take back the last action (S becomes the rebuilt state; callers check recCanUndo first) */
+function recUndo(rec){assert(recCanUndo(rec),'recUndo: an action can be taken back');rec.actions.pop();({S,MAP}=recState(rec));return true;}
+/* the log of the game on show (S), ready to save and watch, with a title. places: null for a game that didn't finish (a
+   training log stopped at its round cap) */
 function recFinal(rec){
-  if(!rec)return null;
   const{mark,...L}=rec;
-  L.title=L.title||S.players.map(p=>p.name).join(', ')+' · '+(courseById(rec.course)||{name:rec.course}).name;
-  L.result={places:S.places||null,rounds:S.round};
+  L.title=S.players.map(p=>p.name).join(', ')+' · '+S.course.name;
+  L.result={places:S.places,rounds:S.round};
   return L;
 }
 function newGame(o){
@@ -143,14 +142,15 @@ function hist(ev){
   }
 }
 function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
-function blockAt(a,b){const c=MAP.edgeConn.get(a+'|'+b);if(c===undefined)return null;const bi=S.blockades.findIndex(x=>x.conn===c);if(bi<0||S.blockades[bi].owner!==null)return null;return bi;}
+/* the standing blockade between spaces a and b (its index), or null. Blockade i sits on connection i (buildCourse deals one per connection) */
+function blockAt(a,b){const c=MAP.edgeConn.get(a+'|'+b);return c===undefined||S.blockades[c].owner!==null?null:c;}
 function neighbors(k){const nb=MAP._nb||(MAP._nb=new Map());let r=nb.get(k);if(!r){const h=hexAt(k);r=DIRS.map(([dq,dr])=>key(h.q+dq,h.r+dr)).filter(n=>MAP.hexes.has(n));nb.set(k,r);}return r;} // cached per map
 function coinVal(id){const d=def(id);if(d.c==='y'||d.c==='x')return d.p;return .5;}
 function blkLabel(B){return B.k==='r'?'discard '+plural(B.v,'card'):plural(B.v,SYMNAME[B.k]);}
 
 /* ---------- reachability ---------- */
 function reach(pl,pi,syms,budget){
-  const out=new Map();const from=S.players[pl].pieces[pi];if(!from||from==='done')return out;
+  const out=new Map(),from=S.players[pl].pieces[pi];assert(from&&from!=='done','reach: the explorer is on the board');
   for(const sym of syms){
     const dist=new Map([[from,0]]),prev=new Map(),pq=[[0,from]];
     while(pq.length){
@@ -179,7 +179,7 @@ function reach(pl,pi,syms,budget){
   return out;
 }
 function nativeTargets(pl,pi){
-  const T=new Map();const pk=S.players[pl].pieces[pi];if(!pk||pk==='done')return T;
+  const T=new Map(),pk=S.players[pl].pieces[pi];assert(pk&&pk!=='done','nativeTargets: the explorer is on the board');
   for(const n of neighbors(pk)){const h=hexAt(n);if(h.type==='m'||h.type==='s'||occupied(n))continue;T.set(n,{kind:'native',path:[n],cost:0,pi,bl:blockAt(pk,n)});}
   for(const n of neighbors(pk)){const b=blockAt(pk,n);if(b!==null&&!T.has('B'+b))T.set('B'+b,{kind:'nativebl',bl:b,path:[],cost:0,pi});}
   return T;
@@ -189,7 +189,7 @@ function nativeTargets(pl,pi){
    play with leftover strength: where that reaches; the Native: its own targets. Empty: not on the board now */
 function cardTargets(seat,pi,id){
   const T=new Map(),P=S.players[seat],d=def(id),act=S.turn.active&&S.turn.active.id===id?S.turn.active:null;
-  if(!d||S.over||seat!==S.cur||S.turn.pending)return T;
+  if(S.over||seat!==S.cur||S.turn.pending)return T;
   if(act){for(const[k,v]of reach(seat,act.pi,[act.sym],act.left))T.set(k,v);return T;}
   if(!P.hand.includes(id))return T;
   if(typeOf(id)==='native'){for(const[k,v]of nativeTargets(seat,pi))T.set(k,v);return T;}
@@ -199,8 +199,7 @@ function cardTargets(seat,pi,id){
 }
 /* spaces/blockades entered by discarding (rubble, grey blockade) or removing cards (base camp) */
 function payTargets(pl,pi){
-  const T=new Map();const P=S.players[pl];const pk=P.pieces[pi];if(!pk||pk==='done')return T;
-  const hn=P.hand.length;
+  const T=new Map(),P=S.players[pl],pk=P.pieces[pi],hn=P.hand.length;assert(pk&&pk!=='done','payTargets: the explorer is on the board');
   for(const n of neighbors(pk)){const h=hexAt(n);
     if((h.type==='r'||h.type==='c')&&!occupied(n)&&blockAt(pk,n)===null&&hn>=h.val)T.set(n,{kind:h.type==='r'?'rubble':'camp',need:h.val,path:[n],pi});
     const b=blockAt(pk,n);if(b!==null&&S.blockades[b].k==='r'&&hn>=S.blockades[b].v&&!T.has('B'+b))T.set('B'+b,{kind:'blr',bl:b,need:S.blockades[b].v,pi});
@@ -226,7 +225,7 @@ function payTargets(pl,pi){
    ========================================================= */
 function applyAction(seat,a){
   const fail=err=>({ok:false,err,ev:[]});
-  if(!S||S.over)return fail('The game is over.');
+  if(S.over)return fail('The game is over.');
   if(!a||typeof a!=='object')return fail('Bad action.');
   if(a.t==='resign')return resign(seat);
   if(seat!==S.cur)return fail('It is not your turn.');
@@ -238,15 +237,15 @@ function applyAction(seat,a){
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
   const pieceOk=pi=>Number.isInteger(pi)&&pi>=0&&pi<P.pieces.length&&P.pieces[pi]!=='done';
   if(T.pending&&a.t!=='trash')return fail('Choose which cards to remove first.');
-  const takeBlock=b=>{const B=S.blockades[b];if(B.owner!==null)return;B.owner=seat;P.blocks.push(b);log(seat,'tears down blockade #'+B.n+' and keeps it.');ev.push({e:'block',pl:seat,n:B.n});};
+  const takeBlock=b=>{const B=S.blockades[b];assert(B.owner===null,'a blockade is taken once');B.owner=seat;P.blocks.push(b);log(seat,'tears down blockade #'+B.n+' and keeps it.');ev.push({e:'block',pl:seat,n:B.n});};
   const arrive=pi=>{if(P.pieces[pi]!=='done')return;log(seat,'reaches El Dorado!');ev.push({e:'arrive',pl:seat,pi});
-    if(playerDone(P)&&!P.fin){P.fin=S.round;checkEnd();}};
+    if(playerDone(P)){P.fin=S.round;checkEnd();}};
   const passTurn=()=>{S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});};
   switch(a.t){
     case 'move':{
       const act=T.active&&T.active.id===a.card?T.active:null;
       if(!act&&!inHand(a.card))return fail('That card is not in your hand.');
-      const d=def(a.card);if(!d||d.c==='p')return fail('That card cannot move.');
+      const d=def(a.card);if(d.c==='p')return fail('That card cannot move.');
       const pi=act?act.pi:a.pi;if(!pieceOk(pi))return fail('Choose one of your explorers.');
       const syms=act?[act.sym]:(d.s==='*'?['j','w','v']:[d.s]);const budget=act?act.left:d.p;
       const tg=reach(seat,pi,syms,budget).get(a.to);if(!tg)return fail('That space is out of reach.');
@@ -328,7 +327,7 @@ function applyAction(seat,a){
       const toDisc=P.hand.filter(id=>!keep.includes(id));ev.push({e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length}); // counts only: the hand is private
       for(const id of toDisc){rm(P.hand,id);P.discard.push(id);}
       P.discard.push(...P.play);P.play=[];
-      drawCards(P,Math.max(0,4-P.hand.length));reveal=true;
+      drawCards(P,4-P.hand.length);reveal=true;
       log(seat,'ends the turn'+(toDisc.length?', discarding '+toDisc.length:'')+(keep.length?(toDisc.length?' and':'')+' keeping '+keep.length:'')+'.');
       passTurn();break;
     }
@@ -342,11 +341,9 @@ function applyAction(seat,a){
 }
 /* who still races */
 function checkEnd(){
-  const n=S.players.length;
   if(S.fullRace){if(S.players.filter(isActive).length<=1&&!S.endTriggered){S.endTriggered=true;log(null,'Only one expedition is still racing. The round will be finished.');}}
   else if(S.players.some(playerDone)&&!S.endTriggered){S.endTriggered=true;log(null,'The final round has begun.');}
   if(S.players.every(p=>!isActive(p))&&S.fullRace)S.endTriggered=true;
-  return n;
 }
 function advance(){
   const n=S.players.length;let i=S.cur;
@@ -356,11 +353,11 @@ function advance(){
     const p=S.players[i];
     if(S.fullRace?isActive(p):!p.resigned){S.cur=i;return;}
   }
-  endGame();
+  assert(false,'advance: someone takes the turn, or the game ends'); // (checkEnd and resign end the game before nobody is left)
 }
 /* A player leaves a game for good (online): placed below everyone still racing. */
 function resign(seat){
-  const P=S.players[seat];if(!P||P.resigned||playerDone(P))return{ok:false,err:'You are not racing.',ev:[]};
+  const P=S.players[seat];if(P.resigned||playerDone(P))return{ok:false,err:'You are not racing.',ev:[]};
   P.resigned=++S.resigns;log(seat,'leaves the expedition.');
   const ht=histTurn(seat);ht.s.push({k:'resign'});ht.end=1;
   const ev=[{e:'resign',pl:seat}];
@@ -375,8 +372,9 @@ function progress(p){ // lower = closer: sum of shortest step counts from each e
   let tot=0;
   for(const k of p.pieces){if(k==='done')continue;
     const seen=new Set([k]);let q=[k],d=0,found=false;
-    while(q.length&&!found){d++;const nq=[];for(const u of q)for(const n of neighbors(u)){if(seen.has(n))continue;const h=hexAt(n);if(h.type==='m')continue;if(h.type==='g'){found=true;break;}seen.add(n);nq.push(n);}q=nq;if(d>200)break;}
-    tot+=found?d:999;}
+    while(!found){d++;const nq=[];for(const u of q)for(const n of neighbors(u)){if(seen.has(n))continue;const h=hexAt(n);if(h.type==='m')continue;if(h.type==='g'){found=true;break;}seen.add(n);nq.push(n);}q=nq;
+      assert(found||q.length,'progress: El Dorado can be reached from every explorer');}
+    tot+=d;}
   return tot;
 }
 function endGame(){
@@ -393,7 +391,7 @@ function endGame(){
 }
 /* ---------- multiplayer Elo from a finishing order ---------- */
 function eloDeltas(ratings,places,games){
-  const n=ratings.length;const out=new Array(n).fill(0);if(n<2)return out;
+  const n=ratings.length,out=new Array(n).fill(0);
   for(let i=0;i<n;i++){const K=(games[i]<10?48:32)/(n-1);
     for(let j=0;j<n;j++){if(i===j)continue;
       const E=1/(1+Math.pow(10,(ratings[j]-ratings[i])/400));
@@ -410,7 +408,7 @@ function redact(state,seat){
     p.play.forEach(id=>vis.add(id));p.discard.forEach(id=>vis.add(id));
   });
   R.trash.forEach(id=>vis.add(id));
-  if(R.turn&&R.turn.active)vis.add(R.turn.active.id);
-  const cards={};for(const id of vis)if(state.cards[id])cards[id]=state.cards[id];R.cards=cards;
+  if(R.turn.active)vis.add(R.turn.active.id);
+  const cards={};for(const id of vis)cards[id]=state.cards[id];R.cards=cards;
   return R;
 }

@@ -3,7 +3,7 @@
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
 import { S, CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, setS, setMAP } from '../engine.gen.js';
 import { esc } from './dom.js';
-import { UI, NET, G, cur, canAct, online, isAI, myId, viewIdx, save, keepLocalReplay, loadSave } from './state.js';
+import { UI, NET, G, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave } from './state.js';
 import { replayDecorate } from './replay.js';
 import { render, resetView } from './frame.js';
 import { toast, banner, modal, closeModal, showGameOver } from './dialogs.js';
@@ -62,7 +62,7 @@ export function playEvents(ev,viewer){
   }
 }
 export function act(a){
-  if(!S||!canAct()){if(online()&&S&&!S.over&&S.owners[S.cur]===myId())toast('Reconnecting… your move wasn’t sent.');return;}
+  if(!S||!canAct()){if(online()&&!S.over&&S.cur===NET.seat)toast('Reconnecting… your move wasn’t sent.');return;}
   if(online()){netAct({t:'act',a});render();return;}
   const prevCur=S.cur,prevRound=S.round;
   const r=recApply(G.rec,S.cur,a);
@@ -80,7 +80,7 @@ export function afterLocalChange(turnChanged){
     render();
     if(!UI.cover&&!S.over){banner(cur().name,isAI(S.cur)?'AI · Round '+S.round:'Round '+S.round);ensureVisible();}
   }
-  if(S.over){if(G.rec)UI.lastReplay=keepLocalReplay();setTimeout(()=>showGameOver(),600);}
+  if(S.over){UI.lastReplay=keepLocalReplay();setTimeout(()=>showGameOver(),600);}
   save();aiKick();
 }
 
@@ -141,12 +141,13 @@ export function startEndTurn(){
 }
 export function finishTurn(){act({t:'end',keep:UI.mode==='endTurn'?UI.picks.slice():[]});}
 export function undo(){
-  if(!canAct())return;
-  if(online()){if(NET.canUndo)netAct({t:'undo'});return;}
-  if(!recUndo(G.rec))return;
+  if(!inGame()||!canAct()||!canUndo())return;
+  if(online()){netAct({t:'undo'});return;}
+  recUndo(G.rec);
   UI.picks=[];UI.buy=null;UI.pending=null;UI.mode='idle';UI.card=null;
   syncMode(false);render();save();
 }
+/* (a game in progress: a local one always has its record) */
 export const canUndo=()=>online()?NET.canUndo:recCanUndo(G.rec);
 
 export function onHandCard(id){
@@ -181,7 +182,7 @@ export function onPiece(pl,i){
 
 /* resign: online the server does it; locally the player whose turn it is (or, while an AI moves, the human watching) leaves.
    Everyone else plays on; with no human left racing, the AIs finish the game quickly. */
-export function resignSeat(){if(!S||S.over||G.replay)return -1;if(online()){const i=S.owners.indexOf(myId());return i>=0&&isActive(S.players[i])?i:-1;}
+export function resignSeat(){if(!S||S.over||G.replay)return -1;if(online()){const i=NET.seat;return i>=0&&isActive(S.players[i])?i:-1;}
   const i=isAI(S.cur)?viewIdx():S.cur;return isAI(i)||!isActive(S.players[i])?-1:i;}
 export function resignLocal(){const seat=resignSeat();if(seat<0)return;
   const humans=S.players.filter((p,j)=>j!==seat&&!p.ai&&isActive(p)).length;

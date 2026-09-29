@@ -8,7 +8,7 @@
    Your own turn is added once you end it. */
 import { S, CT, fmt } from '../engine.gen.js';
 import { $, esc, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
-import { UI, G, online, isAI, myId } from './state.js';
+import { UI, NET, G, online, isAI } from './state.js';
 import { render, after } from './frame.js';
 import { geo, onGeo } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
@@ -19,7 +19,7 @@ import { setTrail } from './board/overlays.js';
 /* ---------- live: the turn being watched (its trail on the board, cards to fly into the panel) ---------- */
 const LIVE={pl:-1,ended:false,trail:[],fly:[],fresh:false};
 /* whose turns are followed live: the AIs (local), everyone but me (online); never in replays, where the actor's own hand is shown */
-export function feedWatch(pl){if(!S||G.replay||pl==null||!S.players[pl])return false;return online()?S.owners[pl]!==myId():isAI(pl);}
+export function feedWatch(pl){if(!S||G.replay||pl==null||!S.players[pl])return false;return online()?pl!==NET.seat:isAI(pl);}
 function liveReset(){LIVE.pl=-1;LIVE.ended=false;LIVE.trail=[];LIVE.fly=[];}
 /* I (or a pass-and-play human here) act: the last watched turn's trail goes */
 export function feedClear(){if(LIVE.pl<0)return;liveReset();render();}
@@ -84,7 +84,7 @@ function stepHTML(g){
   return`<div class="fg f-${g.k}" data-c="${cardSig(g)}"><div class="frc"><div class="fcs">${(g.ts||[]).map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap">${stepCap(g)}</div></div>`;
 }
 function turnHead(t,now){
-  const p=S.players[t.p];if(!p)return'';const you=online()&&S.owners[t.p]===myId();
+  const p=S.players[t.p];if(!p)return'';const you=online()&&t.p===NET.seat;
   return`<i style="background:${p.color}"></i><b>${esc(p.name)}</b>${you?'<span>(you)</span>':''}<span class="hr">Round ${t.r}</span>${now?'<span class="hnow">playing…</span>':''}`;
 }
 const NONE='<p class="hnone">Nothing played yet. Each turn shows here, newest first.</p>';

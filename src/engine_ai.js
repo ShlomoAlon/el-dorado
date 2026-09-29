@@ -14,7 +14,7 @@ const AIS=[
   {id:'raleigh',name:'Raleigh',tier:'Steady',rating:1200,desc:'Hand-written route planner',opts:{mode:'plan'}},
 ];
 const aiById=id=>AIS.find(a=>a.id===id)||null;
-const aiUsesNet=id=>{const a=aiById(id);return!!(a&&a.opts.mode==='net');};
+const aiUsesNet=id=>aiById(id).opts.mode==='net';
 /* the shipped network: see tools/ai/pack.mjs for the format (half floats) */
 /* courses the AI players are offered on (the network is trained for First Expedition only; elsewhere they would fall back to
    the planner). Used by the setup screen, the online room and the server (worker.js addAI, start). */
@@ -34,30 +34,30 @@ function aiNetDecode(bin){
 function aiSetNet(n){BOT_NET=n;}
 const aiNetFits=()=>botNetReady();
 /* one decision for the AI in seat S.cur. mem: per-game object ({}) that keeps the turn planner's cache between calls.
-   Returns a legal action (falls back to ending the turn). */
+   Returns a legal action. */
 function aiChoose(id,mem){
-  const A=aiById(id);mem=mem||{};
-  let opts=A?A.opts:{mode:'plan'};if(opts.mode==='net'&&(!botNetReady()||S.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
+  const A=aiById(id);assert(A,'aiChoose: a named AI');
+  let opts=A.opts;if(opts.mode==='net'&&(!botNetReady()||S.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
   const me=S.cur,tk=me+':'+S.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
   if(++mem.n>60)return S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
   const r0=RNG;setRng(null);BOT_PLAN_CACHE=mem.plan||null;
-  let a=null;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;RNG=r0;}
-  return aiFinishGuard(a||(S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}));
+  let a;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;RNG=r0;}
+  return aiFinishGuard(a);
 }
 /* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
    the line (the cards it draws change the plan). null: this AI doesn't plan whole turns with the network, or it isn't loaded */
 function aiPlan(id,rnd){
-  const A=aiById(id),o=A&&A.opts;if(!o||o.mode!=='net'||!o.search||o.search.kind!=='plan'||!botNetReady()||S.players.length===2||S.over)return null;
+  const o=aiById(id).opts;if(o.mode!=='net'||!o.search||o.search.kind!=='plan'||!botNetReady()||S.players.length===2||S.over)return null;
   const best=botPlanTurn(S.cur,o.search.beam||3,rnd||Math.random,o.draws||4,false);
   return best.line&&best.line.length?best.line:[S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}];
 }
 /* El Dorado can only be entered with a card of its symbol (paddle on the water side, machete on the jungle side) or a joker.
    The bot sometimes trashes its last such card (or nearly its whole deck) and, near the end, stops buying, so it could wait forever next to the finish
    (seen on the newer courses). Keep one such card when trashing, and buy one before ending a turn without any. */
-const aiFinishCard=t=>{const d=CT[t];return!!d&&d.c!=='p'&&(d.s===MAP.endSym||d.s==='*');};
+const aiFinishCard=t=>{const d=CT[t];return d.c!=='p'&&(d.s===MAP.endSym||d.s==='*');};
 function aiFinishGuard(a){
   const P=S.players[S.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>aiFinishCard(S.cards[id])).length;
-  if(a.t==='trash'&&a.cards){let c=a.cards;
+  if(a.t==='trash'){let c=a.cards;
     if(n){const out=c.filter(id=>aiFinishCard(S.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
     c=c.slice(0,Math.max(0,all.length-4)); // and never thin the deck below 4 cards (owner: 4 can be valid, fewer can't)
     if(c.length!==a.cards.length)return{...a,cards:c};}
@@ -67,9 +67,9 @@ function aiFinishGuard(a){
   }
   return a;
 }
-/* apply the AI's decision (recorded in rec, the game's log; may be null); if it is somehow illegal, end the turn instead. Returns applyAction's result. */
+/* apply the AI's decision (recorded in rec, the game's log; may be null). Returns applyAction's result. */
 function aiStep(id,mem,rec){
-  const me=S.cur,a=aiChoose(id,mem);let r=recApply(rec,me,a);
-  if(!r.ok)r=recApply(rec,me,{t:'timeout'});
+  const r=recApply(rec,S.cur,aiChoose(id,mem));
+  assert(r.ok,'aiStep: the AI chooses a legal action');
   return r;
 }

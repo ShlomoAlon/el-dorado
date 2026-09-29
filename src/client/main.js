@@ -2,7 +2,7 @@
    or room link, a game in progress, the Online screen, or the start screen). */
 import { S, MAP, buildCourse, courseById, applyAction, reach, setMAP } from '../engine.gen.js';
 import { $ } from './dom.js';
-import { UI, NET, G, canAct, myId } from './state.js';
+import { UI, NET, G, canAct, myId, online } from './state.js';
 import { addPart, render, flush, frameStats } from './frame.js';
 import { watchGeometry } from './geometry.js';
 import { GAME_READY } from './ready.js';
@@ -78,7 +78,7 @@ function onBoardOut(e) { if (drag) return; if (!e.relatedTarget || !e.relatedTar
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, view, frameStats, myId, canAct, reach, applyAction, joinRoom, netSend,
+window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, view, frameStats, myId, canAct, online, reach, applyAction, joinRoom, netSend,
   render() { render(); flush(); },
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },
   ...Object.fromEntries(Object.entries({ act, playEvents, openReplay, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, confirmDiscardFor, confirmTrash, cancelMode }).map(([k, f]) => [k, now(f)])) };

@@ -44,7 +44,10 @@ const T = report('flows');
   await check('targets on the board', k => !!document.querySelector(`#board2 .tgt[data-t="${k}"] polygon`), pick.ks[0]);
   // 3. click a target space: the explorer walks there
   const before = await S(() => JSON.stringify(window.__ED.S.players[window.__ED.S.cur].pieces));
-  await settle(p); const tgt = await center(`#board2 .tgt[data-t="${pick.ks[0]}"] polygon`);
+  // (the history panel sits over the board under the prompt: click a target it doesn't cover)
+  await settle(p); const tk = await S(ks => ks.find(k => { const e = document.querySelector(`#board2 .tgt[data-t="${k}"] polygon`), r = e && e.getBoundingClientRect();
+    return r && e.closest('.tgt').contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)); }) || ks[0], pick.ks);
+  const tgt = await center(`#board2 .tgt[data-t="${tk}"] polygon`);
   await p.mouse.move(tgt.x, tgt.y); await p.mouse.click(tgt.x, tgt.y);
   await check('the explorer animates', () => window.__ED.UI.anim, null, 3000);
   await idle();

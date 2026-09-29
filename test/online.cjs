@@ -33,7 +33,7 @@ const T = report('online');
     T.ok('room: joined by code and by link', await wait(A, () => __ED.NET.room && __ED.NET.room.seats.length === 3), code);
     T.ok('room lobby: no tabs or Profile link to wander off with (Leave is the way out)', await B.evaluate(() => document.querySelector('#sMode').hidden && getComputedStyle(document.querySelector('#acProfile')).display === 'none'));
     await A.click('#rlStart');
-    const started = await Promise.all([A, B, C].map(p => wait(p, () => __ED.S && __ED.S.owners && !document.querySelector('#menu').open)));
+    const started = await Promise.all([A, B, C].map(p => wait(p, () => __ED.online() && !document.querySelector('#menu').open)));
     T.ok('start: every player is in the game, menu closed', started.every(Boolean));
     // the menu during an online game: the Online screen with the game bar only (no second game to start, no tabs)
     await B.click('#menuBtn');
@@ -43,7 +43,7 @@ const T = report('online');
     // a connection that dies silently (a phone asleep, a dropped network): noticed when the page comes back, and replaced
     await B.evaluate(() => { const w = __ED.NET.ws; window.__deadWs = w; w.send = () => { }; document.dispatchEvent(new Event('visibilitychange')); });
     T.ok('a silently dead connection is noticed and replaced', await wait(B, () => __ED.NET.ws && __ED.NET.ws !== window.__deadWs && __ED.NET.connected && !!__ED.S, null, 20000));
-    const view = await Promise.all([A, B, C].map(p => p.evaluate(me => { const S = __ED.S, seat = S.owners.indexOf(me);
+    const view = await Promise.all([A, B, C].map(p => p.evaluate(me => { const S = __ED.S, seat = __ED.NET.seat;
       return { seat, mine: S.players[seat].hand.every(id => S.cards[id]), others: S.players.every((q, i) => i === seat || q.hand.every(id => !S.cards[id])) }; }, ids[[A, B, C].indexOf(p)])));
     T.ok('each player sees their own hand and no one else\'s', view.every(v => v.seat >= 0 && v.mine && v.others) && new Set(view.map(v => v.seat)).size === 3, JSON.stringify(view));
     const who = async () => { for (const p of [A, B, C]) if (await p.evaluate(() => __ED.canAct())) return p; return null; };
@@ -86,7 +86,7 @@ const T = report('online');
     await A.click('[data-addai="fawcett"]'); await wait(A, () => __ED.NET.room.seats.length === 2);
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 3);
     T.ok('AI seats added from the room lobby', (await A.evaluate(() => __ED.NET.room.seats.map(s => s.ai || '').join())) === ',fawcett,raleigh', code2);
-    await A.click('#rlStart'); await wait(A, () => __ED.S && __ED.S.owners);
+    await A.click('#rlStart'); await wait(A, () => __ED.online());
     let noClockOnAI = true;
     for (let t = 0; t < 2; t++) {
       for (let i = 0; i < 120 && !(await A.evaluate(() => __ED.canAct() || __ED.S.over)); i++) { if (await A.evaluate(() => __ED.S.cur !== 0 && !!__ED.NET.deadline)) noClockOnAI = false; await A.waitForTimeout(250); }
@@ -106,7 +106,7 @@ const T = report('online');
     await wait(A, () => __ED.NET.room && __ED.NET.room.seats.length === 1);
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 2);
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 3);
-    await A.click('#rlStart'); await wait(A, () => __ED.S && __ED.S.owners);
+    await A.click('#rlStart'); await wait(A, () => __ED.online());
     await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('unrated game ends as unrated', await wait(A, () => __ED.S.over && __ED.NET.room.results && __ED.NET.room.results.unrated, null, 120000));
     const lbC = await board(A);
@@ -124,12 +124,12 @@ const T = report('online');
     for (const p of [D, E2]) { await p.click('#qGo'); await wait(p, () => __ED.NET.room && __ED.NET.room.opts && __ED.NET.room.opts.auto); }
     T.ok('quick match: two players land in the same room', await wait(D, () => __ED.NET.room.seats.length === 2) && (await D.evaluate(() => __ED.NET.code)) === (await E2.evaluate(() => __ED.NET.code)));
     await F.click('#qGo');
-    T.ok('quick match: it starts by itself once full', (await Promise.all([D, E2, F].map(p => wait(p, () => __ED.S && __ED.S.owners)))).every(Boolean));
+    T.ok('quick match: it starts by itself once full', (await Promise.all([D, E2, F].map(p => wait(p, () => __ED.online())))).every(Boolean));
     const G2 = await open('G'), H2 = await open('H'); await signIn(G2, 'Gwen'); await signIn(H2, 'Hugo');
     for (const p of [G2, H2]) { await p.click('#qGo'); await wait(p, () => __ED.NET.room && __ED.NET.room.opts && __ED.NET.room.opts.auto); }
     await wait(G2, () => __ED.NET.room.seats.length === 2);
     await G2.click('#rlNow'); await H2.click('#rlNow');
-    T.ok('quick match: "Start now" from everyone starts it early', await wait(G2, () => __ED.S && __ED.S.owners) && await wait(H2, () => __ED.S && __ED.S.owners));
+    T.ok('quick match: "Start now" from everyone starts it early', await wait(G2, () => __ED.online()) && await wait(H2, () => __ED.online()));
 
     const errs = pages.flatMap(p => p.errors);
     T.ok('no page errors', !errs.length, errs.slice(0, 5).join(' | '));
