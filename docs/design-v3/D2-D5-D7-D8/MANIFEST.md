@@ -106,4 +106,62 @@ Text arrows inside sentences ("plays Explorer → jungle") stay text.
 **Recommendation: B.** Consistency for every future icon is worth more than hand-drawn character on 20 px controls; the
 character lives in the game symbols, which stay ours. (If you like A's hexagon "fit board" icon, it can stay as the one custom icon.)
 
-(Other decisions are added below as they are finished.)
+## D8. Design tokens
+
+**Problem:** the UI uses 21 font sizes, 23 radii, ~180 hex colours and 21 inline styles; every new screen invents more values,
+especially UI written by an AI agent.
+
+States: `start`, `game` (1440, 390). **These should look the same as before**, and they do: a pixel diff against `before` shows no
+movement; the only visible differences are corner radii snapped to the radius tokens (e.g. HUD buttons 11 → 10 px, End turn 14 → 12 px):
+at most 0.1 % of pixels change noticeably. A and B render identically (0 % difference).
+
+| | files |
+|---|---|
+| before | `D8-before-{start,game}-{1440,390}.png` |
+| A | `D8-A-{start,game}-{1440,390}.png` |
+| B | `D8-B-{start,game}-{1440,390}.png` |
+
+Counts (`count.py` here; "whole client" = shell.html + all client scripts except the figure art; "chrome CSS" = shell.html's CSS
+without the tokens block and without the art rules: card faces, deck back, board background):
+
+| | before | after (A and B) |
+|---|---|---|
+| distinct font sizes (px), whole client | 21 | 17 |
+| distinct border radii, whole client | 23 | 18 (the rest are card-art `em` radii) |
+| distinct hex colours, whole client | 179 | 148 (the rest are card, board and terrain art) |
+| inline `style="`, whole client | 21 | 10 (all 10 carry data as custom properties, e.g. `style="--pc:${player colour}"`; plus the icon sprite) |
+| chrome CSS: font sizes / radii / hex | 21 / 16 / 36 | 16 / 9 / 1 |
+
+Font sizes were only converted where they already equal the type scale (12/14/16/20/28/40); the half sizes (10.5, 11.5, 12.5, 13.5 …)
+are left as they are so that nothing moves, and DESIGN.md says to fold them in when a screen is next redesigned.
+
+**Option A: tokens + a written guide** (branch `design/v3-D8-A`).
+- A tokens block at the top of `shell.html` `:root`: 5 surfaces, lines, 4 text colours, gold accent (and the primary-button gold),
+  state colours (ok, danger, warn, camp, difficulty), type scale 12/14/16/20/28/40, space 4/8/16/24/32, control heights 36/44,
+  radii 4/8/10/12/18/full. The chrome's CSS now uses them (near-identical dark surfaces merged: 1–2 units apart).
+- The game-over list, the "(you)" tag, the reserve note and others were inline styles in scripts: now classes; player colours are
+  passed as `--pc`. New `docs/DESIGN.md` (the tokens table + a "never" list: no raw hex, no px sizes, no inline styles, no Unicode
+  icons, no small-caps labels, no native-looking controls, no glows), referenced from CLAUDE.md.
+- Effort: medium (CSS-wide find-and-replace, verified by pixel diff). Risk: low (layout test passes; explorers' positions checked).
+- Trade-offs: gives every future change (and every AI agent) a vocabulary; but nothing stops drift except reading the guide.
+
+**Option B: A + a build check** (branch `design/v3-D8-B`).
+- Everything in A, plus a check in `build.mjs`: it counts raw hex colours, px font sizes and inline styles per file (chrome CSS and UI
+  scripts; art left out). Today's legacy count is the baseline (`src/client/design-baseline.json`); a build with more fails and names
+  the file, a build with fewer lowers the baseline, so the count can only go down. (Tried: adding `color:#abcdef;font-size:13px`
+  to a rule fails the build.)
+- Effort: small on top of A (~25 lines). Risk: low; a failed build never deploys, so a slip is caught before it reaches the site.
+- Trade-offs: drift becomes impossible rather than discouraged, which matters most for AI-written UI; the cost is an occasional
+  "add a token" step when a design genuinely needs a new value.
+
+**Recommendation: B.** The problem is exactly that new UI invents values; a guide alone relies on whoever writes the next screen
+remembering it, and the check costs almost nothing.
+
+## Summary of recommendations
+
+- **D2: B** (quiet dashboard): the cards and board carry the character; strict chrome is easier to keep consistent.
+- **D5: B** (Lucide): one complete, consistent icon family for every control; game symbols stay ours.
+- **D7: B** (keep the hues, pair each with its explorer's hat): fixes "colour is the only cue" without invalidating saved games.
+- **D8: B** (tokens + build check): stops the drift at the source.
+
+B+B+B+B fit together: D8's tokens are D2-B's single surface/border/radius written down, and D5-B's icons follow D8's "no Unicode icons".
