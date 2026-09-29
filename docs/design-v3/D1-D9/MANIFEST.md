@@ -35,3 +35,23 @@ phone the Start button is two screens down.
 - **Trade-offs:** on desktop the title uses little of the tall menu panel (the panel keeps one size for every screen;
   it could shrink for this screen only). Returning players with a saved game tap Continue once more than today.
   "Rules" is not on the title (it is in the top bar); Replays stays a tab.
+
+### Option B — one screen, short top, More options folded (branch `design/v3-D1-B`)
+- **What changed:** the This device tab keeps one screen, but its top is short: two big tiles for how you play
+  (**Against the AI** / **Pass and play**), the player count, and **Start expedition** right beside it with the game
+  written out under it ("Ana against Humboldt and Raleigh · First Expedition"). Everything else (leaders, names and
+  colours, course, end rule, privacy) sits in a native **More options** fold, closed by default.
+- The two tiles drive the seats: Against the AI fills the other seats with AIs (the ones picked last time), Pass and
+  play makes every seat human and turns on hand privacy. They follow the seats too (pick an AI in More options and the
+  tile switches). On a course or player count the AI can't play, the AI tile is greyed with the reason.
+- **Course cards show a thumbnail of the route** (every space, coloured by terrain, drawn from the engine's own map),
+  two per row.
+- The whole setup is remembered on the device. A first visit is you against Humboldt and Raleigh.
+- **Saved game:** unchanged: a saved game still opens straight into the board (so `D1-B-saved-*` looks like before).
+  **During a game:** the gold "Game in progress" bar stays; Start becomes a plain "Start a new game" button so
+  "Back to game" is the only gold one.
+- **Effort / risk:** small–medium (≈ 50 lines CSS, 35 JS, a default in build.mjs). Low risk: every test still passes
+  its Start button; start screen 10.4 KB compressed. The thumbnails are drawn by the script (a moment after first paint).
+- **Trade-offs:** on a phone Start is on the first screen now (no scrolling), but the page still says "settings" more
+  than "title". The "Against the AI / Pass and play" choice is new vocabulary; it replaces nothing (the per-seat
+  Human/AI pickers remain inside More options).
