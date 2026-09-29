@@ -56,9 +56,11 @@ function feedGroupHTML(g){
   return`<div class="fg f-${g.k}" data-g="${g.id}"><div class="frc"><div class="fcs">${g.ts.map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap">${feedCap(g)}</div></div>`;
 }
 function update(){
-  const F=$('#feed');const p=S&&S.players[FEED.pl];
+  const F=$('#feed'),hide=()=>{if(!F.hidden){F.hidden=true;F.innerHTML='';F.dataset.pl='';}};
+  if(!S){hide();return;}
+  const p=S.players[FEED.pl]; // (none while nobody's turn is shown)
   setTrail(p&&!G.replay?FEED.trail:[],p?p.color:'');
-  if(!S||G.replay||UI.cover||!FEED.groups.length||!p){if(!F.hidden){F.hidden=true;F.innerHTML='';F.dataset.pl='';}return;}
+  if(G.replay||UI.cover||!FEED.groups.length||!p){hide();return;}
   if(F.dataset.pl!==String(FEED.pl)){F.innerHTML='<div class="fwho"></div><div class="frow"></div>';F.dataset.pl=FEED.pl;}
   const recap=S.cur!==FEED.pl||S.over; // their turn is over: say whose turn this was
   const who=F.querySelector('.fwho');setHTML(who,recap?`<i style="background:${p.color}"></i>${esc(p.name)}’s turn`:'');who.hidden=!recap;

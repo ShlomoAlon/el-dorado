@@ -3,7 +3,7 @@
    the explorer slides from space to space (easing in and out at each one) while its figure hops once per space above a
    shadow that stays on the ground. Whose turn it is: a pool of light and a marker (fading in and out); the explorer to
    move (two-explorer games): a dashed ring. */
-import { S, MAP, R, hexAt } from '../../engine.gen.js';
+import { S, MAP, R, hexAt, assert } from '../../engine.gen.js';
 import { $, reduceMotion } from '../dom.js';
 import { UI } from '../state.js';
 import { render } from '../frame.js';
@@ -42,7 +42,7 @@ function piecePos(pl, i) {
 const stopAnims = P => { P.walk = null; for (const a of P.anims.splice(0)) a.cancel(); moving.delete(P); UI.anim = moving.size > 0; };
 function rest(P, t) { if (P.tf === t) return; P.tf = t; P.el.style.transform = t; }
 function update() {
-  if (!S || !MAP) return;
+  if (!S) return;
   S.players.forEach((p, pl) => p.pieces.forEach((k, i) => {
     const id = pl + '-' + i; let P = els.get(id); if (!P) { P = make(pl, i); els.set(id, P); }
     const t = tf(...piecePos(pl, i));
@@ -57,7 +57,7 @@ function update() {
    which a phone can take a few hundred ms to draw; an animation started before it would have its clock running during
    that frame (Safari) and appear already half done. Until then the explorer stays on its old space. */
 export function animateMove(pl, i, keys) {
-  const P = els.get(pl + '-' + i); if (!P || !S.players[pl]) return;
+  const P = els.get(pl + '-' + i); assert(P, 'animateMove: the explorer is drawn');
   const pts = keys.map(k => { const h = hexAt(k); return [h.x, h.y]; });
   if (S.players[pl].pieces[i] === 'done') pts.push(piecePos(pl, i));
   const T = pts.map(p => tf(...p)); stopAnims(P);
@@ -68,13 +68,13 @@ export function animateMove(pl, i, keys) {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     if (P.walk !== token || !moving.has(P)) return; // (the game jumped in the meantime: update() has placed it)
     P.el.style.transform = P.tf;
-    const n = T.length - 1, up = Math.max(14, 9 / (view.s || 1)); // the hop: at least ~9 screen pixels high at any zoom
+    const n = T.length - 1, up = Math.max(14, 9 / view.s); // the hop: at least ~9 screen pixels high at any zoom
     const slide = P.el.animate(T.map((t, k) => ({ transform: t, offset: k / n, easing: 'cubic-bezier(.45,0,.55,1)' })), { duration: n * STEP });
     // up fast and down fast like a thrown ball (sine), a little bigger at the top; the shadow shrinks under it
     P.anims = [slide,
       P.pin.animate([{ transform: 'translateY(0) scale(1)', easing: 'cubic-bezier(.61,1,.88,1)' }, { transform: `translateY(${-up}px) scale(1.08)`, offset: .5, easing: 'cubic-bezier(.12,0,.39,0)' }, { transform: 'translateY(0) scale(1)' }], { duration: STEP, iterations: n }),
       P.shadow.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(.66)', opacity: .5, offset: .5 }, { transform: 'scale(1)', opacity: 1 }], { duration: STEP, iterations: n, easing: 'ease-in-out' })];
-    slide.finished.then(() => { if (P.anims[0] !== slide) return; P.anims = []; moving.delete(P); UI.anim = moving.size > 0; render(); }, () => { });
+    slide.finished.then(() => { if (P.anims[0] !== slide) return; P.anims = []; moving.delete(P); UI.anim = moving.size > 0; render(); }, () => { }); // (cancelled: the game jumped)
   }));
 }
 export const piecesPart = { name: 'pieces', 
