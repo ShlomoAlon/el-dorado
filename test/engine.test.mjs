@@ -120,7 +120,7 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
 { let recs = 0;
   for (let g = 0; g < 12; g++) {
     const np = 2 + (g % 3), C = E.COURSES[g % E.COURSES.length];
-    const rec = E.recNewGame({ course: C, seed: 1000 + g, fullRace: true, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636'][i] })) });
+    const rec = E.recNewGame({ course: C, seed: 1000 + g, fullRace: true, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: ['#1fbfb8', '#efe9dc', '#9d7df7', '#ff9636'][i] })) });
     const rnd = E.mulberry32(g + 7), mem = [{}, {}, {}, {}]; let steps = 0, undos = 0;
     while (!E.S.over && steps++ < 20000) {
       const S = E.S, me = S.cur;

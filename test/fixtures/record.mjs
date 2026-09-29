@@ -5,7 +5,7 @@ import { S, recNewGame, aiStep, aiSetNet, aiNetDecode, recFinal, courseById } fr
 import { readFileSync, writeFileSync } from 'node:fs';
 aiSetNet(aiNetDecode(readFileSync(new URL('../../src/ai/first.bin', import.meta.url))));
 const seats = ['humboldt', 'raleigh', 'humboldt'];
-const rec = recNewGame({ course: courseById('first'), seed: 4242, fullRace: true, players: seats.map((ai, i) => ({ name: ['Humboldt', 'Raleigh', 'Humboldt 2'][i], color: ['#e5484d', '#efe9dc', '#9d7df7'][i], ai })) });
+const rec = recNewGame({ course: courseById('first'), seed: 4242, fullRace: true, players: seats.map((ai, i) => ({ name: ['Humboldt', 'Raleigh', 'Humboldt 2'][i], color: ['#1fbfb8', '#efe9dc', '#9d7df7'][i], ai })) });
 const mem = seats.map(() => ({}));
 while (!S.over && S.round <= 30) aiStep(S.players[S.cur].ai, mem[S.cur], rec);
 const log = recFinal(rec);
