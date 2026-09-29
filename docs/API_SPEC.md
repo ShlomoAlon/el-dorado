@@ -136,6 +136,9 @@ The acting seat must be `S.cur`, except for `resign`. A refused action returns `
 - Single-use cards (`once`) are removed from the game when their effect is used.
 - A single-use *coin or joker* card used to pay is also removed. Any other card used to pay goes to play as usual.
 
+**Arriving:** when a player's last explorer reaches El Dorado, their turn ends at once: the hand and the cards played go to the
+discard pile, nothing is drawn, and the next player moves (`turn` event). With two explorers each, the first to arrive doesn't end it.
+
 **Game end:**
 
 - Full race (`fullRace`, the default): the game ends at the end of the round in which at most one player is still racing.
@@ -189,7 +192,7 @@ Equal keys share a place. `winners` are the players in place 1.
 A game is its setup plus its list of actions; any position is rebuilt by replaying them.
 
 ```
-{ kind: 'eldorado-replay', v: 2, course: id, seed, rng, fullRace, privacy?,
+{ kind: 'eldorado-replay', v: 3, course: id, seed, rng, fullRace, privacy?,
   players: [{name, color, bot?}], actions: [[seat, action]…],
   mark,                          // records in play only: actions before it can't be undone
   title?, result?: {places, rounds} }  // finished logs
@@ -209,7 +212,7 @@ A game is its setup plus its list of actions; any position is rebuilt by replayi
 | `recUndo(rec)` | Drops the last action and rebuilds `S` and `MAP`. |
 | `recState(rec)` → `{S, MAP}` | The position a record leads to (the module's `S` and `MAP` are left as they were). |
 | `recFinal(rec)` | The finished log, with `title` and `result` (`{places, rounds}`, read from the game on show, `S`), and without `mark`. |
-| `replayCheck(log)` | `null`, or why the log can't be played. |
+| `replayCheck(log)` | `null`, or why the log can't be played. Records before v3 were played under older rules (the turn went on after the last explorer arrived) and are refused; the server deleted its stored ones once (settings `logs_v3`), rooms with one close, and the page dropped its old saves (keys `-v1`). |
 | `replayStart(log)`, `replayStep(log, i)` | Rebuild step by step; `replayStep` returns `applyAction`'s result. |
 
 **Training logs** (`v: 1`, tools only) use one generator for the whole game, `mulberry32(rng)`, consumed only by the recorded actions.
@@ -418,8 +421,8 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 
 | key | holds |
 |---|---|
-| `eldorado-game-v1` | the game in progress: its record, `S` rebuilt from it |
-| `eldorado-games-v1` | up to 20 finished local games (logs) |
+| `eldorado-game-v2` | the game in progress: its record, `S` rebuilt from it (the -v1 keys held records from before v3; dropped on load) |
+| `eldorado-games-v2` | up to 20 finished local games (logs) |
 | `ed-token` | the sign-in token |
 | `eldorado-seats` | the AI choices on the start screen |
 | `eldorado-mkt` | whether the market is open |

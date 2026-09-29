@@ -73,11 +73,12 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
   const full = JSON.parse(readFileSync(new URL('../tools/ai/models/first-first1-best.json', import.meta.url), 'utf8'));
   const half = E.aiNetDecode(readFileSync(new URL('../src/ai/first.bin', import.meta.url)));
   assert(half.course === full.course && half.nf === full.nf && half.w1T.length === full.w1T.length, 'packed network header');
-  // 'play' events (shown to every player online) name only cards that just became public: in play or removed from the game
+  // 'play' events (shown to every player online) name only cards that just became public: in play, discarded (an arrival
+  // clears the finished player's cards) or removed from the game
   let plays = 0;
   const publicEvents = ev => { for (const e of ev) { if (e.e !== 'play') continue; plays++;
     if (e.k === 'end') { assert(!e.ts && Number.isInteger(e.kept) && Number.isInteger(e.disc), 'end event shows cards'); continue; }
-    const pub = {}; for (const id of [...E.S.players[e.pl].play, ...E.S.trash]) pub[E.S.cards[id]] = (pub[E.S.cards[id]] || 0) + 1;
+    const pub = {}; for (const id of [...E.S.players[e.pl].play, ...E.S.players[e.pl].discard, ...E.S.trash]) pub[E.S.cards[id]] = (pub[E.S.cards[id]] || 0) + 1;
     for (const t of e.ts) assert(pub[t]-- > 0, 'play event names a card that is not public: ' + e.k + ' ' + t); } };
   const aiGame = (course, ais, check) => {
     E.newGame({ course, seed: (Math.random() * 1e9) | 0, fullRace: true, players: ais.map((a, i) => ({ name: 'P' + i, color: '#fff', ai: a })) });

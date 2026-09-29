@@ -199,31 +199,33 @@ function buyOptions(seat){
   return out;
 }
 /* ---- game logs (replays) ----
-   {kind:'eldorado-replay', v:1 (training logs) or 2 (game records, below), title, course, seed, rng, fullRace, players:[{name,color,bot}], actions:[[seat,action],…], notes:[…]}
+   {kind:'eldorado-replay', v:1 (training logs) or 3 (game records, below), title, course, seed, rng, fullRace, players:[{name,color,bot}], actions:[[seat,action],…], notes:[…]}
+   Game records before v3 were played under older rules (the turn went on after the last explorer arrived): not replayable.
    Every shuffle draws from a generator seeded with log.rng, so re-applying the same actions rebuilds the identical game. */
 const REPLAY_MAX_ACTIONS=20000;
 function replayCheck(log){
-  if(!log||log.kind!=='eldorado-replay'||(log.v!==1&&log.v!==2))return'Not an El Dorado game log.';
+  if(!log||log.kind!=='eldorado-replay')return'Not an El Dorado game log.';
+  if(log.v!==1&&log.v!==3)return'This game was recorded by an older version of the game.';
   if(!courseById(log.course))return'Unknown course: '+log.course;
   if(!Array.isArray(log.players)||log.players.length<2||log.players.length>4)return'A game log needs 2 to 4 players.';
   if(!Number.isFinite(log.seed)||!Number.isFinite(log.rng))return'The game log is missing its seeds.';
   if(log.gift&&!(CT[log.gift]&&CT[log.gift].cost))return'Unknown gift card: '+log.gift;
   if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
   return null;}
-function replayStart(log){const v2=log.v===2,g=v2?recRng(log.rng,-1):mulberry32(log.rng>>>0);setRng(g);
-  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,privacy:v2&&!!log.privacy,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:v2&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:v2?p.bot:undefined}))});
+function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry32(log.rng>>>0);setRng(g);
+  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,privacy:rec&&!!log.privacy,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:rec&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:rec?p.bot:undefined}))});
   // training exploration: every player starts with the same extra card, shuffled into the draw pile
   if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(RNG()*(p.deck.length+1)),0,newCard(log.gift));
-  if(v2)setRng(null);
+  if(rec)setRng(null);
   return g;}
 /* apply action i of a log to S (after replayStart and actions 0…i-1) */
 function replayStep(log,i){
-  const[seat,a]=log.actions[i],v2=log.v===2,r0=RNG;if(v2)setRng(recRng(log.rng,i));
+  const[seat,a]=log.actions[i],rec=log.v===3,r0=RNG;if(rec)setRng(recRng(log.rng,i));
   try{
     return applyAction(seat,a);
-  }finally{if(v2)RNG=r0;}
+  }finally{if(rec)RNG=r0;}
 }
-/* ---- game records (log v2): a game is its setup and its list of actions; the state is rebuilt from them ----
+/* ---- game records (log v3): a game is its setup and its list of actions; the state is rebuilt from them ----
    Each action's shuffles come from a generator of its own, seeded from the game's secret number (rec.rng) and the action's
    index (newGame's: index -1), so re-applying the log rebuilds the same game and nothing needs a generator's state between
    moves. rec.rng would reveal every future shuffle, so the record stays on the server (or in the local save) until the game
@@ -234,7 +236,7 @@ function recNewGame(o){
   // the secret: from the platform's cryptographic generator where there is one (Math.random's state could be guessed)
   const c=globalThis.crypto,rng=c&&c.getRandomValues?c.getRandomValues(new Uint32Array(1))[0]:(Math.random()*4294967296)>>>0,r0=RNG;setRng(recRng(rng,-1));
   try{newGame(o);}finally{RNG=r0;}
-  return{kind:'eldorado-replay',v:2,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(S.privacy?{privacy:true}:{}),
+  return{kind:'eldorado-replay',v:3,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(S.privacy?{privacy:true}:{}),
     players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0};
 }
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
@@ -368,6 +370,7 @@ function applyAction(seat,a){
   const takeBlock=b=>{const B=S.blockades[b];if(B.owner!==null)return;B.owner=seat;P.blocks.push(b);log(seat,'tears down blockade #'+B.n+' and keeps it.');ev.push({e:'block',pl:seat,n:B.n});};
   const arrive=pi=>{if(P.pieces[pi]!=='done')return;log(seat,'reaches El Dorado!');ev.push({e:'arrive',pl:seat,pi});
     if(playerDone(P)&&!P.fin){P.fin=S.round;checkEnd();}};
+  const passTurn=()=>{S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});};
   switch(a.t){
     case 'move':{
       const act=T.active&&T.active.id===a.card?T.active:null;
@@ -450,17 +453,18 @@ function applyAction(seat,a){
     case 'end':{
       const keep=Array.isArray(a.keep)?a.keep:[];
       if(!keep.every(inHand)||new Set(keep).size!==keep.length)return fail('Bad cards to keep.');
+      // the kept cards stay; the rest of the hand and the cards played are discarded; draw up to 4
       const toDisc=P.hand.filter(id=>!keep.includes(id));ev.push({e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length}); // counts only: the hand is private
       for(const id of toDisc){rm(P.hand,id);P.discard.push(id);}
       P.discard.push(...P.play);P.play=[];
       drawCards(P,Math.max(0,4-P.hand.length));reveal=true;
       log(seat,'ends the turn'+(toDisc.length?', discarding '+toDisc.length:'')+(keep.length?(toDisc.length?' and':'')+' keeping '+keep.length:'')+'.');
-      S.turn={bought:false,active:null,pending:null};
-      advance();ev.push({e:'turn',pl:S.cur});
-      break;
+      passTurn();break;
     }
     default:return fail('Unknown action.');
   }
+  // arriving with your last explorer ends your turn: nothing is left to do, or to draw for
+  if(!S.over&&S.cur===seat&&(a.t==='move'||a.t==='native')&&playerDone(P)){P.discard.push(...P.hand,...P.play);P.hand=[];P.play=[];passTurn();}
   if(S.over)ev.push({e:'over'});
   return{ok:true,ev,reveal};
 }
