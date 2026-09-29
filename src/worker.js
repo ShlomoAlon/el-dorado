@@ -380,7 +380,7 @@ async function pruneReplays(DB, uids) {
 /* ---------------- Room: one live game ---------------- */
 const mapCache = new Map();
 function mapFor(S) { const k = S.course.id + ':' + S.seed; let m = mapCache.get(k); if (!m) { m = E.mapFor(S); mapCache.set(k, m); if (mapCache.size > 200) mapCache.delete(mapCache.keys().next().value); } return m; }
-const PCOLORS = ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636']; // matches COLORS: one explorer figure per colour
+const PCOLORS = E.COLORS.map(c => c.hex); // the seats' colours (one explorer figure each)
 const AI_RULE = 'AI players play First Expedition with 3 or 4 players for now.';
 const PLAYER_ACTIONS = ['move', 'native', 'pay', 'action', 'trash', 'transmit', 'buy', 'end', 'resign']; // what a player may send
 

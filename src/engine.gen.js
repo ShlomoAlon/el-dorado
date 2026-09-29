@@ -215,13 +215,14 @@ function replayCheck(log){
   if(log.v!==1&&log.v!==3)return'This game was recorded by an older version of the game.';
   if(!courseById(log.course))return'Unknown course: '+log.course;
   if(!Array.isArray(log.players)||log.players.length<2||log.players.length>4)return'A game log needs 2 to 4 players.';
+  if(log.v===3&&!log.players.every(p=>typeof p.name==='string'&&p.name&&p.name.length<=24&&COLORS.some(c=>c.hex===p.color)&&(p.bot===undefined||aiById(p.bot))))return'The game log names its players wrongly.';
   if(!Number.isFinite(log.seed)||!Number.isFinite(log.rng))return'The game log is missing its seeds.';
   if(log.gift&&!(CT[log.gift]&&CT[log.gift].cost))return'Unknown gift card: '+log.gift;
   if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
   return null;}
 /* set up the log's game (S, MAP). Returns the generator a training log's actions share (records give each action its own) */
 function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry32(log.rng>>>0);
-  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>({name:String(p.name||'Player '+(i+1)).slice(0,24),color:rec&&/^#[0-9a-f]{6}$/i.test(p.color||'')?p.color:COLORS[i%COLORS.length].hex,ai:rec?p.bot:undefined}))},g);
+  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>rec?{name:p.name,color:p.color,ai:p.bot}:{name:String(p.name),color:COLORS[i].hex})},g); // (training logs: colours by seat)
   // training exploration: every player starts with the same extra card, shuffled into the draw pile
   if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(g()*(p.deck.length+1)),0,newCard(log.gift));
   return g;}
@@ -263,14 +264,14 @@ function recFinal(rec){
   return L;
 }
 function newGame(o,rnd=Math.random){
-
+  assert(o.players.length>=2&&o.players.length<=4,'newGame: 2 to 4 players');
   const course=o.course||COURSES[0];
   MAP=buildCourse(course,o.seed);
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
     const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
     const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck,rnd),hand:[],discard:[],play:[],fin:0,resigned:0};
-    if(p.ai&&aiById(p.ai))pl.ai=p.ai; // a named AI plays this seat (engine_ai.js)
+    if(p.ai){assert(aiById(p.ai),'newGame: a known AI');pl.ai=p.ai;} // a named AI plays this seat (engine_ai.js)
     return pl;
   });
   const st=MAP.starts;
@@ -389,7 +390,6 @@ function applyAction(seat,a,rnd=Math.random){
   const takeBlock=b=>{const B=S.blockades[b];assert(B.owner===null,'a blockade is taken once');B.owner=seat;tell(ev,{e:'block',pl:seat,n:B.n});};
   const arrive=pi=>{if(P.pieces[pi]!=='done')return;tell(ev,{e:'arrive',pl:seat,pi});
     if(playerDone(P)){P.fin=S.round;checkEnd(ev);}};
-  const passTurn=()=>{S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});};
   switch(a.t){
     case 'move':{
       const act=T.active&&T.active.id===a.card?T.active:null;
@@ -465,19 +465,18 @@ function applyAction(seat,a,rnd=Math.random){
       break;
     }
     case 'end':{
-      const keep=Array.isArray(a.keep)?a.keep:[];
-      if(!keep.every(inHand)||new Set(keep).size!==keep.length)return fail('Bad cards to keep.');
+      const keep=a.keep;if(!distinctHand(keep))return fail('Bad cards to keep.');
       // the kept cards stay; the rest of the hand and the cards played are discarded; draw up to 4
       const toDisc=P.hand.filter(id=>!keep.includes(id));tell(ev,{e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length}); // counts only: the hand is private
       for(const id of toDisc){rm(P.hand,id);P.discard.push(id);}
       P.discard.push(...P.play);P.play=[];
       drawCards(P,4-P.hand.length,rnd);reveal=true;
-      passTurn();break;
+      passTurn(ev);break;
     }
     default:return fail('Unknown action.');
   }
   // arriving with your last explorer ends your turn: nothing is left to do, or to draw for
-  if(!S.over&&S.cur===seat&&(a.t==='move'||a.t==='native')&&playerDone(P)){P.discard.push(...P.hand,...P.play);P.hand=[];P.play=[];passTurn();}
+  if(!S.over&&S.cur===seat&&(a.t==='move'||a.t==='native')&&playerDone(P)){P.discard.push(...P.hand,...P.play);P.hand=[];P.play=[];passTurn(ev);}
   if(S.over)ev.push({e:'over'});
   return{ok:true,ev,reveal};
 }
@@ -498,6 +497,8 @@ function advance(){
   }
   assert(false,'advance: someone takes the turn, or the game ends'); // (checkEnd and resign end the game before nobody is left)
 }
+/* the turn passes to the next player racing (or the game ends: advance) */
+function passTurn(ev){S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});}
 /* A player leaves a game for good (online): placed below everyone still racing. */
 function resign(seat){
   const P=S.players[seat];if(P.resigned||playerDone(P))return{ok:false,err:'You are not racing.',ev:[]};
@@ -506,7 +507,7 @@ function resign(seat){
   const others=S.players.filter((p,i)=>i!==seat&&!p.resigned);
   if(others.length<=1||!S.players.some(isActive)){endGame();ev.push({e:'over'});return{ok:true,ev};} // nobody left to race: finish now
   checkEnd(ev);
-  if(seat===S.cur){S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});}
+  if(seat===S.cur)passTurn(ev);
   if(S.over)ev.push({e:'over'});
   return{ok:true,ev};
 }
@@ -1041,5 +1042,5 @@ function aiStep(id,mem,rec,rnd){ // rnd: the game's shuffles when there is no re
 }
 
 // every name (live bindings), and setters for the game on show
-export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,aiById,drawCards,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiFinishCard,aiStep};
+export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiFinishCard,aiStep};
 export const setS=v=>{S=v},setMAP=v=>{MAP=v};

@@ -125,7 +125,7 @@ The acting seat must be `S.cur`, except for `resign`. A refused action returns `
 | `{t:'trash', cards}` | Finishes a pending Scientist or Travel Log: 0…`max` cards from the hand are removed from the game. |
 | `{t:'transmit', card, type}` | The Transmitter (then removed) takes one card of `type` from the market or reserve into the discard pile. |
 | `{t:'buy', type, cards}` | At most one buy per turn. Coin and joker cards pay their strength; every other card pays ½. The reserve opens once a market slot is empty, and a reserve stack then moves into that slot. The bought card goes to the discard pile. |
-| `{t:'end', keep}` | `keep` (optional, default none): hand cards kept for next turn. The rest of the hand and the played cards go to the discard pile, then the player draws up to 4 (reshuffling the discard pile when the deck runs out). Sets `reveal`; the turn passes. |
+| `{t:'end', keep}` | `keep` (required; `[]` keeps none): hand cards kept for next turn. The rest of the hand and the played cards go to the discard pile, then the player draws up to 4 (reshuffling the discard pile when the deck runs out). Sets `reveal`; the turn passes. |
 | `{t:'timeout'}` | Ends the turn for the player: a pending removal is skipped and nothing is kept. |
 | `{t:'resign'}` | Any seat, at any time. The player places below everyone still racing. |
 | `{t:'endgame'}` | Local play only (the server refuses it): the game ends now. |

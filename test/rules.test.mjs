@@ -3,7 +3,7 @@
 // the reserve, the Transmitter, action cards, single-use cards, the end of a turn, both end-of-game rules and their
 // tie-break, two explorers each, resigning, what undo may take back, and what each player is shown.
 //   node test/rules.test.mjs
-import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cardTargets, blocksOf, cantBuy, buyOptions, COURSES, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck, setAssertMode } from '../src/engine.gen.js';
+import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cardTargets, blocksOf, cantBuy, buyOptions, COURSES, COLORS, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck, setAssertMode } from '../src/engine.gen.js';
 setAssertMode({ debug: true }); // a broken invariant fails the run
 let checks = 0; const failures = [];
 const ok = (cond, what) => { checks++; if (!cond) failures.push(what); };
@@ -206,7 +206,7 @@ ok(act({ t: 'resign' }, 2).ok && S.over && S.places.join() === '1,3,2', 'one lef
 // ---------- undo (records)
 let rec = null, before = null;
 for (let seed = 1; seed < 40 && !before; seed++) { // a deal where the first player has a move
-  rec = recNewGame({ course: COURSES[0], seed, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) });
+  rec = recNewGame({ course: COURSES[0], seed, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: COLORS[i].hex })) });
   const me = S.cur, pos = JSON.stringify(S.players[me].pieces);
   for (const id of S.players[me].hand) { const t = [...targets(me, 0, S.cards[id])].find(([, v]) => v.kind === 'move');
     if (CT[S.cards[id]].c !== 'p' && t && recApply(rec, me, { t: 'move', card: id, pi: 0, to: t[0] }).ok) { before = pos; break; } }
