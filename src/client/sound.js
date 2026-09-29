@@ -1,5 +1,6 @@
 import { S } from '../engine.gen.js';
 import { UI, canAct, online, myId } from './state.js';
+import { STEP } from './board/pieces.js';
 /* =========================================================
    SOUND: tiny synthesized UI effects (Web Audio, no files).
    sfx(name[,n]) plays one; everything is short, soft and low-passed.
@@ -56,8 +57,8 @@ export function sfx(name,n){
     const c=SND.ctx;if(SND.muted||!c||c.state!=='running'||!SFX[name==='move'?'step':name==='draw'?'tick':name])return;
     const now=performance.now();if(now-(SND.last[name]||0)<40)return;SND.last[name]=now;
     const t0=c.currentTime+.005,rnd=()=>1+(Math.random()*2-1)*(SND_TUNED[name]?.01:.03);
-    if(name==='move'){ // one soft knock as the explorer lands on each space (see animatePiece: 200 ms per step)
-      const k=sndStill?1:Math.min(n||1,8);for(let i=0;i<k;i++)SFX.step(t0+(sndStill?0:i*.2+.17),rnd());return;}
+    if(name==='move'){ // one soft knock as the explorer lands on each space (board/pieces.js: STEP ms per space)
+      const k=sndStill?1:Math.min(n||1,8),st=STEP/1000;for(let i=0;i<k;i++)SFX.step(t0+(sndStill?0:.035+i*st+st*.85),rnd());return;} // (the walk starts two frames after the move: board/pieces.js)
     if(name==='draw'){const k=Math.min(n||1,5);for(let i=0;i<k;i++)SFX.tick(t0+i*.055,rnd());return;}
     SFX[name](t0,rnd());
   }catch(e){}
@@ -65,7 +66,7 @@ export function sfx(name,n){
 /* engine events → sounds (called from playEvents) */
 export function sfxEvent(e,viewer){
   const mine=pl=>!online()||(S.owners&&S.owners[pl]===myId());
-  if(e.e==='move'){sfx('move',e.path.length-1);SND.moveEnd=performance.now()+(sndStill?0:e.path.length*200);}
+  if(e.e==='move'){sfx('move',e.path.length-1);SND.moveEnd=performance.now()+(sndStill?0:e.path.length*STEP);}
   else if(e.e==='block')sfx('block');
   else if(e.e==='arrive')setTimeout(()=>sfx('arrive'),Math.max(0,(SND.moveEnd||0)-performance.now()));
   else if(e.e==='gain')sfx('buy');

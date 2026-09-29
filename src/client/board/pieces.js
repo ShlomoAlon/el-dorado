@@ -8,10 +8,10 @@ import { $, reduceMotion } from '../dom.js';
 import { UI } from '../state.js';
 import { render } from '../frame.js';
 import { meepleSVG } from '../meeple.js';
-import { cam } from './camera.js';
+import { cam, view } from './camera.js';
 import { onPiece } from '../actions.js';
 
-const STEP = 200; // ms per space (the step sounds are timed to it: sound.js)
+export const STEP = 260; // ms per space (the step sounds are timed to it: sound.js)
 const els = new Map(); // 'player-explorer' → { el, pin, shadow, tf }
 const moving = new Set(); // explorers walking now
 const tf = (x, y) => `translate(${(x - MAP.minX).toFixed(1)}px,${(y - MAP.minY).toFixed(1)}px)`;
@@ -39,7 +39,7 @@ function piecePos(pl, i) {
   const px = -C.dy, py = C.dx, off = (idx - 1.5) * 18;
   return [C.x + px * off + C.dx * R * 1.6, C.y + py * off + C.dy * R * 1.6];
 }
-const stopAnims = P => { for (const a of P.anims.splice(0)) a.cancel(); moving.delete(P); UI.anim = moving.size > 0; };
+const stopAnims = P => { P.walk = null; for (const a of P.anims.splice(0)) a.cancel(); moving.delete(P); UI.anim = moving.size > 0; };
 function rest(P, t) { if (P.tf === t) return; P.tf = t; P.el.style.transform = t; }
 function update() {
   if (!S || !MAP) return;
@@ -52,21 +52,30 @@ function update() {
     const z = moving.has(P) ? '3' : pl === S.cur ? '2' : '1'; if (P.el.style.zIndex !== z) P.el.style.zIndex = z; // the player to move stands in front
   }));
 }
-/* an explorer walked along keys (engine 'move' event; the state already has it at the end) */
+/* an explorer walked along keys (engine 'move' event; the state already has it at the end).
+   The walk starts two frames later: the first frame after a move carries the page's own update (cards, prompt, targets),
+   which a phone can take a few hundred ms to draw; an animation started before it would have its clock running during
+   that frame (Safari) and appear already half done. Until then the explorer stays on its old space. */
 export function animateMove(pl, i, keys) {
   const P = els.get(pl + '-' + i); if (!P || !S.players[pl]) return;
   const pts = keys.map(k => { const h = hexAt(k); return [h.x, h.y]; });
   if (S.players[pl].pieces[i] === 'done') pts.push(piecePos(pl, i));
-  const T = pts.map(p => tf(...p)); stopAnims(P); rest(P, T[T.length - 1]);
-  if (reduceMotion || T.length < 2) return;
-  const n = T.length - 1;
-  const slide = P.el.animate(T.map((t, k) => ({ transform: t, offset: k / n, easing: 'cubic-bezier(.45,0,.55,1)' })), { duration: n * STEP });
-  // the hop: up fast and down fast like a thrown ball (sine), growing a little at the top; the shadow shrinks under it
-  P.anims = [slide,
-    P.pin.animate([{ transform: 'translateY(0) scale(1)', easing: 'cubic-bezier(.61,1,.88,1)' }, { transform: 'translateY(-8px) scale(1.1)', offset: .5, easing: 'cubic-bezier(.12,0,.39,0)' }, { transform: 'translateY(0) scale(1)' }], { duration: STEP, iterations: n }),
-    P.shadow.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(.72)', opacity: .55, offset: .5 }, { transform: 'scale(1)', opacity: 1 }], { duration: STEP, iterations: n, easing: 'ease-in-out' })];
+  const T = pts.map(p => tf(...p)); stopAnims(P);
+  if (reduceMotion || T.length < 2) { rest(P, T[T.length - 1]); return; }
+  P.tf = T[T.length - 1]; P.el.style.transform = T[0]; // (where it rests once the walk is done; shown on its old space until then)
   P.el.style.zIndex = '3'; moving.add(P); UI.anim = true;
-  slide.finished.then(() => { if (P.anims[0] !== slide) return; P.anims = []; moving.delete(P); UI.anim = moving.size > 0; render(); }, () => { });
+  const token = P.walk = {};
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (P.walk !== token || !moving.has(P)) return; // (the game jumped in the meantime: update() has placed it)
+    P.el.style.transform = P.tf;
+    const n = T.length - 1, up = Math.max(14, 9 / (view.s || 1)); // the hop: at least ~9 screen pixels high at any zoom
+    const slide = P.el.animate(T.map((t, k) => ({ transform: t, offset: k / n, easing: 'cubic-bezier(.45,0,.55,1)' })), { duration: n * STEP });
+    // up fast and down fast like a thrown ball (sine), a little bigger at the top; the shadow shrinks under it
+    P.anims = [slide,
+      P.pin.animate([{ transform: 'translateY(0) scale(1)', easing: 'cubic-bezier(.61,1,.88,1)' }, { transform: `translateY(${-up}px) scale(1.08)`, offset: .5, easing: 'cubic-bezier(.12,0,.39,0)' }, { transform: 'translateY(0) scale(1)' }], { duration: STEP, iterations: n }),
+      P.shadow.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(.66)', opacity: .5, offset: .5 }, { transform: 'scale(1)', opacity: 1 }], { duration: STEP, iterations: n, easing: 'ease-in-out' })];
+    slide.finished.then(() => { if (P.anims[0] !== slide) return; P.anims = []; moving.delete(P); UI.anim = moving.size > 0; render(); }, () => { });
+  }));
 }
 export const piecesPart = { name: 'pieces', 
   update,

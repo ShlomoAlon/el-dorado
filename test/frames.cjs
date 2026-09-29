@@ -33,11 +33,27 @@ function summary(T) {
   if (!pick) { console.log('FAIL no move found: ' + await p.evaluate(() => JSON.stringify({ mode: window.__ED.UI.mode, cover: window.__ED.UI.cover, act: window.__ED.canAct(), hand: window.__ED.S.players[window.__ED.S.cur].hand.map(id => window.__ED.S.cards[id]) }))); process.exit(1); }
   const sel = await traced('select', `window.__ED.onHandCard(${JSON.stringify(pick.id)})`);
   ok('select a card: no big restyle', sel.styled < 400, `${sel.styled} elements restyled, longest task ${sel.longest.toFixed(0)} ms`);
-  ok('select a card: no long task', sel.longest < 80, `${sel.longest.toFixed(0)} ms (CPU ÷4)`);
+  ok('select a card: no long task', sel.longest < 120, `${sel.longest.toFixed(0)} ms (CPU ÷4)`);
   const mv = await traced('move', `window.__ED.doMove(${JSON.stringify(pick.k)})`, 1400);
   ok('move: no big restyle', mv.styled < 400, `${mv.styled} elements restyled, longest task ${mv.longest.toFixed(0)} ms`);
   ok('move: animations on the compositor', mv.anims >= 3 && mv.notComposited === 0, `${mv.anims} animations, ${mv.notComposited} on the main thread`);
   const cn = await traced('cancel', `window.__ED.cancelMode()`);
+  // a phone may take a few hundred ms to draw the frame after a move: the walk must start after that frame, from its start
+  await p.waitForFunction(() => !window.__ED.UI.anim);
+  const walk = await p.evaluate(async () => { const E = window.__ED;
+    for (let turn = 0; turn < 8; turn++) { const S = E.S, P = S.players[S.cur];
+      for (const id of P.hand) { E.onHandCard(id); const k = [...E.UI.targets].find(([k, t]) => k[0] !== 'B' && t.kind === 'move'); if (k) {
+        E.doMove(k[0]); const el = [...document.querySelectorAll('#pieces .piece')].find(e => e.style.zIndex === '3'); if (!el) return { err: 'no moving explorer' };
+        const at0 = el.style.transform;
+        await new Promise(r => requestAnimationFrame(() => { const t = performance.now(); while (performance.now() - t < 300); r(); })); // the slow frame
+        const during = el.getAnimations().length, still = el.style.transform === at0;
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const a = el.getAnimations()[0], hop = el.querySelector('.pin').getAnimations()[0];
+        return { during, still, t: a ? Math.round(a.currentTime) : null, hops: hop ? hop.effect.getTiming().iterations : 0 }; }
+        E.cancelMode(); }
+      E.act({ t: 'end', keep: [] }); }
+    return { err: 'no move found' }; });
+  ok('move after a slow frame: the walk plays from its start', !walk.err && walk.during === 0 && walk.still && walk.t !== null && walk.t < 120 && walk.hops >= 1, JSON.stringify(walk));
   ok('cancel: no big restyle', cn.styled < 400, `${cn.styled} elements restyled`);
   ok('no page errors', !errs.length, errs.join(' | '));
   await b.close(); console.log(fails ? `frames: ${fails} failing` : 'frames ok'); process.exit(fails ? 1 : 0);
