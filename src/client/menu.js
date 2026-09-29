@@ -2,7 +2,7 @@
    `hidden`; choices are native form controls that keep their own state (the Online tabs are pure CSS). This file wires
    them, reads them when they're used, and fills only the boxes that hold data (seats, rooms, leaderboard, profile,
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
-import { S, MAP, COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, replayCheck, plural } from '../engine.gen.js';
+import { S, MAP, COLORS, COURSES, buildCourse, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, replayCheck, plural } from '../engine.gen.js';
 import { $, esc, setHTML, setText } from './dom.js';
 import { UI, NET, G, clearSelection, cur, isAI, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
@@ -24,8 +24,13 @@ const SETUP={seed:(Math.random()*1e9)|0,id:null,cur:null,map:null};
 export function menuInit(){
   // (courses, seats, AI and colour choices are written into the page by build.mjs: the start screen needs no script)
   // AI seats chosen before are remembered on this device
-  let ai=[];try{ai=JSON.parse(localStorage.getItem('eldorado-seats')||'[]');}catch(e){}
-  mqa('#seats select').forEach((s,i)=>{if(aiById(ai[i]))s.value=ai[i];});
+  let ai=null;try{ai=JSON.parse(localStorage.getItem('eldorado-seats')||'null');}catch(e){}
+  if(ai)mqa('#seats select').forEach((s,i)=>{s.value=aiById(ai[i])?ai[i]:'';});
+  let st=null;try{st=JSON.parse(localStorage.getItem('eldorado-setup')||'null');}catch(e){}
+  if(st)try{for(const n of ['np','course','full'])if(st[n]&&mq(`input[name="${n}"][value="${st[n]}"]`))setRadio(n,st[n]);
+    mq('#sPriv').checked=!!st.priv;(st.names||[]).forEach((v,i)=>{const e=mq(`input[name=nm${i}]`);if(e&&v)e.value=v;});
+    (st.cols||[]).forEach((v,i)=>{const e=mq(`input[name=col${i}][value="${v}"]`);if(e)e.checked=true;});}catch(e){}
+  courseThumbs();
   MENU.f.addEventListener('submit',e=>e.preventDefault());
   MENU.f.addEventListener('change',menuChange);
   MENU.f.addEventListener('click',menuClick);
@@ -50,7 +55,7 @@ export function menuOpen(screen){
   mq('#ingame').hidden=!ig;
   if(ig){mq('#igTxt').innerHTML=`<b>Game in progress</b> · round ${S.round}${online()?' · online':''}`;const r=mq('#sResign');r.hidden=rs<0;
     r.textContent='Resign'+(rs>=0&&!online()&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');mq('#sEnd').hidden=online();}
-  if(screen==='setup'){const saved=loadSave();mq('#sResume').hidden=!(saved&&!saved.S.over&&!ig);setText(mq('#sGo'),ig?'Start a new game':'Start expedition');}
+  if(screen==='setup'){const saved=loadSave();mq('#sResume').hidden=!(saved&&!saved.S.over&&!ig);setText(mq('#sGo'),ig?'Start a new game':'Start expedition');mq('#sGo').classList.toggle('pri',!ig);} // (in a game, Back to game is the gold one)
   acctRender();
   setRadio('mode',MODE[screen]);mq('#sMode').hidden=screen==='room'||onlineGame(); // in a room, Leave is the way out; in an online game, Back to game
   mq('#acct').classList.toggle('inroom',screen==='room');
@@ -77,8 +82,13 @@ export function acctRender(){
 export function menuChange(e){
   const n=e.target.name||e.target.id;
   if(n==='mode'){({local:showSetup,online:showHub,replays:showReplays})[e.target.value]();return;}
-  if(n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){setupSync();prepareGame();
-    if(/^who\d$/.test(n))try{localStorage.setItem('eldorado-seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value)));}catch(_){} return;}
+  if(n==='kind'){const sels=[...mqa('#seats select')],dflt=['','humboldt','raleigh','fawcett'];
+    sels.forEach((s,i)=>{if(i)s.value=e.target.value==='ai'?(KIND.last[i]||dflt[i]):'';});
+    mq('#sPriv').checked=e.target.value==='pass';}
+  if(n==='kind'||n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){setupSync();prepareGame();
+    try{localStorage.setItem('eldorado-seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value)));
+      localStorage.setItem('eldorado-setup',JSON.stringify({np:radio('np'),course:radio('course'),full:radio('full'),priv:mq('#sPriv').checked,
+        names:[...mqa('#seats input[name^=nm]')].map(e=>e.value),cols:[...mqa('#seats .seat')].map(r=>r.querySelector('.sws input:checked').value)}));}catch(_){} return;}
   if(n==='otab'){onlineTab();return;}
   if(n==='rlrated'){netSend({t:'rated',v:e.target.value==='1'});return;}
   if(n==='rlcol'){netSend({t:'color',color:e.target.value});return;}
@@ -131,6 +141,26 @@ export function setupSync(){
     if(i<n&&rows.slice(0,i).some(q=>col(q)===col(r))){const free=COLORS.find(c=>!rows.slice(0,n).some(q=>q!==r&&col(q)===c.id));r.querySelector(`.sws input[value="${free.id}"]`).checked=true;}}); // (4 colours, at most 4 seats: one is free)
   rows.forEach((r,i)=>{for(const x of r.querySelectorAll('.sws input'))x.disabled=rows.slice(0,n).some((q,j)=>j!==i&&col(q)===x.value);});
   const allAI=rows.slice(0,n).every(r=>r.querySelector('select').value);mq('#allAI').hidden=!allAI;mq('#sGo').disabled=allAI;
+  // the two tiles follow the seats (an AI seat anywhere: Against the AI); AI seats are remembered for the tile
+  const sels=[...mqa('#seats select')];sels.forEach((s,i)=>{if(s.value)KIND.last[i]=s.value;});
+  const shown=rows.slice(0,n),anyAI=shown.some(r=>r.querySelector('select').value),ki=mq('input[name=kind][value=ai]');
+  ki.disabled=!aiOK;setText(mq('#kAiTxt'),aiOK?'You, and AI explorers for the other seats':'AI plays First Expedition with 3 or 4 players');
+  setRadio('kind',anyAI?'ai':'pass');
+  const who=shown.map(r=>{const A=aiById(r.querySelector('select').value);return A?{ai:1,n:A.name}:{n:r.querySelector('input[name^=nm]').value.trim()||'Player'};});
+  const hu=who.filter(w=>!w.ai).map(w=>w.n),ais=who.filter(w=>w.ai).map(w=>w.n),cid=radio('course');
+  const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+  setText(mq('#goSum'),(ais.length?andList(hu)+' against '+andList(ais):andList(hu))+' · '+(cid==='random'?'Random course':(courseById(cid)||COURSES[0]).name));
+}
+const KIND={last:[]};
+/* a small picture of each course on its card: the boards' spaces, coloured by terrain */
+const TH={j:'#3f8a54',w:'#3f8fcc',v:'#e2b85a',r:'#9da19c',c:'#c96550',m:'#3b423d',s:'#d9cfb0',g:'#ffd86a'};
+function courseThumbs(){
+  for(const l of mqa('#sC label')){const C=courseById(l.dataset.v);let svg;
+    if(!C)svg='<svg class="cth" viewBox="0 0 160 78" preserveAspectRatio="xMidYMid meet"><text x="80" y="52" text-anchor="middle" font-size="40" fill="#62756a" font-family="Georgia,serif">?</text></svg>';
+    else{let m;try{m=buildCourse(C,1);}catch(e){continue;}const hs=[...m.hexes.values()];
+      const x0=Math.min(...hs.map(h=>h.x))-40,x1=Math.max(...hs.map(h=>h.x))+40,y0=Math.min(...hs.map(h=>h.y))-40,y1=Math.max(...hs.map(h=>h.y))+40;
+      svg=`<svg class="cth" viewBox="${x0|0} ${y0|0} ${(x1-x0)|0} ${(y1-y0)|0}" preserveAspectRatio="xMidYMid meet">${hs.map(h=>`<circle cx="${h.x|0}" cy="${h.y|0}" r="27" fill="${TH[h.type==='g'?'g':h.type]||'#555'}"/>`).join('')}</svg>`;}
+    l.insertAdjacentHTML('afterbegin',svg);}
 }
 /* The start screen's background IS the game about to start: made from the current choices (this deal's seed) and laid
    out exactly as it will be played (board, pieces, hand, top bar). A changed choice remakes it behind the menu; Start
