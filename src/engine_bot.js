@@ -300,7 +300,7 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
 function botActionValue(me,a,mode,rnd,K){const root=S;K=K||4;
   const one=()=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
     if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}
-    else{const r=applyAction(me,a);v=r.ok?botValue(me,mode):-Infinity;}
+    else{const r=applyAction(me,a,rnd);v=r.ok?botValue(me,mode):-Infinity;}
     S=root;return v;};
   return a.t==='action'&&BOT_DRAW[typeOf(a.card)]?[...Array(K)].reduce(x=>x+one(),0)/K:one();}
 function botChoose(opts){
@@ -371,12 +371,12 @@ function botPlanTurnChoose(opts){
   const me=S.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
   // follow the current plan while it still applies (same player, same round, same position the plan expects)
   if(C&&C.me===me&&C.round===S.round&&C.i<C.line.length&&C.key===botTurnKey(me)){
-    const a=C.line[C.i];const root=S;S=botClone(root);const ok=applyAction(me,a).ok;const nk=ok&&!S.over&&S.cur===me?botTurnKey(me):null;S=root;
+    const a=C.line[C.i];const root=S;S=botClone(root);const ok=applyAction(me,a,rnd).ok;const nk=ok&&!S.over&&S.cur===me?botTurnKey(me):null;S=root;
     if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(a.card)])BOT_PLAN_CACHE=null;return{a,v:C.v,why:'plan'};}
   }
   const best=botPlanTurn(me,o.beam||3,rnd,opts.draws||4,!!(opts.turnState&&opts.turnState.noBuy));
   if(!best.line||!best.line.length){BOT_PLAN_CACHE=null;return{a:{t:'end',keep:[]},why:'plan'};}
-  const a=best.line[0];const root=S;S=botClone(root);applyAction(me,a);const nk=!S.over&&S.cur===me?botTurnKey(me):null;S=root;
+  const a=best.line[0];const root=S;S=botClone(root);applyAction(me,a,rnd);const nk=!S.over&&S.cur===me?botTurnKey(me):null;S=root;
   BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(a.card)])?{me,round:S.round,line:best.line,i:1,key:nk,v:best.v}:null;
   return{a,v:best.v,why:'plan'};
 }

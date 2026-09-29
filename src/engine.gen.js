@@ -857,7 +857,7 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
 function botActionValue(me,a,mode,rnd,K){const root=S;K=K||4;
   const one=()=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
     if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}
-    else{const r=applyAction(me,a);v=r.ok?botValue(me,mode):-Infinity;}
+    else{const r=applyAction(me,a,rnd);v=r.ok?botValue(me,mode):-Infinity;}
     S=root;return v;};
   return a.t==='action'&&BOT_DRAW[typeOf(a.card)]?[...Array(K)].reduce(x=>x+one(),0)/K:one();}
 function botChoose(opts){
@@ -928,12 +928,12 @@ function botPlanTurnChoose(opts){
   const me=S.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
   // follow the current plan while it still applies (same player, same round, same position the plan expects)
   if(C&&C.me===me&&C.round===S.round&&C.i<C.line.length&&C.key===botTurnKey(me)){
-    const a=C.line[C.i];const root=S;S=botClone(root);const ok=applyAction(me,a).ok;const nk=ok&&!S.over&&S.cur===me?botTurnKey(me):null;S=root;
+    const a=C.line[C.i];const root=S;S=botClone(root);const ok=applyAction(me,a,rnd).ok;const nk=ok&&!S.over&&S.cur===me?botTurnKey(me):null;S=root;
     if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(a.card)])BOT_PLAN_CACHE=null;return{a,v:C.v,why:'plan'};}
   }
   const best=botPlanTurn(me,o.beam||3,rnd,opts.draws||4,!!(opts.turnState&&opts.turnState.noBuy));
   if(!best.line||!best.line.length){BOT_PLAN_CACHE=null;return{a:{t:'end',keep:[]},why:'plan'};}
-  const a=best.line[0];const root=S;S=botClone(root);applyAction(me,a);const nk=!S.over&&S.cur===me?botTurnKey(me):null;S=root;
+  const a=best.line[0];const root=S;S=botClone(root);applyAction(me,a,rnd);const nk=!S.over&&S.cur===me?botTurnKey(me):null;S=root;
   BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(a.card)])?{me,round:S.round,line:best.line,i:1,key:nk,v:best.v}:null;
   return{a,v:best.v,why:'plan'};
 }
@@ -993,7 +993,7 @@ function aiAllowed(id,n){return aiCourseOK(id)&&n>=3;}
 function aiNetDecode(bin){
   const u8=bin instanceof Uint8Array?bin:new Uint8Array(bin),dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
   const hl=dv.getUint32(0,true),H=JSON.parse(new TextDecoder().decode(u8.subarray(4,4+hl)));
-  let o=4+hl+((4+hl)&1);const N={course:H.course,nf:H.nf,unsettled:H.unsettled,name:H.name,leak:H.leak??.01}; // leak: the network's leaky-ReLU slope (older files: 0.01)
+  let o=4+hl+((4+hl)&1);const{parts,...N}=H; // course, nf, unsettled, name, leak (the leaky-ReLU slope), and a multi-course network's courses, onehot, extra
   const half=h=>{const s=h&0x8000?-1:1,e=(h>>10)&31,m=h&1023;return e===0?s*m*2**-24:e===31?(m?NaN:s*Infinity):s*(1+m/1024)*2**(e-15);};
   const tab=new Float32Array(65536);for(let i=0;i<65536;i++)tab[i]=half(i);
   for(const[k,n]of H.parts){const a=new Float32Array(n);for(let i=0;i<n;i++,o+=2)a[i]=tab[dv.getUint16(o,true)];N[k]=a;}

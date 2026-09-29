@@ -25,7 +25,7 @@ function aiAllowed(id,n){return aiCourseOK(id)&&n>=3;}
 function aiNetDecode(bin){
   const u8=bin instanceof Uint8Array?bin:new Uint8Array(bin),dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
   const hl=dv.getUint32(0,true),H=JSON.parse(new TextDecoder().decode(u8.subarray(4,4+hl)));
-  let o=4+hl+((4+hl)&1);const N={course:H.course,nf:H.nf,unsettled:H.unsettled,name:H.name,leak:H.leak??.01}; // leak: the network's leaky-ReLU slope (older files: 0.01)
+  let o=4+hl+((4+hl)&1);const{parts,...N}=H; // course, nf, unsettled, name, leak (the leaky-ReLU slope), and a multi-course network's courses, onehot, extra
   const half=h=>{const s=h&0x8000?-1:1,e=(h>>10)&31,m=h&1023;return e===0?s*m*2**-24:e===31?(m?NaN:s*Infinity):s*(1+m/1024)*2**(e-15);};
   const tab=new Float32Array(65536);for(let i=0;i<65536;i++)tab[i]=half(i);
   for(const[k,n]of H.parts){const a=new Float32Array(n);for(let i=0;i<n;i++,o+=2)a[i]=tab[dv.getUint16(o,true)];N[k]=a;}

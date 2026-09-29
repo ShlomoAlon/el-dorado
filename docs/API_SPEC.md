@@ -245,17 +245,17 @@ Each entry also has `rating` (its calibrated starting rating), `desc` and `opts`
 | `aiChoose(id, mem)` → action | One decision for `S.cur`. `mem` is `{}` per game and seat; it keeps the turn planner's cache. An unknown id, a 2-player game, or no fitting network: the route planner. After 60 decisions in one turn it ends the turn. It never removes its last card that can enter El Dorado, never thins its deck below 4 cards, and buys such a card before ending a turn without one. |
 | `aiStep(id, mem, rec, rnd?)` | `recApply` of `aiChoose` (the AI's choice is always legal: asserted). |
 | `aiPlan(id, rnd)` → `[action]` or null | The whole turn that AI would play from here for `S.cur` (its planner's best line; a draw card ends the line). null unless the AI plans whole turns with a loaded network. The replay shows Fawcett's. |
-| `aiNetDecode(bytes)`, `aiSetNet(net)`, `aiNetFits()` | Load and select the network; `aiNetFits()` says whether it was trained for this course. |
+| `aiNetDecode(bytes)`, `aiSetNet(net)`, `botNetReady()` | Load and select the network; `botNetReady()` says whether it fits the course on show. |
 
 **The network file** (`src/ai/first.bin`, made by `tools/ai/pack.mjs`):
 
 1. uint32 LE: the header's length.
-2. The JSON header: `{course, nf, unsettled, leak, name, parts: [[key, length]…]}`.
+2. The JSON header: `{course, nf, unsettled, leak, name, parts: [[key, length]…]}`, plus `courses`, `onehot`, `extra` for a multi-course network.
 3. Padding to an even offset.
 4. Each part (`w1T, b1, w2, b2, w3, b3`) as little-endian IEEE half floats.
 
 The network is 3 layers with leaky ReLU (slope `leak`) and a sigmoid output: a player's expected result, where 1st = 1 and each later place is worth less.
-The file has no room for a multi-course network's `courses`, `onehot` or `extra`: only single-course networks can ship.
+A multi-course network's header also names its inputs (`courses`, `onehot`, `extra`), so any trained network can ship.
 
 ### 1.10 Bot and training API (`engine_bot.js`)
 
@@ -442,15 +442,16 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 
 ## 4. Tools
 
-The tools import the engine as `E` (`import * as E`). Their common loop:
+The tools import the engine as `E` (`import * as E`). They play games through one helper, `tools/ai/playout.mjs`:
 
 ```
-const gen = E.replayStart(log)        // or E.newGame({course, seed, fullRace: true, players}, gen) for a game not recorded
-while (!E.S.over) { const me = E.S.cur; E.aiSetNet(netFor(me));
-  const a = E.botChoose(opts).a; if (!E.applyAction(me, a, gen).ok) E.applyAction(me, {t: 'end', keep: []}, gen); }
+playout({seed, players: seatPlayers(n, aiIds?), choose: me => action, course?, cap = 25, stop?, after?}) → {capped}
 ```
 
-- A round cap ends a game with `E.endGame()`.
+- The game shuffles with `mulberry32(seed * 7 + 1)`, so a seed replays the same game when the choices are seeded too
+  (`botChoose({rnd})`; the bot's look-ahead uses only that `rnd`).
+- The choices must be legal (asserted). A round cap ends a game with `E.endGame()`.
+- The training generator (`gen.mjs`) and the recorder (`record.mjs`) keep their own loops: they write game logs.
 - The game's generator goes only to the game's own `applyAction` calls, so the bots' look-ahead never consumes it.
 - `tools/ai/golden.mjs` checks the feature contract (§1.10).
 - `h2h.mjs` plays AI settings against each other.

@@ -2,18 +2,16 @@
 // weight statistics, and calibration (predicted value vs the place value actually reached).
 //   node tools/ai/health.mjs <net.json> [course=first] [games=40]
 import * as E from '../../src/engine.gen.js';
+import { playout, seatPlayers } from './playout.mjs';
 import { readFileSync } from 'node:fs';
 const [, , file, course = 'first', G = '40'] = process.argv;
 const N = JSON.parse(readFileSync(file, 'utf8')), H1 = N.b1.length, H2 = N.b2.length; E.aiSetNet(N);
 const pos = []; // {f, me, g}
 const outcomes = [];
 for (let g = 0; g < +G; g++) {
-  const n = g % 2 ? 4 : 3; E.newGame({ course: E.courseById(course), seed: 60000 + g, fullRace: true, players: [...Array(n)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
-  const rnd = E.mulberry32(g + 9), mine = [];
-  while (!E.S.over && E.S.round <= 30) { const me = E.S.cur; const c = E.botChoose({ mode: 'net', rnd, temp: .01 });
-    if (!E.applyAction(me, c.a).ok) E.applyAction(me, { t: 'end', keep: [] });
-    if (!E.S.over && rnd() < .25) for (let p = 0; p < n; p++) if (!E.S.players[p].fin) mine.push({ f: E.botNetFeatures(p), me: p, n }); }
-  if (!E.S.over) E.endGame();
+  const n = g % 2 ? 4 : 3, rnd = E.mulberry32(g + 9), mine = [];
+  playout({ seed: 60000 + g, players: seatPlayers(n), course: E.courseById(course), cap: 30, choose: () => E.botChoose({ mode: 'net', rnd, temp: .01 }).a,
+    after: () => { if (!E.S.over && rnd() < .25) for (let p = 0; p < n; p++) if (!E.S.players[p].fin) mine.push({ f: E.botNetFeatures(p), me: p, n }); } });
   for (const x of mine) { const pl = E.S.places[x.me], fail = !E.S.players[x.me].fin; x.z = fail ? 0 : E.botPlaceValue(pl, x.n); pos.push(x); }
 }
 // forward pass with activations (same math as botNetValue)

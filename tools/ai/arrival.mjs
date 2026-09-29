@@ -4,18 +4,16 @@
 // The game runs until the network arrives (or round 30), so its arrival round never depends on the race ending early.
 // Writes tools/ai/data/arrival.jsonl (one line per network and mode) and prints mean / median / 90th percentile.
 import * as E from '../../src/engine.gen.js';
+import { playout, seatPlayers } from './playout.mjs';
 import { readFileSync, appendFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 if (!isMainThread) {
   const { net, search, from, to } = workerData; E.aiSetNet(net); const out = [];
   for (let g = from; g < to; g++) {
-    const seat = g % 3; E.newGame({ course: E.COURSES[0], seed: 70000 + g, fullRace: true, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) });
-    const rnd = E.mulberry32(5000 + g); let fin = null;
-    while (!E.S.over && E.S.round <= 30) { const me = E.S.cur;
-      const c = me === seat ? E.botChoose({ mode: 'net', rnd, search: search ? { kind: 'plan', beam: 3 } : undefined }) : E.botChoose({ mode: 'plan', rnd });
-      if (!E.applyAction(me, c.a).ok) E.applyAction(me, { t: 'end', keep: [] });
-      if (E.S.players[seat].fin) { fin = E.S.players[seat].fin; break; } }
-    out.push(fin);
+    const seat = g % 3, rnd = E.mulberry32(5000 + g);
+    playout({ seed: 70000 + g, players: seatPlayers(3), cap: 30, stop: () => E.S.players[seat].fin,
+      choose: me => (me === seat ? E.botChoose({ mode: 'net', rnd, search: search ? { kind: 'plan', beam: 3 } : undefined }) : E.botChoose({ mode: 'plan', rnd })).a });
+    out.push(E.S.players[seat].fin || null);
   }
   parentPort.postMessage(out);
 } else {

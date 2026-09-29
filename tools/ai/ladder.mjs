@@ -6,6 +6,7 @@
 // Every game goes to tools/ai/data/ladder.jsonl. Ratings: Elo scale, fitted by maximum likelihood over every pair of players in
 // every game (who finished ahead; ties count half), anchored at first-td2 (plain) = 1500. ± is one standard error.
 import * as E from '../../src/engine.gen.js';
+import { playout, seatPlayers } from './playout.mjs';
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 const LOG = 'tools/ai/data/ladder.jsonl';
@@ -14,12 +15,10 @@ if (!isMainThread) {
   const { from, to, A, B, seed0 } = workerData, POLS = [A.name + '+s', A.name, B.name + '+s', B.name], nets = { [A.name]: A.net, [B.name]: B.net };
   for (let g = from; g < to; g++) {
     const n = g % 2 ? 4 : 3, k = g >> 1, base = n === 4 ? POLS : POLS.filter((_, i) => i !== k % 4), pols = base.map((_, i) => base[(i + (k >> 2)) % n]);
-    E.newGame({ course: E.COURSES[0], seed: seed0 + g, fullRace: true, players: pols.map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
-    let capped = false, acts = 0; const rnd = E.mulberry32(seed0 * 7 + g);
-    while (!E.S.over) { if (E.S.round > 25 || acts++ > 20000) { capped = true; E.endGame(); break; }
-      const me = E.S.cur, p = pols[me], s = p.endsWith('+s'); E.aiSetNet(nets[s ? p.slice(0, -2) : p]);
-      const c = E.botChoose({ mode: 'net', rnd, search: s ? { kind: 'plan', beam: 3 } : undefined });
-      if (!E.applyAction(me, c.a).ok) E.applyAction(me, { t: 'end', keep: [] }); }
+    const rnd = E.mulberry32(seed0 * 7 + g);
+    const { capped } = playout({ seed: seed0 + g, players: seatPlayers(n), choose: me => {
+      const p = pols[me], s = p.endsWith('+s'); E.aiSetNet(nets[s ? p.slice(0, -2) : p]);
+      return E.botChoose({ mode: 'net', rnd, search: s ? { kind: 'plan', beam: 3 } : undefined }).a; } });
     // not arriving by the cap counts as last (tied with anyone else who didn't arrive)
     const seats = pols.map((p, i) => { const P = E.S.players[i], fail = capped && !P.fin; return { id: p, place: fail ? n : E.S.places[i], fin: P.fin || null }; });
     parentPort.postMessage({ game: { time: new Date().toISOString(), match: `${A.name} vs ${B.name}`, g, n, capped, seats } });

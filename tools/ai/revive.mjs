@@ -3,15 +3,15 @@
 // tiny leak those units had (leaky ReLU 0.01·x), so it plays essentially the same; training can then use the revived units.
 //   node tools/ai/revive.mjs <in.json> <out.json> [games per course=20]
 import * as E from '../../src/engine.gen.js';
+import { playout, seatPlayers } from './playout.mjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 const [, , inp, out, G = '20'] = process.argv;
 const N = JSON.parse(readFileSync(inp, 'utf8')), H1 = N.b1.length, H2 = N.b2.length, courses = N.courses || [N.course];
 E.aiSetNet(N); const pos = [];
 for (const id of courses) for (let g = 0; g < +G; g++) {
-  const n = g % 2 ? 4 : 3; E.newGame({ course: E.courseById(id), seed: 61000 + g, fullRace: true, players: [...Array(n)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
-  const rnd = E.mulberry32(g + 3);
-  while (!E.S.over && E.S.round <= 30) { const me = E.S.cur, c = E.botChoose({ mode: 'net', rnd, temp: .02 }); if (!E.applyAction(me, c.a).ok) E.applyAction(me, { t: 'end', keep: [] });
-    if (!E.S.over && rnd() < .2) for (let p = 0; p < n; p++) if (!E.S.players[p].fin) pos.push(E.botNetFeatures(p)); }
+  const n = g % 2 ? 4 : 3, rnd = E.mulberry32(g + 3);
+  playout({ seed: 61000 + g, players: seatPlayers(n), course: E.courseById(id), cap: 30, choose: () => E.botChoose({ mode: 'net', rnd, temp: .02 }).a,
+    after: () => { if (!E.S.over && rnd() < .2) for (let p = 0; p < n; p++) if (!E.S.players[p].fin) pos.push(E.botNetFeatures(p)); } });
 }
 const fwd = f => { const h1 = Float64Array.from(N.b1); for (let k = 0; k < f.length; k++) { const x = f[k]; if (!x) continue; for (let j = 0; j < H1; j++) h1[j] += N.w1T[k * H1 + j] * x; } return h1; };
 const pre1 = pos.map(fwd), a1 = pre1.map(h => h.map(x => x > 0 ? x : .01 * x));

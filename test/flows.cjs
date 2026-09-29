@@ -76,6 +76,9 @@ const T = report('flows');
   await check('turn ended', m => window.__ED.S.cur !== m, me);
   // 8. the AI plays its turn; its steps show in a row under the prompt
   await check('the AI played its turn', () => !window.__ED.S.players[window.__ED.S.cur].ai, null, 30000);
+  // (if the turns went round, the turn that just ended can be the other human's: pass until the AI has just played)
+  const aiJustPlayed = () => S(() => { const E = window.__ED, n = E.S.players.length; return !!E.S.players[(E.S.cur + n - 1) % n].ai; });
+  for (let k = 0; k < 3 && !await aiJustPlayed(); k++) { await idle(); await S(() => { window.__ED.act({ t: 'end', keep: [] }); }); await until(() => { const E = window.__ED; return !E.S.players[E.S.cur].ai; }, null, 30000); }
   await idle();
   await check('its recap is shown', () => !document.querySelector('#feed').hidden && document.querySelectorAll('#feed .fg').length > 0);
   // 9. journal, menu

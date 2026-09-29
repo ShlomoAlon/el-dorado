@@ -12,6 +12,7 @@
 // eloDeltas over the games with no repeated AI (the only tables a real room allows), averaged over 200 shuffled orders.
 // Anchor: Raleigh (the heuristic planner, the weakest) = 1200, the rating every new player starts with. See docs/HANDOFF.md.
 import * as E from '../../src/engine.gen.js';
+import { playout, seatPlayers } from './playout.mjs';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 const IDS = E.AIS.map(a => a.id); // three AIs
@@ -26,11 +27,8 @@ function table(g) {
 if (!isMainThread) {
   const { games } = workerData; E.aiSetNet(E.aiNetDecode(readFileSync(new URL('../../src/ai/first.bin', import.meta.url))));
   for (const g of games) {
-    const ai = table(g), gen = E.mulberry32(SEED0 + g); // the game's shuffles; the AIs' look-ahead runs with its own (aiChoose)
-    E.newGame({ course: E.COURSES[0], seed: SEED0 + g, fullRace: true, players: ai.map((id, i) => ({ name: 'P' + i, color: '#fff', ai: id })) }, gen);
-    const mem = ai.map(() => ({})); let acts = 0, capped = false;
-    while (!E.S.over) { if (E.S.round > CAP || acts++ > 20000) { capped = true; E.endGame(); break; }
-      const me = E.S.cur; E.aiStep(ai[me], mem[me], null, gen); }
+    const ai = table(g), mem = ai.map(() => ({})); // (the AIs' look-ahead runs with its own randomness: aiChoose)
+    const { capped } = playout({ seed: SEED0 + g, players: seatPlayers(ai.length, ai), cap: CAP, choose: me => E.aiChoose(ai[me], mem[me]) });
     parentPort.postMessage({ g, ai, places: E.S.places.slice(), fin: E.S.players.map(p => p.fin || 0), round: E.S.round, capped });
   }
   parentPort.postMessage({ done: true });

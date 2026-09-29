@@ -4,6 +4,7 @@
 // Games alternate 3 and 4 players with A and B seated as evenly as possible, seats rotated. Reported: wins, mean place,
 // and each setting's thinking time per turn (ms, on this machine) and network evaluations per turn.
 import * as E from '../../src/engine.gen.js';
+import { playout, seatPlayers } from './playout.mjs';
 import { readFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 if (!isMainThread) {
@@ -13,14 +14,11 @@ if (!isMainThread) {
   for (let g = from; g < to; g++) {
     const n = g % 2 ? 4 : 3, base = n === 4 ? ['hA', 'hB', 'hA', 'hB'] : (g >> 1) % 2 ? ['hA', 'hB', 'hB'] : ['hA', 'hA', 'hB'];
     const r = (g >> 2) % n, ids = base.map((_, i) => base[(i + r) % n]);
-    E.newGame({ course: E.courseById('first'), seed: seed0 + g, fullRace: true, players: ids.map((id, i) => ({ name: 'P' + i, color: '#fff', ai: id })) });
-    const mem = ids.map(() => ({})), t = { hA: [0, 0, 0], hB: [0, 0, 0] }; let steps = 0, turnKey = '', capped = false;
-    while (!E.S.over) {
-      if (E.S.round > 25 || steps++ > 30000) { capped = true; E.endGame(); break; }
-      const me = E.S.cur, k = me + ':' + E.S.round, id = ids[me], e0 = E.BOT_EVALS, t0 = performance.now();
-      E.aiStep(id, mem[me], null);
+    const mem = ids.map(() => ({})), t = { hA: [0, 0, 0], hB: [0, 0, 0] }; let turnKey = '';
+    const { capped } = playout({ seed: seed0 + g, players: seatPlayers(ids.length, ids), choose: me => { // (timed: the AI's thinking)
+      const k = me + ':' + E.S.round, id = ids[me], e0 = E.BOT_EVALS, t0 = performance.now(), a = E.aiChoose(id, mem[me]);
       t[id][0] += performance.now() - t0; t[id][1] += E.BOT_EVALS - e0; if (k !== turnKey) { t[id][2]++; turnKey = k; }
-    }
+      return a; } });
     parentPort.postMessage({ n, seats: ids.map((id, i) => ({ id, place: capped && !E.S.players[i].fin ? n : E.S.places[i] })), t });
   }
   parentPort.postMessage({ done: true });

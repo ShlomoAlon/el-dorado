@@ -149,23 +149,26 @@ The browser build wraps everything in one IIFE; engine and UI share scope (`S`, 
 inside it). The server imports the engine as `E` (`import * as E`) and calls `E.setS`/`E.setMAP` before each call (safe: DO calls are
 synchronous around the engine).
 
-### 6.2 Game state `S` (JSON, v3)
-`{v:5, seed, course{id,name,p,e,s}, players[{name,color,ai?(AI id),pieces[hexKey|'done'],deck[],hand[],discard[],play[],blocks[blockadeIdx],fin(round|0),resigned(order|0)}],
-cards{id:type}, nid, market[{t,n}], reserve[{t,n}], blockades[{n,k,v,conn,owner}], cur, start, round, endTriggered, over,
-winners[], places[], fullRace, turn{bought, active{id,pi,sym,left}|null, pending{max}|null}, trash[], log[{p,t}], privacy, resigns,
-owners[uid] (online only), room (online only)}`.
-`MAP` is derived from `(course, seed)` by `buildCourse` (seed deals the blockades) — deterministic, never stored.
-Local save key `eldorado-save-v5` (v5 added `players[].ai`); v4 saves still load (`loadSave`); v3 saves are ignored; v3 rooms on the server are closed on load.
+### 6.2 Game state `S` (never stored)
+Full shape: `docs/API_SPEC.md` §1.4. `{seed, course, players[{name, color, ai?, pieces[hexKey|'done'], deck[], hand[], discard[],
+play[], fin, resigned}], cards{id: type}, nid, market[{t,n}], reserve[{t,n}], blockades[{n,k,v,conn,owner}], cur, round,
+endTriggered, over, places, fullRace, turn{bought, active, pending}, trash[], log[]}`.
+- Derived, not stored: winners (place 1), a player's blockades (`blocksOf`), `MAP` (`buildCourse(course, seed)`).
+- `S` is rebuilt from the game record (setup + secret + actions, log v3) everywhere: the local save (`eldorado-game-v2`),
+  finished local games (`eldorado-games-v2`), online rooms and replays. The server never writes into `S`.
+- `S.log` is the journal: the public events worth telling (§6.3), each with its round; the page writes the sentences
+  (`dialogs.js` `logLine`). The engine keeps the last 120.
 
-### 6.3 Actions (`applyAction(seat, a)` → `{ok, err, ev[], reveal}`)
-`move{card,pi,to}` · `native{card,pi,to}` · `pay{pi,to,cards}` · `action{card}` · `trash{cards}` ·
-`transmit{card,src,idx}` · `buy{src,idx,cards}` · `end{keep}`; plus `resign(seat)`.
-`to` is a hex key `"q,r"` or `"B<blockadeIndex>"`. Events: `move{pl,pi,path}`, `block`, `arrive`, `draw`, `gain{t,src,idx}`,
-`turn`, `over`, (server adds) `timeout`, `resign`, `undo`, `start`. `reveal=true` (cards drawn) clears undo.
-Every action also emits `play{pl,k,ts,…}` (k = move/native/rubble/camp/blr/action/trash/transmit/buy/end; `ts` = card types spent,
-`got`/`paid` for buy/transmit, `n` spaces or cards drawn, `more` = leftover strength): the same `ev` goes to every seat online, so
-it may only name cards that just became public (in play or removed); `end` carries counts only (`kept`, `disc`). engine.test checks this.
-Log lines are `{p,t,r}` (r = round; lines the server adds have none).
+### 6.3 Actions and events (`applyAction(seat, a, rnd)` → `{ok, err, ev[], reveal}`)
+Full list: `docs/API_SPEC.md` §1.5–1.6. Player actions: `move{card,pi,to}` · `native{card,pi,to}` · `pay{pi,to,cards}` ·
+`action{card}` · `trash{cards}` · `transmit{card,type}` · `buy{type,cards}` · `end{keep}` · `resign`; system actions (the server's
+turn clock, local play's End game): `timeout`, `endgame`. `to` is a hex key `"q,r"` or `"B<blockadeIndex>"`. `rnd` is where any
+shuffle comes from (a record gives each action its own generator).
+Events: `play{pl,k,ts,…}` (what became public: k = move/native/rubble/camp/blr/action/trash/transmit/buy/end; `n` spaces or cards
+drawn, `got`/`paid` for a card gained, `kept`/`disc` counts for end), `move{pl,pi,path}`, `block`, `arrive`, `final`, `turn`,
+`timeout`, `resign`, `endgame`, `over`. The same `ev` goes to every seat online, so it names only cards that just became public
+(engine.test checks this). `reveal` (cards drawn) ends what undo can take back.
+Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), so the page never maps rules itself.
 
 ### 6.4 Client UI essentials
 - `act(a)`: local → snapshot for undo, `applyAction`, `playEvents` (animations/toasts; call before render so market DOM
