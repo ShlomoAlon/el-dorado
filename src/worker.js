@@ -274,7 +274,7 @@ export default {
       if ((m0 = p.match(/^\/api\/users\/([A-Za-z0-9_-]{1,40})$/)) && req.method === 'GET') {
         const u = await env.DB.prepare(`SELECT id,name,rating,games,wins,bot FROM users WHERE id=?`).bind(m0[1]).first();
         if (!u) return bad('No such player.', 404);
-        const me = await authUser(req, env).catch(() => null), own = !!me && me.id === u.id;
+        const me = await authUser(req, env), own = !!me && me.id === u.id;
         const rank = await env.DB.prepare(`SELECT COUNT(*)+1 AS r FROM users WHERE (games>0 OR bot IS NOT NULL) AND rating>?`).bind(u.rating).first();
         const g = await env.DB.prepare(`SELECT id,created,title,actions,uids,places FROM replays WHERE game=1 AND uids LIKE ?${own ? '' : ' AND listed=1'} ORDER BY created DESC LIMIT ${REPLAYS_PER_PLAYER}`).bind('%,' + u.id + ',%').all();
         const games = g.results.map(r => { const i = r.uids.split(',').filter(Boolean).indexOf(u.id), pl = r.places ? JSON.parse(r.places) : null;
@@ -432,7 +432,7 @@ export class Room extends DurableObject {
   }
   sendAll(ev) {
     for (const ws of this.ctx.getWebSockets()) {
-      const { uid } = ws.deserializeAttachment() || {};
+      const { uid } = ws.deserializeAttachment(); // (every socket gets its attachment when it is accepted)
       if (this.S && this.d.status !== 'lobby') this.send(ws, this.stateFor(uid, ev)); else this.send(ws, { t: 'room', room: this.roomInfo() });
     }
   }
@@ -468,8 +468,7 @@ export class Room extends DurableObject {
   async onMessage(ws, raw) {
     if (raw === 'ping') { ws.send('pong'); return; }
     let m; try { m = JSON.parse(raw); } catch (e) { return; }
-    const { uid } = ws.deserializeAttachment() || {};
-    const d = this.d; if (!d || !uid) return;
+    const { uid } = ws.deserializeAttachment(), d = this.d; // (a socket is only accepted into a room that exists)
     const err = e => this.send(ws, { t: 'error', err: e });
     if (d.status === 'lobby') {
       const seat = d.seats.find(s => s.uid === uid);
@@ -510,7 +509,7 @@ export class Room extends DurableObject {
       }
       return;
     }
-    if (d.status !== 'playing' || !this.S) { if (m.t === 'act' || m.t === 'undo') err('This game is not running any more.'); return; }
+    if (d.status !== 'playing') { if (m.t === 'act' || m.t === 'undo') err('This game is not running any more.'); return; }
     const seat = this.owners.indexOf(uid);
     if (m.t === 'selftest' && this.env.DEV_AUTH === '1') { this.S.round = -1; E.assert(false, 'self-test: a broken invariant in a live room'); } // (test/online.cjs: the boundary)
     if (m.t === 'undo') {
@@ -536,7 +535,7 @@ export class Room extends DurableObject {
   }
   async startGame() {
     const d = this.d;
-    this.rec = E.recNewGame({ course: E.courseById(d.opts.course) || E.COURSES[Math.floor(Math.random() * E.COURSES.length)], seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
+    this.rec = E.recNewGame({ course: d.opts.course === 'random' ? E.COURSES[Math.floor(Math.random() * E.COURSES.length)] : E.courseById(d.opts.course), seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
     this.S = E.S; mapCache.set(this.S.course.id + ':' + this.S.seed, E.MAP);
     d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null;
     await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll();
@@ -550,16 +549,16 @@ export class Room extends DurableObject {
      turns (undo doesn't change it). d.bank[seat] = ms left when their last turn ended; d.clock = whose clock is running. */
   settleClock() {
     const d = this.d; if (d.clock == null || !d.deadline) { d.clock = null; return; }
-    d.bank = d.bank || {}; d.bank[d.clock] = Math.max(0, d.deadline - Date.now()); d.clock = null;
+    d.bank[d.clock] = Math.max(0, d.deadline - Date.now()); d.clock = null;
   }
   async startTurnTimer() {
     this.settleClock(); const d = this.d, seat = this.S.cur;
-    d.clock = seat; d.deadline = Date.now() + ((d.bank && d.bank[seat]) || 0) + d.opts.turn * 1000; d.aiAt = null;
+    d.clock = seat; d.deadline = Date.now() + (d.bank[seat] || 0) + d.opts.turn * 1000; d.aiAt = null;
     await this.ctx.storage.setAlarm(this.d.deadline);
   }
   /* the turn passed to someone new: a person gets the turn timer, an AI gets its next move scheduled (same alarm) */
   async nextTurn() { if (this.aiToMove()) await this.scheduleAI(900); else await this.startTurnTimer(); }
-  aiToMove() { return !!(this.S && !this.S.over && this.S.players[this.S.cur].ai); }
+  aiToMove() { return !this.S.over && !!this.S.players[this.S.cur].ai; }
   // someone is following the game: a person still racing with the page open. Otherwise the AIs play on without pauses.
   watched() { return this.S.players.some((p, i) => !p.ai && !p.resigned && !p.pieces.every(k => k === 'done') && this.online(this.owners[i])); }
   async scheduleAI(ms) { this.settleClock(); const d = this.d; d.deadline = null; d.aiAt = Date.now() + (this.watched() ? ms : 0); await this.ctx.storage.setAlarm(d.aiAt); }
@@ -567,7 +566,6 @@ export class Room extends DurableObject {
      or up to ~0.3 s of actions per alarm when nobody is racing with the page open */
   async aiMove() {
     const eng = this.engine(); useNet(); const ev = []; const t0 = Date.now(); const fast = !this.watched();
-    this.aiMem = this.aiMem || {};
     do {
       const seat = this.S.cur, mem = this.aiMem[seat] || (this.aiMem[seat] = {});
       const r = eng.aiStep(this.S.players[seat].ai, mem, this.rec); this.S = E.S; ev.push(...r.ev);
@@ -576,7 +574,7 @@ export class Room extends DurableObject {
     await this.afterChange(ev);
   }
   async onAlarm() {
-    const d = this.d; if (!d || d.status !== 'playing' || !this.S || this.S.over) return;
+    const d = this.d; if (d.status !== 'playing') return; // (a game that ended meanwhile: finish() removes its alarm, and sets the status first)
     if (this.aiToMove()) { if (d.aiAt && Date.now() < d.aiAt - 50) { await this.ctx.storage.setAlarm(d.aiAt); return; } await this.aiMove(); return; }
     if (Date.now() < d.deadline - 1000) { await this.ctx.storage.setAlarm(d.deadline); return; }
     // the clock ran out: the turn ends; the third time in a row the player forfeits
@@ -587,17 +585,17 @@ export class Room extends DurableObject {
     await this.afterChange(ev);
   }
   /* the finished game's log becomes its replay (/?replay=<id>): kept for good, listed publicly unless the room was private.
-     Returns the replay's id, or null (a game started before games were recorded, or the database failed). */
+     Returns the replay's id, or null (the log is too large, or the database failed). */
   async saveReplay() {
     const d = this.d; if (d.replay !== undefined) return d.replay;
     d.replay = null; E.S = this.S; E.MAP = mapFor(this.S);
-    const log = E.recFinal(this.rec); if (!log) return null;
+    const log = E.recFinal(this.rec);
     const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
     const text = JSON.stringify(log); if (text.length > REPLAY_MAX_BYTES) return null;
     try {
       await this.env.DB.prepare(`INSERT INTO replays(id,created,title,players,actions,body,game,uids,listed) VALUES(?,?,?,?,?,?,1,?,?)`)
         .bind(id, Date.now(), log.title.slice(0, 120), log.players.map(x => x.name).join(', '), log.actions.length, text, ',' + this.owners.join(',') + ',', d.opts.pub ? 1 : 0).run();
-      await this.env.DB.prepare(`UPDATE replays SET places=? WHERE id=?`).bind(JSON.stringify(this.S.places || []), id).run();
+      await this.env.DB.prepare(`UPDATE replays SET places=? WHERE id=?`).bind(JSON.stringify(this.S.places), id).run();
       d.replay = id;
       await pruneReplays(this.env.DB, this.owners);
     } catch (e) { }
@@ -629,10 +627,10 @@ export class Room extends DurableObject {
   }
   async onClose(ws, code) {
     try { ws.close(code); } catch (e) { }
-    const d = this.d; if (!d || d.status === 'closed') return;
-    const { uid } = ws.deserializeAttachment() || {};
+    const d = this.d; if (d.status === 'closed') return;
+    const { uid } = ws.deserializeAttachment();
     // someone who closes the page before a quick match starts gives up their seat, so matches never start with absent players
-    if (d.opts.auto && d.status === 'lobby' && uid && !this.ctx.getWebSockets(uid).some(w => w !== ws && w.readyState === 1)) {
+    if (d.opts.auto && d.status === 'lobby' && !this.ctx.getWebSockets(uid).some(w => w !== ws && w.readyState === 1)) {
       d.seats = d.seats.filter(s => s.uid !== uid); if (d.host === uid && d.seats.length) d.host = d.seats[0].uid;
       if (!d.seats.length) d.status = 'closed';
       await this.persist(); this.tellLobby();
