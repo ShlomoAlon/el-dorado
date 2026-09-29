@@ -234,18 +234,18 @@ incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning
   or the end. Plan cache is per room (`this.aiMem`), so rooms sharing an isolate can't mix plans.
 - Ratings: each AI is a `users` row `id='ai-<id>'`, `bot=<id>`, no google_sub (created in `ensureSchema`; if a person already has the
   name, the AI gets "(AI)" appended). Leaderboard lists them (with `bot`) even before their first game.
-- **Calibrated starting ratings** (`AIS[].rating`): Humboldt **1530**, Orellana **1483**, Raleigh **1200**, from
-  `nice -n 10 node tools/ai/calibrate_ais.mjs 720 2` (fixed seeds, reproducible; ~20 min on 2 cores; games cached in
-  tools/ai/data/calibration.json, `… report` re-prints). The AIs play exactly as on the site (`aiStep`, shipped half-float net,
-  First Expedition, fullRace, 30-round cap). Ratings: maximum-likelihood Elo over every pair of different AIs in the 540 three- and
-  four-player games (pairwise: Humboldt beats Orellana 58%, both beat Raleigh ~85%), ±23; the server's own sequential eloDeltas
-  over the legal games (no repeated AI) agrees (1535 / 1468 / 1200). **Anchor: Raleigh = 1200**, the rating every new person
-  starts with: Raleigh is the "Steady" level for newcomers, so a new player is assumed equal to it, and real rated games then move
-  everyone from there (Elo only fixes differences; anchoring the AIs' mean at 1200 would have put Raleigh ~140 below a
-  first-timer, which experience says is too harsh on the person who beats it). Applied once by `ensureSchema()`: one D1 batch
-  shifts each ai-* row by (calibrated − applied) and records the applied rating in `settings` `ai_rating:<id>` (the first
-  calibration is in `ai_calibration_v1`), in one conditional transaction — so AIs that already played keep their gains/losses,
-  and changing `AIS[].rating` later (a new calibration, or a new AI) moves that AI by the difference exactly once.
+- **Calibrated starting ratings** (`AIS[].rating`): Fawcett **1464** ±21, Humboldt **1398** ±20, Raleigh **1200**, from
+  `nice -n 10 node tools/ai/calibrate_ais.mjs 720 2` (2026-09-29, network `first-first1-best`; ~20 min on 2 cores; games cached in
+  tools/ai/data/calibration-<ai ids>.json, `… report` re-prints). The AIs play exactly as on the site (`aiStep`, shipped half-float
+  net, First Expedition, fullRace, 30-round cap). Ratings: maximum-likelihood Elo over every pair of different AIs in the 540
+  three- and four-player games (Fawcett finishes ahead of Humboldt 57%, of Raleigh 84%; Humboldt ahead of Raleigh 75%); the
+  server's own sequential eloDeltas over the legal games agrees (1451 / 1381 / 1200). (The first calibration, with an earlier
+  network, had Humboldt at 1530.) **Anchor: Raleigh = 1200**, the rating every new person starts with: Raleigh is the "Steady"
+  level for newcomers, so a new player is assumed equal to it, and real rated games then move everyone from there. Applied by
+  `ensureSchema()`: it shifts each ai-* row by (calibrated − applied) and records the applied rating in `settings`
+  `ai_rating:<id>` (the first calibration is in `ai_calibration_v1`), in one conditional transaction — so AIs that already
+  played keep their gains/losses, and changing `AIS[].rating` later (a new calibration, or a new AI) moves that AI by the
+  difference exactly once.
 - **Known problem (2 players):** in the 180 two-player calibration games the network AIs (Humboldt, Orellana) mostly failed to
   reach El Dorado within 30 rounds (88 capped; Raleigh won all 120 of its 2-player games). The network seems not to handle two
   explorers per player. Those games are left out of the ratings. Worth a look by the training side (engine_bot.js), or a

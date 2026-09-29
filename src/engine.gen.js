@@ -1065,9 +1065,9 @@ function botRandomCourse(seed,nMid){
    the server applies it once (worker.js ensureSchema). */
 const AIS=[
   // Fawcett: Humboldt's network with a 4x wider whole-turn search and 8 imagined draws per line (≈3x his thinking time):
-  // tools/ai/h2h.mjs against Humboldt, 200 games: 34.6% of seats won against 23.7%, mean place 0.44 against 0.54
-  {id:'fawcett',name:'Fawcett',tier:'Grandmaster',rating:1610,desc:'Neural network that weighs many more plans each turn',opts:{mode:'net',search:{kind:'plan',beam:12},draws:8}},
-  {id:'humboldt',name:'Humboldt',tier:'Master',rating:1530,desc:'Neural network that plans each whole turn',opts:{mode:'net',search:{kind:'plan',beam:3}}},
+  // tools/ai/h2h.mjs against Humboldt, 200 games: 34.6% of seats won against 23.7%, mean place 0.44 against 0.54; ratings: calibrate_ais.mjs
+  {id:'fawcett',name:'Fawcett',tier:'Grandmaster',rating:1464,desc:'Neural network that weighs many more plans each turn',opts:{mode:'net',search:{kind:'plan',beam:12},draws:8}},
+  {id:'humboldt',name:'Humboldt',tier:'Master',rating:1398,desc:'Neural network that plans each whole turn',opts:{mode:'net',search:{kind:'plan',beam:3}}},
   {id:'raleigh',name:'Raleigh',tier:'Steady',rating:1200,desc:'Hand-written route planner',opts:{mode:'plan'}},
 ];
 const aiById=id=>AIS.find(a=>a.id===id)||null;
