@@ -57,6 +57,7 @@ const seedScript = () => { let a = 20260929; Math.random = () => { a |= 0; a = a
   for (const [vw, vh] of [[1440, 900], [390, 844]]) {
     const { p, ctx, idle } = await game(vw, vh, 1);
     if (want.has('mid')) await shot(p, `mid-${vw}.png`);
+    if (want.has('hover') && vw === 1440) { const r = await p.evaluate(() => { const e = document.querySelector('#market .mslot[data-i="1"]'); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }); await p.mouse.move(r.x, r.y); await p.waitForTimeout(400); await shot(p, 'hover-1440.png'); await p.mouse.move(vw / 2, 5); }
     if (want.has('buying')) { await buy(p); await idle(); await shot(p, `buying-${vw}.png`); await p.evaluate(() => window.__ED.cancelMode()); await idle(); }
     if (want.has('allcards')) { await openAll(p); await idle(); await shot(p, `allcards-${vw}.png`); await p.keyboard.press('Escape'); await p.evaluate(() => { const c = document.querySelector('#allClose'); if (c && c.offsetParent) c.click(); }); await idle(); }
     await ctx.close();

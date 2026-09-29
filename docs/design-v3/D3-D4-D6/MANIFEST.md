@@ -15,10 +15,11 @@ progress, one coin paid), `market` (close-up of the market, `@2x`).
 
 | state | before | A | B |
 |---|---|---|---|
-| mid-play | `D3-before-mid-1440.png`, `D3-before-mid-390.png` | `D3-A-mid-1440.png`, `D3-A-mid-390.png` | |
-| All cards | `D3-before-allcards-1440.png`, `D3-before-allcards-390.png` | `D3-A-allcards-1440.png`, `D3-A-allcards-390.png` | |
-| buying | `D3-before-buying-1440.png`, `D3-before-buying-390.png` | `D3-A-buying-1440.png`, `D3-A-buying-390.png` | |
-| market close-up | `D3-before-market-1440@2x.png`, `D3-before-market-390@2x.png` | `D3-A-market-1440@2x.png`, `D3-A-market-390@2x.png` | |
+| mid-play | `D3-before-mid-1440.png`, `D3-before-mid-390.png` | `D3-A-mid-1440.png`, `D3-A-mid-390.png` | `D3-B-mid-1440.png`, `D3-B-mid-390.png` |
+| All cards | `D3-before-allcards-1440.png`, `D3-before-allcards-390.png` | `D3-A-allcards-1440.png`, `D3-A-allcards-390.png` | `D3-B-allcards-1440.png`, `D3-B-allcards-390.png` |
+| buying | `D3-before-buying-1440.png`, `D3-before-buying-390.png` | `D3-A-buying-1440.png`, `D3-A-buying-390.png` | `D3-B-buying-1440.png`, `D3-B-buying-390.png` |
+| market close-up | `D3-before-market-1440@2x.png`, `D3-before-market-390@2x.png` | `D3-A-market-1440@2x.png`, `D3-A-market-390@2x.png` | `D3-B-market-1440@2x.png`, `D3-B-market-390@2x.png` |
+| hover (B only) | | | `D3-B-hover-1440.png` |
 
 ### Option A: a proper drawer — branch `design/v3-D3-A`
 - **What changed:** the market is a panel with a heading ("Market", a line saying what you can do now, a close ✕),
@@ -33,3 +34,15 @@ progress, one coin paid), `market` (close-up of the market, `@2x`).
   instead of always visible.
 - **Trade-offs:** legible cards everywhere, at the cost of ~360 px of board width on desktop (the board shrinks a bit)
   and of the "glanceable" market on phones.
+
+### Option B: compact cards in the floating column — branch `design/v3-D3-B`
+- **What changed:** the column stays where it is, but each stack is a compact row: the strength badge (or the action
+  card's glyph) on the suit colour, the name in the display serif at 13.5 px (10.5 px on phones, where it was 5 px),
+  the price coin, and a small "×2" count. No scene art. Hovering a row on desktop shows the full card beside it; All
+  cards and the buy slot still show full cards. "All cards · Reserve locked" is a row of the same shape.
+  The "Can buy" pill is gone (it collided with the next row); a mint ring and dimming the rest remain.
+- **Effort / risk:** small (a compact face in cards.js, market.js sizing, one CSS block). `layout ok` at 5 sizes.
+  Risk: low; flights and drags start from a card-shaped box at the row's left end.
+- **Trade-offs:** everything in the market is readable at a glance and the board keeps most of its room, but the market
+  no longer looks like cards (less charm), single-use and card text are only on hover / All cards, and on phones the
+  column is wider (140 px vs ~95 px), so the history panel moves below it and covers more of the board.
