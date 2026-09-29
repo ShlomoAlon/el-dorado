@@ -3,7 +3,7 @@
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
 import { S, CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, setS, setMAP, assert } from '../engine.gen.js';
 import { esc } from './dom.js';
-import { UI, NET, G, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave } from './state.js';
+import { UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave } from './state.js';
 import { replayDecorate } from './replay.js';
 import { render, resetView } from './frame.js';
 import { toast, banner, modal, closeModal, showGameOver } from './dialogs.js';
@@ -29,7 +29,7 @@ export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
 /* after a bug (boundary.js): the game on show again from its source, with nothing selected. Online: a new connection
    brings the server's state. A local game: rebuilt from its record (the action that failed was never recorded) */
 export function resync(){
-  UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;
+  clearSelection();
   if(online())reconnect();
   else if(G.rec&&!G.replay){const g=recState(G.rec);aiReset();setS(g.S);setMAP(g.MAP);syncMode(true);resetView();aiKick();}
   toast('Something went wrong, sorry. The game was restored.',3200);render();
@@ -47,7 +47,7 @@ export const isTargeted=id=>def(id).c!=='p'||typeOf(id)==='native';
 export function firstPiece(){return Math.max(0,cur().pieces.findIndex(k=>k!=='done'));}
 /* after the state changed, put the UI into the matching mode */
 export function syncMode(turnChanged){
-  if(turnChanged||!canAct()){UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;}
+  if(turnChanged||!canAct())clearSelection();
   if(S.turn.pending){UI.mode='trashPick';UI.max=S.turn.pending.max;if(turnChanged)UI.picks=[];}
   else if(UI.mode==='trashPick'){UI.mode='idle';UI.picks=[];}
   if(S.turn.active&&canAct()){UI.mode='card';UI.card=S.turn.active.id;UI.piece=S.turn.active.pi;}
@@ -159,7 +159,7 @@ export function undo(){
   if(!inGame()||!canAct()||!canUndo())return;
   if(online()){netAct({t:'undo'});return;}
   recUndo(G.rec);
-  UI.picks=[];UI.buy=null;UI.pending=null;UI.mode='idle';UI.card=null;
+  clearSelection();
   syncMode(false);render();save();
 }
 /* (a game in progress: a local one always has its record) */

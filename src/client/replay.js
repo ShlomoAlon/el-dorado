@@ -3,7 +3,7 @@
    game that was played. Nothing here changes any rules. */
 import { S, CT, hexAt, mapFor, setS, setMAP, replayCheck, replayStart, replayStep, applyAction, botRemaining, botCost, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
 import { $, esc, setHTML } from './dom.js';
-import { UI, G, online } from './state.js';
+import { UI, G, online, clearSelection } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, banner, closeModal } from './dialogs.js';
 import { showGame, resumeSaved, playEvents, firstPiece } from './actions.js';
@@ -69,7 +69,7 @@ function replayGo(i,anim){
   const R=G.replay;i=Math.max(0,Math.min(R.states.length-1,i));
   const fwd=anim&&i===R.i+1;R.i=i;
   setS(JSON.parse(R.states[i]));let L=[];for(let k=i;k>=0&&L.length<120;k--)L=R.lines[k].concat(L);S.log=L.slice(-120); // (the journal the game had here)
-  UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.piece=firstPiece();
+  clearSelection();UI.piece=firstPiece();
   if(fwd&&R.evs[i])playEvents(R.evs[i]);
   render();
 }

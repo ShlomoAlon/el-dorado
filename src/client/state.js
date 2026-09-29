@@ -4,6 +4,8 @@ import { S, isActive, recState, replayCheck, recFinal } from '../engine.gen.js';
 import { failed } from './boundary.js';
 export const UI = { mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), cover: false, hover: null, mktOpen: true, allOpen: false,
   buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null };
+/* nothing selected: no card, no picks, no purchase or payment under way */
+export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = []; UI.buy = null; UI.pending = null; }
 /* NET.S: the online game the server last sent (the game on show is online while it is that one); NET.seat: my seat in it;
    NET.clockEnd: when the turn clock runs out (local time) */
 export const NET = { available: false, cfg: null, user: null, token: null, ws: null, lobbyWs: null, room: null, S: null, seat: -1, connected: false, clockEnd: null,

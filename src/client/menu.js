@@ -4,7 +4,7 @@
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
 import { S, MAP, COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, replayCheck, plural } from '../engine.gen.js';
 import { $, esc, setHTML, setText } from './dom.js';
-import { UI, NET, G, cur, isAI, online, myId, inGame, loadSave, save, myGames } from './state.js';
+import { UI, NET, G, clearSelection, cur, isAI, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
 import { toast, banner } from './dialogs.js';
 import { showGame, resumeSaved, resignSeat, resignLocal, endLocal } from './actions.js';
@@ -147,7 +147,7 @@ export function prepareGame(force){
   if(inGame()&&!force)return;
   if(online())exitOnline(); // a finished online game: its room is left (rejoin a running one from Online)
   G.rec=recNewGame(setupOpts());UI.preview=true;UI.lastReplay=null;
-  UI.mode='idle';UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.piece=0;UI.viewer=null;
+  clearSelection();UI.piece=0;UI.viewer=null;
   UI.cover=!!G.rec.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;showGame();
   setHTML(mq('#rInfo'),`Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random`);
 }
