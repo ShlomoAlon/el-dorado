@@ -70,4 +70,40 @@ States: `board4` (4 players, everyone has moved once; 1440, 390), `setup` (start
 **Recommendation: B**, and if the red clash still bothers you, B plus swapping only Crimson for a non-red hue (a one-line change,
 but a record bump). B fixes the accessibility problem without invalidating games; A's black explorer is weak on this board.
 
+## D5. Icons
+
+**Problem:** custom SVG icons are mixed with Unicode glyphs (`+ − ⤢ ✕ ⏮ « ‹ ▶ › » ⏭ ★ ✓`), which take the system font's
+weight and metrics and never match the SVGs.
+
+States (close-ups at 2×): `zoom` (the zoom / fit / full-screen / sound column; at 390 the shot also shows the top bar and the History
+panel's close, grip and resize icons), `hud` (Market, History, Rules, Menu), `replay` (the replay controls).
+
+| | files |
+|---|---|
+| before | `D5-before-{zoom,hud,replay}-1440@2x.png`, `D5-before-{zoom,replay}-390@2x.png` |
+| A | `D5-A-…` (same names) |
+| B | `D5-B-…` (same names) |
+
+Both options add `src/client/icons.js` (one list of icons; `ico(name)` in scripts, `<!--I:name-->` in the static markup, written in
+by `build.mjs`) and replace every Unicode icon: zoom +/−/fit, the close ✕ (All cards, cancel purchase), the seven replay controls and
+play/pause, the History panel's "bought →" arrow, the "arrived ★" in the chips, the ✓ in the replay's evaluation, "‹ Leaderboard".
+Text arrows inside sentences ("plays Explorer → jungle") stay text.
+
+**Option A: our own set** (branch `design/v3-D5-A`).
+- The missing icons are drawn in the style of the existing History / sound / full-screen icons (20×20, 1.8 px stroke, round joins);
+  play and the skip triangles are filled. The fit-board icon is a hexagon in frame corners (the board, not a generic "expand").
+- Effort: small. Risk: low (layout test passes; the History arrow is sized to the cards so a turn still fits one row on short screens).
+- Trade-offs: a little character (the hex), zero dependency; but every future icon has to be drawn by hand to match.
+
+**Option B: Lucide** (branch `design/v3-D5-B`).
+- Lucide (ISC licence), vendored: only the ~24 icons used, inlined as SVG (the page stays self-contained, ~5 KB before compression).
+  It also replaces the existing custom UI icons (History, sound on/off, full screen, the History panel's close / put-back / grip / resize),
+  so every control icon is one family. Game symbols (machete, paddle, coin, joker, the card-pile tile) stay custom.
+- Effort: small. Risk: low (layout test passes).
+- Trade-offs: a complete, consistent, well-known set, and any new icon is a copy-paste away; but it is a generic look (the same icons
+  as thousands of apps), and Lucide's outlined play triangle is lighter than A's filled one on the gold button.
+
+**Recommendation: B.** Consistency for every future icon is worth more than hand-drawn character on 20 px controls; the
+character lives in the game symbols, which stay ours. (If you like A's hexagon "fit board" icon, it can stay as the one custom icon.)
+
 (Other decisions are added below as they are finished.)
