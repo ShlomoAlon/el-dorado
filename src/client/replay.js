@@ -1,6 +1,7 @@
 /* REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
    The log holds the seeds and every action; the engine rebuilds each position (replayStart), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
+import { ico } from './icons.js';
 import { S, CT, LOG_MAX, hexAt, mapFor, setS, setMAP, replayCheck, replayStart, replayStep, applyAction, botRemaining, botCost, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
 import { $, esc, setHTML } from './dom.js';
 import { UI, G, online, clearSelection } from './state.js';
@@ -127,7 +128,7 @@ const RSPEEDS=[['Slow','½×',.5],['Normal','1×',1],['Fast','2×',2],['Faster',
 function replayBar(){
   const R=G.replay,d=$('#rdock'),side=$('#rside');
   if(!d.firstChild){
-    d.innerHTML=`<div class="rgrp"><button id="rbS" class="ends" title="Start (Home)" aria-label="Start">⏮</button><button id="rbT0" title="Previous turn (↑)" aria-label="Previous turn">«</button><button id="rbP" title="Back one move (←)" aria-label="Back one move">‹</button><button id="rbGo" class="pri" title="Play / pause (space)" aria-label="Play">▶</button><button id="rbN" title="Forward one move (→)" aria-label="Forward one move">›</button><button id="rbT1" title="Next turn (↓)" aria-label="Next turn">»</button><button id="rbE" class="ends" title="End (End)" aria-label="End">⏭</button></div>
+    d.innerHTML=`<div class="rgrp"><button id="rbS" class="ends" title="Start (Home)" aria-label="Start">${ico('first')}</button><button id="rbT0" title="Previous turn (↑)" aria-label="Previous turn">${ico('prevTurn')}</button><button id="rbP" title="Back one move (←)" aria-label="Back one move">${ico('prev')}</button><button id="rbGo" class="pri" title="Play / pause (space)" aria-label="Play">${ico('play')}</button><button id="rbN" title="Forward one move (→)" aria-label="Forward one move">${ico('next')}</button><button id="rbT1" title="Next turn (↓)" aria-label="Next turn">${ico('nextTurn')}</button><button id="rbE" class="ends" title="End (End)" aria-label="End">${ico('last')}</button></div>
       <div class="rspd" role="group" aria-label="Replay speed">${RSPEEDS.map(([t,s,v])=>`<button data-v="${v}" aria-label="${t}" title="${t}"><span class="lg">${t}</span><span class="sm">${s}</span></button>`).join('')}</div>
       <input type="range" id="rbR" min="0" value="0" aria-label="Position in the game"><span id="rbPos"></span>
       <button id="rbA" class="rtog" title="Show or hide the evaluation">Evaluation</button><div id="rbTxt" aria-live="polite"></div>`;
@@ -140,7 +141,7 @@ function replayBar(){
     d.querySelector('#rbA').onclick=()=>{G.replay.side=!G.replay.side;try{localStorage.setItem('eldorado-rside',G.replay.side?'1':'0');}catch(e){}render();};
     const rr=d.querySelector('#rbR');rr.oninput=()=>go(+rr.value);}
   d.hidden=false;side.hidden=!R.side;$('#app').classList.add('replaying');d.querySelector('#rbTxt').innerHTML=replayPromptHTML()+`<span class="rpos"> · move ${R.i} / ${R.states.length-1} · round ${S.round}</span>`;
-  const n=R.states.length-1,gb=d.querySelector('#rbGo');gb.textContent=R.timer?'❚❚':'▶';gb.setAttribute('aria-label',R.timer?'Pause':'Play');
+  const n=R.states.length-1,gb=d.querySelector('#rbGo');if(gb.dataset.st!==(R.timer?'1':'0')){gb.dataset.st=R.timer?'1':'0';gb.innerHTML=ico(R.timer?'pause':'play');}gb.setAttribute('aria-label',R.timer?'Pause':'Play');
   d.querySelectorAll('.rspd button').forEach(b=>b.classList.toggle('on',+b.dataset.v===R.speed));
   const tg=d.querySelector('#rbA'),ok=replayEvalOK();tg.hidden=!ok;if(!ok)side.hidden=true;
   tg.classList.toggle('on',R.side);tg.setAttribute('aria-pressed',R.side?'true':'false');
@@ -160,7 +161,7 @@ function replayBar(){
     else{const same=nx&&nx[0]===S.cur&&steps[0].key===actionKey(nx[1],JSON.parse(R.states[R.i]));
       h+=`<ol class="rplan">${steps.map((o,j)=>`<li class="ralt${j===0&&same?' on':''}" data-j="${j}"><span>${o.html}</span></li>`).join('')}</ol>`;
       if(steps[steps.length-1].a.t==='action')h+=`<p class="rcmp">…then decides the rest after seeing the cards it draws.</p>`; // (every action card draws)
-      if(nx&&nx[0]===S.cur)h+=`<p class="rcmp">${same?`<b>✓</b> ${who} made this move.`:`${who} played instead: ${describeAction(nx[1],JSON.parse(R.states[R.i]))}`}</p>`;}
+      if(nx&&nx[0]===S.cur)h+=`<p class="rcmp">${same?`${ico('check',13)} ${who} made this move.`:`${who} played instead: ${describeAction(nx[1],JSON.parse(R.states[R.i]))}`}</p>`;}
   }
   if(side.__h===h)return;setHTML(side,h); // (rewritten only when it changes: hovering a step redraws the board, not this list)
   // hovering a step marks its space on the board
