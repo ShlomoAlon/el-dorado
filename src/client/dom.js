@@ -8,7 +8,6 @@ export function el(tag, cls, parent) { const e = document.createElement(tag); if
 export const setText = (e, t) => { t = String(t); if (e.__tx !== t) { e.__tx = t; e.textContent = t; } };
 export const setHTML = (e, h) => { if (e.__h !== h) { e.__h = h; e.innerHTML = h; } };
 export const setStyle = (e, p, v) => { v = String(v); const k = '__s' + p; if (e[k] !== v) { e[k] = v; if (p.startsWith('--')) e.style.setProperty(p, v); else e.style[p] = v; } };
-export const setAttr = (e, a, v) => { v = String(v); if (e.getAttribute(a) !== v) e.setAttribute(a, v); };
 export const show = (e, on) => { if (e.hidden === on) e.hidden = !on; };
 export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 export const EASE = 'cubic-bezier(.2,.8,.2,1)';
