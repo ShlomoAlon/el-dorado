@@ -2,7 +2,7 @@
    `hidden`; choices are native form controls that keep their own state (the Online tabs are pure CSS). This file wires
    them, reads them when they're used, and fills only the boxes that hold data (seats, rooms, leaderboard, profile,
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
-import { S, MAP, COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, replayCheck, plural, shuffle } from '../engine.gen.js';
+import { S, MAP, COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, plural, shuffle } from '../engine.gen.js';
 import { $, esc, setHTML, setText } from './dom.js';
 import { UI, NET, G, clearSelection, cur, isAI, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
@@ -85,7 +85,6 @@ export function menuChange(e){
   if(n==='otab'){onlineTab();return;}
   if(n==='rlrated'){netSend({t:'rated',v:e.target.value==='1'});return;}
   if(n==='rlcol'){netSend({t:'color',color:e.target.value});return;}
-  if(n==='rFile'){uploadReplay(e.target.files[0]);e.target.value='';} // (so picking the same file again works too)
 }
 export function menuClick(e){
   const b=e.target.closest('button');if(!b||b.disabled)return;
@@ -110,7 +109,6 @@ export function menuClick(e){
     case'rlLeave':leaveRoom();showHub();return;
     case'rlStart':netSend({t:'start'});return;
     case'rlNow':netSend({t:'now'});return;
-    case'rUp':mq('#rFile').click();return;
   }
   if(b.dataset.join){joinRoom(b.dataset.join);return;}
   if(b.dataset.uid){NET.viewUser=b.dataset.uid;setRadio('otab','me');onlineTab();return;}
@@ -201,7 +199,7 @@ export function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
   const stat=(v,l)=>`<div class="pst"><b>${v}</b><span>${l}</span></div>`;
   return`<div class="pfh"><span class="av big">${esc(u.name.slice(0,1).toUpperCase())}</span><div><h3>${esc(u.name)}${A?' <span class="aitag">AI</span>':''}</h3>${A?`<span class="note">${esc(A.tier)} · ${esc(A.desc)}</span>`:''}</div></div>
   <div class="pstats">${stat(Math.round(u.rating),'rating')}${stat('#'+u.rank,'rank')}${stat(u.games,'rated games')}${stat(u.wins,'wins')}${stat(u.games?Math.round(100*u.wins/u.games)+'%':'–','win rate')}</div>
-  <div class="field"><label>Recent games</label><div class="rlist">${r.games.length?r.games.map(g=>`<button type="button" data-rid="${esc(g.id)}"><b>${g.place?`<span class="plc p${g.place}">${ordn(g.place)}</span> `:''}${esc(g.title||'Game')}</b><span>${new Date(g.created).toLocaleString()} · ${g.actions} moves · watch replay</span></button>`).join(''):'<p class="note">No recorded games yet.</p>'}</div></div>`;}
+  <div class="field"><label>Recent games</label><div class="rlist">${r.games.length?r.games.map(g=>gameRowHTML(`data-rid="${esc(g.id)}"`,g,g.seat,'',u.id===myId())).join(''):'<p class="note">No recorded games yet.</p>'}</div></div>`;}
 
 /* ---- the room lobby: drawn from the room the server sends; each part changes only when its data does ---- */
 export function showRoomLobby(){renderRoomLobby();menuOpen('room');}
@@ -228,25 +226,24 @@ export function renderRoomLobby(){
 }
 
 /* ---- replays ---- */
+/* a finished game as a list row: the result first (the place of the player whose list it is: seat me, 'You' when that is
+   you; with no such player, who won), then the course, how long it took and when.
+   g: {course, names, places, rounds, created} (the server's rows; a game kept on this device) */
+function gameRowHTML(attr,g,me,where,you=true){
+  const won=g.places?g.names.filter((_,i)=>g.places[i]===1).map(esc).join(' & '):'',C=courseById(g.course);
+  const res=!g.places?'Unfinished':me<0?`Won by ${won}`:g.places[me]===1&&you?`<span class="plc p1">1st</span> You won`:g.places[me]===1?`<span class="plc p1">1st</span> of ${g.names.length}`:`<span class="plc p${g.places[me]}">${ordn(g.places[me])}</span> of ${g.names.length} · won by ${won}`;
+  const sub=[where,C&&C.name,g.rounds&&plural(g.rounds,'round'),new Date(g.created).toLocaleString([],{dateStyle:'medium',timeStyle:'short'})].filter(Boolean).join(' · ');
+  return`<button type="button" ${attr}><b>${res}</b><span>${esc(sub)}</span></button>`;}
 export function showReplays(){
-  const mine=mq('#rMine'),loc=myGames(),row=(attr,title,sub)=>`<button type="button" ${attr}><b>${esc(title)}</b><span>${esc(sub)}</span></button>`;
-  const showMine=online=>{const items=[...loc.map(L=>({t:L.created,h:row(`data-lid="${L.created}"`,L.title,`on this device · ${L.actions.length} moves · ${new Date(L.created).toLocaleString()}`)})),
-      ...online.map(g=>({t:g.created,h:row(`data-id="${esc(g.id)}"`,g.title||'Game',`online · ${g.actions} moves · ${new Date(g.created).toLocaleString()}`)}))].sort((a,b)=>b.t-a.t);
+  const mine=mq('#rMine'),loc=myGames().map(L=>{const hum=L.players.map((p,i)=>p.bot?-1:i).filter(i=>i>=0); // (you: the one person at the table)
+    return{t:L.created,h:gameRowHTML(`data-lid="${L.created}"`,{course:L.course,names:L.players.map(p=>p.name),places:L.result&&L.result.places,rounds:L.result&&L.result.rounds,created:L.created},hum.length===1?hum[0]:-1,'on this device')};});
+  const showMine=online=>{const items=[...loc,...online.map(g=>({t:g.created,h:gameRowHTML(`data-id="${esc(g.id)}"`,g,g.seat,'online')}))].sort((a,b)=>b.t-a.t);
     setHTML(mine,items.length?items.map(x=>x.h).join(''):'<p class="note">No finished games yet. Games you finish here are kept to watch again.</p>');};
   showMine([]);
   if(NET.available&&NET.user)api('/api/users/'+encodeURIComponent(myId())).then(j=>showMine(j.games||[])).catch(()=>{});
   const list=mq('#rList');
-  if(!NET.available)setHTML(list,'<p class="note">Uploading and the shared list need the online server; a file you pick still plays here.</p>');
+  if(!NET.available)setHTML(list,'<p class="note">The shared list needs the online server.</p>');
   else fetch('/api/replays').then(r=>r.json()).then(j=>{const rs=j.replays||[];
-    setHTML(list,rs.length?rs.map(r=>row(`data-id="${esc(r.id)}"`,r.title||r.players,`${r.players} · ${r.actions} moves · ${new Date(r.created).toLocaleString()}`)).join(''):'<p class="note">No replays yet.</p>');}).catch(()=>setHTML(list,'<p class="note">Could not load the list.</p>'));
+    setHTML(list,rs.length?rs.map(r=>gameRowHTML(`data-id="${esc(r.id)}"`,r,-1,plural(r.names.length,'player'))).join(''):'<p class="note">No replays yet.</p>');}).catch(()=>setHTML(list,'<p class="note">Could not load the list.</p>'));
   menuOpen('replays');
-}
-async function uploadReplay(f){
-  const msg=mq('#rMsg');if(!f)return;msg.textContent='Uploading…';
-  try{const text=await f.text();let log;try{log=JSON.parse(text);}catch(_){throw new Error('That file is not valid JSON.');}
-    const err=replayCheck(log);if(err)throw new Error(err);
-    let id=null;
-    if(NET.available){const r=await fetch('/api/replays',{method:'POST',headers:{'content-type':'application/json'},body:text});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.err||'Upload failed ('+r.status+')');id=j.id;}
-    msg.textContent='';openReplay(log,id);}
-  catch(e){msg.textContent=e.message;}
 }

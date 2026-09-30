@@ -1,11 +1,12 @@
 // The menus as a person uses them, on this device (no server): the start screen's three tabs (This device / Online /
-// Replays) and no extra Back or Replays buttons; a replay opened from Replays comes back to Replays when closed; during a
+// Replays) and no extra Back or Replays buttons; a game kept on this device listed with who won, and opened from Replays
+// comes back to Replays when closed; during a
 // game the menu shows the game bar, and watching a replay from there keeps the game; the results at the end of a game.
 // (Online menus, the room lobby and signing out: test/online.cjs.)
 //   NODE_PATH=$(npm root -g) node test/menus.cjs
 const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
-const path = require('path');
-const T = report('menus'), LOG = path.join(__dirname, 'fixtures/replay.json');
+const fs = require('fs'), path = require('path');
+const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/replay.json'), 'utf8'));
 (async () => {
   const srv = await serveStatic(), b = await chromium.launch(), p = await openPage(b, 'menus');
   const until = (f, a, ms = 15000) => p.waitForFunction(f, a, { timeout: ms }).then(() => true, () => false);
@@ -15,11 +16,15 @@ const T = report('menus'), LOG = path.join(__dirname, 'fixtures/replay.json');
   await check('start screen: three tabs, no Back or Replays buttons', () => document.querySelectorAll('#sMode label').length === 3 && !document.querySelector('[data-go]') && !document.querySelector('#sReplays'));
   await p.click('#sMode label[data-v="online"]');
   await check('Online tab (this copy can\'t reach the server, and says so)', new Function(`return ${screen('online')} && !document.querySelector('#oOff').hidden`));
+  // a game finished on this device is listed under Your games: its result first (all AIs here: who won), then the course
+  await p.evaluate(L => localStorage.setItem('eldorado-games-v2', JSON.stringify([{ ...L, created: Date.now() }])), LOG);
   await p.click('#sMode label[data-v="replays"]');
   await check('Replays tab', new Function(`return ${screen('replays')}`));
-  // a game log picked from a file opens as a replay; closing it comes back to Replays
-  await p.setInputFiles('#rFile', LOG);
-  await check('a picked game log opens as a replay', () => !!window.__ED.G.replay && !document.querySelector('#menu').open);
+  const won = LOG.players.filter((_, i) => LOG.result.places[i] === 1).map(x => x.name).join(' & ');
+  await check('a game kept here: who won, then where and when (no upload button)', w => { const b = document.querySelector('#rMine [data-lid] b'); return !!b && b.textContent === 'Won by ' + w && !document.querySelector('#rUp'); }, won);
+  // opening it plays it; closing it comes back to Replays
+  await p.click('#rMine [data-lid]');
+  await check('a kept game opens as a replay', () => !!window.__ED.G.replay && !document.querySelector('#menu').open);
   await settle(p); await p.click('#menuBtn');
   await check('closing it comes back to Replays', new Function(`return !window.__ED.G.replay && document.querySelector('#menu').open && ${screen('replays')} && document.querySelector('input[name=mode][value=replays]').checked`));
   // a game: the menu over it has the game bar; a replay watched from there keeps the game
@@ -28,7 +33,7 @@ const T = report('menus'), LOG = path.join(__dirname, 'fixtures/replay.json');
   await settle(p);
   const pos = await p.evaluate(() => JSON.stringify(window.__ED.S.players.map(q => q.hand)));
   await p.click('#menuBtn'); await check('Menu during a game: the game bar and the tabs', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && !document.querySelector('#sMode').hidden);
-  await p.click('#sMode label[data-v="replays"]'); await p.setInputFiles('#rFile', LOG);
+  await p.click('#sMode label[data-v="replays"]'); await p.click('#rMine [data-lid]');
   await check('a replay during a game', () => !!window.__ED.G.replay);
   await settle(p); await p.click('#menuBtn');
   await check('closing it comes back to Replays, the game kept', new Function('r', `return !window.__ED.G.replay && ${screen('replays')} && !document.querySelector('#ingame').hidden && JSON.stringify(window.__ED.S.players.map(q => q.hand)) === r`), pos);

@@ -50,7 +50,7 @@ async function createSchema(env) {
   ]);
   try { await env.DB.prepare(`ALTER TABLE users ADD COLUMN bot TEXT`).run(); } catch (e) { } // already there
   // replays of online games (game=1) are kept for good; uids = ',uid1,uid2,' (who played); listed=0: a private room's game
-  // places: JSON array of finishing places, in the order of uids
+  // places: finishing places in the order of uids (no longer written or read: the log's own result has them; columns stay)
   for (const c of ['game INTEGER NOT NULL DEFAULT 0', 'uids TEXT', 'listed INTEGER NOT NULL DEFAULT 1', 'places TEXT'])
     try { await env.DB.prepare(`ALTER TABLE replays ADD COLUMN ${c}`).run(); } catch (e) { }
   // game logs from before log v3 were played under older rules and can't be replayed: deleted, once (ratings stay).
@@ -202,6 +202,11 @@ async function createRoom(env, uid, opts) {
   }
   return null;
 }
+/* a finished game in a list (Replays, a profile): what its row shows. From the game log itself, so uploads have it too:
+   course id, the players' names, their places (null: it never finished), rounds played */
+const GAME_COLS = `id,created,actions,json_extract(body,'$.course') AS course,json_extract(body,'$.players') AS pl,json_extract(body,'$.result') AS res`;
+const gameRow = r => { const res = JSON.parse(r.res || '{}');
+  return { id: r.id, created: r.created, actions: r.actions, course: r.course, names: JSON.parse(r.pl).map(p => p.name), places: res.places || null, rounds: res.rounds || null }; };
 const REPLAY_MAX_BYTES = 1.9e6, // D1 rows hold at most 2 MB
       REPLAY_KEEP = 1000, // uploaded logs
       REPLAYS_PER_PLAYER = 10; // online games: each player's latest are kept
@@ -273,8 +278,8 @@ export default {
         return json({ id });
       }
       if (p === '/api/replays' && req.method === 'GET') {
-        const r = await env.DB.prepare(`SELECT id,created,title,players,actions FROM replays WHERE listed=1 ORDER BY created DESC LIMIT 50`).all();
-        return json({ replays: r.results });
+        const r = await env.DB.prepare(`SELECT ${GAME_COLS} FROM replays WHERE listed=1 ORDER BY created DESC LIMIT 50`).all();
+        return json({ replays: r.results.map(gameRow) });
       }
       if ((m0 = p.match(/^\/api\/replays\/([a-z0-9]{6,12})$/)) && req.method === 'GET') {
         const r = await env.DB.prepare(`SELECT body FROM replays WHERE id=?`).bind(m0[1]).first();
@@ -286,9 +291,8 @@ export default {
         if (!u) return bad('No such player.', 404);
         const me = await authUser(req, env), own = !!me && me.id === u.id;
         const rank = await env.DB.prepare(`SELECT COUNT(*)+1 AS r FROM users WHERE (games>0 OR bot IS NOT NULL) AND rating>?`).bind(u.rating).first();
-        const g = await env.DB.prepare(`SELECT id,created,title,actions,uids,places FROM replays WHERE game=1 AND uids LIKE ?${own ? '' : ' AND listed=1'} ORDER BY created DESC LIMIT ${REPLAYS_PER_PLAYER}`).bind('%,' + u.id + ',%').all();
-        const games = g.results.map(r => { const i = r.uids.split(',').filter(Boolean).indexOf(u.id), pl = r.places ? JSON.parse(r.places) : null;
-          return { id: r.id, created: r.created, title: r.title, actions: r.actions, place: pl ? pl[i] : null, of: pl ? pl.length : null }; });
+        const g = await env.DB.prepare(`SELECT ${GAME_COLS},uids FROM replays WHERE game=1 AND uids LIKE ?${own ? '' : ' AND listed=1'} ORDER BY created DESC LIMIT ${REPLAYS_PER_PLAYER}`).bind('%,' + u.id + ',%').all();
+        const games = g.results.map(r => ({ ...gameRow(r), seat: r.uids.split(',').filter(Boolean).indexOf(u.id) })); // seat: theirs in it
         return json({ user: { ...u, rank: rank.r }, games });
       }
       if (p === '/api/leaderboard') {
@@ -606,7 +610,6 @@ export class Room extends DurableObject {
     try {
       await this.env.DB.prepare(`INSERT INTO replays(id,created,title,players,actions,body,game,uids,listed) VALUES(?,?,?,?,?,?,1,?,?)`)
         .bind(id, Date.now(), log.title.slice(0, 120), log.players.map(x => x.name).join(', '), log.actions.length, text, ',' + this.owners.join(',') + ',', d.opts.pub ? 1 : 0).run();
-      await this.env.DB.prepare(`UPDATE replays SET places=? WHERE id=?`).bind(JSON.stringify(this.S.places), id).run();
       d.replay = id;
       await pruneReplays(this.env.DB, this.owners);
     } catch (e) { }

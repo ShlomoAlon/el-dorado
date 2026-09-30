@@ -341,14 +341,14 @@ The trained networks work only if a port keeps these exactly:
 | `POST auth/dev {name}` | dev only | same as above |
 | `GET me` | yes | `{user: {id, name, rating, games, wins}, active: room code\|null}` |
 | `PATCH me {name}` | yes | `{user}` |
-| `GET users/:id` | optional | `{user: {…, bot, rank}, games: [{id, created, title, actions, place, of}]}`: the latest 10 games; games from private rooms are shown only to the player |
+| `GET users/:id` | optional | `{user: {…, bot, rank}, games: [{…game, seat}]}` (seat: theirs in it): the latest 10 games; games from private rooms are shown only to the player |
 | `GET leaderboard` | | `{players: [{id, name, rating, games, wins, bot}]}`: top 100 with rated games, plus the current AIs |
 | `POST rooms {max 2–4, course\|'random', turn ∈ 60/90/120/180/300, pub, rated}` | yes | `{code}` |
 | `POST match` | yes | `{code}`: the room the player is already in (of any kind), else the fullest open quick match, else a new one |
 | `GET rooms/:code/ws` | yes | WebSocket to the Room (§2.5) |
 | `GET lobby/ws` | yes | WebSocket: `{t: 'rooms', rooms: [room]}` (the room shape of §2.5) on connect and on every change |
-| `POST replays <log>` | | `{id}`: any valid log, up to 1.9 MB; the latest 1000 uploads are kept |
-| `GET replays` | | `{replays: [{id, created, title, players, actions}]}`: the latest 50 listed |
+| `POST replays <log>` | | `{id}`: any valid log, up to 1.9 MB; the latest 1000 uploads are kept (tools/ai/record.mjs; the page has no upload) |
+| `GET replays` | | `{replays: [game]}`: the latest 50 listed. A game: `{id, created, actions, course, names, places, rounds}` (from the log; places null if it never finished) |
 | `GET replays/:id` | | the log |
 | `POST train` / `GET train` | token / | training progress for `/train.html`: `POST` stores a status (`{ok: true}`); `GET` returns `{updated, now, status}` |
 
@@ -404,7 +404,7 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 | table | columns |
 |---|---|
 | `users` | `id` (`u…` for people, `ai-<id>` for AIs), `google_sub`, `name`, `rating` (1200), `games`, `wins`, `created`, `bot` |
-| `replays` | `id`, `created`, `title`, `players`, `actions`, `body` (the log), `game` (1 = an online game), `uids` (`,uid,uid,`), `listed`, `places` (JSON, in `uids` order) |
+| `replays` | `id`, `created`, `title`, `players`, `actions`, `body` (the log), `game` (1 = an online game), `uids` (`,uid,uid,`), `listed`, `places` (no longer written: the log's `result` has them) |
 | `matches` | `id`, `room`, `finished`, `data` (JSON: players, names, ai, places, rated, before, deltas, rounds, replay) |
 | `settings` | `k`, `v` (the session secret; the one-time AI rating calibration marker) |
 | `train` | `run`, `updated`, `body` |
