@@ -80,6 +80,7 @@ const T = report('online');
     T.ok('bug reports: the room\'s carries the room and its record', !!roomFull && roomFull.context.d.code === code && Array.isArray(roomFull.context.rec.actions) && /selftest/.test(roomFull.context.what), JSON.stringify(reps.map(b => b.source + ': ' + b.msg)));
     T.ok('bug reports: the page\'s carries the game it held, its selection and its log', !!pageFull && pageFull.context.game.room === code && !!pageFull.context.game.S && !!pageFull.context.ui && Array.isArray(pageFull.context.log) && /^app\.\w+\.js$/.test(pageFull.build) && pageFull.who === ids[2], pageFull && pageFull.build);
     T.ok('bug reports can\'t be read without the key', (await fetch(srv.url + 'api/bugs')).status === 403);
+    T.ok('a request body that isn\'t JSON gets a 400', (await fetch(srv.url + 'api/bugs', { method: 'POST', body: 'not json' })).status === 400);
     const cur0 = await P.evaluate(() => __ED.S.cur);
     await P.evaluate(() => { __ED.startEndTurn(); if (['endTurn', 'buyWarn'].includes(__ED.UI.mode)) { __ED.startEndTurn(); if (__ED.UI.mode === 'endTurn') __ED.finishTurn(); } });
     T.ok('end turn: the next player moves', await wait(A, c => __ED.S.cur !== c, cur0));

@@ -11,7 +11,9 @@ import { DurableObject } from 'cloudflare:workers';
 import * as E from './engine.gen.js';
 import NET_BIN from './ai/first.bin'; // the AI's neural network as half floats (tools/ai/pack.mjs); wrangler imports .bin as an ArrayBuffer
 
-const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+// JSON responses (jsonText: a body that is already JSON)
+const jsonText = (text, status = 200, cache = 'no-store') => new Response(text, { status, headers: { 'content-type': 'application/json', 'cache-control': cache } });
+const json = (data, status = 200) => jsonText(JSON.stringify(data), status);
 const bad = (err, status = 400) => json({ err }, status);
 const CODE_CH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const genCode = () => Array.from({ length: 5 }, () => CODE_CH[Math.floor(Math.random() * CODE_CH.length)]).join('');
@@ -226,8 +228,7 @@ export default {
       await ensureSchema(env);
       if (p === '/api/bugs' && req.method === 'POST') {
         const text = await req.text(); if (text.length > BUG_MAX_BYTES) return bad('Too large', 413);
-        let b; try { b = JSON.parse(text); } catch (e) { return bad('Not JSON', 400); }
-        const user = await authUser(req, env);
+        const b = JSON.parse(text), user = await authUser(req, env);
         const id = await storeBug(env, 'page', user ? user.id : ipOf(req), b);
         return id ? json({ id }) : bad('Not stored (too many reports)', 429);
       }
@@ -244,13 +245,13 @@ export default {
         const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tok)))].map(b => b.toString(16).padStart(2, '0')).join('');
         if (!env.TRAIN_TOKEN_HASH || h !== env.TRAIN_TOKEN_HASH) return bad('Not allowed', 403);
         const text = await req.text(); if (text.length > 300000) return bad('Too large', 413);
-        let st; try { st = JSON.parse(text); } catch (e) { return bad('Not JSON', 400); }
+        const st = JSON.parse(text);
         await env.DB.prepare(`INSERT INTO train(run,updated,body) VALUES(?,?,?) ON CONFLICT(run) DO UPDATE SET updated=excluded.updated, body=excluded.body`).bind(String(st.run || 'run').slice(0, 40), Date.now(), text).run();
         return json({ ok: true });
       }
       if (p === '/api/train') {
         const r = await env.DB.prepare(`SELECT updated, body FROM train ORDER BY updated DESC LIMIT 1`).first();
-        return r ? new Response(`{"updated":${r.updated},"now":${Date.now()},"status":${r.body}}`, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } }) : json({ updated: null, now: Date.now(), status: null });
+        return r ? jsonText(`{"updated":${r.updated},"now":${Date.now()},"status":${r.body}}`) : json({ updated: null, now: Date.now(), status: null });
       }
       if (p === '/api/config') return json({ google: env.GOOGLE_CLIENT_ID || null, dev: env.DEV_AUTH === '1' });
       if (p === '/api/auth/google' && req.method === 'POST') {
@@ -270,9 +271,8 @@ export default {
       if (p === '/api/replays' && req.method === 'POST') {
         const text = await req.text();
         if (text.length > REPLAY_MAX_BYTES) return bad('That game log is too large.', 413);
-        let log; try { log = JSON.parse(text); } catch (e) { return bad('That file is not valid JSON.', 400); }
-        const err = E.replayCheck(log); if (err) return bad(err, 400);
-        const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+        const log = JSON.parse(text), err = E.replayCheck(log); if (err) return bad(err, 400);
+        const id = newId();
         const title = String(log.title || '').slice(0, 120), players = log.players.map(x => String(x.name || '').slice(0, 24)).join(', ');
         await env.DB.prepare(`INSERT INTO replays(id,created,title,players,actions,body) VALUES(?,?,?,?,?,?)`).bind(id, Date.now(), title, players, log.actions.length, text).run();
         await env.DB.prepare(`DELETE FROM replays WHERE game=0 AND id NOT IN (SELECT id FROM replays WHERE game=0 ORDER BY created DESC LIMIT ${REPLAY_KEEP})`).run();
@@ -284,7 +284,7 @@ export default {
       }
       if ((m0 = p.match(/^\/api\/replays\/([a-z0-9]{6,12})$/)) && req.method === 'GET') {
         const r = await env.DB.prepare(`SELECT body FROM replays WHERE id=?`).bind(m0[1]).first();
-        return r ? new Response(r.body, { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' } }) : bad('No replay with that id.', 404);
+        return r ? jsonText(r.body, 200, 'public, max-age=3600') : bad('No replay with that id.', 404);
       }
       // a player's profile: stats and their most recent games (each with its replay). Private rooms' games only for the player.
       if ((m0 = p.match(/^\/api\/users\/([A-Za-z0-9_-]{1,40})$/)) && req.method === 'GET') {
