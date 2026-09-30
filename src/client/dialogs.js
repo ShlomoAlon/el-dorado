@@ -1,6 +1,6 @@
 /* Everything that opens over the game: the round banner, toasts, and one modal at a time (rules, results, a pile).
    The menu is its own dialog (menu.js); opening a modal closes it. */
-import { S, CT, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
+import { S, CT, SYMCOL, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
 import { $, esc } from './dom.js';
 import { UI, NET, online, hp, viewIdx } from './state.js';
 import { cardHTML } from './cards.js';
@@ -53,10 +53,11 @@ export function showPlayer(i){
   const faces=ids=>ids.map(typeOf).sort((a,b)=>order.indexOf(a)-order.indexOf(b)).map(t=>`<div class="mcard">${cardHTML(t)}</div>`).join('');
   const backs=n=>Array.from({length:n},()=>'<div class="pback"><div class="back"></div></div>').join('');
   const part=(title,n,body)=>`<div class="ppart"><h3>${title} <span class="m">${n}</span></h3>${n?`<div class="deckgrid">${body}</div>`:''}</div>`;
-  const held=blocksOf(i).map(b=>'#'+S.blockades[b].n);
-  modal(`<h2><i class="pdot" style="background:${p.color}"></i>${esc(p.name)}</h2><p class="sub">${plural(p.deck.length+p.hand.length+p.discard.length+p.play.length,'card')} in the expedition${held.length?` · blockades ${held.join(', ')}`:''}${playerDone(p)?' · reached El Dorado':p.resigned?' · left the game':''}</p>
+  const held=blocksOf(i).map(b=>S.blockades[b]).sort((a,b)=>b.n-a.n); // (the biggest first: most blockades, then the biggest, breaks a tie)
+  modal(`<h2><i class="pdot" style="background:${p.color}"></i>${esc(p.name)}</h2>${playerDone(p)||p.resigned?`<p class="sub">${playerDone(p)?'Reached El Dorado':'Left the game'}</p>`:''}
     ${part('Hand',p.hand.length,me?faces(p.hand):backs(p.hand.length))}${part('In play',p.play.length,faces(p.play))}
     ${part('Draw pile',p.deck.length,me?faces(p.deck):backs(Math.min(p.deck.length,1)))}${part('Discard pile',p.discard.length,faces(p.discard))}
+    ${part('Blockades',held.length,held.map(B=>`<span class="pbk" style="--c:${SYMCOL[B.k]}" title="Blockade ${B.n}"><b>${B.n}</b></span>`).join(''))}
     <div class="mrow"><button class="btn pri" id="pClose">Close</button></div>`,sc=>{sc.querySelector('#pClose').onclick=closeModal;},true);
 }
 export function showPile(which){

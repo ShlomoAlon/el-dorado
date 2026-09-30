@@ -32,8 +32,7 @@ const seats = ['Ana', 'Ben', 'Cleo', 'Dev'].map((nm, i) => `<div class="prow sea
   + `<input name="nm${i}" maxlength="14" value="${nm}" aria-label="Player ${i + 1} name"><div class="ainm" hidden><span></span></div><div class="sws">${sw('col' + i, i, c => c.id)}</div></div>`).join('');
 const shell = r('./src/client/shell.html').replace('<!--COURSES:course-->', courses('course')).replace('<!--COURSES:ocourse-->', courses('ocourse')).replace('<!--SEATS-->', seats)
   .replace('<!--AILIST-->', E.AIS.map(a => `<button type="button" data-addai="${a.id}"><b>${esc(a.name)} <span class="aitag">AI</span></b><span>${esc(a.tier)} · ${esc(a.desc)}</span></button>`).join(''))
-  .replace('<!--ROOMCOLS-->', sw('rlcol', -1, c => c.hex))
-  .replace('<!--ROUTE-->', (M => `Boards <b>${M.route.join(' · ')}</b> · El Dorado (${M.endSym === 'j' ? 'jungle' : 'water'} side) · ${M.blockDefs.length} blockades, dealt at random`)(E.buildCourse(E.courseById('first'), 1)));
+  .replace('<!--ROOMCOLS-->', sw('rlcol', -1, c => c.hex));
 // the AI's neural network (tools/ai/pack.mjs): the site loads it from /ai/first.bin only when an AI needs it;
 // the artifact (no network access there) carries it inline
 const netBin = readFileSync(new URL('./src/ai/first.bin', import.meta.url));

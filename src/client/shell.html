@@ -478,6 +478,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .pback{position:relative;width:64px;height:90px;flex:none}
 .pdot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:10px;vertical-align:1px}
 .pchip{cursor:pointer}
+.pbk{display:grid;place-items:center;width:34px;height:34px;margin:6px;transform:rotate(45deg);border-radius:6px;background:var(--c);box-shadow:0 0 0 2px rgba(0,0,0,.45) inset}
+.pbk b{transform:rotate(-45deg);color:#fff;font-weight:800;font-size:14px;line-height:1}
 
 @media (max-height:500px){#rside{width:250px;padding:10px 12px}#lside{width:250px;--fw:32px}
 }
@@ -599,9 +601,10 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
     <div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div><p class="note" id="n2note" hidden>Two players each lead two explorers. Both must reach El Dorado.</p></div>
     <div class="field"><label>Expedition leaders</label><div id="seats"><!--SEATS--></div><p class="note warn" id="allAI" hidden>Seat at least one human player.</p></div>
-    <div class="field"><label>Course</label><div class="clist" id="sC"><!--COURSES:course--></div><div class="routeInfo" id="rInfo"><!--ROUTE--></div><div class="aiNote" id="aiNote" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div></div>
+    <div class="field"><label>Course</label><div class="clist" id="sC"><!--COURSES:course--></div><div class="aiNote" id="aiNote" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><label data-v="1"><input type="radio" name="full" value="1" checked><span>When all but one arrive</span></label><label data-v="0"><input type="radio" name="full" value="0"><span>At the first arrival (official)</span></label></div></div>
     <div class="field"><label class="chk"><input type="checkbox" name="priv" id="sPriv"> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
+    <div class="field"><label>Settings</label><label class="chk"><input type="checkbox" name="buywarn" id="sBuyWarn" checked> <span>Before I end my turn, remind me if I can still buy a card</span></label></div>
     <div class="mrow"><button type="button" class="btn" id="sResume" hidden>Resume saved game</button><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
   </section>
   <section data-screen="online" hidden>
@@ -637,7 +640,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <h2 id="rlTitle">Room</h2><p class="sub" id="rlSub"></p>
     <div class="prow"><input id="lkIn" readonly><button type="button" class="btn" id="lkCopy">Copy link</button></div>
     <div class="field"><label id="rlCount">Players</label><div id="rlSeats"></div></div>
-    <div class="field" id="rlAIBox" hidden><label>Add an AI player</label><div class="aiNote" id="rlAINo" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div><div class="clist ailist" id="rlAIList"><!--AILIST--></div><p class="note" id="rlFull" hidden>The room is full. Remove an AI to add another.</p><p class="note" id="rlAINote"></p></div>
+    <div class="field" id="rlAIBox" hidden><label>Add an AI player</label><div class="aiNote" id="rlAINo" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div><div class="clist ailist" id="rlAIList"><!--AILIST--></div><p class="note" id="rlFull" hidden>The room is full. Remove an AI to add another.</p></div>
     <div class="field" id="rlRatedBox" hidden><label>Rating</label><div class="seg" id="rlRated"><label data-v="1"><input type="radio" name="rlrated" value="1" checked><span>Rated</span></label><label data-v="0"><input type="radio" name="rlrated" value="0"><span>Unrated</span></label></div></div>
     <div class="field" id="rlColBox" hidden><label>Your colour</label><div class="sws" id="rlCols"><!--ROOMCOLS--></div></div>
     <p class="note" id="rlNoSeat" hidden>This room is full.</p>

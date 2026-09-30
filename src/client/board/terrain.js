@@ -1,7 +1,7 @@
-/* The static board: terrain, board plates, seams, board letters and the city, drawn once per deal into #board (SVG)
+/* The static board: terrain, board plates, seams and the city, drawn once per deal into #board (SVG)
    with their text as HTML labels (#blabels): Chrome re-lays out SVG text whenever an ancestor's scale changes, HTML
    text it doesn't. The live layers (targets, blockades, trails: #board2; explorers: #pieces) sit above it. */
-import { MAP, R, pxOf, hash, hexAt } from '../../engine.gen.js';
+import { MAP, R, hash, hexAt } from '../../engine.gen.js';
 import { $, sv } from '../dom.js';
 export function hexPts(x,y,r){let s='';for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);s+=(x+r*Math.cos(a)).toFixed(1)+','+(y+r*Math.sin(a)).toFixed(1)+' ';}return s;}
 const TFILL={j:['#4a9b5f','#2a6a40'],w:['#4aa0dd','#2464a0'],v:['#f2cd6c','#d09632'],r:['#aeb2ad','#7a7f7b'],c:['#d4705a','#9a3e2d'],m:['#58615a','#2d332f'],s:['#e3d8b9','#b4a887'],g:['#ffe690','#e3a52b']};
@@ -91,10 +91,6 @@ export function buildBoard(){
   // seams between boards
   const seam=sv('g',{stroke:'rgba(0,0,0,.55)','stroke-width':2.4,'stroke-linecap':'round'},L.terrain);
   for(const c of MAP.conns)for(const[a,b]of c.edges){const[x1,y1,x2,y2]=edgeSeg(a,b);sv('line',{x1,y1,x2,y2},seam);}
-  // board letters
-  MAP.tiles.forEach((t,i)=>{if(t.end)return;const hs=byTile.get(i);let best=hs[0];const cc=pxOf(...t.c);
-    for(const h of hs){const d=(h.y-cc[1])*2+(h.x-cc[0]);if(d<(best.y-cc[1])*2+(best.x-cc[0]))best=h;}
-    label(lab,best.x-R*.9,best.y-R*.55,t.name,{anchor:'middle',size:13,family:'Young Serif, Georgia, serif',color:'rgba(255,255,255,.5)'});});
   // city
   const C=MAP.city;
   sv('circle',{cx:C.x,cy:C.y,r:R*2.6,fill:'url(#cityGlow)'},L.city);

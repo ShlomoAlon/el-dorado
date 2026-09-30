@@ -4,10 +4,10 @@
 import { S, CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, setS, setMAP, assert } from '../engine.gen.js';
 import { esc } from './dom.js';
 import { UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave, humanRacing } from './state.js';
-import { showSetup } from './menu.js';
+import { showSetup, buyReminder } from './menu.js';
 import { replayDecorate } from './replay.js';
 import { render, resetView } from './frame.js';
-import { toast, banner, modal, closeModal, showGameOver } from './dialogs.js';
+import { toast, modal, closeModal, showGameOver } from './dialogs.js';
 import { buildBoard } from './board/terrain.js';
 import { fitSoon, ensureVisible } from './board/camera.js';
 import { animateMove } from './board/pieces.js';
@@ -25,8 +25,7 @@ import { diag } from './debug.js';
 export function showGame(){aiReset();buildBoard();resetView();fitSoon();}
 /* continue the saved local game (first visit, or back from a replay). Returns false if there is none in progress. */
 export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
-  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!G.rec.privacy;syncMode(false);render();aiKick();
-  if(!UI.cover)banner(cur().name,'Round '+S.round);return true;}
+  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!G.rec.privacy;syncMode(false);render();aiKick();return true;}
 /* after a bug (boundary.js): the game on show again from its source, with nothing selected. Online: a new connection
    brings the server's state. A local game: rebuilt from its record (the action that failed was never recorded) */
 export function resync(){
@@ -98,7 +97,7 @@ export function afterChange(turnChanged,ended){
   if(turnChanged&&!S.over&&!online()&&G.rec.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
   render();
   if(ended)setTimeout(()=>{if(S&&S.over)showGameOver();},600); // (unless another game is on show by then)
-  else if(turnChanged&&!UI.cover&&!S.over){banner(online()&&canAct()?'Your turn':cur().name,(isAI(S.cur)?'AI · ':'')+'Round '+S.round);ensureVisible();}
+  else if(turnChanged&&!UI.cover&&!S.over)ensureVisible(); // (whose turn it is: the chip lights up and flashes, hud.js)
 }
 
 /* ---------- UI actions (build an action from the current selection) ---------- */
@@ -150,7 +149,7 @@ export function cancelMode(){
 export function affordable(){return UI.cover||!canAct()?[]:buyOptions(S.cur);}
 export function startEndTurn(){
   if(!canAct())return; // (online, the turn can pass before the tap arrives)
-  if(UI.mode!=='buyWarn'&&affordable().length){UI.mode='buyWarn';UI.card=null;UI.picks=[];UI.buy=null;render();return;} // nudge before skipping a purchase
+  if(UI.mode!=='buyWarn'&&buyReminder()&&affordable().length){UI.mode='buyWarn';UI.card=null;UI.picks=[];UI.buy=null;render();return;} // nudge before skipping a purchase
   if(cur().hand.length){UI.mode='endTurn';UI.picks=[];UI.card=null;render();}
   else finishTurn();
 }

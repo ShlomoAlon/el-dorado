@@ -151,12 +151,12 @@ function replayBar(){
   d.querySelector('#rbPos').textContent=`move ${R.i} / ${n} · round ${S.round}`;
   if(!R.side||!ok)return;
   const ev=replayEval(),pc=v=>v==null?'–':Math.round(v*100)+'%';
-  let h=`<div class="rwh">Evaluation <span class="m">· estimated winning chances</span></div>`;
+  let h=`<div class="rwh">Evaluation</div>`;
   if(!ev)h+=`<p class="m">Loading the network…</p>`;
   else h+=`<div class="revl">${S.players.map((p,j)=>`<div class="rev${j===S.cur&&!S.over?' now':''}"><i style="background:${p.color}"></i><span class="n">${esc(p.name)}</span><span class="bar"><span style="transform:scaleX(${ev.share[j]==null?0:Math.max(0,Math.min(1,ev.share[j]))})"></span></span><b>${p.resigned?'left':pc(ev.share[j])}</b></div>`).join('')}</div>`;
   const nx=replayNext(),A=aiById(ADVISOR),who=esc(S.players[S.cur].name);let steps=null,played=null;
   if(ev&&!S.over){
-    h+=`<div class="rwh radv">${esc(A.name)}’s turn for ${who} <span class="m">· the strongest AI’s plan from here</span></div>`;
+    h+=`<div class="rwh radv">${esc(A.name)}’s turn for ${who}</div>`;
     if(R.timer)h+=`<p class="m">Pause to see it.</p>`;
     else if(!(R.i in R.adv)){h+=`<p class="m">${esc(A.name)} is thinking…</p>`;adviceSoon();}
     else if(!(steps=R.adv[R.i]))h+=`<p class="m">No plan for this position.</p>`;

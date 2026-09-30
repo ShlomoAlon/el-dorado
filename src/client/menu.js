@@ -6,7 +6,7 @@ import { S, MAP, COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recN
 import { $, esc, setHTML, setText } from './dom.js';
 import { UI, NET, G, clearSelection, cur, isAI, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
-import { toast, banner } from './dialogs.js';
+import { toast } from './dialogs.js';
 import { showGame, resumeSaved, resignSeat, resignLocal, endLocal } from './actions.js';
 import { aiKick, aiNetLoad } from './ai.js';
 import { api, gsiMount, signOut, signedIn, joinRoom, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, exitOnline, resignOnline } from './online.js';
@@ -24,11 +24,15 @@ const setRadio=(n,v)=>{MENU.f.querySelector(`input[name="${n}"][value="${v}"]`).
 const newOrder=()=>shuffle([0,1,2,3],Math.random);
 const SETUP={seed:(Math.random()*1e9)|0,order:newOrder(),id:null,cur:null,map:null};
 
+const BUYWARN_KEY='eldorado-buywarn';
+/* setting: before ending a turn with a card still affordable, ask first */
+export const buyReminder=()=>mq('#sBuyWarn').checked;
 export function menuInit(){
   // (courses, seats, AI and colour choices are written into the page by build.mjs: the start screen needs no script)
   // AI seats chosen before are remembered on this device
   let ai=[];try{ai=JSON.parse(localStorage.getItem('eldorado-seats')||'[]');}catch(e){}
   mqa('#seats select').forEach((s,i)=>{if(aiById(ai[i]))s.value=ai[i];});
+  try{if(localStorage.getItem(BUYWARN_KEY)==='0')mq('#sBuyWarn').checked=false;}catch(e){} // (settings: kept on this device)
   MENU.f.addEventListener('submit',e=>e.preventDefault());
   MENU.f.addEventListener('change',menuChange);
   MENU.f.addEventListener('click',menuClick);
@@ -82,6 +86,7 @@ export function menuChange(e){
   if(n==='mode'){({local:showSetup,online:showHub,replays:showReplays})[e.target.value]();return;}
   if(n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){setupSync();prepareGame();
     if(/^who\d$/.test(n))try{localStorage.setItem('eldorado-seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value)));}catch(_){} return;}
+  if(n==='buywarn'){try{localStorage.setItem(BUYWARN_KEY,e.target.checked?'1':'0');}catch(_){}return;}
   if(n==='otab'){onlineTab();return;}
   if(n==='rlrated'){netSend({t:'rated',v:e.target.value==='1'});return;}
   if(n==='rlcol'){netSend({t:'color',color:e.target.value});return;}
@@ -152,7 +157,6 @@ export function prepareGame(force){
   G.rec=recNewGame(setupOpts());UI.preview=true;UI.lastReplay=null;
   clearSelection();UI.piece=0;UI.viewer=null;
   UI.cover=!!G.rec.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;showGame();
-  setHTML(mq('#rInfo'),`Boards <b>${MAP.route.join(' · ')}</b> · El Dorado (${MAP.endSym==='j'?'jungle':'water'} side) · ${MAP.blockDefs.length} blockades, dealt at random`);
 }
 export function startLocal(){
   if(!GAME_READY.done){GAME_READY.then(startLocal);return;} // the game's fonts are still on their way: start the moment they're in
@@ -160,7 +164,6 @@ export function startLocal(){
   if(!UI.preview)prepareGame(true); // Start a new game from a game in progress: made behind the menu first
   UI.preview=false;save();if(S.players.some(p=>p.ai&&aiUsesNet(p.ai)))aiNetLoad();
   menuClose();aiKick();
-  if(!UI.cover)banner(cur().name,isAI(S.cur)?'AI · Round 1':'Round 1');
   SETUP.seed=(Math.random()*1e9)|0;SETUP.order=newOrder();SETUP.cur=null; // the next deal
 }
 
@@ -215,7 +218,6 @@ export function renderRoomLobby(){
   setHTML(mq('#rlSeats'),seats.map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="seatrow"><span><i style="background:${s.color}"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note">(you)</span>':''}</span>${A?`<span class="lbp"><span class="note">${esc(A.tier)}</span>${host&&lobby?`<button type="button" class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note">${s.now?'wants to start · ':''}${s.uid===r.host&&!auto?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('')||'<p class="note">Connecting…</p>');
   const ctl=host&&!auto&&lobby,aiOK=!!(o&&aiAllowed(o.course,o.max));
   mq('#rlAIBox').hidden=!ctl;for(const b of mqa('[data-addai]'))b.disabled=!NET.connected; // (adding one is the server's: once it's connected)mq('#rlAINo').hidden=aiOK;mq('#rlAIList').hidden=!aiOK||!room;mq('#rlFull').hidden=!aiOK||room;
-  mq('#rlAINote').textContent='AI players move on the server'+(rated?' and gain or lose rating like everyone else':'')+'.';
   mq('#rlRatedBox').hidden=!ctl;setRadio('rlrated',rated?'1':'0');
   mq('#rlColBox').hidden=!mine;
   if(mine)for(const x of mqa('#rlCols input')){x.checked=x.value===mine.color;x.disabled=seats.some(s=>s!==mine&&s.color===x.value);}
