@@ -169,7 +169,7 @@ Equal keys share a place; the winners are the players in place 1.
 
 **The journal** (`S.log`) is the game's history in the same words: every event above except `turn`, plus `{e:'start'}` when
 the game is set up, each with the round it happened in (`r`). The engine keeps the last `LOG_MAX` (200). The page's history
-panel shows it turn by turn and writes its words (`feed.js`). It is as public as the events are.
+column shows it turn by turn and writes its words (`feed.js`). It is as public as the events are.
 
 
 ### 1.7 Queries

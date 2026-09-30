@@ -43,7 +43,7 @@ The rules engine (`src/engine_*.js`) is imported from `src/engine.gen.js`, which
 | `board/pieces.js` | explorers and their moves |
 | `hand.js` | cards in hand and in play, piles, card drag, aim arrow |
 | `hud.js` | player chips, prompt, turn buttons, timer |
-| `feed.js` | the history panel (every turn, newest first; live for other players' turns), trails |
+| `feed.js` | the History: the recap row under the prompt, the column of every turn, a step's words and path, trails |
 | `market.js` | market strip, All cards, purchase slot, market drag |
 | `dialogs.js` | banner, toast, modals (rules, results, piles) |
 | `cards.js`, `art.js`, `meeple.js` | card faces and art, explorer figures |

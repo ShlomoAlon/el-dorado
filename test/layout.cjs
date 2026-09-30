@@ -5,7 +5,7 @@
 const { chromium, serveStatic, settle } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
 const ALL = [[320, 568], [390, 844], [844, 390], [768, 1024], [1024, 700], [1024, 768], [1280, 720], [1366, 768], [1440, 900], [1920, 1080], [2560, 1440]];
-const SIZES = process.env.ONLY ? [process.env.ONLY.split('x').map(Number)] : process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1920, 1080]] : ALL;
+const SIZES = process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1920, 1080]] : ALL;
 const shots = process.argv.includes('--shots') ? process.argv[process.argv.indexOf('--shots') + 1] : null;
 const log = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/replay.json'), 'utf8'));
 
@@ -19,6 +19,10 @@ const CHECK = () => {
     return R - L > 1 && B - T > 1 ? { left: L, top: T, right: R, bottom: B, width: R - L, height: B - T } : null; };
   const W = innerWidth, H = innerHeight, bad = [];
   const items = [];
+  // on a portrait phone every turn of the history takes the whole screen: then it is the only thing to check
+  const hcFull = document.querySelector('#lside'); if (hcFull && !hcFull.hidden && getComputedStyle(hcFull).position === 'fixed') { const r = hcFull.getBoundingClientRect();
+    if (Math.abs(r.width - W) > 1 || Math.abs(r.height - H) > 1) bad.push('full-screen history does not fill the screen'); if (!hcFull.querySelector('.ht, .hnone')) bad.push('history is empty');
+    if (!vis(hcFull.querySelector('.hx'))) bad.push('full-screen history has no way out'); return bad; }
   const add = (sel, name, group) => document.querySelectorAll(sel).forEach((e, i) => { const r = vis(e); if (r) items.push({ name: name + (i ? '#' + i : ''), r, group, el: e }); });
   add('#hud .tbtn, #hud #menuBtn', 'hud button', 'hud');
   add('#hud .pchip', 'player chip', 'chips');
@@ -29,13 +33,11 @@ const CHECK = () => {
   add('#actBtns button', 'turn button', 'act');
   add('#rdock button, #rdock input, #rdock #rbPos', 'replay control', 'dock');
   add('#rside', 'bot view', 'side');
-  add('#hist', 'history panel', 'hist');
+  add('#lside', 'history column', 'side');
   if (!vis(document.querySelector('#histBtn'))) bad.push('history button not visible');
-  // the history panel (in its place under the prompt): the newest turn fits whole, and it can be hidden
-  const hp = document.querySelector('#hist');
-  if (hp && !hp.hidden) { const l = vis(hp.querySelector('#histList')), f = hp.querySelector('#histList > :first-child');
-    if (!l || !f) bad.push('history list not shown'); else { const r = f.getBoundingClientRect(); if (r.bottom > l.bottom + 1 || r.top < l.top - 1) bad.push('the newest turn does not fit in the history panel'); }
-    if (!vis(hp.querySelector('#histX'))) bad.push('history close button hidden'); }
+  // the history column (when shown): its own cell, with its turns
+  const hc = document.querySelector('#lside');
+  if (hc && !hc.hidden) { const r = vis(hc); if (!r || r.height < 80) bad.push('history column too small'); if (!hc.querySelector('.ht, .hnone')) bad.push('history column is empty'); }
   // 1. fully on screen (the player chips may scroll sideways inside their strip)
   for (const it of items) { const r = it.r; if (it.group === 'chips') continue;
     if (r.left < -0.5 || r.top < -0.5 || r.right > W + 0.5 || r.bottom > H + 0.5) bad.push(`${it.name} off screen (${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)})`); }
@@ -47,7 +49,7 @@ const CHECK = () => {
     if (hit(a.r, b.r)) bad.push(`${a.name} overlaps ${b.name}`); }
   // 3. the hand: every card at least half visible, and never under a control
   document.querySelectorAll('#cards .card:not(.fly):not(.mghost)').forEach((c, i) => { const r = vis(c); if (!r) return; // (cards in flight are animations, not the hand)
-    for (const it of items) if (['dock', 'side', 'act', 'prompt', 'hud', 'hist'].includes(it.group) && hit(r, it.r)) bad.push(`hand card ${i} over ${it.name}`); });
+    for (const it of items) if (['dock', 'side', 'act', 'prompt', 'hud'].includes(it.group) && hit(r, it.r)) bad.push(`hand card ${i} under ${it.name}`); });
   return [...new Set(bad)];
 };
 
@@ -62,19 +64,18 @@ const CHECK = () => {
     await p.goto(url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     // normal play: start a local game from the setup screen
     await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
-    const states = [['play', null], ['play, market closed', async () => { await p.click('#mktBtn', { timeout: 5000 }); }],
-      // another player's turn in the history panel (more steps than fit on one line on a phone), market closed and open
-      ['history of an AI turn', async () => { await p.evaluate(() => { const E = window.__ED, S = E.S, r = S.round; S.players[1].ai = 'raleigh';
-        S.log.push(...[{ e: 'play', pl: 1, k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { e: 'play', pl: 1, k: 'action', ts: ['cartographer'], n: 2 },
+    const states = [['play', null], ['history on the left', async () => { await p.click('#histBtn', { timeout: 5000 }); }],
+      ['history hidden', async () => { await p.click(await p.evaluate(() => getComputedStyle(document.querySelector('#lside')).position === 'fixed') ? '#lside .hx' : '#histBtn', { timeout: 5000 }); }],
+      ['play, market closed', async () => { await p.click('#histBtn', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }], // (back under the prompt)
+      // another player's turn as a recap under the prompt (more steps than fit on a phone), market closed and open
+      ['recap of an AI turn', async () => { await p.evaluate(() => { const E = window.__ED, S = E.S; S.players[1].ai = 'raleigh';
+        E.playEvents([{ e: 'play', pl: 1, k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { e: 'play', pl: 1, k: 'action', ts: ['cartographer'], n: 2 },
           { e: 'play', pl: 1, k: 'rubble', ts: ['traveler', 'sailor'] }, { e: 'play', pl: 1, k: 'buy', ts: ['traveler', 'traveler', 'explorer'], got: 'scout', paid: 2.5 },
-          { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1 }].map(e => ({ ...e, r }))); E.render(); }); }],
-      ['history, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await settle(p); const n = await p.evaluate(() => document.querySelectorAll('#hist .fg').length); if (!n) throw new Error('no turn shown'); }],
-      ['history hidden', async () => { await p.click('#histX', { timeout: 5000 }); await p.waitForFunction(() => document.querySelector('#hist').hidden, null, { timeout: 3000 });
-        await p.click('#histBtn', { timeout: 5000 }); }],
-      ['replay history', async () => { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForFunction(() => window.__ED.G.replay); await settle(p);
-        await p.evaluate(() => { const r = document.querySelector('#rbR'); r.value = Math.floor(r.max * .4); r.dispatchEvent(new Event('input')); }); await settle(p);
-        if (!await p.waitForFunction(() => document.querySelectorAll('#hist .ht').length > 3 || document.querySelector('#app').clientWidth < 600 && document.querySelector('#hist').hidden, null, { timeout: 3000 }).then(() => true, () => false)) throw new Error('no turns in the replay\'s history'); }], // (phones: only when asked for)
-      ['replay', null],
+          { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1 }], 0); E.render(); }); }],
+      ['recap, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await settle(p); const n = await p.evaluate(() => document.querySelectorAll('#feed .fg:not(.gone)').length); if (!n) throw new Error('no recap shown'); }],
+      ['replay, history on the left', async () => { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForFunction(() => window.__ED.G.replay); await settle(p);
+        await p.evaluate(() => { const r = document.querySelector('#rbR'); r.value = Math.floor(r.max * .4); r.dispatchEvent(new Event('input')); }); await p.click('#histBtn', { timeout: 5000 }); }],
+      ['replay', async () => { await p.click(await p.evaluate(() => getComputedStyle(document.querySelector('#lside')).position === 'fixed') ? '#lside .hx' : '#histBtn', { timeout: 5000 }); }], // (history hidden)
       ['replay, bot view hidden', async () => { await p.click('#rbA', { timeout: 5000 }); }],
       ['replay, market closed', async () => { await p.click('#rbA', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }]];
     for (const [name, setup] of states) {

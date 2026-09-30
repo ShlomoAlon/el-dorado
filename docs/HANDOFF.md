@@ -156,7 +156,7 @@ endTriggered, over, places, fullRace, turn{bought, active, pending}, trash[], lo
 - Derived, not stored: winners (place 1), a player's blockades (`blocksOf`), `MAP` (`buildCourse(course, seed)`).
 - `S` is rebuilt from the game record (setup + secret + actions, log v3) everywhere: the local save (`eldorado-game-v2`),
   finished local games (`eldorado-games-v2`), online rooms and replays. The server never writes into `S`.
-- `S.log` is the journal: the game's public events (§6.3, all but turn changes), each with its round; the history panel
+- `S.log` is the journal: the game's public events (§6.3, all but turn changes), each with its round; the History
   (`feed.js`) shows it turn by turn, newest first, with each step's words on hover. The engine keeps the last 200.
 
 ### 6.3 Actions and events (`applyAction(seat, a, rnd)` → `{ok, err, ev[], reveal}`)
@@ -188,72 +188,14 @@ Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), s
 - Cards: suit sets frame + scene palette; strength badge uses the suit colour and icon (only coin cards are gold);
   action cards show `face` (short) text, `txt` in tooltips. Full-screen button `#fsBtn` is hidden where unsupported
   (iPhone Safari); home-screen metas make the saved web app full screen there.
-- **History panel** (`#hist`, feed.js; replaced the Journal, 2026-09-29, owner's request): every turn from `S.hist`, newest first,
-  each a row of small cards with a caption per step ("Explorer · 2 spaces · blockade #3", "Bought Scout for 2½", "Ended turn · kept 1").
-  By default it sits under the prompt, centred in the prompt's band, exactly one turn tall (the list's height follows the newest turn,
-  measured by a ResizeObserver; never less than one full turn); it scrolls to older turns. The bar on its right edge drags it anywhere
-  (it floats: `.free`, placed with a transform; dropped near its old spot it goes back there), the corner resizes it (under the prompt it
-  stays centred, so width grows both ways), ✕ hides it, ↺ puts it back under the prompt one turn tall. Position (as fractions of the room
-  around it), size and hidden are kept on this device (`eldorado-hist`). The History button in the top bar shows/hides it.
-  On large screens (≥ 900 px) it can also be dropped at the left edge (a dashed outline shows where): it becomes a full-height column
-  of its own (`#lside`, a grid cell left of the game, so it covers no control and the game area shrinks), the list scrolls, the corner
-  sets the column's width; dragged out it floats again. Phones: a panel too narrow for a turn to wrap well (≤ 300 px) shows each turn
-  as one row that scrolls sideways; in a replay on a small game area (< 600 px wide) it shows only when asked for (History button).
-  Your own turn in progress isn't listed (it's added when you end it); a watched player's turn (AI seats locally, every seat but mine
-  online) is live: `playEvents` feeds their events to `feedEvent`, so played cards fly out of their player chip, a bought/taken card
-  out of the market, and their moves leave a dotted trail in their colour (`L.trail`) until I act. Replays show it too (their
-  snapshots keep the history apart: `R.turns`/`R.hc`, rebuilt in `replayGo`). When the market is a row of cards (landscape phones) the
-  panel sits just below it and takes the full width; very short game areas use smaller cards. In short game areas the prompt also keeps
-  clear of the turn buttons (`--actFoot`, set in `btnWire`). Local AIs act ~0.75 s apart (first action of a turn 1 s) so each card can be followed.
-- Design: single dark theme by choice. Fonts Young Serif (display) + Figtree (UI). Tokens in `:root` of shell.html.
-  Terrain colors in `TFILL`, card frames `.k-g/.k-b/.k-y/.k-x/.k-p`.
-
-### 6.5 Server (`src/worker.js`)
-HTTP: `GET /api/config` → `{google, dev}` · `POST /api/auth/google {credential}` · `POST /api/auth/dev {name}` (only with
-`DEV_AUTH=1`) · `GET /api/leaderboard` · `GET/PATCH /api/me` · `POST /api/rooms {max 2–4 (default 3),course,turn,pub}` (course id or `'random'`; `pub:false` = private, not listed) ·
-`POST /api/match` (quick match: Lobby DO puts you in the fullest waiting public match room or opens one) → `{code}` ·
-`GET /api/rooms/:CODE/ws?t=token` (WebSocket) · `GET /api/lobby/ws?t=token` (WebSocket). Everything else = static assets.
-Auth token: `uid.exp.hmac` (60 days), secret generated once and stored in D1 `settings`. Google ID tokens verified
-against Google JWKS (RS256, aud = `GOOGLE_CLIENT_ID`).
-D1 tables (auto-created): `users(id, google_sub, name UNIQUE NOCASE, rating, games, wins, created)`,
-`matches(id, room, finished, data JSON)`, `settings(k, v)`.
-Room DO (one per 5-char code, hibernatable WebSockets tagged by uid): storage keys `d` (meta: code, host, seats,
-status lobby|playing|over|closed, opts{max,len,turn}, deadline, timeouts, rated, results), `S`, `undo` (≤6 snapshots).
-Client→room: `join`, `leave`, `color`, `start` (host, normal rooms), `now` (match rooms: toggle "start now"), `act{a}`, `undo`, `resign`, `"ping"`.
-Quick-match rooms (`opts.auto`): 3 seats, start by themselves when full, or with 2+ when every seated player sent `now`
-(owner: 2-player games only when explicitly requested). Players who disconnect before a match starts lose their seat;
-the host leaving doesn't close a match room. The Lobby lists only public rooms.
-Room→client: `{t:'room', room}` (pre-game), `{t:'state', S(redacted), ev, seat, undo, deadline, now, room}`, `{t:'error', msg}`.
-Turn timer = DO alarm at `d.deadline`. Lobby DO keeps `{code → summary}` and pushes `{t:'rooms'}` to hub sockets.
-Free-tier notes: DO CPU limit 30 s/message (engine actions take <5 ms); Worker requests 100k/day (static assets free);
-incoming WebSocket messages are cheap; hibernation keeps idle rooms from burning duration.
-
-### 6.6 AI players
-- Three named AIs (`AIS` in `src/engine_ai.js`), all the same bot code with different settings:
-  **Fawcett** (Grandmaster) = value network + a wider whole-turn planner (`{mode:'net',search:{kind:'plan',beam:12},draws:8}`,
-  the strongest; ~3x Humboldt's thinking time), **Humboldt** (Master) = value network + whole-turn planner
-  (`{mode:'net',search:{kind:'plan',beam:3}}`), **Raleigh** (Steady) = heuristic route planner (`mode:'plan'`).
-  (Orellana, the network one action at a time, was retired.) Searching further rounds ahead (`search.kind:'deep'`, depth 1–3,
-  ~2.8 s per turn) was measured against Humboldt with tools/ai/h2h.mjs: depth 1 and 3 about as strong as Fawcett's wide search,
-  depth 2 no better than Humboldt; the wide search costs ~1/18 of the time, so it is the level shipped.
-  The network (`first-first1-351`: the first1 training run at iteration 351, 2026-09-29; before it `first-first1-best`, then
-  `first-distill-35`, `first-distill-22`, `first-qmax`) only fits First Expedition (`botNetReady`); elsewhere the network AIs play as the planner.
-  **Keep shipping the best network trained** (owner, 2026-09-29): before promoting, play the candidate against the shipped one with
-  `node tools/ai/ladder.mjs match <shipped> <candidate> 128 3` (512 games; each side with and without the planner search). The
-  2026-09-29 check, all under the current rules: first-first1-best vs distill-35 (the one shipped before) 246 wins to 11, vs
-  distill-53 236 to 20, vs multi4-40 247 to 9, vs ck198 122 to 136 (even), vs the run at iteration 351 98 to 161, hence 351.
-- Network shipping: half floats, 339 KB (288 KB gzip), outputs within 2e-4 of the JSON (checked in engine.test). The site
-  fetches `/ai/first.bin` only when a network AI is about to move; the artifact has it inline (`AI_NET.b64`); the worker imports
-  the .bin (wrangler's default Data rule → ArrayBuffer). To ship a new network: `node tools/ai/pack.mjs <model.json>` then build.
-- Local: setup seat picker (Human / AI); `aiKick()` after every render schedules one AI action at a time (~0.75 s apart, waits for
-  piece animations). `canAct()` is false on AI turns; `viewIdx()` keeps showing the last human's hand. No Elo locally.
-  Thinking runs on the main thread: Humboldt's first action of a turn takes up to ~150 ms (rest of the turn follows the plan, ~0 ms).
-- Online: the host adds AI seats in the room lobby (`addAI {ai}`, `removeAI {uid}`, each AI once per room; not in quick matches).
-  The Room DO plays them: `nextTurn()` gives people the turn timer and AIs an alarm (`d.aiAt`); `aiMove()` plays one action per
-  alarm (0.7 s apart) while a person still racing has the page open, otherwise ~0.3 s of actions per alarm until a person's turn
-  or the end. Plan cache is per room (`this.aiMem`), so rooms sharing an isolate can't mix plans.
-- Ratings: each AI is a `users` row `id='ai-<id>'`, `bot=<id>`, no google_sub (created in `ensureSchema`; if a person already has the
-  name, the AI gets "(AI)" appended). Leaderboard lists them (with `bot`) even before their first game.
+- **History** (feed.js; owner, 2026-09-30: three modes, cycled by the History button in the top bar, kept on this device as
+  `eldorado-hist`): **center**: other players' turns in a one-row recap under the prompt (cards fly in from the player chip or the
+  market; the row has one fixed height, so steps that don't fit drop out whole, never a second line); **left**: every turn in the
+  journal (`S.log`), newest first, in a column of its own (`#lside`, a grid cell left of the game; full screen with a ✕ on portrait
+  phones), the newest turn at the top and growing as it is played; **off**. Pointing at a step (tapping it on touch) shows its words
+  (the journal's sentences, as the tooltip) and draws its explorer's path on the board. No dragging or resizing: the owner rejected the
+  movable, resizable panel (turns wrapped to two lines, its height jumped mid-animation, the left snap was hard to undo).
+  Landed cards have no opacity transition: the flying copy is removed the same frame the card shows (a transition made them blink).
 - **Calibrated starting ratings** (`AIS[].rating`): Fawcett **1464** ±21, Humboldt **1398** ±20, Raleigh **1200**, from
   `nice -n 10 node tools/ai/calibrate_ais.mjs 720 2` (2026-09-29, network `first-first1-best`; ~20 min on 2 cores; games cached in
   tools/ai/data/calibration-<ai ids>.json, `… report` re-prints). The AIs play exactly as on the site (`aiStep`, shipped half-float

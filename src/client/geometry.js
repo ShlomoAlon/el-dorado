@@ -2,6 +2,7 @@
    so reading there is free). Views read these instead of measuring the DOM while they update. */
 import { $ } from './dom.js';
 import { diag } from './debug.js';
+import { render } from './frame.js';
 export const geo = { app: { left: 0, top: 0, width: 0, height: 0 }, cw: 132, promptBottom: 0, mktW: 0, actW: 0, deck: null, disc: null };
 const subs = [];
 /* f(sized): after every measurement; sized = the game area itself changed size */
@@ -19,6 +20,6 @@ export function measure() {
 }
 export function watchGeometry() {
   measure(); for (const f of subs) f(true);
-  const ro = new ResizeObserver(() => { const sized = measure(); diag(`layout: game area ${Math.round(geo.app.width)}×${Math.round(geo.app.height)}${sized ? ' (resized)' : ''}, prompt ${Math.round(geo.promptBottom)}, market ${Math.round(geo.mktW)}, buttons ${Math.round(geo.actW)}`); for (const f of subs) f(sized); });
+  const ro = new ResizeObserver(() => { const sized = measure(); diag(`layout: game area ${Math.round(geo.app.width)}×${Math.round(geo.app.height)}${sized ? ' (resized)' : ''}, prompt ${Math.round(geo.promptBottom)}, market ${Math.round(geo.mktW)}, buttons ${Math.round(geo.actW)}`); for (const f of subs) f(sized); if (sized) render(); }); // (a new size: the views lay themselves out again, the hand included)
   for (const s of ['#app', '#prompt', '#mkt', '#actBtns']) ro.observe($(s));
 }
