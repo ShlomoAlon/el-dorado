@@ -55,14 +55,6 @@ async function createSchema(env) {
   // places: finishing places in the order of uids (no longer written or read: the log's own result has them; columns stay)
   for (const c of ['game INTEGER NOT NULL DEFAULT 0', 'uids TEXT', 'listed INTEGER NOT NULL DEFAULT 1', 'places TEXT'])
     try { await env.DB.prepare(`ALTER TABLE replays ADD COLUMN ${c}`).run(); } catch (e) { }
-  // one-time (2026-09-30): logs that aren't v3 records can't be replayed any more (v1 training uploads went on after the
-  // first clean-up, 'logs_v3'): deleted once (ratings stay). Delete this block once it has run on the live database.
-  // (a failure only means it runs again on the next start)
-  try {
-    if (!(await env.DB.prepare(`SELECT v FROM settings WHERE k='logs_only_v3'`).first()))
-      await env.DB.batch([env.DB.prepare(`DELETE FROM replays WHERE CASE WHEN json_valid(body) THEN json_extract(body,'$.v') IS NOT 3 ELSE 1 END`),
-        env.DB.prepare(`INSERT OR IGNORE INTO settings(k,v) VALUES('logs_only_v3','1')`)]);
-  } catch (e) { }
   for (const A of E.AIS) { // one rated player per named AI; if a person already has the name, the AI gets "(AI)" after it
     const id = aiUid(A.id);
     if (await env.DB.prepare(`SELECT id FROM users WHERE id=?`).bind(id).first()) continue;
