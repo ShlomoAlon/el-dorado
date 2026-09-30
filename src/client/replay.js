@@ -1,7 +1,7 @@
 /* REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
    The log holds the seeds and every action; the engine rebuilds each position (replayStart), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
-import { S, CT, LOG_MAX, hexAt, mapFor, setS, setMAP, replayCheck, replayStart, replayStep, applyAction, botRemaining, botCost, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
+import { S, CT, LOG_MAX, hexAt, mapFor, setS, setMAP, replayCheck, replayStart, replayStep, applyAction, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
 import { $, esc, setHTML } from './dom.js';
 import { UI, G, online, clearSelection } from './state.js';
 import { render, resetView } from './frame.js';
@@ -14,8 +14,8 @@ const TERR={j:'jungle',w:'water',v:'village',r:'rubble',c:'base camp',g:'El Dora
 function buildReplay(log,id){
   const err=replayCheck(log);if(err)throw new Error(err);
   const g=replayStart(log);
-  const states=[],lines=[],evs=[null],rem=[];
-  const snap=()=>{const L0=S.log;S.log=[];states.push(JSON.stringify(S));S.log=L0;rem.push(S.players.map((_,j)=>botRemaining(j)));};
+  const states=[],lines=[],evs=[null];
+  const snap=()=>{const L0=S.log;S.log=[];states.push(JSON.stringify(S));S.log=L0;};
   lines.push(S.log.slice());snap();
   for(let i=0;i<log.actions.length;i++){
     S.log=[];
@@ -25,7 +25,7 @@ function buildReplay(log,id){
   }
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
   let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}
-  return{log,id,states,lines,evs,rem,i:0,timer:0,speed:sp,side,ev:{},adv:{},played:{}};
+  return{log,id,states,lines,evs,i:0,timer:0,speed:sp,side,ev:{},adv:{},played:{}};
 }
 /* ---- the evaluation: the shipped network's estimate for the position on screen, and the turn the strongest AI would play
    from it. Only where a network was trained (First Expedition, 3-4 players: aiAllowed); elsewhere the replay shows none. */
@@ -99,7 +99,7 @@ export function exitReplay(){const from=G.replay.from;replayStop();G.replay=null
 
 /* words for one action, read against the position before it */
 function describeAction(a,st){
-  const T=id=>CT[st.cards[id]]?CT[st.cards[id]].n:'?',sp=k=>{if(!k)return'';if(k[0]==='B'){const B=st.blockades[+k.slice(1)];return`blockade #${B?B.n:'?'}`;}const h=hexAt(k);return h?`${TERR[h.type]||h.type}${h.val>1?' '+h.val:''} <span class="m">(${fmtR(botCost(k))} left)</span>`:k;};
+  const T=id=>CT[st.cards[id]]?CT[st.cards[id]].n:'?',sp=k=>{if(!k)return'';if(k[0]==='B'){const B=st.blockades[+k.slice(1)];return`blockade #${B?B.n:'?'}`;}const h=hexAt(k);return h?`${TERR[h.type]||h.type}${h.val>1?' '+h.val:''}`:k;};
   const list=ids=>ids&&ids.length?ids.map(T).join(', '):'nothing';
   const stack=a=>CT[a.type]?CT[a.type].n:'?';
   switch(a.t){
@@ -121,10 +121,8 @@ export function replayPromptHTML(){
   const R=G.replay,a=replayNext();
   if(!a)return`<b>End of the replay.</b> ${S.over?'The game is over.':'The log stops here'+(R.log.result&&R.log.result.capped?' (it hit the 25-round cap).':'.')}`;
   const pl=S.players[a[0]],st=JSON.parse(R.states[R.i]);
-  const r0=R.rem[R.i][a[0]];
-  return`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>${describeAction(a[1],st)} <span class="m">· now ${fmtR(r0)} left</span>`;
+  return`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>${describeAction(a[1],st)}`;
 }
-const fmtR=x=>Math.round(x*10)/10;
 /* Replay UI lives in its own grid cells (#rdock under the game, #rside beside it or under it on narrow screens),
    never on top of the game: the game area (#app) shrinks to make room, and everything in it lays itself out in
    the space it gets (container queries). Nothing here measures other elements, so nothing can overlap. */

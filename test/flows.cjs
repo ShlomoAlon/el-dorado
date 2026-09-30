@@ -88,8 +88,8 @@ const T = report('flows');
   await check('its recap is shown', () => !document.querySelector('#feed').hidden && document.querySelectorAll('#feed .fg').length > 0);
   // 9. the history: the History button cycles under the prompt → every turn on the left (newest first) → hidden → back
   await p.click('#histBtn');
-  await check('history: every turn on the left, the AI\'s newest first', () => { const E = window.__ED, n = E.S.players.length, L = document.querySelector('#lside'), t = L.querySelector('.ht:not(.sys)');
-    return !L.hidden && document.querySelector('#feed').hidden && !!t && t.querySelector('.hwho b').textContent === E.S.players[(E.S.cur + n - 1) % n].name && L.querySelectorAll('.ht:not(.sys)').length >= 2; });
+  await check('history: every turn on the left, newest first: mine just begun (already headed), then the AI\'s', () => { const E = window.__ED, n = E.S.players.length, L = document.querySelector('#lside'), [t0, t1] = L.querySelectorAll('.ht:not(.sys)');
+    return !L.hidden && document.querySelector('#feed').hidden && !!t1 && t0.querySelector('.hwho b').textContent === E.S.players[E.S.cur].name && !!t0.querySelector('.hnow') && t1.querySelector('.hwho b').textContent === E.S.players[(E.S.cur + n - 1) % n].name; });
   // pointing at a step of my turn: its words, and where my explorer went, in my colour, on the board
   const myStep = await S(me => { const L = document.querySelector('#lside'), f = [...L.querySelectorAll('.ht:not(.sys)')].filter(t => t.querySelector('.hwho b').textContent === window.__ED.S.players[me].name)
     .flatMap(t => [...t.querySelectorAll('.fg.f-move')])[0]; if (!f) return null; f.scrollIntoView({ block: 'nearest' }); const r = f.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, title: f.title }; }, me);

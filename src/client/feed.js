@@ -32,7 +32,7 @@ export function feedEvent(e){
     const last=FEED.groups[FEED.groups.length-1];
     if(e.k==='move'&&e.more&&last&&last.k==='move'){last.n+=e.n;last.v++;last.log.push(e);return;} // leftover strength: same card, more spaces
     if(e.k==='trash'&&!e.ts.length)return;
-    if(e.k==='end')FEED.ended=true;
+    if(e.k==='end'){FEED.ended=true;return;} // (not a step of its own: the turn is visibly over)
     const g={...e,id:++FEED.seq,v:0,log:[e],paths:[]};FEED.groups.push(g);
     if(g.ts&&g.ts.length)FEED.fly.push({gid:g.id,kind:'hand',from:chipRect(e.pl)});
     if(g.got)FEED.fly.push({gid:g.id,kind:'got',from:marketRectOf(g.got)}); // the card bought or taken flies in from the market
@@ -57,10 +57,10 @@ function feedCap(g){
   return'';
 }
 /* one step: its cards and caption. attr: what finds it again (the row: data-g; the column: data-s); its words are its tooltip */
-const PILL={end:'End',timeout:'Out of time',resign:'Left the game',endgame:'Ended the game'};
+const PILL={timeout:'Out of time',resign:'Left the game',endgame:'Ended the game'};
 function stepHTML(g,attr,pl){
   const tip=` title="${esc(stepWords(g,pl))}"`;
-  if(PILL[g.k])return`<div class="fg fend f-${g.k}" ${attr}${tip}><div class="fpill">${PILL[g.k]}</div><div class="fcap">${g.k==='end'&&g.kept?`kept <b>${g.kept}</b>`:''}</div></div>`;
+  if(PILL[g.k])return`<div class="fg fend f-${g.k}" ${attr}${tip}><div class="fpill">${PILL[g.k]}</div><div class="fcap"></div></div>`;
   const mini=(t,got)=>`<div class="fc${got?' got':''}" data-t="${t}"><div class="mcard">${cardHTML(t)}</div></div>`;
   return`<div class="fg f-${g.k}" ${attr}${tip}><div class="frc"><div class="fcs">${g.ts.map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap">${feedCap(g)}</div></div>`;
 }
@@ -108,7 +108,8 @@ function turnsOf(log){
     if(e.e==='play'){
       if(e.k==='move'&&e.more&&st&&st.k==='move'){st.n+=e.n;st.log.push(e);continue;} // leftover strength: the same step goes further
       if(e.k==='trash'&&!e.ts.length)continue;
-      t.steps.push({...e,log:[e],paths:[]});if(e.k==='end')t.done=true;continue;}
+      if(e.k==='end'){t.done=true;continue;} // (not shown as a step: the next turn says it)
+      t.steps.push({...e,log:[e],paths:[]});continue;}
     if(e.e==='timeout'||e.e==='resign'||e.e==='endgame'){t.steps.push({k:e.e,log:[e],paths:[]});if(e.e==='resign')t.done=true;continue;}
     if(!st)continue; // (the journal keeps its last entries only: this step's start is gone)
     if(e.e==='move')st.paths.push(e.path);else{st.log.push(e);if(e.e==='block')st.bl=e.n;else if(e.e==='arrive')st.arr=true;}
@@ -154,6 +155,7 @@ function columnUpdate(){
   if(COL.sig===sig&&L.firstElementChild)return;COL.sig=sig; // (nothing new in the journal)
   if(!L.firstElementChild){L.innerHTML='<h2 class="hh">History <span>newest first</span><button class="hx" aria-label="Hide the history" title="Hide the history">✕</button></h2><div class="hlist"></div>';L.querySelector('.hx').onclick=histCycle;}
   const list=L.lastElementChild,T=turnsOf(S.log).reverse();COL.turns=new Map(T.filter(t=>!t.sys).map(t=>[t.key,t]));
+  const now=`${S.round}:${S.cur}`;if(!S.over&&!COL.turns.has(now))T.unshift({key:now,pl:S.cur,r:S.round,steps:[]}); // the turn just begun: its heading is there before its first card
   if(!T.length){setHTML(list,'<p class="hnone">Nothing has happened yet.</p>');return;}
   const have=new Map([...list.children].map(el=>[el.dataset.k,el])),keys=new Set(T.map(t=>t.key));
   for(const [k,el] of have)if(!keys.has(k))el.remove();
