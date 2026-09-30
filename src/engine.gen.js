@@ -226,8 +226,10 @@ function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry3
   // training exploration: every player starts with the same extra card, shuffled into the draw pile
   if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(g()*(p.deck.length+1)),0,newCard(log.gift));
   return g;}
-/* apply action i of a log to S (after replayStart and actions 0…i-1); g: the generator replayStart returned */
-function replayStep(log,i,g){const[seat,a]=log.actions[i];return applyAction(seat,a,log.v===3?recRng(log.rng,i):g);}
+/* a log played back on S, one action at a time: yields {i, ok, err, ev} after each (i = -1: the setup), S then being the
+   position after it. (A generator: stop early, or snapshot S at each step) */
+function* replay(log){const g=replayStart(log);yield{i:-1,ok:true,ev:[]};
+  for(let i=0;i<log.actions.length;i++){const[seat,a]=log.actions[i];yield{i,...applyAction(seat,a,log.v===3?recRng(log.rng,i):g)};}}
 /* ---- game records (log v3): a game is its setup and its list of actions; the state is rebuilt from them ----
    Each action's shuffles come from a generator of its own, seeded from the game's secret number (rec.rng) and the action's
    index (newGame's: index -1), so re-applying the log rebuilds the same game and nothing needs a generator's state between
@@ -252,15 +254,15 @@ function recApply(rec,seat,a,rnd=Math.random){ // (rnd: for a game without a rec
 const recCanUndo=rec=>rec.actions.length>rec.mark;
 /* the state a record leads to, as {S, MAP} (the module's S and MAP are left as they were) */
 function recState(rec){const s0=S,m0=MAP;
-  try{replayStart(rec);for(let i=0;i<rec.actions.length;i++)replayStep(rec,i);return{S,MAP};}finally{S=s0;MAP=m0;}}
+  try{for(const _ of replay(rec));return{S,MAP};}finally{S=s0;MAP=m0;}}
 /* take back the last action (S becomes the rebuilt state; callers check recCanUndo first) */
 function recUndo(rec){assert(recCanUndo(rec),'recUndo: an action can be taken back');rec.actions.pop();({S,MAP}=recState(rec));return true;}
-/* the log of the game on show (S), ready to save and watch, with a title. places: null for a game that didn't finish (a
+/* the log of game st (rec's state), ready to save and watch, with a title. places: null for a game that didn't finish (a
    training log stopped at its round cap) */
-function recFinal(rec){
+function recFinal(rec,st){
   const{mark,...L}=rec;
-  L.title=S.players.map(p=>p.name).join(', ')+' · '+S.course.name;
-  L.result={places:S.places,rounds:S.round};
+  L.title=st.players.map(p=>p.name).join(', ')+' · '+st.course.name;
+  L.result={places:st.places,rounds:st.round};
   return L;
 }
 function newGame(o,rnd=Math.random){
@@ -1061,5 +1063,5 @@ function aiStep(id,mem,rec,rnd){ // rnd: the game's shuffles when there is no re
 }
 
 // every name (live bindings), and setters for the game on show
-export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiStep};
+export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,replay,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,recRng,newGame,newCard,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiStep};
 export const setS=v=>{S=v},setMAP=v=>{MAP=v};

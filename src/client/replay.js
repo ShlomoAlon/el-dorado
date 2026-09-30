@@ -1,7 +1,7 @@
 /* REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
-   The log holds the seeds and every action; the engine rebuilds each position (replayStart), so a replay is exactly the
+   The log holds the seeds and every action; the engine rebuilds each position (replay), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
-import { S, CT, LOG_MAX, hexAt, mapFor, setS, setMAP, replayCheck, replayStart, replayStep, applyAction, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
+import { S, CT, LOG_MAX, hexAt, mapFor, setS, setMAP, replayCheck, replay, applyAction, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
 import { $, esc, setHTML } from './dom.js';
 import { UI, G, online, clearSelection } from './state.js';
 import { render, resetView } from './frame.js';
@@ -13,15 +13,11 @@ import { showSetup, showHub, showReplays, MENU } from './menu.js';
 const TERR={j:'jungle',w:'water',v:'village',r:'rubble',c:'base camp',g:'El Dorado',s:'start'};
 function buildReplay(log,id){
   const err=replayCheck(log);if(err)throw new Error(err);
-  const g=replayStart(log);
-  const states=[],lines=[],evs=[null];
-  const snap=()=>{const L0=S.log;S.log=[];states.push(JSON.stringify(S));S.log=L0;};
-  lines.push(S.log.slice());snap();
-  for(let i=0;i<log.actions.length;i++){
-    S.log=[];
-    const r=replayStep(log,i,g);
-    if(!r.ok)throw new Error(`move ${i+1} doesn't fit the game (${r.err})`); // (an uploaded log can be anything)
-    lines.push(S.log.slice());evs.push(r.ev);snap();
+  const states=[],lines=[],evs=[];
+  for(const r of replay(log)){ // each position, and the journal lines and events of the action that led to it
+    if(!r.ok)throw new Error(`move ${r.i+1} doesn't fit the game (${r.err})`); // (an uploaded log can be anything)
+    lines.push(S.log.slice());evs.push(r.i<0?null:r.ev);
+    S.log=[];states.push(JSON.stringify(S)); // (the journal is kept per step, in lines)
   }
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
   let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}

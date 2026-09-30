@@ -46,7 +46,7 @@ export function save() {
 const MYGAMES = 'eldorado-games-v2';
 export function myGames() { try { return JSON.parse(localStorage.getItem(MYGAMES) || '[]'); } catch (e) { return []; } }
 export function keepLocalReplay() {
-  const L = recFinal(G.rec); G.rec = null; L.created = Date.now();
+  const L = recFinal(G.rec, S); G.rec = null; L.created = Date.now();
   const list = [L, ...myGames()].slice(0, 20);
   for (; ;) { try { localStorage.setItem(MYGAMES, JSON.stringify(list)); break; } catch (e) { if (list.length <= 1) break; list.pop(); } } // storage full: drop the oldest
   return L;

@@ -217,12 +217,13 @@ A game is its setup plus its list of actions; any position is rebuilt by replayi
 | `recCanUndo(rec)` | `actions.length > mark` |
 | `recUndo(rec)` | Drops the last action and rebuilds `S` and `MAP`. |
 | `recState(rec)` → `{S, MAP}` | The position a record leads to (the module's `S` and `MAP` are left as they were). |
-| `recFinal(rec)` | The finished log, with `title` and `result` (`{places, rounds}`, read from the game on show, `S`), and without `mark`. |
+| `recFinal(rec, state)` | The finished log, with `title` and `result` (`{places, rounds}`, read from `state`, the record's game), and without `mark`. |
 | `replayCheck(log)` | `null`, or why the log can't be played. Records before v3 were played under older rules (the turn went on after the last explorer arrived) and are refused; the server deleted its stored ones once (settings `logs_v3`), rooms with one close, and the page dropped its old saves (keys `-v1`). |
-| `replayStart(log)` → `g`, `replayStep(log, i, g)` | Rebuild step by step; `replayStep` returns `applyAction`'s result. `g` is the generator a training log's actions share (records ignore it: each action has its own). |
+| `replay(log)` | A generator: plays the log back on `S` one action at a time, yielding `{i, ok, err, ev}` after each (`i = -1`: the setup). Stop early, or snapshot `S` at each step. |
+| `replayStart(log)` → `g` | Sets up the log's game on `S` (tools start new training games with it); `g` is the generator a training log's actions share (records ignore it: each action has its own). |
 
 **Training logs** (`v: 1`, tools only) use one generator for the whole game, `mulberry32(rng)`, consumed only by the recorded actions.
-They may give every player one extra card (`gift`) shuffled into the deck. `replayStart` leaves their generator installed for the
+They may give every player one extra card (`gift`) shuffled into the deck. `replayStart` returns their generator for the
 steps that follow. Tool logs also carry `notes` and `result: {capped, arrived}`.
 
 `newGame({course, seed, players: [{name, color, ai?}], fullRace?})` starts a game without a record (tools and tests). (`privacy`, the page's pass-and-play cover, goes to `recNewGame` and lives in the record only.)

@@ -20,7 +20,7 @@ That shape has no module globals and no `setRng`, and nothing in it is English t
 
 - **Done:** 2 (randomness is a parameter), 3 (records only, log v3), 6 (state trimmed), 7 (the server doesn't write into
   `S`), 8 (dead bot code), 9 (one export surface: `import * as E`), 10, 12 (events), 13 (player vs. system actions,
-  `keep` required), 11 (the packed network names its inputs), 15, 16, 23 (tools share `tools/ai/playout.mjs`; four finished one-off investigations deleted), 24.
+  `keep` required), 11 (the packed network names its inputs), 15, 16, 17 (one `replay(log)` generator; `recFinal` takes the state), 23 (tools share `tools/ai/playout.mjs`; four finished one-off investigations deleted), 24.
 - **Partly done:**
   - 4: the journal is structured (the page writes the sentences); errors are still English.
   - 5: `cardTargets` is the one page query, and every target names its action (`t`); the three internal queries remain.
@@ -28,7 +28,7 @@ That shape has no module globals and no `setRng`, and nothing in it is English t
     need a log version bump, which drops every stored game).
   - 19: the server keeps each room's board with its state; the bot's caches on `MAP` remain.
   - 22: one `passTurn`.
-- **Open:** 1 (pass the game explicitly), 17, 18, 20, 21.
+- **Open:** 1 (pass the game explicitly), 18, 20, 21.
 
 ---
 

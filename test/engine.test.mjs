@@ -135,10 +135,9 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
       if (rnd() < .1 && E.recCanUndo(rec)) { assert(E.recUndo(rec), 'undo refused'); assert(JSON.stringify({ ...E.S, log: [] }) === JSON.stringify({ ...JSON.parse(before), log: [] }), 'undo did not restore the position'); undos++; }
     }
     if (!E.S.over) continue;
-    const fin = JSON.stringify({ ...E.S, log: [] }), log = JSON.parse(JSON.stringify(E.recFinal(rec)));
+    const fin = JSON.stringify({ ...E.S, log: [] }), log = JSON.parse(JSON.stringify(E.recFinal(rec, E.S)));
     assert(!E.replayCheck(log), 'record fails replayCheck: ' + E.replayCheck(log));
-    const gen = E.replayStart(log);
-    for (let i = 0; i < log.actions.length; i++) { const r = E.replayStep(log, i, gen); assert(r.ok, 'replay step ' + i + ' failed: ' + r.err); }
+    for (const r of E.replay(log)) assert(r.ok, 'replay step ' + r.i + ' failed: ' + r.err);
     assert(JSON.stringify({ ...E.S, log: [] }) === fin, 'replay differs from the recorded game (' + C.id + ', ' + np + ' players, ' + undos + ' undos)');
     recs++;
   }

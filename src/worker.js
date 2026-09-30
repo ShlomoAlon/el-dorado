@@ -608,7 +608,7 @@ export class Room extends DurableObject {
   async saveReplay() {
     const d = this.d; if (d.replay !== undefined) return d.replay;
     d.replay = null;
-    const log = this.engine().recFinal(this.rec);
+    const log = this.engine().recFinal(this.rec, this.S);
     const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
     const text = JSON.stringify(log); if (text.length > REPLAY_MAX_BYTES) return null;
     try {
