@@ -105,8 +105,8 @@ const T = report('flows');
   const h1 = await hbox('#hist'); T.ok('history: drag moves it', Math.abs(h1.x - (h0.x - 300)) < 3 && Math.abs(h1.y - (h0.y + 300)) < 3, JSON.stringify([h0, h1]));
   const g = await hbox('#histSize'); await p.mouse.move(g.x + 11, g.y + 11); await p.mouse.down(); for (let i = 1; i <= 10; i++) { await p.mouse.move(g.x + 11 + 5 * i, g.y + 11 - 20 * i); await frame(); }
   for (let i = 1; i <= 10; i++) { await p.mouse.move(g.x + 61, g.y - 189 + 30 * i); await frame(); } await p.mouse.up(); await settle(p);
-  T.ok('history: resizing makes it taller and wider', await S(() => { const l = document.querySelector('#histList'); return l.offsetHeight > l.firstElementChild.offsetHeight + 60; }) && (await hbox('#hist')).w > h1.w + 40);
-  await check('history: kept on this device', () => { const v = JSON.parse(localStorage.getItem('eldorado-hist')); return v.fx != null && v.w > 0 && v.h > 0; });
+  T.ok('history: resizing makes it taller (more turns), never wider', await S(() => { const l = document.querySelector('#histList'); return l.offsetHeight > l.firstElementChild.offsetHeight + 60; }) && (await hbox('#hist')).w === h1.w);
+  await check('history: kept on this device', () => { const v = JSON.parse(localStorage.getItem('eldorado-hist')); return v.fx != null && v.h > 0; });
   // at the left edge of a large screen it becomes a full-height column of its own (the game area moves over); dragged out, it floats
   let gr = await hbox('.hgrip'); await p.mouse.move(gr.x + 4, gr.y + 6); await p.mouse.down(); for (let i = 1; i <= 10; i++) { await p.mouse.move(gr.x + 4 - (gr.x - 20) * i / 10, gr.y + 6); await frame(); }
   await check('history: the left column shows where it will go', () => !document.querySelector('#histGuide').hidden); await p.mouse.up();

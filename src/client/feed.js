@@ -97,10 +97,10 @@ function hoverStep(el){if(el===hoverEl)return;hoverEl=el;
 
 /* ---------- where the panel is, how big, and whether it's shown (kept on this device) ----------
    fx/fy: where it floats, as fractions of the room around it (null: its place under the prompt);
-   w: its width in px (null: the default); h: the list's height in px (null: one turn);
-   dock 'left': a full-height column of its own left of the game (large screens only: elsewhere it goes under the prompt); sw: its width */
+   h: the list's height in px (null: one turn): the only size that changes (taller shows more turns; the width is fixed, shell.html --histW);
+   dock 'left': a full-height column of its own left of the game (large screens only: elsewhere it goes under the prompt) */
 const KEY='eldorado-hist';
-const P={hide:false,fx:null,fy:null,w:null,h:null,dock:null,sw:340};
+const P={hide:false,fx:null,fy:null,h:null,dock:null};
 try{const v=JSON.parse(localStorage.getItem(KEY)||'null');if(v&&typeof v==='object')for(const k in P)if(k in v)P[k]=v[k];}catch(e){}
 function saveP(){try{localStorage.setItem(KEY,JSON.stringify(P));}catch(e){}}
 const wide=matchMedia('(min-width:900px)');
@@ -108,7 +108,7 @@ const inSide=()=>P.dock==='left'&&wide.matches;
 const isHome=()=>P.fx==null&&!inSide();
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 /* while it is dragged or resized: its position / size under the pointer (the saved ones change on release) */
-const DRAG={x:null,y:null,w:null,h:null};
+const DRAG={x:null,y:null,h:null};
 
 /* ---------- what the panel shows ---------- */
 /* the turns to show, oldest first: the turn in progress only while it is followed live (or in a replay) */
@@ -233,7 +233,7 @@ function place(sizeOnly){
   const list=$('#histList'),first=list.firstElementChild,a=geo.app;
   if(inSide()&&sizeOnly){more();return;}
   if(inSide()){ // a column of its own: full height, the list scrolls
-    for(const k of['top','width','transform','--mktClear'])setStyle(H,k,'');setStyle(list,'height','');setStyle($('#lside'),'width',Math.round(P.sw)+'px');
+    for(const k of['top','transform','--mktClear'])setStyle(H,k,'');setStyle(list,'height','');
     H.classList.remove('free');$('#histHome').hidden=false;more();return;}
   if(!sizeOnly)H.classList.toggle('free',!isHome());
   // under the prompt its band stays clear of the market column; when the market is a row of cards ending about where the
@@ -242,7 +242,6 @@ function place(sizeOnly){
   if(isHome()){const m=$('#mkt'),on=!m.classList.contains('hid')&&!m.classList.contains('cramped'),mr=on?m.getBoundingClientRect():null;
     if(mr&&(mr.bottom-a.top<top+40||mr.left-a.left<250)){top=Math.max(top,Math.round(mr.bottom-a.top+5));clear=true;}}
   setStyle(H,'top',isHome()&&(homeTop()!=null||clear)?top+'px':'');if(!sizeOnly)setStyle(H,'--mktClear',clear?'16px':'');
-  if(!sizeOnly){const w=DRAG.w??P.w;setStyle(H,'width',w?Math.round(w)+'px':'');}
   // the list: one full turn at least (the newest), as tall as it was made (or one turn), never past the bottom of the game area
   const one=first?first.offsetHeight:0,room=a.height-(isHome()?top:4)-12;
   const lh=Math.max(one,Math.min(DRAG.h??P.h??one,room));setStyle(list,'height',lh+'px');
@@ -251,14 +250,14 @@ function place(sizeOnly){
     const x=DRAG.x??P.fx*(a.width-W),y=DRAG.y??P.fy*(a.height-Ht);
     setStyle(H,'transform',`translate3d(${Math.round(clamp(x,4,a.width-W-4))}px,${Math.round(clamp(y,row2-6,Math.max(row2-6,a.height-Ht-4)))}px,0)`);
   }else setStyle(H,'transform','');
-  $('#histHome').hidden=isHome()&&P.w==null&&P.h==null;
+  $('#histHome').hidden=isHome()&&P.h==null;
   more();
 }
 /* where it sits under the prompt, in game-area coordinates (for dropping it back there) */
 function homeSpot(w){const a=$('#app').getBoundingClientRect(),pr=$('#prompt').getBoundingClientRect(),hid=!pr.height;
   return{x:(hid?a.width/2:pr.left+pr.width/2-a.left)-w/2,y:hid?64:pr.bottom-a.top+8};}
-/* a dashed outline where it will go (the left column), or the column's new width while it is resized */
-function guide(w){const g=$('#histGuide');if(w==null){g.hidden=true;return;}g.hidden=false;g.style.width=Math.round(w)+'px';}
+/* a dashed outline where it will go (the left column) */
+function guide(on){$('#histGuide').hidden=!on;}
 /* pointer drag helper: start(e) → {move(ev), end()}, or nothing to ignore the press */
 function dragWith(el,start){
   el.addEventListener('pointerdown',e=>{
@@ -281,36 +280,36 @@ export function histInit(){
   $('#histBtn').onclick=()=>{if(!smallReplay()){histShow(P.hide);return;}
     if(shown())replayOpen=null;else{replayOpen=G.replay;if(P.hide)P.hide=false,saveP();}render();};
   $('#histX').onclick=()=>{if(smallReplay()){replayOpen=null;render();}else histShow(false);};
-  $('#histHome').onclick=()=>{P.fx=P.fy=P.w=P.h=P.dock=null;saveP();sync(true);place();render();};
+  $('#histHome').onclick=()=>{P.fx=P.fy=P.h=P.dock=null;saveP();sync(true);place();render();};
   // move: drag the bar. Let go near its spot under the prompt and it goes back there; at the left edge of a large screen it
   // becomes a full-height column there (dragged out again, it floats)
   dragWith(H.querySelector('.hbar'),e=>{
-    const r0=H.getBoundingClientRect(),w0=P.w;let off={x:e.clientX-r0.left,y:e.clientY-r0.top},x0=e.clientX,y0=e.clientY,moved=false,snap=null;
+    const r0=H.getBoundingClientRect();let off={x:e.clientX-r0.left,y:e.clientY-r0.top},x0=e.clientX,y0=e.clientY,moved=false,snap=null;
     return{move(ev){
       if(!moved){if(Math.hypot(ev.clientX-x0,ev.clientY-y0)<4)return;moved=true;H.classList.add('dragging');
-        if(inSide()){const w=Math.min(r0.width,420);P.w=Math.round(w);off={x:Math.min(off.x,w-13),y:Math.min(off.y,40)};P.dock=null;} // out of the column: it floats, holding on where it was grabbed
-        else if(isHome()&&P.w==null)P.w=Math.round(r0.width); // (it keeps the width it had)
+        if(inSide()){off={x:Math.min(off.x,r0.width-13),y:Math.min(off.y,40)};P.dock=null;} // out of the column: it floats, holding on where it was grabbed
         P.fx=P.fx??0;P.fy=P.fy??0;sync(true);}
       const a=$('#app').getBoundingClientRect(),W=H.offsetWidth,Ht=H.offsetHeight;
       DRAG.x=clamp(ev.clientX-off.x-a.left,4,a.width-W-4);DRAG.y=clamp(ev.clientY-off.y-a.top,row2-6,Math.max(row2-6,a.height-Ht-4));
       const hs=homeSpot(W);snap=wide.matches&&ev.clientX<60?'left':Math.abs(DRAG.x-hs.x)<36&&Math.abs(DRAG.y-hs.y)<28?'home':null;
-      H.classList.toggle('snap',snap==='home');guide(snap==='left'?P.sw:null);place();},
-    end(){guide(null);if(!moved)return;H.classList.remove('dragging','snap');
-      if(snap==='left'){P.dock='left';P.fx=P.fy=null;P.w=w0;}
-      else if(snap==='home'){P.fx=P.fy=null;P.w=w0;}
+      H.classList.toggle('snap',snap==='home');guide(snap==='left');place();},
+    end(){guide(false);if(!moved)return;H.classList.remove('dragging','snap');
+      if(snap==='left'){P.dock='left';P.fx=P.fy=null;}
+      else if(snap==='home')P.fx=P.fy=null;
       else fracs(DRAG.x,DRAG.y,H.offsetWidth,H.offsetHeight,$('#app').getBoundingClientRect());
       DRAG.x=DRAG.y=null;saveP();sync(true);place();render();}};
   });
-  // resize: drag the corner (under the prompt it stays centred, so the width grows on both sides). In the left column: its width
+  // resize: drag the grip at the bottom down (more turns) or up (down to one turn). The width stays; in the left column
+  // (full height already) there is nothing to resize
   dragWith($('#histSize'),e=>{
-    const b=H.getBoundingClientRect(),a=$('#app').getBoundingClientRect(),x0=e.clientX,y0=e.clientY;H.classList.add('dragging');
-    if(inSide()){let w=P.sw;return{move(ev){w=clamp(P.sw+ev.clientX-x0,260,Math.min(640,innerWidth*.45));guide(w);},end(){guide(null);H.classList.remove('dragging');P.sw=Math.round(w);saveP();place();}};}
-    const lh=$('#histList').offsetHeight,home=isHome(),maxW=home?a.width-8:a.right-b.left-4;
+    if(inSide())return;
+    const b=H.getBoundingClientRect(),a=$('#app').getBoundingClientRect(),y0=e.clientY;H.classList.add('dragging');
+    const lh=$('#histList').offsetHeight,home=isHome();
     if(!home){DRAG.x=b.left-a.left;DRAG.y=b.top-a.top;}
-    return{move(ev){const dx=ev.clientX-x0;DRAG.w=clamp(b.width+(home?2*dx:dx),220,maxW);DRAG.h=Math.max(0,lh+ev.clientY-y0);place();},
-      end(){H.classList.remove('dragging');if(DRAG.w!=null){const list=$('#histList'),one=list.firstElementChild?list.firstElementChild.offsetHeight:0;
-        P.w=Math.round(H.offsetWidth);P.h=DRAG.h>one+4?Math.round(list.offsetHeight):null; // (made as small as it gets: one turn, whatever its height)
+    return{move(ev){DRAG.h=Math.max(0,lh+ev.clientY-y0);place();},
+      end(){H.classList.remove('dragging');if(DRAG.h!=null){const list=$('#histList'),one=list.firstElementChild?list.firstElementChild.offsetHeight:0;
+        P.h=DRAG.h>one+4?Math.round(list.offsetHeight):null; // (made as small as it gets: one turn, whatever its height)
         if(!home)fracs(DRAG.x,DRAG.y,H.offsetWidth,H.offsetHeight,a);}
-        DRAG.x=DRAG.y=DRAG.w=DRAG.h=null;saveP();place();}};
+        DRAG.x=DRAG.y=DRAG.h=null;saveP();place();}};
   });
 }
