@@ -27,21 +27,20 @@ for (let g = 0; g < G; g++) {
   const seed = seed0 + g, log = { kind: 'eldorado-replay', v: 1, course: course.id, seed, rng: (seed * 2654435761) >>> 0, fullRace: true,
     players: pols.map((p, i) => ({ name: `${NAME[p] || p} ${i + 1}`, bot: p })), actions: [] };
   const { gs, g: gen } = E.replayStart(log);
-  let acts = 0, capped = false;
+  let acts = 0, capped = false; const plans = pols.map(() => ({ plan: null }));
   while (!gs.over) {
-    const S = gs;
-    if (S.round > 25 || acts++ > 20000) { capped = true; break; }
-    const me = S.cur, pol = pols[me];
-    const c = E.botChoose(gs, optsOf(pol) || { mode: pol }); // (its look-ahead has its own randomness: the game's stream is for the game)
+    if (gs.round > 25 || acts++ > 20000) { capped = true; break; }
+    const me = gs.cur, pol = pols[me];
+    const c = E.botChoose(gs, { ...(optsOf(pol) || { mode: pol }), planMem: plans[me] }); // (its look-ahead has its own randomness: the game's stream is for the game)
     const r = E.applyAction(gs, me, c.a, gen), a = r.ok ? c.a : { t: 'end', keep: [] };
     if (!r.ok) E.applyAction(gs, me, a, gen);
     log.actions.push([me, slim(a)]);
   }
-  const S = gs, fin = S.players.map(p => p.fin), netLost = pols.some((p, i) => p === 'net') && !pols.some((p, i) => p === 'net' && S.places && S.places[i] === 1);
+  const fin = gs.players.map(p => p.fin), netLost = pols.some((p, i) => p === 'net') && !pols.some((p, i) => p === 'net' && gs.places && gs.places[i] === 1);
   if (FILTER === 'capped' && !capped) continue;
   if (FILTER === 'netlost' && !netLost) continue;
   if (FILTER === 'netclose') { // net won, and the runner-up arrived within one round of it
-    const w = pols.findIndex((p, i) => p === 'net' && S.places && S.places[i] === 1), r2 = S.places ? S.places.indexOf(2) : -1;
+    const w = pols.findIndex((p, i) => p === 'net' && gs.places && gs.places[i] === 1), r2 = gs.places ? gs.places.indexOf(2) : -1;
     if (capped || w < 0 || r2 < 0 || !fin[r2] || fin[r2] - fin[w] > 1) continue; }
   log.title = `${pols.join(' vs ')} · seed ${seed}${capped ? ' · hit the 25-round cap' : ''}`;
   log.result = { capped, arrived: fin };
@@ -53,6 +52,6 @@ for (let g = 0; g < G; g++) {
     const j = await res.json().catch(() => ({}));
     link = res.ok ? `${base}/?replay=${j.id}` : `upload failed: ${res.status} ${j.error || ''}`;
   }
-  console.log(`${file} · ${log.actions.length} actions · rounds ${S.round} · arrived ${fin.join('/')}${capped ? ' · CAPPED' : ''}${link ? ' · ' + link : ''}`);
+  console.log(`${file} · ${log.actions.length} actions · rounds ${gs.round} · arrived ${fin.join('/')}${capped ? ' · CAPPED' : ''}${link ? ' · ' + link : ''}`);
 }
 if (!kept) console.log('no game matched the filter');

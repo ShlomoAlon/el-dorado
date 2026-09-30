@@ -39,9 +39,7 @@ function aiChoose(gs,id,mem){
   let opts=A.opts;if(opts.mode==='net'&&(!botNetReady(gs)||gs.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
   const me=gs.cur,tk=me+':'+gs.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
   if(++mem.n>60)return gs.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
-  BOT_PLAN_CACHE=mem.plan||null;
-  let a;try{a=botChoose(gs,opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;}
-  return aiFinishGuard(gs,a,mem);
+  return aiFinishGuard(gs,botChoose(gs,{...opts,planMem:mem}).a,mem);
 }
 /* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
    the line (the cards it draws change the plan). null: this AI doesn't plan whole turns with the network, or it isn't loaded */

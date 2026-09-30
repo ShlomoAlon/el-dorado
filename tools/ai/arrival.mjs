@@ -10,9 +10,9 @@ import { Worker, isMainThread, parentPort, workerData } from 'node:worker_thread
 if (!isMainThread) {
   const { net, search, from, to } = workerData; E.aiSetNet(net); const out = [];
   for (let g = from; g < to; g++) {
-    const seat = g % 3, rnd = E.mulberry32(5000 + g);
+    const seat = g % 3, rnd = E.mulberry32(5000 + g), planMem = { plan: null };
     const { gs } = playout({ seed: 70000 + g, players: seatPlayers(3), cap: 30, stop: gs => gs.players[seat].fin,
-      choose: (gs, me) => (me === seat ? E.botChoose(gs, { mode: 'net', rnd, search: search ? { kind: 'plan', beam: 3 } : undefined }) : E.botChoose(gs, { mode: 'plan', rnd })).a });
+      choose: (gs, me) => (me === seat ? E.botChoose(gs, { mode: 'net', rnd, search: search ? { kind: 'plan', beam: 3 } : undefined, planMem }) : E.botChoose(gs, { mode: 'plan', rnd })).a });
     out.push(gs.players[seat].fin || null);
   }
   parentPort.postMessage(out);

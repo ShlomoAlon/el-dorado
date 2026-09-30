@@ -10,8 +10,7 @@ export function playGame(pols, seed, cap = 60, opts = {}, course = E.COURSES[0])
   const { gs, capped } = playout({ seed, course, cap, players: seatPlayers(pols.length), choose: (gs, me) => {
     if (pols[me] === 'random') { const L = E.botActions(gs); return L[Math.floor(Math.random() * L.length)]; }
     return E.botChoose(gs, { mode: pols[me] === 'net' ? 'net' : 'heur', ...opts }).a; } });
-  const S = gs;
-  return { places: S.places, fin: S.players.map(p => p.fin || null), rounds: S.round, capped };
+  return { places: gs.places, fin: gs.players.map(p => p.fin || null), rounds: gs.round, capped };
 }
 if (import.meta.url === `file://${process.argv[1]}`) {
   const t0 = Date.now(); const firstArr = [], allArr = [], wins = Array(pols.length).fill(0); let capped = 0;

@@ -30,14 +30,14 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
   const dg = k => { if (k === 'done') return -1; const h = M.hexes.get(k); return Math.min(...goals.map(q => Math.hypot(q.x - h.x, q.y - h.y))); };
   let turns = 0;
   while (!gs.over && turns < 3000) {
-    turns++; const S = gs, seat = S.cur, P = S.players[seat];
+    turns++; const seat = gs.cur, P = gs.players[seat];
     if (turns > 300) { E.applyAction(gs, seat, { t: 'resign' }); continue; }
     for (let guard = 0; guard < 20; guard++) {
       let did = false;
       for (const pi of P.pieces.keys()) {
         if (P.pieces[pi] === 'done') continue;
         for (const id of P.hand.slice()) {
-          const d = E.CT[S.cards[id]]; if (!d || d.c === 'p') continue;
+          const d = E.CT[gs.cards[id]]; if (!d || d.c === 'p') continue;
           const T = E.reach(gs, seat, pi, d.s === '*' ? ['j', 'w', 'v'] : [d.s], d.p); let best = null, bd = dg(P.pieces[pi]) - 1;
           for (const [k] of T) { if (k[0] === 'B') { best = best || k; continue; } const dd = dg(k); if (dd < bd) { bd = dd; best = k; } }
           if (best) { const t1 = performance.now(); const r = E.applyAction(gs, seat, { t: 'move', card: id, pi, to: best }); maxAct = Math.max(maxAct, performance.now() - t1); assert(r.ok, r.err); did = true; break; }
@@ -59,14 +59,14 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
     if (Math.random() < .01 && S2.players.filter(p => !p.resigned).length > 2) { E.applyAction(gs, seat, { t: 'resign' }); continue; }
     const r = E.applyAction(gs, seat, { t: 'end', keep: [] }); assert(r.ok, r.err);
   }
-  const S = gs; games++;
-  assert(S.over, 'game did not end');
-  const cards = S.players.reduce((a, p) => a + p.deck.length + p.hand.length + p.discard.length + p.play.length, 0) + S.trash.length;
-  assert(cards === S.nid - 1, 'cards created or lost');
-  assert(S.places && S.places.length === np && S.places.includes(1), 'bad placements');
-  const d = E.eloDeltas(S.players.map(() => 1200), S.places, S.players.map(() => 0));
+  games++;
+  assert(gs.over, 'game did not end');
+  const cards = gs.players.reduce((a, p) => a + p.deck.length + p.hand.length + p.discard.length + p.play.length, 0) + gs.trash.length;
+  assert(cards === gs.nid - 1, 'cards created or lost');
+  assert(gs.places && gs.places.length === np && gs.places.includes(1), 'bad placements');
+  const d = E.eloDeltas(gs.players.map(() => 1200), gs.places, gs.players.map(() => 0));
   assert(Math.abs(d.reduce((a, b) => a + b, 0)) < 0.5, 'elo not zero-sum');
-  for (let s = 0; s < np; s++) { const R = E.redact(S, s); R.players.forEach((p, i) => { if (i !== s) { assert(p.hand.every(id => !R.cards[id]), 'hand leak'); assert(p.deck.every(id => !R.cards[id]), 'deck leak'); } }); }
+  for (let s = 0; s < np; s++) { const R = E.redact(gs, s); R.players.forEach((p, i) => { if (i !== s) { assert(p.hand.every(id => !R.cards[id]), 'hand leak'); assert(p.deck.every(id => !R.cards[id]), 'deck leak'); } }); }
 }
 // named AI seats (engine_ai.js): the shipped half-float network matches the trained one, AI games finish,
 // the network plays on its own course (First Expedition) and the AIs fall back to the route planner elsewhere
@@ -112,10 +112,10 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
 // single-use cards played for movement are removed from the game (Giant Machete, Prop Plane, Treasure Chest), never discarded
 for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's reach from the start)
   gs = E.newGame({ course: E.COURSES[0], seed: 4242, fullRace: true, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) });
-  const S = gs, seat = S.cur, P = S.players[seat], id = P.hand[0]; S.cards[id] = t;
+  const seat = gs.cur, P = gs.players[seat], id = P.hand[0]; gs.cards[id] = t;
   let to = null, pi = 0; for (; pi < P.pieces.length && !to; pi++) for (const [k] of E.reach(gs, seat, pi, t === 'plane' ? ['j', 'w', 'v'] : [E.CT[t].s], E.CT[t].p)) if (k[0] !== 'B') { to = k; break; }
   assert(to, t + ': no move found'); const r = E.applyAction(gs, seat, { t: 'move', card: id, pi: pi - 1, to }); assert(r.ok, r.err);
-  assert(S.trash.includes(id) && !P.play.includes(id), t + ' played for movement was not removed from the game');
+  assert(gs.trash.includes(id) && !P.play.includes(id), t + ' played for movement was not removed from the game');
   E.applyAction(gs, seat, { t: 'end', keep: [] });
   assert(!P.discard.includes(id) && !P.deck.includes(id) && !P.hand.includes(id), t + ' came back after the turn');
 }
@@ -126,11 +126,11 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
     const { gs: g0, rec } = E.recNewGame({ course: C, seed: 1000 + g, fullRace: true, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636'][i] })) });
     gs = g0; const rnd = E.mulberry32(g + 7), mem = [{}, {}, {}, {}]; let steps = 0, undos = 0;
     while (!gs.over && steps++ < 20000) {
-      const S = gs, me = S.cur;
+      const me = gs.cur;
       if (steps === 150 && np > 2) { E.recApply(gs, rec, (me + 1) % np, { t: 'resign' }); continue; }
       if (rnd() < .01) { E.recApply(gs, rec, me, { t: 'timeout' }); continue; }
       const a = E.aiChoose(gs, 'raleigh', mem[me]);
-      const before = JSON.stringify(S), prevCur = S.cur;
+      const before = JSON.stringify(gs), prevCur = gs.cur;
       const r = E.recApply(gs, rec, me, a); if (!r.ok) { E.recApply(gs, rec, me, { t: 'timeout' }); continue; }
       // sometimes undo (as the page does: bring back the earlier state), when the action drew nothing and the turn did not pass
       if (rnd() < .1 && E.recCanUndo(rec)) { gs = E.recUndo(rec); assert(JSON.stringify({ ...gs, log: [] }) === JSON.stringify({ ...JSON.parse(before), log: [] }), 'undo did not restore the position'); undos++; }

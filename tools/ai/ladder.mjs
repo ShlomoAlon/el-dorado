@@ -15,10 +15,10 @@ if (!isMainThread) {
   const { from, to, A, B, seed0 } = workerData, POLS = [A.name + '+s', A.name, B.name + '+s', B.name], nets = { [A.name]: A.net, [B.name]: B.net };
   for (let g = from; g < to; g++) {
     const n = g % 2 ? 4 : 3, k = g >> 1, base = n === 4 ? POLS : POLS.filter((_, i) => i !== k % 4), pols = base.map((_, i) => base[(i + (k >> 2)) % n]);
-    const rnd = E.mulberry32(seed0 * 7 + g);
+    const rnd = E.mulberry32(seed0 * 7 + g), plans = pols.map(() => ({ plan: null }));
     const { gs, capped } = playout({ seed: seed0 + g, players: seatPlayers(n), choose: (gs, me) => {
       const p = pols[me], s = p.endsWith('+s'); E.aiSetNet(nets[s ? p.slice(0, -2) : p]);
-      return E.botChoose(gs, { mode: 'net', rnd, search: s ? { kind: 'plan', beam: 3 } : undefined }).a; } });
+      return E.botChoose(gs, { mode: 'net', rnd, search: s ? { kind: 'plan', beam: 3 } : undefined, planMem: plans[me] }).a; } });
     // not arriving by the cap counts as last (tied with anyone else who didn't arrive)
     const seats = pols.map((p, i) => { const P = gs.players[i], fail = capped && !P.fin; return { id: p, place: fail ? n : gs.places[i], fin: P.fin || null }; });
     parentPort.postMessage({ game: { time: new Date().toISOString(), match: `${A.name} vs ${B.name}`, g, n, capped, seats } });

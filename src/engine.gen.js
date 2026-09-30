@@ -931,18 +931,19 @@ function botPlanTurn(gs,me,B,rnd,K,noBuy,top){ // top: optional array that recei
   }
   return best;
 }
-let BOT_PLAN_CACHE=null;
+// the plan being followed lives on the caller's holder, opts.planMem ({plan}: one per seat; a named AI passes its memory)
 function botPlanTurnChoose(gs,opts){
-  const me=gs.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
+  const M=opts.planMem;assert(M&&typeof M==='object','botChoose: a search needs opts.planMem, the seat\'s plan holder');
+  const me=gs.cur,o=opts.search,rnd=opts.rnd||Math.random,C=M.plan;
   // follow the current plan while it still applies (same player, same round, same position the plan expects)
   if(C&&C.me===me&&C.round===gs.round&&C.i<C.line.length&&C.key===botTurnKey(gs,me)){
     const a=C.line[C.i],st=botClone(gs),ok=applyAction(st,me,a,rnd).ok,nk=ok&&!st.over&&st.cur===me?botTurnKey(st,me):null;
-    if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])BOT_PLAN_CACHE=null;return{a,v:C.v,why:'plan'};}
+    if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])M.plan=null;return{a,v:C.v,why:'plan'};}
   }
   const best=botPlanTurn(gs,me,o.beam||3,rnd,opts.draws||4,!!(opts.turnState&&opts.turnState.noBuy));
-  if(!best.line||!best.line.length){BOT_PLAN_CACHE=null;return{a:{t:'end',keep:[]},why:'plan'};}
+  if(!best.line||!best.line.length){M.plan=null;return{a:{t:'end',keep:[]},why:'plan'};}
   const a=best.line[0],st=botClone(gs);applyAction(st,me,a,rnd);const nk=!st.over&&st.cur===me?botTurnKey(st,me):null;
-  BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])?{me,round:gs.round,line:best.line,i:1,key:nk,v:best.v}:null;
+  M.plan=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])?{me,round:gs.round,line:best.line,i:1,key:nk,v:best.v}:null;
   return{a,v:best.v,why:'plan'};
 }
 /* ---- random courses for training (so the bot learns to play, not to memorise one map) ----
@@ -1015,9 +1016,7 @@ function aiChoose(gs,id,mem){
   let opts=A.opts;if(opts.mode==='net'&&(!botNetReady(gs)||gs.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
   const me=gs.cur,tk=me+':'+gs.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
   if(++mem.n>60)return gs.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
-  BOT_PLAN_CACHE=mem.plan||null;
-  let a;try{a=botChoose(gs,opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;}
-  return aiFinishGuard(gs,a,mem);
+  return aiFinishGuard(gs,botChoose(gs,{...opts,planMem:mem}).a,mem);
 }
 /* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
    the line (the cards it draws change the plan). null: this AI doesn't plan whole turns with the network, or it isn't loaded */
@@ -1081,4 +1080,4 @@ function aiStep(gs,id,mem,rec,rnd){ // rnd: the game's shuffles when there is no
 }
 
 // every name
-export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,mapOf,MAPS,lastMap,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,replay,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,recRng,newGame,newCard,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiRouteFor,aiStep};
+export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,mapOf,MAPS,lastMap,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,replay,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,recRng,newGame,newCard,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiRouteFor,aiStep};

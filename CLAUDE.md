@@ -63,6 +63,8 @@ waiting on me.
   Never add one for simple things. Vendor it into the build (the client is one self-contained page).
 
 ## Hard invariants
+- **Zero tech debt:** when an interface changes, update every caller (page, server, tools, tests) in the same change.
+  Never keep an old path, default or fallback alive so callers can stay as they were.
 - **All rules live in the engine.** The client builds an action and calls `act(a)`; locally that runs `applyAction`,
   online it is sent to the Room Durable Object, which runs the same engine and broadcasts `redact()`ed state.
   Never put rules logic in UI code or the worker.

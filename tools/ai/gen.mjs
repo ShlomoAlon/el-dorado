@@ -75,17 +75,16 @@ if (!isMainThread) {
       if (ns.length > 1 || rnd() < .5) plainSeat[ns[Math.floor(rnd() * ns.length)]] = true; }
     glog.players.forEach((p, i) => { if (pols[i] === 'net' && search) p.name = `${plainSeat[i] ? 'Net (no search)' : 'Net + search'} ${i + 1}`; });
     const { gs, g: shuf } = E.replayStart(glog), T = id => gs.cards[id]; // (the game's shuffles; the bots' look-ahead uses its own)
-    const traj = pols.map(() => []), trajU = pols.map(() => []), trajB = pols.map(() => []), lastPush = pols.map(() => null); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
+    const traj = pols.map(() => []), trajU = pols.map(() => []), trajB = pols.map(() => []), lastPush = pols.map(() => null), plans = pols.map(() => ({ plan: null })); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
     while (!gs.over) {
-      const S = gs;
-      if (S.round > H || acts > 20000) { capped = S.round > H; E.endGame(gs); break; }
-      const me = S.cur, isNet = pols[me] === 'net';
-      if (me !== lastMe || S.round !== lastRound) { lastMe = me; lastRound = S.round; const nb = mode === 'self' && !lotemp && !ANNEAL && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
+      if (gs.round > H || acts > 20000) { capped = gs.round > H; E.endGame(gs); break; }
+      const me = gs.cur, isNet = pols[me] === 'net';
+      if (me !== lastMe || gs.round !== lastRound) { lastMe = me; lastRound = gs.round; const nb = mode === 'self' && !lotemp && !ANNEAL && isNet && rnd() < buyEps; turnState = { noBuy: nb, forceTransmit: mode === 'self' && isNet && rnd() < transEps }; }
       const c = mode === 'eval' && pols[me] === 'netP' ? E.botChoose(gs, { mode: 'net', rnd })
         : mode === 'eval' && pols[me] === 'old' ? (E.aiSetNet(oldNet), ((x) => (E.aiSetNet(net), x))(E.botChoose(gs, { mode: 'net', rnd })))
-        : mode === 'eval' && pols[me] === 'oldS' ? (E.aiSetNet(oldNet), ((x) => (E.aiSetNet(net), x))(E.botChoose(gs, { mode: 'net', rnd, search })))
-        : mode === 'eval' ? E.botChoose(gs, { mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined })
-        : isNet ? E.botChoose(gs, lotemp || ANNEAL ? { mode: 'net', eps, lotemp: ANNEAL ? Math.max(ANNEAL[2], ANNEAL[0] * ANNEAL[1] ** (S.round - 1)) : lotemp, rnd } : { mode: 'net', eps, temp, typeEps, turnState, rnd, search: plainSeat[me] ? undefined : search })
+        : mode === 'eval' && pols[me] === 'oldS' ? (E.aiSetNet(oldNet), ((x) => (E.aiSetNet(net), x))(E.botChoose(gs, { mode: 'net', rnd, search, planMem: plans[me] })))
+        : mode === 'eval' ? E.botChoose(gs, { mode: isNet ? 'net' : bench, rnd, search: isNet ? search : undefined, planMem: plans[me] })
+        : isNet ? E.botChoose(gs, lotemp || ANNEAL ? { mode: 'net', eps, lotemp: ANNEAL ? Math.max(ANNEAL[2], ANNEAL[0] * ANNEAL[1] ** (gs.round - 1)) : lotemp, rnd } : { mode: 'net', eps, temp, typeEps, turnState, rnd, search: plainSeat[me] ? undefined : search, planMem: plans[me] })
         : pols[me].startsWith('lg') ? (E.aiSetNet(LEAGUE[+pols[me].slice(2)]), ((x) => (E.aiSetNet(net), x))(E.botChoose(gs, { mode: 'net', rnd, temp: .004 })))
         : E.botChoose(gs, { mode: bench, eps: .03, noise: .3, rnd });
       // MAXBACK=1 (Q-learning style max backup within a turn): my turn has no luck between my own actions, so the position after
@@ -93,13 +92,13 @@ if (!isMainThread) {
       // Only within the same turn and never across "end turn"; other steps keep the TD(λ) update.
       if (MAXBACK && mode === 'self' && isNet) { const lp = lastPush[me];
         const explored = c.why === 'explore' || c.why === 'random';
-        if (lp && traj[me].length === lp.idx + 1 && trajB[me][lp.idx] == null && ((lp.round === S.round && !lp.ended) || (explored && (lotemp || ANNEAL)))) {
+        if (lp && traj[me].length === lp.idx + 1 && trajB[me][lp.idx] == null && ((lp.round === gs.round && !lp.ended) || (explored && (lotemp || ANNEAL)))) {
           // DISTILL=1: the target is the whole-turn planner's best completion from here (search distilled into the network)
           // DISTILL_P: share of these targets that use the planner (the rest: the one-step target below); DISTILL_BEAM: its beam
           // width — together they set how much extra compute distillation costs
           const useD = DISTILL && (DISTILL_P >= 1 || rnd() < DISTILL_P);
           const cb = c.best != null && !(turnState && turnState.noBuy) ? c : useD ? null : E.botChoose(gs, { mode: 'net', rnd });
-          const b = useD ? E.botChoose(gs, { mode: 'net', rnd, search: { kind: 'plan', beam: DISTILL_BEAM } }).v
+          const b = useD ? E.botChoose(gs, { mode: 'net', rnd, search: { kind: 'plan', beam: DISTILL_BEAM }, planMem: { plan: null } }).v // (a fresh plan: the seat's own is left as it was)
             : PREV && cb.bestA ? (E.aiSetNet(PREV), ((x) => (E.aiSetNet(net), x))(E.botActionValue(gs, me, cb.bestA, 'net', rnd, 4))) // Double-Q style
             : cb.best;
           trajB[me][lp.idx] = b; st.maxback = (st.maxback || 0) + 1; } }
@@ -113,7 +112,7 @@ if (!isMainThread) {
           } }
       // track every kind of decision the network makes (and which of them were exploration)
       if (isNet) {
-        const a = c.a, P = S.players[me];
+        const a = c.a, P = gs.players[me];
         st.netDec = (st.netDec || 0) + 1; if (c.why) st.explore[c.why] = (st.explore[c.why] || 0) + 1;
         if (turnState && turnState.noBuy && !turnState.nbCounted) { turnState.nbCounted = 1; st.explore.noBuyTurn = (st.explore.noBuyTurn || 0) + 1; }
         if (a.t === 'trash') { inc('Remove (Scientist / Travel Log): how many', a.cards.length + ''); for (const id of a.cards) inc('Remove (Scientist / Travel Log): which card', T(id)); }
@@ -123,8 +122,8 @@ if (!isMainThread) {
         else if (a.t === 'end') {
           inc('End of turn: cards kept', a.keep.length + ''); for (const id of a.keep) inc('End of turn: which cards kept', T(id));
           for (const id of P.hand) if (!a.keep.includes(id) && ['cartographer', 'compass', 'scientist', 'travellog', 'native', 'transmitter'].includes(T(id))) inc('Ended the turn without playing', T(id));
-          if (!S.turn.bought) { const cash = P.hand.reduce((x, id) => x + ((E.CT[T(id)].c === 'y' || E.CT[T(id)].c === 'x') ? E.CT[T(id)].p : .5), 0), open = S.market.some(q => q.n === 0);
-            const cheapest = Math.min(...[...S.market, ...(open ? S.reserve : [])].filter(q => q.n > 0).map(q => E.CT[q.t].cost));
+          if (!gs.turn.bought) { const cash = P.hand.reduce((x, id) => x + ((E.CT[T(id)].c === 'y' || E.CT[T(id)].c === 'x') ? E.CT[T(id)].p : .5), 0), open = gs.market.some(q => q.n === 0);
+            const cheapest = Math.min(...[...gs.market, ...(open ? gs.reserve : [])].filter(q => q.n > 0).map(q => E.CT[q.t].cost));
             inc('Buying', cash >= cheapest ? 'could afford a card but bought nothing' : 'could not afford anything'); }
           else inc('Buying', 'bought a card');
         }
@@ -146,23 +145,22 @@ if (!isMainThread) {
     if (capped) st.capped++;
     if (process.env.REPLAYALL) writeFileSync(`${process.env.REPLAYALL}/g-${glog.seed}.json`, JSON.stringify(glog)); // testing: keep every game
     // a full-length game where someone still hasn't arrived by the cap is probably a bug: save it
-    if (capped && H >= 25 && stuckFile && st.stuck < 5) { st.stuck++; const S = gs;
-      glog.title = `training ${mode} game · hit the 25-round cap`; glog.result = { capped: true, arrived: S.players.map(p => p.fin) };
+    if (capped && H >= 25 && stuckFile && st.stuck < 5) { st.stuck++; glog.title = `training ${mode} game · hit the 25-round cap`; glog.result = { capped: true, arrived: gs.players.map(p => p.fin) };
       mkdirSync('tools/ai/data/replays', { recursive: true }); writeFileSync(`tools/ai/data/replays/stuck-${glog.seed}.json`, JSON.stringify(glog));
-      appendFileSync(stuckFile, JSON.stringify({ mode, round: S.round, pols, players: S.players.map((p, i) => ({ pieces: p.pieces, left: E.botRemaining(gs, i), fin: p.fin, hand: p.hand.map(T), cards: [...p.deck, ...p.hand, ...p.discard, ...p.play].map(T).sort().join(',') })), blockades: S.blockades }) + '\n'); }
-    const S = gs, n = pols.length, rem = S.players.map((_, i) => E.botRemaining(gs, i));
-    S.players.forEach((p, i) => {
+      appendFileSync(stuckFile, JSON.stringify({ mode, round: gs.round, pols, players: gs.players.map((p, i) => ({ pieces: p.pieces, left: E.botRemaining(gs, i), fin: p.fin, hand: p.hand.map(T), cards: [...p.deck, ...p.hand, ...p.discard, ...p.play].map(T).sort().join(',') })), blockades: gs.blockades }) + '\n'); }
+    const n = pols.length, rem = gs.players.map((_, i) => E.botRemaining(gs, i));
+    gs.players.forEach((p, i) => {
       const others = rem.filter((_, j) => j !== i), lead = others.reduce((a, x) => a + x, 0) / others.length - rem[i];
       // result = what the place is worth (1st 1, 2nd ¼, 3rd ⅛, last 0; E.botPlaceValue).
       // Short horizons also reward getting far; at the final 25-round cap, not arriving is worth 0 whoever got closest.
-      const fail = capped && H >= 25 && !p.fin && !TRUNC, win = S.places[i] === 1 && !fail, pv = E.botPlaceValue(S.places[i], n);
+      const fail = capped && H >= 25 && !p.fin && !TRUNC, win = gs.places[i] === 1 && !fail, pv = E.botPlaceValue(gs.places[i], n);
       const z = TRUNC ? (capped && !p.fin && traj[i].length && net ? E.botNetValue(traj[i][traj[i].length - 1]) : pv)
         : fail ? 0 : H >= 25 ? pv : 0.8 * pv + 0.2 / (1 + Math.exp(-lead / 5));
       // (a network not yet trained on arrived-but-unsettled positions has no idea there: bootstrap through the result instead)
       if (mode === 'self') { const T = traj[i], U = trajU[i], Bv = trajB[i]; let G = z; for (let t = T.length - 1; t >= 0; t--) { X.push(T[t]); Y.push(G); GID.push(wi * games + g); G = t > 0 && Bv[t - 1] != null ? Bv[t - 1] : (1 - LAMBDA) * (net && (net.unsettled || !U[t]) ? E.botNetValue(T[t]) : G) + LAMBDA * G; } }
       if (table) { const tn = (st.tab = st.tab || {})['p' + n] = st.tab['p' + n] || {}, t = tn[pols[i]] = tn[pols[i]] || { seats: 0, wins: 0, pv: 0, arrSum: 0, arrN: 0 };
         t.seats++; if (win) t.wins++; t.pv += fail ? 0 : pv; if (p.fin) { t.arrSum += p.fin; t.arrN++; } if (i === 0) tn.games = (tn.games || 0) + 1; }
-      if (mode === 'eval' && p.fin) { const A = (st.arrC = st.arrC || {})[C.id] = st.arrC[C.id] || { sum: 0, n: 0, win: 0, wn: 0, games: 0 }; A.sum += p.fin; A.n++; if (S.places[i] === 1) { A.win += p.fin; A.wn++; } }
+      if (mode === 'eval' && p.fin) { const A = (st.arrC = st.arrC || {})[C.id] = st.arrC[C.id] || { sum: 0, n: 0, win: 0, wn: 0, games: 0 }; A.sum += p.fin; A.n++; if (gs.places[i] === 1) { A.win += p.fin; A.wn++; } }
       if (mode === 'eval' && i === 0) { const A = (st.arrC = st.arrC || {})[C.id] = st.arrC[C.id] || { sum: 0, n: 0, win: 0, wn: 0, games: 0 }; A.games++; }
       if (pols[i] === 'net') { st.netSeats++; if (win) st.netWins++; st['seat' + n]++; if (win) st['win' + n]++; st.netRem.push(rem[i]); if (p.fin) st.netArr.push(p.fin); st.netPV = (st.netPV || 0) + (fail ? 0 : pv); }
       else { st.heurRem.push(rem[i]); if (p.fin) st.heurArr.push(p.fin); st.heurPV = (st.heurPV || 0) + (fail ? 0 : pv); st.heurSeats = (st.heurSeats || 0) + 1; }

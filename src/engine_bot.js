@@ -372,18 +372,19 @@ function botPlanTurn(gs,me,B,rnd,K,noBuy,top){ // top: optional array that recei
   }
   return best;
 }
-let BOT_PLAN_CACHE=null;
+// the plan being followed lives on the caller's holder, opts.planMem ({plan}: one per seat; a named AI passes its memory)
 function botPlanTurnChoose(gs,opts){
-  const me=gs.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
+  const M=opts.planMem;assert(M&&typeof M==='object','botChoose: a search needs opts.planMem, the seat\'s plan holder');
+  const me=gs.cur,o=opts.search,rnd=opts.rnd||Math.random,C=M.plan;
   // follow the current plan while it still applies (same player, same round, same position the plan expects)
   if(C&&C.me===me&&C.round===gs.round&&C.i<C.line.length&&C.key===botTurnKey(gs,me)){
     const a=C.line[C.i],st=botClone(gs),ok=applyAction(st,me,a,rnd).ok,nk=ok&&!st.over&&st.cur===me?botTurnKey(st,me):null;
-    if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])BOT_PLAN_CACHE=null;return{a,v:C.v,why:'plan'};}
+    if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])M.plan=null;return{a,v:C.v,why:'plan'};}
   }
   const best=botPlanTurn(gs,me,o.beam||3,rnd,opts.draws||4,!!(opts.turnState&&opts.turnState.noBuy));
-  if(!best.line||!best.line.length){BOT_PLAN_CACHE=null;return{a:{t:'end',keep:[]},why:'plan'};}
+  if(!best.line||!best.line.length){M.plan=null;return{a:{t:'end',keep:[]},why:'plan'};}
   const a=best.line[0],st=botClone(gs);applyAction(st,me,a,rnd);const nk=!st.over&&st.cur===me?botTurnKey(st,me):null;
-  BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])?{me,round:gs.round,line:best.line,i:1,key:nk,v:best.v}:null;
+  M.plan=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])?{me,round:gs.round,line:best.line,i:1,key:nk,v:best.v}:null;
   return{a,v:best.v,why:'plan'};
 }
 /* ---- random courses for training (so the bot learns to play, not to memorise one map) ----

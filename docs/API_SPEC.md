@@ -276,6 +276,7 @@ These functions belong to the training code. `botActions` and `botChoose` act fo
 |---|---|
 | `mode` | `net` (the default when a network is set; without a fitting network it becomes `heur`), `heur`, or `plan` (the hand-written planner, the AI Raleigh; it returns before any option below is read) |
 | `search` | `{kind: 'plan', beam}`: the whole-turn planner (Humboldt, Fawcett, and training with `SEARCH_BEAM`) |
+| `planMem` | Required with `search`: the seat's plan holder `{plan}`, one per seat, kept between its moves (the planner follows its plan while the position is the one it expected). `aiChoose` passes the AI's memory. |
 | exploration | `rnd`, `eps`, `typeEps`, `temp`, `lotemp`, `noise`, `turnState: {noBuy, forceTransmit}` |
 | other | `draws`: imagined draws per draw card (default 4; Fawcett uses 8) |
 
