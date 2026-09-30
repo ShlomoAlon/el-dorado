@@ -143,6 +143,25 @@ const T = report('online');
     const lbC = await board(A);
     T.ok('an unrated game changes no rating', lbC['ai-raleigh'].g === lbB['ai-raleigh'].g && lbC['ai-raleigh'].r === lbB['ai-raleigh'].r && lbC[ids[0]].r === lbB[ids[0]].r);
 
+    // ---------- 3b. two games at once: each room is its own server object, so games run side by side; each page only ever
+    //      hears its own room (checked on every message), and both games reach their end with their AIs racing at once
+    const Pa = await open('Pa'), Pb = await open('Pb'); await signIn(Pa, 'Gil'); await signIn(Pb, 'Gwen');
+    const pair = [];
+    for (const P of [Pa, Pb]) {
+      const c = await mkRoom(P, { max: 3, turn: 60, course: 'first', rated: false });
+      await wait(P, () => __ED.NET.room && __ED.NET.room.seats.length === 1);
+      await P.click('[data-addai="raleigh"]'); await wait(P, () => __ED.NET.room.seats.length === 2);
+      await P.click('[data-addai="humboldt"]'); await wait(P, () => __ED.NET.room.seats.length === 3);
+      await P.evaluate(code => { window.__alien = 0; __ED.NET.ws.addEventListener('message', e => { if (e.data === 'pong') return; const m = JSON.parse(e.data); if (m.room && m.room.code !== code) window.__alien++; }); }, c);
+      pair.push(c);
+    }
+    T.ok('two games at once: two rooms', pair[0] !== pair[1], pair.join(' '));
+    await Promise.all([Pa, Pb].map(P => P.click('#rlStart'))); await Promise.all([Pa, Pb].map(P => wait(P, () => __ED.online())));
+    await Promise.all([Pa, Pb].map(P => P.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } })))); // (both rooms' AIs now race to the end, side by side)
+    const ends = await Promise.all([Pa, Pb].map(P => wait(P, () => __ED.S.over && __ED.NET.room.results, null, 120000)));
+    T.ok('two games at once: both reach their end', ends.every(Boolean));
+    T.ok('two games at once: each page heard only its own room', (await Promise.all([Pa, Pb].map(P => P.evaluate(() => window.__alien)))).every(n => n === 0));
+
     // ---------- 4. room lists and quick match
     const D = await open('D'), E2 = await open('E'), F = await open('F'); await signIn(D, 'Dora'); await signIn(E2, 'Emil'); await signIn(F, 'Finn');
     const pub = await mkRoom(D, { max: 3, turn: 60, course: 'first', pub: true }), priv = await mkRoom(E2, { max: 3, turn: 60, course: 'first', pub: false });
