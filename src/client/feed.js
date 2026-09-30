@@ -43,26 +43,24 @@ export function feedEvent(e){
   else if(e.e==='arrive'){last.arr=true;last.v++;last.log.push(e);}
   else if(e.e==='move'){FEED.trail.push(e.path);last.paths.push(e.path);}
 }
+/* a step's caption: only what its cards don't show (owner: the card's name and effect are on its face; wide captions pushed
+   steps out of the row). Pointing at the step says everything in words. */
 function feedCap(g){
-  const one=g.ts&&g.ts.length===1?CT[g.ts[0]].n:'',bl=g.bl?` · blockade #${g.bl}`:'',arr=g.arr?' · <b>El Dorado</b>':'';
+  const mark=g.arr?'<b>El Dorado</b>':g.bl?`blockade <b>${g.bl}</b>`:'';
   switch(g.k){
-    case 'move':return`${esc(one)} · <b>${g.n}</b> ${g.n===1?'space':'spaces'}`+bl+arr;
-    case 'native':return(g.n?'Native · <b>1</b> space':'Native')+bl+arr;
-    case 'rubble':return`Discarded <b>${g.ts.length}</b> · rubble`;
-    case 'camp':return`Removed <b>${g.ts.length}</b> · base camp`;
-    case 'blr':return`Discarded <b>${g.ts.length}</b>`+bl;
-    case 'action':return`${esc(one)} · drew <b>${g.n}</b>`;
-    case 'trash':return`Removed <b>${g.ts.length}</b> from the game`;
-    case 'transmit':return`Took <b>${esc(CT[g.got].n)}</b>`;
-    case 'buy':return`Bought <b>${esc(CT[g.got].n)}</b> for ${fmt(g.paid)}`;
+    case 'move':case 'native':return mark||(g.n?`<b>${g.n}</b> ${g.n===1?'space':'spaces'}`:'');
+    case 'blr':return mark;
+    case 'rubble':return'rubble';
+    case 'camp':return'base camp';
+    case 'trash':return'removed';
   }
   return'';
 }
 /* one step: its cards and caption. attr: what finds it again (the row: data-g; the column: data-s); its words are its tooltip */
-const PILL={end:'Ended turn',timeout:'Out of time',resign:'Left the game',endgame:'Ended the game'};
+const PILL={end:'End',timeout:'Out of time',resign:'Left the game',endgame:'Ended the game'};
 function stepHTML(g,attr,pl){
   const tip=` title="${esc(stepWords(g,pl))}"`;
-  if(PILL[g.k])return`<div class="fg fend f-${g.k}" ${attr}${tip}><div class="fpill">${PILL[g.k]}</div><div class="fcap">${g.k==='end'?`${g.kept?`kept <b>${g.kept}</b>`:'kept none'}${g.disc?` · discarded ${g.disc}`:''}`:''}</div></div>`;
+  if(PILL[g.k])return`<div class="fg fend f-${g.k}" ${attr}${tip}><div class="fpill">${PILL[g.k]}</div><div class="fcap">${g.k==='end'&&g.kept?`kept <b>${g.kept}</b>`:''}</div></div>`;
   const mini=(t,got)=>`<div class="fc${got?' got':''}" data-t="${t}"><div class="mcard">${cardHTML(t)}</div></div>`;
   return`<div class="fg f-${g.k}" ${attr}${tip}><div class="frc"><div class="fcs">${g.ts.map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap">${feedCap(g)}</div></div>`;
 }
