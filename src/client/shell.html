@@ -307,6 +307,15 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* purchase in progress: the card waits above the hand until it's paid for */
 #buySlot{position:absolute;left:0;top:0;z-index:24;--bw:92px;width:var(--bw);height:calc(var(--bw)*1.4);transform:translate3d(var(--bx,0),var(--by,0),0);transition:opacity .2s}
 #buySlot[hidden]{display:none}
+/* a removal to choose (Scientist, Travel Log): the hand comes up (hand.js), this says what's asked just above it, and the
+   board steps back until it's answered */
+#choice{position:absolute;left:50%;bottom:var(--cb,300px);transform:translateX(-50%);z-index:24;pointer-events:none;text-align:center;padding:10px 20px;border-radius:14px;background:rgba(10,18,15,.94);border:1px solid var(--gold2);box-shadow:0 10px 30px rgba(0,0,0,.45);animation:bsIn .28s var(--ease);width:max-content;max-width:calc(100% - 32px)}
+#choice[hidden]{display:none}
+#choice .ct{font-size:17px;font-weight:700;color:var(--text)}#choice .ct b{color:var(--gold2)}
+#choice .cs{font-size:12.5px;color:var(--muted);margin-top:3px}#choice .cs b{color:var(--text)}
+#vp{transition:opacity .25s}#vp.dim{opacity:.32}
+@container game (max-width:600px){#choice{max-width:calc(100% - 128px);padding:8px 12px}#choice .ct{font-size:14px}#choice .cs{font-size:11.5px}} /* (clear of the zoom column) */
+@container game (max-height:520px){#choice{display:none}} /* (no room above the raised hand: the prompt says it) */
 #buySlot .bs-card{position:absolute;inset:0;border-radius:calc(var(--bw)*.08);outline:2px dashed var(--gold2);outline-offset:4px;animation:bsIn .28s var(--ease)}
 #buySlot .bs-card .mcard{--cw:var(--bw)}
 #buySlot .bs-card .cface{filter:saturate(.8) brightness(.9)}
@@ -563,6 +572,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
   <div id="actBtns"></div>
   <div id="playLbl">In play</div>
   <div id="buySlot" hidden><div class="bs-card"></div><div class="bs-ring"><b id="bsPaid">0</b><span>/</span><span id="bsCost">0</span></div><button class="bs-x" id="bsCancel" aria-label="Cancel purchase">✕</button></div>
+  <div id="choice" hidden></div>
   <div id="cards"></div>
   <svg id="arrow"></svg>
 </div>

@@ -2,8 +2,8 @@
    Cards are positioned with transforms computed from cached sizes (geometry.js), never by measuring; every move is a
    CSS transition on transform, which the compositor runs. A new card is placed at the deck first and moved into the
    hand one frame later, so it slides in without the browser having to lay out anything in between. */
-import { S, typeOf } from '../engine.gen.js';
-import { $, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
+import { S, CT, typeOf, plural } from '../engine.gen.js';
+import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
 import { UI, cur, hp, viewIdx, canAct, G } from './state.js';
 import { geo } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
@@ -35,7 +35,7 @@ export function layoutCards() {
   const pl = hp(), hand = UI.cover ? [] : pl.hand, play = UI.cover ? [] : pl.play, n = hand.length;
   const pileW = phone ? 54 : 74, avail = W - 2 * (pileW + 32) - (W > 900 ? 140 : 0);
   const step = n > 1 ? Math.min(cw * .86, Math.max(cw * .32, (avail - cw) / (n - 1))) : 0;
-  const hi = hand.indexOf(UI.hover), paying = UI.mode === 'pay' && UI.buy && !UI.cover;
+  const hi = hand.indexOf(UI.hover), paying = UI.mode === 'pay' && UI.buy && !UI.cover, choosing = UI.mode === 'trashPick' && !UI.cover;
   const lifted = id => (UI.mode === 'card' && UI.card === id) || (!paying && UI.picks.includes(id)) || (drag && drag.started && drag.id === id);
   // the purchase slot above the hand, the spending tray to its right
   const bw = Math.round(cw * (phone ? .78 : .72)), bx = W / 2 - bw / 2, by = H - ch * 1.02 - 14 - bw * 1.4 - 26, bs = $('#buySlot');
@@ -47,12 +47,14 @@ export function layoutCards() {
     let x = W / 2 + off * step - cw / 2, y = H - ch * (phone ? .78 : .9) + off * off * (phone ? 1.6 : 2.6), rot = off * (phone ? 2.4 : 3.2), sc = 1, z = 10 + i;
     if (hi >= 0 && i !== hi) x += Math.sign(i - hi) * cw * .16;
     if (paying && UI.picks.includes(id)) { const k = tk++; x = bx + bw + 18 + k * tw * .55 - (cw - tw) / 2; y = by + bw * 1.4 * .5 - ch / 2 + k * 3; rot = 4 + k * 3; sc = tsc; z = 70 + k; }
+    else if (choosing) { y = H - ch * 1.02 - 14 + off * off * 1.5; rot *= .5; if (UI.picks.includes(id)) { y -= ch * .16; z = 60 + i; } if (i === hi && !drag) { y = Math.min(y, H - ch * 1.1 - 14); rot = 0; z = 90; } } // the whole hand up; chosen cards higher
     else { if (lifted(id)) { y = H - ch * 1.02 - 14; rot *= .4; z = 60 + i; } if (i === hi && !drag) { y = H - ch * 1.12 - 14; rot = 0; sc = 1.14; z = 90; } }
     setStyle(el, 'zIndex', z); setT(el, x, y, rot, sc);
   });
   // the play area: a small overlapping row left of the discard pile
   const psc = .46, pw = cw * psc, ph = ch * psc, baseX = W - 16 - pileW - 24 - pw, py = H - 16 - (phone ? 76 : 104) + ((phone ? 76 : 104) - ph);
   play.forEach((id, i) => { const el = cardEls.get(id); if (!el || el.__enter) return; const k = play.length - 1 - i; setStyle(el, 'zIndex', 5 + i); setT(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc); });
+  setStyle($('#choice'), '--cb', Math.round(ch * 1.18 + 14 + 30) + 'px'); // (just above the raised hand and its tags)
   const lbl = $('#playLbl'); setStyle(lbl, 'opacity', play.length ? 1 : 0); setStyle(lbl, 'transform', `translate(${baseX - (play.length - 1) * pw * .42}px,${py - 18}px)`);
 }
 
@@ -89,7 +91,7 @@ function update() {
     if (acting && (UI.mode === 'idle' || UI.mode === 'card') && UI.card !== id) dim = !cardUsable(id);
     el.classList.toggle('sel', (UI.mode === 'card' || UI.mode === 'transmit') && UI.card === id);
     el.classList.toggle('pick', UI.picks.includes(id));
-    const dp = UI.mode === 'discardFor' && UI.picks.includes(id); el.classList.toggle('dpick', dp); if (dp) el.dataset.pk = UI.pending.kind === 'camp' ? 'Remove' : 'Discard';
+    const dp = (UI.mode === 'discardFor' || UI.mode === 'trashPick') && UI.picks.includes(id); el.classList.toggle('dpick', dp); if (dp) el.dataset.pk = UI.mode === 'trashPick' || UI.pending.kind === 'camp' ? 'Remove' : 'Discard';
     el.classList.toggle('dim', dim); el.classList.remove('inplay', 'act'); setLeft(el, null);
   }
   for (const id of wantPlay) {
@@ -99,6 +101,10 @@ function update() {
   }
   // a replay marks the card the next move plays and the cards it pays with
   for (const [id, el] of cardEls) { el.classList.toggle('rnext', !!(rx && rx.card === id)); el.classList.toggle('rpay', !!(rx && (rx.cards || rx.keep || []).includes(id))); }
+  // a removal to choose (Scientist, Travel Log): the hand is up (layoutCards), this says what's asked, the board steps back
+  const q = acting && UI.mode === 'trashPick' && !UI.cover && S.turn.pending, qb = $('#choice');
+  if (qb.hidden !== !q) qb.hidden = !q; $('#vp').classList.toggle('dim', !!q);
+  if (q) setHTML(qb, `<div class="ct"><b>${esc(CT[q.by].n)}</b> · remove up to ${plural(q.max, 'card')}</div><div class="cs">${UI.picks.length ? `<b>${UI.picks.length}</b> of ${q.max} chosen · they leave the game` : 'Tap cards to choose · they leave the game'}</div>`);
   layoutCards();
   // piles
   setText($('#deckN'), pl.deck.length); setText($('#discN'), pl.discard.length);

@@ -435,7 +435,7 @@ function applyAction(seat,a,rnd=Math.random){
       const n={cartographer:2,compass:3,scientist:1,travellog:2}[t];if(!n)return fail('That card has no draw effect.');
       T.active=null;rm(P.hand,a.card);if(CT[t].once)S.trash.push(a.card);else P.play.push(a.card);
       const got=drawCards(P,n,rnd);reveal=true;tell(ev,{e:'play',pl:seat,k:'action',ts:[t],n:got.length});
-      if(t==='scientist'||t==='travellog')T.pending={max:t==='scientist'?1:2};
+      if(t==='scientist'||t==='travellog')T.pending={by:t,max:t==='scientist'?1:2}; // by: the card asking (shown while it's answered)
       break;
     }
     case 'trash':{

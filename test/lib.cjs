@@ -46,7 +46,9 @@ async function openPage(browser, name, opts = {}) {
   return page;
 }
 /* nothing finite is animating (card flights, explorer moves, fades); infinite effects (a low clock's pulse) don't count */
-const settle = (page, ms = 4000) => page.waitForFunction(() => !document.getAnimations().some(a => a.playState === 'running' && a.effect && a.effect.getComputedTiming().endTime !== Infinity), null, { timeout: ms }).catch(() => {});
+// (two frames first: a change can start its animations a frame later, e.g. the hand after the game area was resized)
+const settle = (page, ms = 4000) => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
+  .then(() => page.waitForFunction(() => !document.getAnimations().some(a => a.playState === 'running' && a.effect && a.effect.getComputedTiming().endTime !== Infinity), null, { timeout: ms })).catch(() => {});
 
 function report(title) {
   let fails = 0;
