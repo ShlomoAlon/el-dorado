@@ -53,19 +53,29 @@ function aiPlan(id,rnd){
 /* El Dorado can only be entered with a card of its symbol (paddle on the water side, machete on the jungle side) or a joker.
    The bot sometimes trashes its last such card (or nearly its whole deck) and, near the end, stops buying, so it could wait forever next to the finish
    (seen on the newer courses). Keep one such card when trashing, and buy one before ending a turn without any. */
-const aiFinishCard=t=>{const d=CT[t];return d.c!=='p'&&(d.s===MAP.endSym||d.s==='*');};
 function aiFinishGuard(a){
-  const P=S.players[S.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>aiFinishCard(S.cards[id])).length;
+  const P=S.players[S.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>botFinishCard(S.cards[id])).length;
   if(a.t==='trash'){let c=a.cards;
-    if(n){const out=c.filter(id=>aiFinishCard(S.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
+    if(n){const out=c.filter(id=>botFinishCard(S.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
     c=c.slice(0,Math.max(0,all.length-4)); // and never thin the deck below 4 cards (owner: 4 can be valid, fewer can't)
     if(c.length!==a.cards.length)return{...a,cards:c};}
-  if(a.t==='end'&&!n&&!S.turn.bought&&!S.turn.pending){
-    const buys=botActions().filter(b=>b.t==='buy'&&aiFinishCard(b.type));
+  if(a.t==='end'&&!S.turn.bought&&!S.turn.pending){
+    // an expedition with no card that could take the next step (or enter El Dorado) buys one, the cheapest way
+    const steps=aiNextSteps(P),stuck=steps.length&&!all.some(id=>steps.some(h=>aiEnters(S.cards[id],h)));
+    const want=!n?t=>botFinishCard(t):stuck?t=>steps.some(h=>aiEnters(t,h)):null;
+    const buys=want?botActions().filter(b=>b.t==='buy'&&want(b.type)):[];
     if(buys.length){buys.sort((x,y)=>x.cards.length-y.cards.length);return buys[0];}
   }
   return a;
 }
+/* the spaces the player's explorers could step to next on their way: neighbours closer to El Dorado */
+function aiNextSteps(P){const out=[];
+  for(const k of P.pieces){if(k==='done')continue;const c=botCost(k);for(const nb of neighbors(k))if(hexAt(nb).type!=='m'&&botCost(nb)<c)out.push(hexAt(nb));}
+  return out;}
+/* a card of type t could enter space h: its symbol (El Dorado: the course's) and strength, a joker, the Native; rubble and base
+   camps take any cards */
+function aiEnters(t,h){const d=CT[t];if(t==='native'||h.type==='r'||h.type==='c')return true;if(d.c==='p')return false;
+  const sym=h.type==='g'?MAP.endSym:h.type;return(d.s===sym||d.s==='*')&&d.p>=(h.val||1);}
 /* apply the AI's decision (recorded in rec, the game's log; may be null). Returns applyAction's result. */
 function aiStep(id,mem,rec,rnd){ // rnd: the game's shuffles when there is no record (tools)
   const r=recApply(rec,S.cur,aiChoose(id,mem),rnd);

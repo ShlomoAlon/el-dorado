@@ -589,6 +589,13 @@ function botRemaining(pl){const p=S.players[pl];return p.pieces.reduce((a,k)=>a+
 function botCombos(ids,k){const out=[],seen=new Set(),cur=[];
   const rec=i=>{if(cur.length===k){const sig=cur.map(typeOf).sort().join();if(!seen.has(sig)){seen.add(sig);out.push(cur.slice());}return;}
     for(let j=i;j<ids.length;j++){cur.push(ids[j]);rec(j+1);cur.pop();}};rec(0);return out;}
+/* a card that can enter El Dorado on this course (its symbol, or a joker) */
+const botFinishCard=t=>{const d=CT[t];return d.c!=='p'&&(d.s===MAP.endSym||d.s==='*');};
+/* removing these cards from the game still leaves an expedition that can finish: at least 4 cards (owner: 4 can be valid,
+   fewer can't), and a card that can enter El Dorado if it had one. (Without this an AI paid for base camps down to 2
+   cards, none able to enter, and stood forever beside the finish, blocking the way for others: Witch's Cauldron) */
+function botCanRemove(P,out){const all=[...P.deck,...P.hand,...P.discard,...P.play],fin=id=>botFinishCard(S.cards[id]);
+  return all.length-out.length>=4&&(!all.some(fin)||all.filter(fin).length>out.filter(fin).length);}
 function botActions(){
   const seat=S.cur,P=S.players[seat],T=S.turn,out=[];
   // Scientist / Travel Log: remove nothing, or any distinct choice of up to `max` cards
@@ -600,8 +607,9 @@ function botActions(){
       if(t==='native'){for(const[k]of nativeTargets(seat,pi))out.push({t:'native',card:id,pi,to:k});continue;}
       if(d.c==='p')continue;
       for(const[k]of reach(seat,pi,d.s==='*'?['j','w','v']:[d.s],d.p))out.push({t:'move',card:id,pi,to:k});}
-    // rubble / base camp / rubble blockade: every distinct choice of cards to give up
-    for(const[k,tg]of payTargets(seat,pi))for(const c of botCombos(P.hand,tg.need))out.push({t:'pay',pi,to:k,cards:c});
+    // rubble / base camp / rubble blockade: every distinct choice of cards to give up (a base camp removes them from the game:
+    // never so many that the expedition can't finish)
+    for(const[k,tg]of payTargets(seat,pi))for(const c of botCombos(P.hand,tg.need))if(tg.kind!=='camp'||botCanRemove(P,c))out.push({t:'pay',pi,to:k,cards:c});
   });
   for(const id of hand){const t=typeOf(id);if(['cartographer','compass','scientist','travellog'].includes(t))out.push({t:'action',card:id});}
   const open=S.market.some(s=>s.n===0);
@@ -1022,19 +1030,29 @@ function aiPlan(id,rnd){
 /* El Dorado can only be entered with a card of its symbol (paddle on the water side, machete on the jungle side) or a joker.
    The bot sometimes trashes its last such card (or nearly its whole deck) and, near the end, stops buying, so it could wait forever next to the finish
    (seen on the newer courses). Keep one such card when trashing, and buy one before ending a turn without any. */
-const aiFinishCard=t=>{const d=CT[t];return d.c!=='p'&&(d.s===MAP.endSym||d.s==='*');};
 function aiFinishGuard(a){
-  const P=S.players[S.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>aiFinishCard(S.cards[id])).length;
+  const P=S.players[S.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>botFinishCard(S.cards[id])).length;
   if(a.t==='trash'){let c=a.cards;
-    if(n){const out=c.filter(id=>aiFinishCard(S.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
+    if(n){const out=c.filter(id=>botFinishCard(S.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
     c=c.slice(0,Math.max(0,all.length-4)); // and never thin the deck below 4 cards (owner: 4 can be valid, fewer can't)
     if(c.length!==a.cards.length)return{...a,cards:c};}
-  if(a.t==='end'&&!n&&!S.turn.bought&&!S.turn.pending){
-    const buys=botActions().filter(b=>b.t==='buy'&&aiFinishCard(b.type));
+  if(a.t==='end'&&!S.turn.bought&&!S.turn.pending){
+    // an expedition with no card that could take the next step (or enter El Dorado) buys one, the cheapest way
+    const steps=aiNextSteps(P),stuck=steps.length&&!all.some(id=>steps.some(h=>aiEnters(S.cards[id],h)));
+    const want=!n?t=>botFinishCard(t):stuck?t=>steps.some(h=>aiEnters(t,h)):null;
+    const buys=want?botActions().filter(b=>b.t==='buy'&&want(b.type)):[];
     if(buys.length){buys.sort((x,y)=>x.cards.length-y.cards.length);return buys[0];}
   }
   return a;
 }
+/* the spaces the player's explorers could step to next on their way: neighbours closer to El Dorado */
+function aiNextSteps(P){const out=[];
+  for(const k of P.pieces){if(k==='done')continue;const c=botCost(k);for(const nb of neighbors(k))if(hexAt(nb).type!=='m'&&botCost(nb)<c)out.push(hexAt(nb));}
+  return out;}
+/* a card of type t could enter space h: its symbol (El Dorado: the course's) and strength, a joker, the Native; rubble and base
+   camps take any cards */
+function aiEnters(t,h){const d=CT[t];if(t==='native'||h.type==='r'||h.type==='c')return true;if(d.c==='p')return false;
+  const sym=h.type==='g'?MAP.endSym:h.type;return(d.s===sym||d.s==='*')&&d.p>=(h.val||1);}
 /* apply the AI's decision (recorded in rec, the game's log; may be null). Returns applyAction's result. */
 function aiStep(id,mem,rec,rnd){ // rnd: the game's shuffles when there is no record (tools)
   const r=recApply(rec,S.cur,aiChoose(id,mem),rnd);
@@ -1043,5 +1061,5 @@ function aiStep(id,mem,rec,rnd){ // rnd: the game's shuffles when there is no re
 }
 
 // every name (live bindings), and setters for the game on show
-export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiFinishCard,aiStep};
+export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,recRng,newGame,newCard,replayStep,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiStep};
 export const setS=v=>{S=v},setMAP=v=>{MAP=v};

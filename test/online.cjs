@@ -4,6 +4,7 @@
 //   2. a rated room with two AI seats: the AIs play on the server; after the person resigns they finish the race and
 //      every rating moves by its delta
 //   3. an unrated room: nobody's rating moves
+//   3b. two games at once: both run to their end side by side, each page hears only its own room
 //   4. room lists (public listed, private not) and quick match (starts when full, or early when everyone asks)
 //   NODE_PATH=$(npm root -g) node test/online.cjs        (or: node test/run.mjs --online)
 const { chromium, startServer, openPage, settle, report } = require('./lib.cjs');

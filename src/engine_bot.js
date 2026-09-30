@@ -31,6 +31,13 @@ function botRemaining(pl){const p=S.players[pl];return p.pieces.reduce((a,k)=>a+
 function botCombos(ids,k){const out=[],seen=new Set(),cur=[];
   const rec=i=>{if(cur.length===k){const sig=cur.map(typeOf).sort().join();if(!seen.has(sig)){seen.add(sig);out.push(cur.slice());}return;}
     for(let j=i;j<ids.length;j++){cur.push(ids[j]);rec(j+1);cur.pop();}};rec(0);return out;}
+/* a card that can enter El Dorado on this course (its symbol, or a joker) */
+const botFinishCard=t=>{const d=CT[t];return d.c!=='p'&&(d.s===MAP.endSym||d.s==='*');};
+/* removing these cards from the game still leaves an expedition that can finish: at least 4 cards (owner: 4 can be valid,
+   fewer can't), and a card that can enter El Dorado if it had one. (Without this an AI paid for base camps down to 2
+   cards, none able to enter, and stood forever beside the finish, blocking the way for others: Witch's Cauldron) */
+function botCanRemove(P,out){const all=[...P.deck,...P.hand,...P.discard,...P.play],fin=id=>botFinishCard(S.cards[id]);
+  return all.length-out.length>=4&&(!all.some(fin)||all.filter(fin).length>out.filter(fin).length);}
 function botActions(){
   const seat=S.cur,P=S.players[seat],T=S.turn,out=[];
   // Scientist / Travel Log: remove nothing, or any distinct choice of up to `max` cards
@@ -42,8 +49,9 @@ function botActions(){
       if(t==='native'){for(const[k]of nativeTargets(seat,pi))out.push({t:'native',card:id,pi,to:k});continue;}
       if(d.c==='p')continue;
       for(const[k]of reach(seat,pi,d.s==='*'?['j','w','v']:[d.s],d.p))out.push({t:'move',card:id,pi,to:k});}
-    // rubble / base camp / rubble blockade: every distinct choice of cards to give up
-    for(const[k,tg]of payTargets(seat,pi))for(const c of botCombos(P.hand,tg.need))out.push({t:'pay',pi,to:k,cards:c});
+    // rubble / base camp / rubble blockade: every distinct choice of cards to give up (a base camp removes them from the game:
+    // never so many that the expedition can't finish)
+    for(const[k,tg]of payTargets(seat,pi))for(const c of botCombos(P.hand,tg.need))if(tg.kind!=='camp'||botCanRemove(P,c))out.push({t:'pay',pi,to:k,cards:c});
   });
   for(const id of hand){const t=typeOf(id);if(['cartographer','compass','scientist','travellog'].includes(t))out.push({t:'action',card:id});}
   const open=S.market.some(s=>s.n===0);
