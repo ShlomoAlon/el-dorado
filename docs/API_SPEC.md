@@ -61,20 +61,19 @@ The engine works on three module-level variables:
 ### 1.3 `buildCourse(course, seed)` → MAP
 
 `buildCourse` validates the route: boards don't overlap, El Dorado touches the last board, consecutive boards connect, and a path
-exists from the start. It throws if any check fails. It returns:
+exists from the start. It throws if any check fails. It returns the course's topology only (where things are drawn is the
+page's: `src/client/board/layout.js` places each space at `pxOf(q, r)` and works out the city and the bounds):
 
 | field | |
 |---|---|
-| `hexes` | `Map<key, {type, val, sym?, num?, q, r, k, tile, x, y}>` |
-| `tiles` | `[{name, c: [q, r], k: rotation, x, y, end?}]`: each board, then El Dorado |
+| `hexes` | `Map<key, {type, val, sym?, num?, q, r, k, tile}>` |
+| `tiles` | `[{name, c: [q, r], k: rotation, end?}]`: each board, then El Dorado |
 | `conns` | `[{a, b, edges: [[key, key]…]}]`: the seam between board i and board i+1 |
 | `edgeConn` | `Map<"k1\|k2", connection index>` (both directions) |
 | `starts` | the 4 start keys, numbered 1–4 |
 | `goals` | the 3 El Dorado keys |
 | `blockDefs` | `[{n, k, v, conn}]`: one blockade per connection, dealt with `mulberry32(seed ^ 0x2c1b3c6d)` |
-| `city` | `{x, y, dx, dy}`: where arrived explorers stand |
 | `endSym` | El Dorado's symbol |
-| `minX, minY, w, h` | the board's bounds |
 | `route` | the board letters in order |
 | `name` | the course name |
 | `course` | the course id |

@@ -1,7 +1,8 @@
 /* The static board: terrain, board plates, seams and the city, drawn once per deal into #board (SVG)
    with their text as HTML labels (#blabels): Chrome re-lays out SVG text whenever an ancestor's scale changes, HTML
    text it doesn't. The live layers (targets, blockades, trails: #board2; explorers: #pieces) sit above it. */
-import { MAP, R, hash, hexAt } from '../../engine.gen.js';
+import { MAP, R, hash } from '../../engine.gen.js';
+import { layout, xy } from './layout.js';
 import { $, sv } from '../dom.js';
 export function hexPts(x,y,r){let s='';for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);s+=(x+r*Math.cos(a)).toFixed(1)+','+(y+r*Math.sin(a)).toFixed(1)+' ';}return s;}
 const TFILL={j:['#4a9b5f','#2a6a40'],w:['#4aa0dd','#2464a0'],v:['#f2cd6c','#d09632'],r:['#aeb2ad','#7a7f7b'],c:['#d4705a','#9a3e2d'],m:['#58615a','#2d332f'],s:['#e3d8b9','#b4a887'],g:['#ffe690','#e3a52b']};
@@ -28,8 +29,8 @@ function placeLabel(e){e.style.top=(e.__y-baselineOf(e.__f))+'px';}
 export function label(layer,x,y,text,o){
   const e=document.createElement('span');e.className='blabel';e.textContent=text;
   const font=`${o.weight||400} ${o.size}px ${o.family||'Figtree, sans-serif'}`;
-  e.style.cssText=`left:${x-MAP.minX}px;font:${font};color:${o.color||'#fff'};letter-spacing:${o.spacing||0}px;transform:translateX(${o.anchor==='middle'?'-50%':o.anchor==='end'?'-100%':'0'})`;
-  e.__f=font;e.__y=y-MAP.minY;placeLabel(e);layer.appendChild(e);labels.push(e);return e;}
+  e.style.cssText=`left:${x-layout().minX}px;font:${font};color:${o.color||'#fff'};letter-spacing:${o.spacing||0}px;transform:translateX(${o.anchor==='middle'?'-50%':o.anchor==='end'?'-100%':'0'})`;
+  e.__f=font;e.__y=y-layout().minY;placeLabel(e);layer.appendChild(e);labels.push(e);return e;}
 /* once the game's fonts have loaded: measure the baselines again (the board may have been drawn with fallback fonts) */
 export function relabel(){for(const k in baseCache)delete baseCache[k];for(let i=labels.length-1;i>=0;i--){if(!labels[i].isConnected){labels.splice(i,1);continue;}placeLabel(labels[i]);}}
 
@@ -41,8 +42,8 @@ export function buildBoard(){
   if(drawn===sig)return false;
   drawn=sig;
   const svg=$('#board'),svg2=$('#board2'),lab=$('#blabels');svg.innerHTML='';svg2.innerHTML='';lab.innerHTML='';$('#blabels2').innerHTML='';
-  for(const s of[svg,svg2]){s.setAttribute('width',MAP.w);s.setAttribute('height',MAP.h);s.setAttribute('viewBox',`${MAP.minX} ${MAP.minY} ${MAP.w} ${MAP.h}`);}
-  for(const id of['#pieces','#bfx']){const e=$(id);e.style.width=MAP.w+'px';e.style.height=MAP.h+'px';}
+  for(const s of[svg,svg2]){s.setAttribute('width',layout().w);s.setAttribute('height',layout().h);s.setAttribute('viewBox',`${layout().minX} ${layout().minY} ${layout().w} ${layout().h}`);}
+  for(const id of['#pieces','#bfx']){const e=$(id);e.style.width=layout().w+'px';e.style.height=layout().h+'px';}
   const defs=sv('defs',null,svg);
   for(const t in TFILL){const g=sv('linearGradient',{id:'gr-'+t,x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':TFILL[t][0]},g);sv('stop',{offset:1,'stop-color':TFILL[t][1]},g);}
   for(const t in TSHADE)TSHADE[t].forEach(([a,b],i)=>{const g=sv('linearGradient',{id:'gr-'+t+(i+1),x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':a},g);sv('stop',{offset:1,'stop-color':b},g);});
@@ -62,37 +63,37 @@ export function buildBoard(){
   L.hl=sv('g',null,svg2);L.trail=sv('g',{'pointer-events':'none'},svg2);L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);
   // board plates (the physical boards): drop shadow + rim
   const byTile=new Map();for(const h of MAP.hexes.values()){if(!byTile.has(h.tile))byTile.set(h.tile,[]);byTile.get(h.tile).push(h);}
-  for(const[,hs]of byTile){const g=sv('g',null,L.plates);for(const h of hs)sv('polygon',{points:hexPts(h.x+2,h.y+6,R+2),fill:'rgba(0,0,0,.45)'},g);}
-  for(const[t,hs]of byTile){const g=sv('g',null,L.plates);const rim=MAP.tiles[t].end?'#6b4c14':'#1c2a22';for(const h of hs)sv('polygon',{points:hexPts(h.x,h.y,R+2.2),fill:rim},g);}
-  for(const[t,hs]of byTile){const g=sv('g',null,L.plates);const inner=MAP.tiles[t].end?'#3a2a0b':'#0f1a14';for(const h of hs)sv('polygon',{points:hexPts(h.x,h.y,R+.6),fill:inner},g);}
+  for(const[,hs]of byTile){const g=sv('g',null,L.plates);for(const h of hs){const{x,y}=xy(h.k);sv('polygon',{points:hexPts(x+2,y+6,R+2),fill:'rgba(0,0,0,.45)'},g);}}
+  for(const[t,hs]of byTile){const g=sv('g',null,L.plates);const rim=MAP.tiles[t].end?'#6b4c14':'#1c2a22';for(const h of hs){const{x,y}=xy(h.k);sv('polygon',{points:hexPts(x,y,R+2.2),fill:rim},g);}}
+  for(const[t,hs]of byTile){const g=sv('g',null,L.plates);const inner=MAP.tiles[t].end?'#3a2a0b':'#0f1a14';for(const h of hs){const{x,y}=xy(h.k);sv('polygon',{points:hexPts(x,y,R+.6),fill:inner},g);}}
   // hexes
   for(const h of MAP.hexes.values()){
-    const g=sv('g',null,L.terrain);
-    const pts=hexPts(h.x,h.y,R-1.4);
+    const g=sv('g',null,L.terrain),{x,y}=xy(h.k);
+    const pts=hexPts(x,y,R-1.4);
     const vt=h.type==='g'?h.sym:h.type; // El Dorado's finishing spaces look like the terrain they need (water or jungle)
     sv('polygon',{points:pts,fill:'url(#gr-'+vt+(TSHADE[vt]?Math.min(4,h.val):'')+')'},g);
     if(vt!=='m'&&vt!=='s'&&vt!=='g')sv('polygon',{points:pts,fill:'url(#p-'+vt+')'},g);
     sv('polygon',{points:pts,fill:'url(#hexShine)',stroke:'rgba(255,255,255,.16)','stroke-width':1},g);
-    if(h.type==='m'){drawMountain(g,h);continue;}
-    if(h.type==='s'){sv('circle',{cx:h.x,cy:h.y,r:13,fill:'none',stroke:'rgba(75,68,54,.35)','stroke-width':1.5,'stroke-dasharray':'3 3'},g);
-      label(lab,h.x,h.y+6,h.num,{anchor:'middle',size:17,family:'Young Serif, Georgia, serif',color:ICOL.s});continue;}
+    if(h.type==='m'){drawMountain(g,h,x,y);continue;}
+    if(h.type==='s'){sv('circle',{cx:x,cy:y,r:13,fill:'none',stroke:'rgba(75,68,54,.35)','stroke-width':1.5,'stroke-dasharray':'3 3'},g);
+      label(lab,x,y+6,h.num,{anchor:'middle',size:17,family:'Young Serif, Georgia, serif',color:ICOL.s});continue;}
     if(h.type==='g'){
       // a gold ring and gold lettering mark the finish; the space itself is its terrain's colour
-      sv('polygon',{points:hexPts(h.x,h.y,R-5),fill:'none',stroke:'#f8dc97','stroke-width':2.2},g);
-      const u=sv('use',{href:'#i-'+h.sym,x:h.x-9,y:h.y-2,width:18,height:18},g);u.style.color=ICOL[h.sym];
-      label(lab,h.x,h.y-8,'FINISH',{anchor:'middle',size:8,weight:800,spacing:1.2,color:'#f8dc97'});continue;}
+      sv('polygon',{points:hexPts(x,y,R-5),fill:'none',stroke:'#f8dc97','stroke-width':2.2},g);
+      const u=sv('use',{href:'#i-'+h.sym,x:x-9,y:y-2,width:18,height:18},g);u.style.color=ICOL[h.sym];
+      label(lab,x,y-8,'FINISH',{anchor:'middle',size:8,weight:800,spacing:1.2,color:'#f8dc97'});continue;}
     const sym=h.type,n=h.val;
     // icons spaced out so the count reads at a glance: 1 · 2 side by side · 3 in a triangle · 4 in a square
     const at=ICON_AT[Math.min(4,n)],is=n===1?18:n===2?15:13.5;
-    if(n<=2){const w=n===1?28:44;sv('rect',{x:h.x-w/2,y:h.y-12,width:w,height:24,rx:12,fill:CHIP[sym]},g);}
-    else sv('circle',{cx:h.x,cy:h.y+(n===3?.4:0),r:n===3?19:19.5,fill:CHIP[sym]},g);
-    for(const[dx,dy]of at){const u=sv('use',{href:'#i-'+sym,x:h.x+dx-is/2,y:h.y+dy-is/2,width:is,height:is},g);u.style.color=ICOL[sym];}
+    if(n<=2){const w=n===1?28:44;sv('rect',{x:x-w/2,y:y-12,width:w,height:24,rx:12,fill:CHIP[sym]},g);}
+    else sv('circle',{cx:x,cy:y+(n===3?.4:0),r:n===3?19:19.5,fill:CHIP[sym]},g);
+    for(const[dx,dy]of at){const u=sv('use',{href:'#i-'+sym,x:x+dx-is/2,y:y+dy-is/2,width:is,height:is},g);u.style.color=ICOL[sym];}
   }
   // seams between boards
   const seam=sv('g',{stroke:'rgba(0,0,0,.55)','stroke-width':2.4,'stroke-linecap':'round'},L.terrain);
   for(const c of MAP.conns)for(const[a,b]of c.edges){const[x1,y1,x2,y2]=edgeSeg(a,b);sv('line',{x1,y1,x2,y2},seam);}
   // city
-  const C=MAP.city;
+  const C=layout().city;
   sv('circle',{cx:C.x,cy:C.y,r:R*2.6,fill:'url(#cityGlow)'},L.city);
   const cg=sv('g',{transform:`translate(${C.x},${C.y})`},L.city);
   for(let i=0;i<12;i++){const a=i*Math.PI/6;sv('line',{x1:Math.cos(a)*30,y1:Math.sin(a)*30-6,x2:Math.cos(a)*52,y2:Math.sin(a)*52-6,stroke:'rgba(255,214,107,.35)','stroke-width':2,'stroke-linecap':'round'},cg);}
@@ -107,8 +108,8 @@ export function buildBoard(){
   const side=px>.35;label(lab,C.x+(side?px*40+2:0),C.y+(side?py*40+5:44),'El Dorado',{anchor:side?'start':'middle',family:'Young Serif, Georgia, serif',size:15,color:'#f8dc97'});
   return true;
 }
-function drawMountain(g,h){
-  const x=h.x,y=h.y,v=hash(h.q,h.r);
+function drawMountain(g,h,x,y){
+  const v=hash(h.q,h.r);
   const s=v>.5?1:-1;
   sv('path',{d:`M${x-21} ${y+12} L${x-8*s} ${y-12} L${x-2*s} ${y-2} L${x+7*s} ${y-16} L${x+21} ${y+12} Z`,fill:'#6d766e'},g);
   sv('path',{d:`M${x+7*s} ${y-16} L${x+21} ${y+12} L${x+4*s} ${y+12} Z`,fill:'rgba(0,0,0,.25)'},g);
@@ -116,4 +117,4 @@ function drawMountain(g,h){
   sv('path',{d:`M${x+7*s} ${y-16} L${x+2*s} ${y-7} L${x+6*s} ${y-8} L${x+9*s} ${y-4} L${x+11.5*s} ${y-9} Z`,fill:'#eef3ee'},g);
   sv('path',{d:`M${x-8*s} ${y-12} L${x-11*s} ${y-7} L${x-8*s} ${y-8} L${x-5*s} ${y-6.5} Z`,fill:'#eef3ee'},g);
 }
-export function edgeSeg(a,b){const A=hexAt(a),B=hexAt(b);const mx=(A.x+B.x)/2,my=(A.y+B.y)/2;let dx=B.x-A.x,dy=B.y-A.y;const l=Math.hypot(dx,dy);dx/=l;dy/=l;const px=-dy*R/2,py=dx*R/2;return[mx-px,my-py,mx+px,my+py];}
+export function edgeSeg(a,b){const A=xy(a),B=xy(b);const mx=(A.x+B.x)/2,my=(A.y+B.y)/2;let dx=B.x-A.x,dy=B.y-A.y;const l=Math.hypot(dx,dy);dx/=l;dy/=l;const px=-dy*R/2,py=dx*R/2;return[mx-px,my-py,mx+px,my+py];}

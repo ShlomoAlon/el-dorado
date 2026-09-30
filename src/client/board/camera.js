@@ -8,6 +8,7 @@ import { UI, cur } from '../state.js';
 import { geo, onGeo, measure } from '../geometry.js';
 import { after } from '../frame.js';
 import { diag } from '../debug.js';
+import { layout, xy } from './layout.js';
 export const view = { s: 1, x: 0, y: 0 };
 /* userZoomed: the player moved the board (a resize then keeps their view); dragMoved: the current press became a drag
    (its click is not a tap) */
@@ -39,18 +40,18 @@ function safeRect() {
 }
 export function focusPoint() {
   const pl = cur(); const k = pl.pieces[UI.piece] && pl.pieces[UI.piece] !== 'done' ? pl.pieces[UI.piece] : pl.pieces.find(x => x !== 'done');
-  if (!k) return [MAP.city.x, MAP.city.y]; const h = hexAt(k); return [h.x, h.y];
+  const p = k ? xy(k) : layout().city; return [p.x, p.y];
 }
 export function fit(anim) {
   if (!MAP) return; const r = safeRect(); if (!r.W) return; diag(`fit${anim ? ' (glide)' : ''} in ${Math.round(r.W)}×${Math.round(r.H)}`);
   const aw = r.r - r.l, ah = r.b - r.t;
-  let s = Math.min(aw / MAP.w, ah / MAP.h); view.s = s; view.x = r.l + (aw - MAP.w * s) / 2; view.y = r.t + (ah - MAP.h * s) / 2;
+  let s = Math.min(aw / layout().w, ah / layout().h); view.s = s; view.x = r.l + (aw - layout().w * s) / 2; view.y = r.t + (ah - layout().h * s) / 2;
   // too small to play (phones): zoom in on the explorer to move, or (the start screen's preview) on the starting spaces,
   // so the game starts in exactly the view the preview showed
   if (s * R < 13) {
-    s = Math.min(ah / MAP.h, 13 / R * 1.6); view.s = s;
-    const c = S ? focusPoint() : MAP.starts.map(k => hexAt(k)).reduce((a, h, i, A) => [a[0] + h.x / A.length, a[1] + h.y / A.length], [0, 0]);
-    view.x = (r.l + r.r) / 2 - (c[0] - MAP.minX) * s; view.y = r.t + (ah - MAP.h * s) / 2; clampView();
+    s = Math.min(ah / layout().h, 13 / R * 1.6); view.s = s;
+    const c = S ? focusPoint() : MAP.starts.map(xy).reduce((a, h, i, A) => [a[0] + h.x / A.length, a[1] + h.y / A.length], [0, 0]);
+    view.x = (r.l + r.r) / 2 - (c[0] - layout().minX) * s; view.y = r.t + (ah - layout().h * s) / 2; clampView();
   }
   // not animated: drawn sharp at this scale right away (no blurry frame, no later redraw once it's on screen)
   if (anim) glide(); else { baked = view.s; $('#bscale').style.transform = `scale(${baked})`; }
@@ -64,21 +65,21 @@ function glide() {
   glide.t = setTimeout(() => { stage().style.transition = ''; gliding = false; scheduleSettle(); }, 480);
 }
 function clampView() {
-  const W = geo.app.width, H = geo.app.height, bw = MAP.w * view.s, bh = MAP.h * view.s;
+  const W = geo.app.width, H = geo.app.height, bw = layout().w * view.s, bh = layout().h * view.s;
   if (bw <= W) view.x = Math.max(Math.min(view.x, W - bw), 0); else view.x = Math.min(W * .4, Math.max(W * .6 - bw, view.x));
   if (bh <= H) view.y = Math.max(Math.min(view.y, H - bh), 0); else view.y = Math.min(H * .4, Math.max(H * .6 - bh, view.y));
 }
 /* glide the explorer about to move into view, if it isn't */
 export function ensureVisible() {
   const r = safeRect(), c = focusPoint();
-  const sx = (c[0] - MAP.minX) * view.s + view.x, sy = (c[1] - MAP.minY) * view.s + view.y, m = 40;
+  const sx = (c[0] - layout().minX) * view.s + view.x, sy = (c[1] - layout().minY) * view.s + view.y, m = 40;
   if (sx > r.l + m && sx < r.r - m && sy > r.t + m && sy < r.b - m) return; diag('ensureVisible: glide');
   view.x += (r.l + r.r) / 2 - sx; view.y += (r.t + r.b) / 2 - sy; clampView(); glide(); applyView();
 }
 function zoomAt(px, py, f) { const ns = Math.max(.25, Math.min(3.2, view.s * f)); const k = ns / view.s; view.x = px - (px - view.x) * k; view.y = py - (py - view.y) * k; view.s = ns; applyView(); cam.userZoomed = true; moved(); }
 /* screen point → board point; board point → point in the game area */
-export function boardPoint(cx, cy) { return [(cx - geo.app.left - view.x) / view.s + MAP.minX, (cy - geo.app.top - view.y) / view.s + MAP.minY]; }
-export function boardToApp(bx, by) { return [(bx - MAP.minX) * view.s + view.x, (by - MAP.minY) * view.s + view.y]; }
+export function boardPoint(cx, cy) { return [(cx - geo.app.left - view.x) / view.s + layout().minX, (cy - geo.app.top - view.y) / view.s + layout().minY]; }
+export function boardToApp(bx, by) { return [(bx - layout().minX) * view.s + view.x, (by - layout().minY) * view.s + view.y]; }
 export function setupPanZoom() {
   const v = $('#vp');
   v.addEventListener('wheel', e => {

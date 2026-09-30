@@ -15,9 +15,9 @@ const path = require('path');
     await p.evaluate(C => { __ED.showCourse(C, 1); }, C);
     await p.waitForTimeout(900); // let the fit settle
     const box = await p.evaluate(([C, tile]) => {
-      const M = __ED.MAP, m = document.querySelector('#board').getScreenCTM();
-      const pts = tile < 0 ? [[M.minX, M.minY], [M.minX + M.w, M.minY + M.h]]
-        : [...M.hexes.values()].filter(h => h.tile === tile).flatMap(h => [[h.x - 34, h.y - 34], [h.x + 34, h.y + 34]]);
+      const M = __ED.MAP, Y = __ED.layout(), m = document.querySelector('#board').getScreenCTM();
+      const pts = tile < 0 ? [[Y.minX, Y.minY], [Y.minX + Y.w, Y.minY + Y.h]]
+        : [...M.hexes.values()].filter(h => h.tile === tile).flatMap(h => { const { x, y } = Y.pos.get(h.k); return [[x - 34, y - 34], [x + 34, y + 34]]; });
       const s = pts.map(([x, y]) => [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f]);
       const xs = s.map(v => v[0]), ys = s.map(v => v[1]);
       return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };

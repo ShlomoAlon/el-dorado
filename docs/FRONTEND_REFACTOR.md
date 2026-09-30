@@ -37,6 +37,7 @@ The rules engine (`src/engine_*.js`) is imported from `src/engine.gen.js`, which
 | `geometry.js` | cached sizes of the game area, piles, prompt, market |
 | `actions.js` | turning clicks into engine actions (`act`), modes, targets, events |
 | `ai.js` | local AI seats |
+| `board/layout.js` | where the board is drawn: each space's centre, the city, the bounds (the engine's map is topology only) |
 | `board/terrain.js` | the static board (SVG + HTML labels) |
 | `board/camera.js` | pan / zoom / fit |
 | `board/overlays.js` | targets, blockades, hover path and tip, rubble pips, trails |

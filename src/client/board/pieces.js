@@ -9,12 +9,13 @@ import { UI } from '../state.js';
 import { render } from '../frame.js';
 import { meepleSVG } from '../meeple.js';
 import { cam, view } from './camera.js';
+import { layout, xy } from './layout.js';
 import { onPiece } from '../actions.js';
 
 export const STEP = 260; // ms per space (the step sounds are timed to it: sound.js)
 const els = new Map(); // 'player-explorer' → { el, pin, shadow, tf }
 const moving = new Set(); // explorers walking now
-const tf = (x, y) => `translate(${(x - MAP.minX).toFixed(1)}px,${(y - MAP.minY).toFixed(1)}px)`;
+const tf = (x, y) => `translate(${(x - layout().minX).toFixed(1)}px,${(y - layout().minY).toFixed(1)}px)`;
 /* a small SVG drawn in board units around the explorer's spot (inside a box whose own corner is at ox, oy) */
 const svg = (cls, box, body, ox = 0, oy = 0) => { const [x, y, w, h] = box.split(' ').map(Number);
   return `<div class="${cls}" style="left:${x - ox}px;top:${y - oy}px;width:${w}px;height:${h}px"><svg viewBox="${box}" width="${w}" height="${h}">${body}</svg></div>`; };
@@ -33,8 +34,8 @@ function make(pl, i) {
 /* where an explorer rests: its space, or (arrived) a spot in a row beside the city */
 function piecePos(pl, i) {
   const k = S.players[pl].pieces[i];
-  if (k !== 'done') { const h = hexAt(k); return [h.x, h.y]; }
-  const C = MAP.city; let idx = 0;
+  if (k !== 'done') { const p = xy(k); return [p.x, p.y]; }
+  const C = layout().city; let idx = 0;
   S.players.forEach((p, a) => p.pieces.forEach((pk, b) => { if (pk === 'done' && (a < pl || (a === pl && b < i))) idx++; }));
   const px = -C.dy, py = C.dx, off = (idx - 1.5) * 18;
   return [C.x + px * off + C.dx * R * 1.6, C.y + py * off + C.dy * R * 1.6];
@@ -59,7 +60,7 @@ function update() {
 export function animateMove(pl, i, keys) {
   const P = els.get(pl + '-' + i);
   if (!P) return; // not drawn yet (a hidden tab draws no frames, but a game's moves still arrive): update() puts it where it ends
-  const pts = keys.map(k => { const h = hexAt(k); return [h.x, h.y]; });
+  const pts = keys.map(k => { const p = xy(k); return [p.x, p.y]; });
   if (S.players[pl].pieces[i] === 'done') pts.push(piecePos(pl, i));
   const T = pts.map(p => tf(...p)); stopAnims(P);
   if (reduceMotion || T.length < 2) { rest(P, T[T.length - 1]); return; }

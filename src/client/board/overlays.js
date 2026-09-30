@@ -5,6 +5,7 @@ import { S, MAP, R, SQ3, key, hexAt, def, SYMCOL, SYMNAME, blkLabel } from '../.
 import { $, sv, reduceMotion } from '../dom.js';
 import { UI, G, cur } from '../state.js';
 import { L, hexPts, label, edgeSeg } from './terrain.js';
+import { layout, xy } from './layout.js';
 import { view, boardPoint, onViewMove } from './camera.js';
 
 /* ---------- targets: one ring per reachable space, kept while the space stays a target ---------- */
@@ -16,7 +17,7 @@ function updateTargets() {
     if (k[0] === 'B') continue;
     const cls = 'tgt' + (isPayKind(t.kind) ? ' dis' : '') + (hot === k ? ' hot' : '');
     let g = rings.get(k);
-    if (!g) { const h = hexAt(k); g = sv('g', { 'data-t': k }, L.hl); sv('polygon', { points: hexPts(h.x, h.y, R - 3.4), class: 'ring' }, g); rings.set(k, g); }
+    if (!g) { const h = xy(k); g = sv('g', { 'data-t': k }, L.hl); sv('polygon', { points: hexPts(h.x, h.y, R - 3.4), class: 'ring' }, g); rings.set(k, g); }
     if (g.getAttribute('class') !== cls) g.setAttribute('class', cls);
   }
 }
@@ -79,14 +80,14 @@ export function showHover(k, tg) {
   hoverShown = true; L.path.innerHTML = '';
   const from = cur().pieces[tg.pi ?? UI.piece], keys = [from, ...(tg.path || [])];
   if (keys.length > 1) {
-    const d = keys.map((kk, i) => { const h = hexAt(kk); return (i ? 'L' : 'M') + h.x.toFixed(1) + ' ' + h.y.toFixed(1); }).join(' ');
+    const d = keys.map((kk, i) => { const h = xy(kk); return (i ? 'L' : 'M') + h.x.toFixed(1) + ' ' + h.y.toFixed(1); }).join(' ');
     sv('path', { d, fill: 'none', stroke: 'rgba(0,0,0,.45)', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.path);
     sv('path', { d, fill: 'none', stroke: '#f8dc97', 'stroke-width': 3.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-dasharray': '1 7' }, L.path);
-    for (const kk of keys.slice(1, -1)) { const h = hexAt(kk); sv('circle', { cx: h.x, cy: h.y, r: 4, fill: '#f8dc97' }, L.path); }
+    for (const kk of keys.slice(1, -1)) { const h = xy(kk); sv('circle', { cx: h.x, cy: h.y, r: 4, fill: '#f8dc97' }, L.path); }
   }
   const tip = $('#tip'), txt = targetLabel(k, tg); tip.innerHTML = txt; if (!txt) { tip.style.opacity = 0; return; }
-  let x, y; if (k[0] === 'B') { const p = blPos[+k.slice(1)]; x = p[0]; y = p[1] - 10; } else { const h = hexAt(k); x = h.x; y = h.y - R * .6; }
-  tip.style.left = ((x - MAP.minX) * view.s + view.x) + 'px'; tip.style.top = ((y - MAP.minY) * view.s + view.y) + 'px'; tip.style.opacity = 1;
+  let x, y; if (k[0] === 'B') { const p = blPos[+k.slice(1)]; x = p[0]; y = p[1] - 10; } else { const h = xy(k); x = h.x; y = h.y - R * .6; }
+  tip.style.left = ((x - layout().minX) * view.s + view.x) + 'px'; tip.style.top = ((y - layout().minY) * view.s + view.y) + 'px'; tip.style.opacity = 1;
 }
 // clearing an already-empty SVG group still re-lays out the whole layer, so only clear when needed
 export function hideHover() { if (!hoverShown) return; hoverShown = false; L.path.innerHTML = ''; $('#tip').style.opacity = 0; }
@@ -110,7 +111,7 @@ export function targetAt(cx, cy) {
 }
 
 /* ---------- rubble / base camp / rubble blockade being paid: one dot per card, filled as cards go in (HTML, above the explorers) ---------- */
-function discardAnchor(tk) { if (tk[0] === 'B') { const p = blPos[+tk.slice(1)]; return [p[0], p[1] - 40]; } const h = hexAt(tk); return [h.x, h.y - R * .95]; }
+function discardAnchor(tk) { if (tk[0] === 'B') { const p = blPos[+tk.slice(1)]; return [p[0], p[1] - 40]; } const h = xy(tk); return [h.x, h.y - R * .95]; }
 function updatePips() {
   const box = $('#bfx'), P = UI.mode === 'discardFor' ? UI.pending : null, a = P && discardAnchor(P.tk);
   const sig = a ? [P.tk, P.kind, P.need, UI.picks.length].join('|') : '';
@@ -118,7 +119,7 @@ function updatePips() {
   if (!a) { box.innerHTML = ''; return; }
   let g = box.querySelector('.dpips');
   if (!g || g.dataset.tk !== P.tk) { box.innerHTML = ''; g = document.createElement('div'); g.className = 'dpips' + (P.kind === 'camp' ? ' camp' : ''); g.dataset.tk = P.tk;
-    g.style.transform = `translate(${a[0] - MAP.minX}px,${a[1] - 4 - MAP.minY}px) translate(-50%,-50%)`; box.appendChild(g); }
+    g.style.transform = `translate(${a[0] - layout().minX}px,${a[1] - 4 - layout().minY}px) translate(-50%,-50%)`; box.appendChild(g); }
   g.innerHTML = '<i class="on"></i>'.repeat(UI.picks.length) + '<i></i>'.repeat(Math.max(0, P.need - UI.picks.length));
 }
 export function pulseDiscard() {
@@ -131,10 +132,10 @@ let trailSig = '';
 export function setTrail(paths, color) {
   const sig = color + JSON.stringify(paths); if (sig === trailSig) return; trailSig = sig; L.trail.innerHTML = '';
   for (const keys of paths) {
-    if (keys.length < 2) continue; const d = keys.map((k, i) => { const h = hexAt(k); return (i ? 'L' : 'M') + h.x.toFixed(1) + ' ' + h.y.toFixed(1); }).join(' ');
+    if (keys.length < 2) continue; const d = keys.map((k, i) => { const h = xy(k); return (i ? 'L' : 'M') + h.x.toFixed(1) + ' ' + h.y.toFixed(1); }).join(' ');
     sv('path', { d, fill: 'none', stroke: 'rgba(0,0,0,.45)', 'stroke-width': 7, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.trail);
     sv('path', { d, fill: 'none', stroke: color, 'stroke-width': 3.2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-dasharray': '.5 8' }, L.trail);
-    const h = hexAt(keys[0]); sv('circle', { cx: h.x, cy: h.y, r: 5, fill: color, stroke: 'rgba(0,0,0,.55)', 'stroke-width': 2 }, L.trail);
+    const h = xy(keys[0]); sv('circle', { cx: h.x, cy: h.y, r: 5, fill: color, stroke: 'rgba(0,0,0,.55)', 'stroke-width': 2 }, L.trail);
   }
 }
 

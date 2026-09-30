@@ -42,7 +42,7 @@ waiting on me.
    - rules: `src/engine_data.js` (cards, boards, map generation), `src/engine_rules.js` (state, actions, turn order, end of game, Elo, redaction), `src/engine_ai.js` (named AI players; `engine_bot.js` belongs to the AI training code)
    - page: `src/client/shell.html` (markup + CSS) and the ES modules in `src/client/` (bundled by esbuild; map in
      `docs/FRONTEND_REFACTOR.md`): `state.js` (UI/NET/G), `actions.js` (`act()`, modes, targets), `frame.js` (render loop),
-     `geometry.js`, `board/*` (terrain, camera, overlays, pieces), `hand.js`, `aim.js`, `market.js`, `hud.js`, `feed.js`,
+     `geometry.js`, `board/*` (layout, terrain, camera, overlays, pieces), `hand.js`, `aim.js`, `market.js`, `hud.js`, `feed.js`,
      `dialogs.js`, `menu.js`, `online.js`, `replay.js`, `main.js` (boot)
    - server: `src/worker.js`
 2. `node build.mjs` → regenerates `public/index.html`, `public/app.<hash>.js/.css`, `src/engine.gen.js`, `build/artifact.html` (all committed; never hand-edit them).

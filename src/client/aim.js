@@ -8,6 +8,7 @@ import { geo } from './geometry.js';
 import { cardEls, drag } from './hand.js';
 import { targetAt, setHot, blPos } from './board/overlays.js';
 import { boardToApp } from './board/camera.js';
+import { xy } from './board/layout.js';
 const aim = { raf: 0, mx: null, my: null, touch: false, pool: null };
 function aimWanted() { return S && !S.over && !UI.cover && UI.mode === 'card' && cardEls.has(UI.card) && typeOf(UI.card) !== 'transmitter'; }
 export function startAim() { if (!aim.raf && aimWanted()) aim.raf = requestAnimationFrame(loop); }
@@ -23,10 +24,10 @@ function loop(ts) {
   let hot = null; if (free) { hot = targetAt(tx, ty); tx -= geo.app.left; ty -= geo.app.top; }
   setHot(hot);
   let ex, ey;
-  if (hot) { const p = hot[0] === 'B' ? blPos[+hot.slice(1)] : [hexAt(hot).x, hexAt(hot).y];[ex, ey] = boardToApp(p[0], p[1]); }
+  if (hot) { const p = hot[0] === 'B' ? blPos[+hot.slice(1)] : [xy(hot).x, xy(hot).y];[ex, ey] = boardToApp(p[0], p[1]); }
   else if (free) { ex = tx; ey = ty; }
   else { const pi = S.turn.active && S.turn.active.id === UI.card ? S.turn.active.pi : UI.piece, pk = cur().pieces[pi];
-    assert(pk && pk !== 'done', 'aim: the explorer to move is on the board'); const h = hexAt(pk);[ex, ey] = boardToApp(h.x, h.y - R * .9); }
+    assert(pk && pk !== 'done', 'aim: the explorer to move is on the board'); const h = xy(pk);[ex, ey] = boardToApp(h.x, h.y - R * .9); }
   // hidden while the pointer is still down in the hand; the loop then rests until the pointer moves
   const show = Math.hypot(ex - sx, ey - sy) > 50 && ey < sy - 10;
   draw(sx, sy, ex, ey, !!hot, show, (ts / 1100) % 1);

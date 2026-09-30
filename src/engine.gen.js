@@ -124,11 +124,10 @@ function buildCourse(C,seed){
   C.p.forEach(([name,cq,cr,k],ti)=>{
     const tpl=TPL[name];assert(tpl,'a course names an unknown board');
     assert((ti===0)===(name==='A'||name==='B'),'a route starts with board A or B, and only there');
-    let sx=0,sy=0;
     for(const cell of tpl){const[lq,lr]=rot(cell.q,cell.r,k);const q=cq+lq,r=cr+lr,K=key(q,r);
       assert(!hexes.has(K),'two boards of a course overlap');
-      const[x,y]=pxOf(q,r);hexes.set(K,{...cell.d,q,r,k:K,tile:ti,x,y});sx+=x;sy+=y;}
-    tiles.push({c:[cq,cr],name,k,x:sx/tpl.length,y:sy/tpl.length});
+      hexes.set(K,{...cell.d,q,r,k:K,tile:ti});}
+    tiles.push({c:[cq,cr],name,k});
   });
   const nT=tiles.length;
   // El Dorado tile: the given space plus its two neighbours along the last board's edge
@@ -137,7 +136,7 @@ function buildCourse(C,seed){
   let side=null;
   for(let d=0;d<3&&!side;d++){const a=[eq+DIRS[d][0],er+DIRS[d][1]],b=[eq-DIRS[d][0],er-DIRS[d][1]];if(touch(...a)&&touch(...b))side=[a,b];}
   if(!side){const fr=DIRS.map(([a,b])=>[eq+a,er+b]).filter(c=>touch(...c));assert(fr.length>=2,'there is room for El Dorado');side=fr.slice(0,2);}
-  for(const[q,r]of[[eq,er],...side]){const K=key(q,r),[x,y]=pxOf(q,r);hexes.set(K,{type:'g',sym:C.s,val:1,q,r,k:K,tile:nT,x,y});}
+  for(const[q,r]of[[eq,er],...side]){const K=key(q,r);hexes.set(K,{type:'g',sym:C.s,val:1,q,r,k:K,tile:nT});}
   // connections between consecutive boards (only these carry blockades; other touching boards are open)
   const conns=[];const edgeConn=new Map();
   for(let i=0;i<nT-1;i++)conns.push({a:i,b:i+1,edges:[]});
@@ -155,15 +154,9 @@ function buildCourse(C,seed){
   const deal=shuffle(BLOCKADES.slice(),mulberry32(seed^0x2c1b3c6d));
   assert(conns.length<=deal.length,'at most 6 connections (one blockade each)');
   const blockDefs=conns.map((c,i)=>({...deal[i],conn:i}));
-  const gc=goals.reduce((a,h)=>[a[0]+h.x/3,a[1]+h.y/3],[0,0]);
-  const last=tiles[nT-1];let dx=gc[0]-last.x,dy=gc[1]-last.y;const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
-  const city={x:gc[0]+dx*R*2.5,y:gc[1]+dy*R*2.5,dx,dy};
-  tiles.push({c:[eq,er],name:'El Dorado',k:0,end:true,x:gc[0],y:gc[1]});
-  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
-  for(const h of hexes.values()){minX=Math.min(minX,h.x-R);maxX=Math.max(maxX,h.x+R);minY=Math.min(minY,h.y-R);maxY=Math.max(maxY,h.y+R);}
-  minX=Math.min(minX,city.x-R*2.6);maxX=Math.max(maxX,city.x+R*2.6);minY=Math.min(minY,city.y-R*2.6);maxY=Math.max(maxY,city.y+R*2.6);
-  const pad=R*.6;minX-=pad;minY-=pad;maxX+=pad;maxY+=pad;
-  return{hexes,tiles,conns,edgeConn,starts:starts.map(s=>s.k),goals:goals.map(g=>g.k),blockDefs,city,endSym:C.s,minX,minY,w:maxX-minX,h:maxY-minY,route:C.p.map(x=>x[0]),name:C.name,course:C.id};
+  tiles.push({c:[eq,er],name:'El Dorado',k:0,end:true});
+  // (topology only: where things are drawn is the page's, src/client/board/layout.js)
+  return{hexes,tiles,conns,edgeConn,starts:starts.map(s=>s.k),goals:goals.map(g=>g.k),blockDefs,endSym:C.s,route:C.p.map(x=>x[0]),name:C.name,course:C.id};
 }
 
 /* =========================================================

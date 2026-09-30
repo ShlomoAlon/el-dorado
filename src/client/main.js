@@ -10,6 +10,7 @@ import { buildBoard, relabel } from './board/terrain.js';
 import { setupPanZoom, fit } from './board/camera.js';
 import { overlaysPart } from './board/overlays.js';
 import { piecesPart } from './board/pieces.js';
+import { layout } from './board/layout.js';
 import { handPart } from './hand.js';
 import { aimPart, aimInit } from './aim.js';
 import { marketPart, buySlotPart, marketInit, openAll } from './market.js';
@@ -81,7 +82,7 @@ function onBoardOut(e) { if (drag) return; if (!e.relatedTarget || !e.relatedTar
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, canAct, online, joinRoom, netSend, assert,
+window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert,
   render() { render(); flush(); },
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },
   ...Object.fromEntries(Object.entries({ act, playEvents, openReplay, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode }).map(([k, f]) => [k, now(f)])) };
