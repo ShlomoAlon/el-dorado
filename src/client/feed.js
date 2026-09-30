@@ -1,8 +1,9 @@
 /* The history: what happened, turn by turn, as the cards played (the same card faces as your own hand) with a caption per
    step. Three ways to show it, cycled by the History button (kept on this device):
-   - 'center': other players' turns in a row of cards under the prompt. What an AI or an online opponent plays, spends, buys
+   - 'center': the latest turn, in a row of cards under the prompt. What an AI or an online opponent plays, spends, buys
      and removes appears as they do it: played cards fly out of their player chip, a bought card flies out of the market,
-     and their moves leave a dotted trail on the board. After their turn the row stays as a recap until you act.
+     and their moves leave a dotted trail on the board. After their turn the row stays as a recap until you act; from
+     then on it shows your own turn so far (the newest turn in the journal, as at the top of the column).
    - 'left': every turn the game's journal keeps (S.log), newest first, in a column of its own left of the game (under it
      on a portrait phone); the newest turn is at the top and grows as it is played.
    - 'off': neither.
@@ -127,7 +128,7 @@ export function histCycle(){MODE=MODES[(MODES.indexOf(MODE)+1)%3];try{localStora
 let HOVER=null; // {el, paths, color}
 function stepOf(el){
   if(el.dataset.g){const g=FEED.groups.find(x=>String(x.id)===el.dataset.g);return g&&{g,pl:g.pl};}
-  const[k,i]=el.dataset.s.split('|'),t=COL.turns.get(k);return t&&{g:t.steps[+i],pl:t.pl};
+  const[k,i]=el.dataset.s.split('|'),t=COL.turns.get(k)||(LATEST&&LATEST.key===k?LATEST:null);return t&&{g:t.steps[+i],pl:t.pl};
 }
 function point(el){
   if((HOVER&&HOVER.el)===el)return;
@@ -175,7 +176,8 @@ function update(){
   const p=S.players[FEED.pl]; // (none while nobody's turn is shown)
   if(HOVER&&!HOVER.el.isConnected)HOVER=null; // (the step pointed at is gone)
   if(HOVER)setTrail(HOVER.paths,HOVER.color);else setTrail(p&&!G.replay&&MODE!=='off'?FEED.trail:[],p?p.color:'');
-  if(G.replay||UI.cover||MODE!=='center'||!FEED.groups.length||!p){hide();return;}
+  if(G.replay||UI.cover||MODE!=='center'){hide();return;}
+  if(!FEED.groups.length||!p){latestUpdate(F,hide);return;}
   if(F.dataset.pl!==String(FEED.pl)){F.innerHTML='<div class="fwho"></div><div class="frow"></div>';F.dataset.pl=FEED.pl;}
   const recap=S.cur!==FEED.pl||S.over; // their turn is over: say whose turn this was
   const who=F.querySelector('.fwho');setHTML(who,recap?`<i style="background:${p.color}"></i>${esc(p.name)}’s turn`:'');who.hidden=!recap;
@@ -187,6 +189,17 @@ function update(){
     else if(el.dataset.v!==String(g.v)){el.dataset.v=g.v;el.querySelector('.fcap').innerHTML=feedCap(g);el.title=stepWords(g,S.players[g.pl]);}}
   F.hidden=false;
   if(FEED.fly.length){const list=FEED.fly;FEED.fly=[];if(!reduceMotion)after(()=>feedFly(list));}
+}
+/* no one else's turn on show (it is your turn and you have acted): the row shows the newest turn in the journal */
+let LATEST=null;
+function latestUpdate(F,hide){
+  const t=LATEST=turnsOf(S.log).filter(t=>!t.sys).pop();if(!t||!t.steps.length){hide();return;}
+  const pl=S.players[t.pl],id='t'+t.key;
+  if(F.dataset.pl!==id){F.innerHTML='<div class="fwho"></div><div class="frow"></div>';F.dataset.pl=id;}
+  const recap=S.cur!==t.pl||t.done||S.over;
+  const who=F.querySelector('.fwho');setHTML(who,recap?`<i style="background:${pl.color}"></i>${esc(pl.name)}’s turn`:'');who.hidden=!recap;
+  setHTML(F.querySelector('.frow'),t.steps.map((g,i)=>stepHTML(g,`data-s="${t.key}|${i}"`,pl)).reverse().join('')); // (newest first, as above)
+  F.hidden=false;
 }
 export const feedPart = { name: 'feed', update,reset:feedReset};
 /* cards fly into the row: out of the player's chip (from their hand) or out of the market (a card they bought or took) */

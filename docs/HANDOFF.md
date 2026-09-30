@@ -189,8 +189,9 @@ Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), s
   action cards show `face` (short) text, `txt` in tooltips. Full-screen button `#fsBtn` is hidden where unsupported
   (iPhone Safari); home-screen metas make the saved web app full screen there.
 - **History** (feed.js; owner, 2026-09-30: three modes, cycled by the History button in the top bar, kept on this device as
-  `eldorado-hist`): **center**: other players' turns in a one-row recap under the prompt (cards fly in from the player chip or the
-  market; the row has one fixed height, so steps that don't fit drop out whole, never a second line); **left**: every turn in the
+  `eldorado-hist`): **center**: the latest turn in a one-row recap under the prompt: other players' turns as they play them (cards fly in
+  from the player chip or the market), then, once you act, your own turn so far (owner: center must never look like off). The row
+  has one fixed height, so steps that don't fit drop out whole, never a second line; **left**: every turn in the
   journal (`S.log`), newest first, in a column of its own (`#lside`, a grid cell left of the game; full screen with a ✕ on portrait
   phones), the newest turn at the top and growing as it is played; **off**. Pointing at a step (tapping it on touch) shows its words
   (the journal's sentences, as the tooltip) and draws its explorer's path on the board. No dragging or resizing: the owner rejected the

@@ -2,7 +2,7 @@
    `hidden`; choices are native form controls that keep their own state (the Online tabs are pure CSS). This file wires
    them, reads them when they're used, and fills only the boxes that hold data (seats, rooms, leaderboard, profile,
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
-import { S, MAP, COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, replayCheck, plural } from '../engine.gen.js';
+import { S, MAP, COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, replayCheck, plural, shuffle } from '../engine.gen.js';
 import { $, esc, setHTML, setText } from './dom.js';
 import { UI, NET, G, clearSelection, cur, isAI, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
@@ -19,7 +19,10 @@ export const MENU={dlg:$('#menu'),f:$('#mform'),screen:null,acct:null,closeT:0};
 const mq=s=>MENU.f.querySelector(s),mqa=s=>MENU.f.querySelectorAll(s);
 export const radio=n=>{const e=MENU.f.querySelector(`input[name="${n}"]:checked`);return e?e.value:null;};
 const setRadio=(n,v)=>{MENU.f.querySelector(`input[name="${n}"][value="${v}"]`).checked=true;};
-const SETUP={seed:(Math.random()*1e9)|0,id:null,cur:null,map:null};
+// seed and order: the next deal (its shuffles, and the order around the table: a permutation of the 4 seats, those in play
+// taken in its order), drawn again after each start so a change of setting doesn't move anyone on the board behind the menu
+const newOrder=()=>shuffle([0,1,2,3],Math.random);
+const SETUP={seed:(Math.random()*1e9)|0,order:newOrder(),id:null,cur:null,map:null};
 
 export function menuInit(){
   // (courses, seats, AI and colour choices are written into the page by build.mjs: the start screen needs no script)
@@ -139,9 +142,10 @@ export function setupSync(){
 export function setupOpts(){
   const n=+radio('np'),rows=[...mqa('#seats .seat')].slice(0,n),who=rows.map(r=>r.querySelector('select').value),id=radio('course');
   if(SETUP.id!==id||!SETUP.cur){SETUP.id=id;SETUP.cur=pickCourse(id);}
+  const players=rows.map((r,i)=>{const A=aiById(who[i]),k=who.slice(0,i).filter(x=>x===who[i]).length;
+    return{name:A?A.name+(k?' '+(k+1):''):r.querySelector('input[name^=nm]').value.trim()||('Player '+(i+1)),color:COLORS.find(c=>c.id===r.querySelector('.sws input:checked').value).hex,ai:A?A.id:undefined};});
   return{course:SETUP.cur,seed:SETUP.seed,privacy:mq('#sPriv').checked,fullRace:radio('full')==='1',
-    players:rows.map((r,i)=>{const A=aiById(who[i]),k=who.slice(0,i).filter(x=>x===who[i]).length;
-      return{name:A?A.name+(k?' '+(k+1):''):r.querySelector('input[name^=nm]').value.trim()||('Player '+(i+1)),color:COLORS.find(c=>c.id===r.querySelector('.sws input:checked').value).hex,ai:A?A.id:undefined};})};
+    players:SETUP.order.filter(i=>i<n).map(i=>players[i])}; // seated in the deal's order: who moves first changes each game
 }
 export function prepareGame(force){
   if(inGame()&&!force)return;
@@ -158,7 +162,7 @@ export function startLocal(){
   UI.preview=false;save();if(S.players.some(p=>p.ai&&aiUsesNet(p.ai)))aiNetLoad();
   menuClose();aiKick();
   if(!UI.cover)banner(cur().name,isAI(S.cur)?'AI · Round 1':'Round 1');
-  SETUP.seed=(Math.random()*1e9)|0;SETUP.cur=null; // the next deal
+  SETUP.seed=(Math.random()*1e9)|0;SETUP.order=newOrder();SETUP.cur=null; // the next deal
 }
 
 /* ---- Online ---- */

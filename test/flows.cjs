@@ -16,9 +16,14 @@ const T = report('flows');
   const check = async (name, f, a, ms) => T.ok(name, await until(f, a, ms));
   const idle = async () => { await until(() => !window.__ED.UI.anim, null, 10000); await settle(p); };
   const center = async sel => { const r = await p.evaluate(s => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, sel); if (!r) throw new Error('not found: ' + sel); return r; };
-  await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-  // seat 2 is an AI (Fawcett: the network, fetched from /ai/first.bin when it first moves) for the AI-turn step
-  await p.selectOption('select[name=who1]', 'fawcett'); await settle(p);
+  // seat 2 is an AI (Fawcett: the network, fetched from /ai/first.bin when it first moves) for the AI-turn step. The order
+  // around the table is dealt at random: a new page until the person moves first (the steps below start with their turn)
+  for (let k = 0; ; k++) {
+    await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
+    await p.selectOption('select[name=who1]', 'fawcett'); await settle(p);
+    if (!(await S(() => window.__ED.S.players[window.__ED.S.cur].ai))) break;
+    if (k === 30) { T.ok('a deal where the person moves first', false); break; }
+  }
   // 1. Start: the start screen's background is the game itself, so nothing on the board changes
   await S(() => { window.__mut = 0; new MutationObserver(l => { window.__mut += l.length; }).observe(document.querySelector('#stage'), { subtree: true, childList: true, attributes: true, characterData: true }); });
   await p.click('#sGo');

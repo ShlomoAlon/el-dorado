@@ -96,7 +96,9 @@ const T = report('online');
     await C.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('game over after two resign', await wait(A, () => __ED.S.over && __ED.NET.room.results));
     const res = await A.evaluate(() => __ED.NET.room.results), lb1 = await board(A);
-    T.ok('ratings move by the deltas', !!res.deltas && ids.every((id, i) => Math.abs(lb1[id].r - (lb0[id] ? lb0[id].r : 1200) - res.deltas[i]) < .01 && lb1[id].g === 1), JSON.stringify(res.deltas));
+    const seats = await A.evaluate(() => __ED.NET.room.seats.map(s => s.uid)); // (seat order: dealt at random when the game starts)
+    T.ok('seats dealt in a new order', seats.length === 3 && ids.every(id => seats.includes(id)), seats.join());
+    T.ok('ratings move by the deltas', !!res.deltas && ids.every(id => { const i = seats.indexOf(id); return Math.abs(lb1[id].r - (lb0[id] ? lb0[id].r : 1200) - res.deltas[i]) < .01 && lb1[id].g === 1; }), JSON.stringify(res.deltas));
     const rep = res.replay && await A.evaluate(async id => { const r = await fetch('/api/replays/' + id); return r.ok && (await r.json()).kind; }, res.replay);
     T.ok('the game is kept as a replay', rep === 'eldorado-replay', res.replay);
     T.ok('game over: results shown', await wait(A, () => !!document.querySelector('#overlay #gNew')));
@@ -111,7 +113,7 @@ const T = report('online');
     await A.click('#rlStart'); await wait(A, () => __ED.online());
     let noClockOnAI = true;
     for (let t = 0; t < 2; t++) {
-      for (let i = 0; i < 120 && !(await A.evaluate(() => __ED.canAct() || __ED.S.over)); i++) { if (await A.evaluate(() => __ED.S.cur !== 0 && !!__ED.NET.deadline)) noClockOnAI = false; await A.waitForTimeout(250); }
+      for (let i = 0; i < 120 && !(await A.evaluate(() => __ED.canAct() || __ED.S.over)); i++) { if (await A.evaluate(() => __ED.S.cur !== __ED.NET.seat && !!__ED.NET.deadline)) noClockOnAI = false; await A.waitForTimeout(250); }
       await A.evaluate(() => { __ED.startEndTurn(); if (['endTurn', 'buyWarn'].includes(__ED.UI.mode)) { __ED.startEndTurn(); if (__ED.UI.mode === 'endTurn') __ED.finishTurn(); } });
       await wait(A, () => !__ED.canAct());
     }
@@ -120,7 +122,8 @@ const T = report('online');
     await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('after the person resigns, the AIs finish the race', await wait(A, () => __ED.S.over && __ED.NET.room.results, null, 120000));
     const res2 = await A.evaluate(() => __ED.NET.room.results), lbB = await board(A);
-    T.ok('AI ratings move by their deltas', ['ai-fawcett', 'ai-raleigh'].every((id, k) => Math.abs(lbB[id].r - lbA[id].r - res2.deltas[k + 1]) < .01 && lbB[id].g === lbA[id].g + 1), JSON.stringify(res2.deltas));
+    const seats2 = await A.evaluate(() => __ED.NET.room.seats.map(s => s.uid));
+    T.ok('AI ratings move by their deltas', ['ai-fawcett', 'ai-raleigh'].every(id => Math.abs(lbB[id].r - lbA[id].r - res2.deltas[seats2.indexOf(id)]) < .01 && lbB[id].g === lbA[id].g + 1), JSON.stringify(res2.deltas));
 
     // ---------- 3. unrated: nothing moves
     await A.click('#gNew'); await wait(A, () => document.querySelector('#menu').open);

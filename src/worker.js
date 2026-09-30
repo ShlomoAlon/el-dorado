@@ -545,6 +545,7 @@ export class Room extends DurableObject {
   }
   async startGame() {
     const d = this.d;
+    E.shuffle(d.seats, Math.random); // the order around the table (who moves first): new each game; seat i plays player i
     this.rec = E.recNewGame({ course: d.opts.course === 'random' ? E.COURSES[Math.floor(Math.random() * E.COURSES.length)] : E.courseById(d.opts.course), seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
     this.S = E.S; this.MAP = E.MAP;
     d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null;
