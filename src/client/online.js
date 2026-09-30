@@ -82,9 +82,10 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState!==
   if(!ws){clearTimeout(NET.retryT);connectRoom();return;}
   if(ws.readyState!==1)return;const t=Date.now();ws.send('ping');setTimeout(()=>{if(NET.ws===ws&&NET.heard<t)lostConnection(ws);},5000);});
 export function onRoomMsg(m){
-  if(m.t==='error'){diag('server: '+m.err);NET.busy=false;clearTimeout(NET.busyT);sfx('error');toast(m.err);if(S)render();return;}
+  if(m.t==='error'){diag('server: '+m.err);NET.busy=false;NET.leaving=false;clearTimeout(NET.busyT);sfx('error');toast(m.err);if(S)render();return;}
   if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}renderRoomLobby();return;}
-  if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.clockEnd=m.left==null?null:Date.now()+m.left;NET.busy=false;clearTimeout(NET.busyT);applyServerState(m.S,m.ev);}
+  if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.clockEnd=m.left==null?null:Date.now()+m.left;NET.busy=false;clearTimeout(NET.busyT);applyServerState(m.S,m.ev);
+    if(NET.leaving&&m.S.players[m.seat].resigned){NET.leaving=false;exitOnline();showHub();}} // (left the game: to the Online screen once the server has it)
 }
 export function applyServerState(S2,ev){
   const old=S,fresh=!online();UI.preview=false; // (joining a room clears NET.S: its first state is a new game on show)
@@ -96,7 +97,7 @@ export function applyServerState(S2,ev){
 }
 export function resignOnline(){
   modal(`<h2>Leave this game?</h2><p class="sub">${NET.room.opts.rated===false?'Leaving counts as finishing last among the players still racing (this game is unrated).':'Leaving a rated game counts as finishing last among the players still racing. Your rating will drop.'}</p><div class="mrow"><button class="btn" id="rsNo">Stay</button><button class="btn pri" id="rsYes">Leave game</button></div>`,sc=>{
-    sc.querySelector('#rsNo').onclick=closeModal;sc.querySelector('#rsYes').onclick=()=>{netSend({t:'act',a:{t:'resign'}});closeModal();};},true);
+    sc.querySelector('#rsNo').onclick=closeModal;sc.querySelector('#rsYes').onclick=()=>{NET.leaving=true;netAct({t:'act',a:{t:'resign'}});closeModal();toast('Leaving the game…',2000);};},true);
 }
 export function exitOnline(){NET.code=null;NET.S=null;leaveRoomSocket();setS(null);try{history.replaceState(null,'',location.pathname);}catch(e){}resetView();}
 

@@ -3,7 +3,8 @@
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
 import { S, CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, setS, setMAP, assert } from '../engine.gen.js';
 import { esc } from './dom.js';
-import { UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave } from './state.js';
+import { UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave, humanRacing } from './state.js';
+import { showSetup } from './menu.js';
 import { replayDecorate } from './replay.js';
 import { render, resetView } from './frame.js';
 import { toast, banner, modal, closeModal, showGameOver } from './dialogs.js';
@@ -200,9 +201,12 @@ export function resignSeat(){if(!S||S.over||G.replay)return -1;if(online()){cons
   const i=isAI(S.cur)?viewIdx():S.cur;return isAI(i)||!isActive(S.players[i])?-1:i;}
 export function resignLocal(){const seat=resignSeat();if(seat<0)return;
   const humans=S.players.filter((p,j)=>j!==seat&&!p.ai&&isActive(p)).length;
-  modal(`<h2>Resign?</h2><p class="sub">${esc(S.players[seat].name)} leaves the expedition and finishes last among the players still racing. ${humans?'The others play on.':'The AIs finish the race.'}</p><div class="mrow"><button class="btn" id="rsNo">Keep playing</button><button class="btn pri" id="rsYes">Resign</button></div>`,sc=>{
+  modal(`<h2>Resign?</h2><p class="sub">${esc(S.players[seat].name)} leaves the expedition and finishes last among the players still racing. ${humans?'The others play on.':'The game ends here.'}</p><div class="mrow"><button class="btn" id="rsNo">Keep playing</button><button class="btn pri" id="rsYes">Resign</button></div>`,sc=>{
     sc.querySelector('#rsNo').onclick=closeModal;
-    sc.querySelector('#rsYes').onclick=()=>{closeModal();if(!S||S.over||online())return;assert(applyLocal(seat,{t:'resign'}).ok,'resign is accepted');};},true);}
+    sc.querySelector('#rsYes').onclick=()=>{closeModal();if(!S||S.over||online())return;assert(applyLocal(seat,{t:'resign'}).ok,'resign is accepted');
+      if(!S.over&&!humanRacing())leaveLocal();};},true);} // (no one left to play: the player leaves, not watches the AIs race)
+/* leave the local game on show for the start screen (it is not kept: only finished games are) */
+function leaveLocal(){aiReset();G.rec=null;save();setS(null);resetView();showSetup();}
 /* End game (local play): the game ends now for everyone; places as they stand (arrivals first, then who is closest) */
 export function endLocal(){if(!S||S.over||online()||G.replay)return;
   modal(`<h2>End the game?</h2><p class="sub">The race stops now for everyone. Places go by who has arrived, then who is closest to El Dorado.</p><div class="mrow"><button class="btn" id="egNo">Keep playing</button><button class="btn pri" id="egYes">End game</button></div>`,sc=>{

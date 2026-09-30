@@ -86,7 +86,10 @@ const T = report('online');
     const cur1 = await A.evaluate(() => __ED.S.cur);
     T.ok('turn clock: the turn passes when time runs out', await wait(A, c => __ED.S.cur !== c && __ED.S.log.some(l => l.e === 'timeout'), cur1, 45000));
     // two resign: the game is over for the third, rated
-    await B.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } })); await C.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
+    // B leaves through the menu (Resign, then Leave game): the Online screen comes up as soon as the server has it
+    await B.click('#menuBtn'); await B.click('#sResign'); await B.click('#rsYes');
+    T.ok('resign from the menu: out of the game, on the Online screen', await wait(B, () => !__ED.S && document.querySelector('#menu').open && !document.querySelector('section[data-screen="online"]').hidden));
+    await C.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('game over after two resign', await wait(A, () => __ED.S.over && __ED.NET.room.results));
     const res = await A.evaluate(() => __ED.NET.room.results), lb1 = await board(A);
     T.ok('ratings move by the deltas', !!res.deltas && ids.every((id, i) => Math.abs(lb1[id].r - (lb0[id] ? lb0[id].r : 1200) - res.deltas[i]) < .01 && lb1[id].g === 1), JSON.stringify(res.deltas));
