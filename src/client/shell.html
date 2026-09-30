@@ -153,9 +153,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #blabels,#blabels2{position:absolute;left:0;top:0;pointer-events:none}.blabel{position:absolute;white-space:nowrap;line-height:1}
 .tgt{cursor:pointer}
 .tgt .ring{fill:rgba(255,228,150,.14);stroke:var(--gold2);stroke-width:3;transition:fill .12s}
-.tgt:hover .ring,.tgt.hot .ring{fill:rgba(255,228,150,.42)}
+.tgt.hot .ring{fill:rgba(255,228,150,.42)}
 .tgt.dis .ring{fill:rgba(255,255,255,.07);stroke:#fff;stroke-dasharray:6 5;stroke-width:2}
-.tgt.dis:hover .ring,.tgt.dis.hot .ring{fill:rgba(255,255,255,.22)}
+.tgt.dis.hot .ring{fill:rgba(255,255,255,.22)}
 .bl-badge.tgt .bl-halo{stroke:var(--gold2);stroke-width:3}
 .bl-badge.hot .bl-halo{stroke-width:5;animation:none}
 /* explorers (board/pieces.js): HTML over the board, in board units; a move is a compositor animation */
@@ -165,7 +165,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .psel{opacity:0}.piece.sel .psel{opacity:1}
 .pglow,.pmark{opacity:0;transition:opacity .3s ease}.piece.turn .pglow,.piece.turn .pmark{opacity:1}
 .pshadow{transform-origin:15px 13.5px}
-.pin{left:-32px;top:-50px;width:64px;height:72px;transform-origin:32px 61px;pointer-events:auto;cursor:pointer}
+.pin{left:-32px;top:-50px;width:64px;height:72px;transform-origin:32px 61px}
 .pin .pmark{position:absolute}
 /* rubble / base camp being paid: a dot per card */
 .dpips{position:absolute;left:0;top:0;display:flex;gap:6.6px;padding:7.6px 7px;border-radius:14px;background:#0b120f;border:1.5px solid #d8dcd6}

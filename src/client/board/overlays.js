@@ -33,7 +33,7 @@ function updateBlockades() {
   }
   for (const bg of L.bl.querySelectorAll('.bl-badge')) {
     const k = 'B' + bg.dataset.bi, tg = UI.targets.has(k), cls = 'bl-badge' + (tg ? ' tgt' : '') + (hot === k ? ' hot' : '');
-    if (bg.getAttribute('class') !== cls) { bg.setAttribute('class', cls); bg.setAttribute('data-t', tg ? k : ''); }
+    if (bg.getAttribute('class') !== cls) bg.setAttribute('class', cls);
   }
 }
 function drawBlockade(B, bi) {
@@ -45,7 +45,7 @@ function drawBlockade(B, bi) {
   sx /= segs.length; sy /= segs.length; let best = null, bd = 1e9;
   for (const [x1, y1, x2, y2] of segs) { const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, dd = Math.hypot(mx - sx, my - sy); if (dd < bd) { bd = dd; best = [mx, my]; } }
   blPos[bi] = best; const [bx, by] = best;
-  const bg = sv('g', { class: 'bl-badge', transform: `translate(${bx},${by})`, 'data-t': '', 'data-bi': bi }, g);
+  const bg = sv('g', { class: 'bl-badge', transform: `translate(${bx},${by})`, 'data-bi': bi }, g);
   sv('circle', { r: 27, fill: 'rgba(0,0,0,0)', class: 'bl-halo', stroke: 'transparent' }, bg);
   sv('rect', { x: -17, y: -17, width: 34, height: 34, rx: 7, transform: 'rotate(45)', fill: '#0b120f' }, bg);
   sv('rect', { x: -15, y: -15, width: 30, height: 30, rx: 6, transform: 'rotate(45)', fill: col, stroke: 'rgba(255,255,255,.45)', 'stroke-width': 1.2 }, bg);
@@ -95,20 +95,22 @@ onViewMove(hideHover);
 /* the target a card is being aimed or dragged at: lit ring, path and tip */
 export function setHot(k) {
   if (k === hot) return; const was = hot; hot = k;
-  const el = x => x[0] === 'B' ? L.bl.querySelector(`[data-t="${x}"]`) : rings.get(x);
+  const el = x => x[0] === 'B' ? L.bl.querySelector(`[data-bi="${x.slice(1)}"]`) : rings.get(x);
   if (was) { const e = el(was); if (e) e.classList.remove('hot'); }
   if (k) { const e = el(k); if (e) e.classList.add('hot'); showHover(k, UI.targets.get(k)); } else hideHover();
 }
-/* the target at a screen point: a blockade badge within reach, else the space under it */
 function hexRound(x, y) {
   const q = (SQ3 / 3 * x - y / 3) / R, r = (2 / 3 * y) / R; let rx = q, rz = r, ry = -q - r; let a = Math.round(rx), b = Math.round(ry), c = Math.round(rz);
   const dx = Math.abs(a - rx), dy = Math.abs(b - ry), dz = Math.abs(c - rz); if (dx > dy && dx > dz) a = -b - c; else if (dy > dz) b = -a - c; else c = -a - b; return key(a, c);
 }
+/* the target at a screen point: a blockade badge within reach, else the space under it */
 export function targetAt(cx, cy) {
   const [x, y] = boardPoint(cx, cy);
   for (const bi in blPos) { const p = blPos[bi]; if (UI.targets.has('B' + bi) && Math.hypot(p[0] - x, p[1] - y) < 24) return 'B' + bi; }
   const k = hexRound(x, y); return UI.targets.has(k) ? k : null;
 }
+/* the space under a screen point (its key, whether or not the board has one there) */
+export function spaceAt(cx, cy) { const [x, y] = boardPoint(cx, cy); return hexRound(x, y); }
 
 /* ---------- rubble / base camp / rubble blockade being paid: one dot per card, filled as cards go in (HTML, above the explorers) ---------- */
 function discardAnchor(tk) { if (tk[0] === 'B') { const p = blPos[+tk.slice(1)]; return [p[0], p[1] - 40]; } const h = xy(tk); return [h.x, h.y - R * .95]; }

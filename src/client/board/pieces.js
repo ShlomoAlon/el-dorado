@@ -8,9 +8,8 @@ import { $, reduceMotion } from '../dom.js';
 import { S, UI } from '../state.js';
 import { render } from '../frame.js';
 import { meepleSVG } from '../meeple.js';
-import { cam, view } from './camera.js';
+import { view } from './camera.js';
 import { layout, xy } from './layout.js';
-import { onPiece } from '../actions.js';
 
 export const STEP = 260; // ms per space (the step sounds are timed to it: sound.js)
 const els = new Map(); // 'player-explorer' → { el, pin, shadow, tf }
@@ -28,7 +27,6 @@ function make(pl, i) {
     + `<svg viewBox="-32 -50 64 72" width="64" height="72">${meepleSVG(p.color, p.pieces.length > 1 ? i + 1 : 0)}</svg></div>`;
   $('#pieces').appendChild(el);
   const P = { el, pin: el.querySelector('.pin'), shadow: el.querySelector('.pshadow'), tf: '', anims: [] };
-  P.pin.addEventListener('click', e => { e.stopPropagation(); if (!cam.dragMoved) onPiece(pl, i); });
   return P;
 }
 /* where an explorer rests: its space, or (arrived) a spot in a row beside the city */

@@ -17,7 +17,7 @@ import { marketPart, buySlotPart, marketInit, openAll } from './market.js';
 import { hudPart, hudInit } from './hud.js';
 import { feedPart, histInit } from './feed.js';
 import { showRules, showPile, closeModal, modalOpen } from './dialogs.js';
-import { derivePart, act, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, undo, resumeSaved } from './actions.js';
+import { derivePart, act, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, undo, resumeSaved, onPiece } from './actions.js';
 import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, startLocal, radio } from './menu.js';
 import { netInit, joinRoom, netSend } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
@@ -25,7 +25,7 @@ import { soundInit } from './sound.js';
 import { debugInit } from './debug.js';
 import { boundaryInit } from './boundary.js';
 import { cam } from './board/camera.js';
-import { showHover, hideHover } from './board/overlays.js';
+import { targetAt, spaceAt, setHot } from './board/overlays.js';
 import { drag } from './hand.js';
 
 // the order parts update in each frame: first what the selection allows, then the view from back to front
@@ -37,7 +37,7 @@ function boot() {
   if (!document.documentElement.classList.contains('resume')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check)
   $('#deckPile').onclick = () => showPile('deck'); $('#discPile').onclick = () => showPile('discard');
   $('#rulesBtn').onclick = showRules; histInit();
-  $('#vp').addEventListener('click', onBoardClick); $('#stage').addEventListener('pointerover', onBoardHover); $('#stage').addEventListener('pointerout', onBoardOut);
+  $('#vp').addEventListener('click', onBoardClick); $('#vp').addEventListener('pointermove', onBoardHover); $('#vp').addEventListener('pointerleave', () => { if (!drag) setHot(null); });
   // full screen (hidden where the browser can't do it, e.g. iPhone Safari — there, Add to Home Screen gives a full-screen app)
   const fsEl = document.documentElement, fsOn = () => document.fullscreenElement || document.webkitFullscreenElement;
   if (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen) {
@@ -67,17 +67,16 @@ function boot() {
   });
 }
 
-/* clicks and hovers on the board's targets (explorers handle their own clicks: board/pieces.js). A tap anywhere else puts
-   the chosen card down: that is how a player stops moving with a card that has strength left */
+/* taps and hover find the space under the pointer from the board's geometry, as card drags do (never from which element
+   is on top: a figure stands up into the space above its own). A target: move there; else your explorer there: select it;
+   anywhere else puts the chosen card down (how a player stops moving with a card that has strength left) */
 function onBoardClick(e) {
   if (!canAct() || cam.dragMoved || drag || UI.anim) return;
-  const t = e.target.closest('[data-t]'); if (t && t.dataset.t) doMove(t.dataset.t); else if (UI.mode === 'card') cancelMode();
+  const k = targetAt(e.clientX, e.clientY); if (k) { doMove(k); return; }
+  const i = S.players[S.cur].pieces.indexOf(spaceAt(e.clientX, e.clientY));
+  if (i >= 0) onPiece(S.cur, i); else if (UI.mode === 'card') cancelMode();
 }
-function onBoardHover(e) {
-  if (drag) return; const t = e.target.closest('[data-t]'); if (!t || !t.dataset.t) return;
-  const tg = UI.targets.get(t.dataset.t); if (tg) showHover(t.dataset.t, tg);
-}
-function onBoardOut(e) { if (drag) return; if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('[data-t]')) hideHover(); }
+function onBoardHover(e) { if (!drag && !e.buttons && e.pointerType === 'mouse') setHot(targetAt(e.clientX, e.clientY)); }
 
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
