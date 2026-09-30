@@ -432,6 +432,7 @@ export class Room extends DurableObject {
   load() { this.S = E.recState(this.rec); }
   // who plays each seat: the room's seats, in the game's seat order (fixed once the game starts)
   get owners() { return this.d.seats.map(s => s.uid); }
+  async lobbyChanged() { await this.persist(); this.tellLobby(); this.sendAll(); } // a change the room list shows too
   async persist() { await this.ctx.storage.put(this.rec ? { d: this.d, rec: this.rec } : { d: this.d }); }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.roomInfo()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
@@ -490,10 +491,10 @@ export class Room extends DurableObject {
         if (d.opts.auto) { // match rooms never close on the host; the next player hosts
           d.seats = d.seats.filter(s => s.uid !== uid); if (d.host === uid && d.seats.length) d.host = d.seats[0].uid;
           if (!d.seats.length) d.status = 'closed';
-          await this.seatsChanged(); await this.persist(); this.tellLobby(); this.sendAll(); try { ws.close(1000, 'Left'); } catch (e) { } return;
+          await this.seatsChanged(); await this.lobbyChanged(); try { ws.close(1000, 'Left'); } catch (e) { } return;
         }
-        if (uid === d.host) { d.status = 'closed'; await this.persist(); this.tellLobby(); this.sendAll(); for (const w of this.ctx.getWebSockets()) try { w.close(1000, 'Room closed'); } catch (e) { } return; }
-        d.seats = d.seats.filter(s => s.uid !== uid); await this.persist(); this.tellLobby(); this.sendAll(); try { ws.close(1000, 'Left'); } catch (e) { }
+        if (uid === d.host) { d.status = 'closed'; await this.lobbyChanged(); for (const w of this.ctx.getWebSockets()) try { w.close(1000, 'Room closed'); } catch (e) { } return; }
+        d.seats = d.seats.filter(s => s.uid !== uid); await this.lobbyChanged(); try { ws.close(1000, 'Left'); } catch (e) { }
       }
       else if (m.t === 'addAI') { // host seats a named AI (each at most once per room); it plays server-side
         if (d.opts.auto || uid !== d.host) return err('Only the host can add AI players.');
@@ -505,13 +506,13 @@ export class Room extends DurableObject {
         if (d.status !== 'lobby' || d.seats.length >= d.opts.max) return err('This room is full.'); // checked again: other messages ran during the await
         const used = d.seats.map(s => s.color), base = row ? row.name : A.name, k = d.seats.filter(s => s.ai === A.id).length;
         d.seats.push({ uid: aiUid(A.id), name: k ? base + ' ' + (k + 1) : base, color: PCOLORS.find(c => !used.includes(c)), ai: A.id });
-        await this.persist(); this.tellLobby(); this.sendAll();
+        await this.lobbyChanged();
       }
       else if (m.t === 'removeAI') {
         if (uid !== d.host) return err('Only the host can remove AI players.');
-        const i = d.seats.map(s => !!s.ai && s.uid === m.uid).lastIndexOf(true); if (i >= 0) d.seats.splice(i, 1); await this.persist(); this.tellLobby(); this.sendAll();
+        const i = d.seats.map(s => !!s.ai && s.uid === m.uid).lastIndexOf(true); if (i >= 0) d.seats.splice(i, 1); await this.lobbyChanged();
       }
-      else if (m.t === 'rated' && uid === d.host && !d.opts.auto) { d.opts.rated = !!m.v; await this.persist(); this.tellLobby(); this.sendAll(); }
+      else if (m.t === 'rated' && uid === d.host && !d.opts.auto) { d.opts.rated = !!m.v; await this.lobbyChanged(); }
       else if (m.t === 'now' && seat && d.opts.auto) { seat.now = !seat.now; if (await this.seatsChanged()) return; await this.persist(); this.sendAll(); }
       else if (m.t === 'start') {
         if (d.opts.auto) return;
@@ -527,7 +528,7 @@ export class Room extends DurableObject {
     if (m.t === 'selftest' && this.env.DEV_AUTH === '1') { this.S.round = -1; E.assert(false, 'self-test: a broken invariant in a live room'); } // (test/online.cjs: the boundary)
     if (m.t === 'undo') {
       if (seat !== this.S.cur || !E.recCanUndo(this.rec)) return err('Nothing to undo.');
-      this.rec.actions.pop(); this.load(); await this.persist(); this.sendAll(); return;
+      this.S = E.recUndo(this.rec); await this.persist(); this.sendAll(); return;
     }
     if (m.t === 'act') {
       if (seat < 0) return err('You are watching this game.');
@@ -553,7 +554,7 @@ export class Room extends DurableObject {
     E.shuffle(d.seats, Math.random); // the order around the table (who moves first): new each game; seat i plays player i
     ({ gs: this.S, rec: this.rec } = E.recNewGame({ course: d.opts.course === 'random' ? E.COURSES[Math.floor(Math.random() * E.COURSES.length)] : E.courseById(d.opts.course), seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true }));
     d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null;
-    await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll();
+    await this.nextTurn(); await this.lobbyChanged();
   }
   async afterChange(ev) {
     if (this.S.over && this.d.status === 'playing') await this.finish();
