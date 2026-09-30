@@ -28,7 +28,9 @@ That shape has no module globals and no `setRng`, and nothing in it is English t
     need a log version bump, which drops every stored game).
   - 19: the server keeps each room's board with its state; the bot's caches on `MAP` remain.
   - 22: one `passTurn`.
-- **Open:** 18, 20.
+  - 18: API_SPEC §1.12 pins the path tie-break, the feature order and the mixed precision; the redacted state still uses
+    placeholder ids. (A player can always choose among equally cheap routes by moving one step at a time.)
+- **Open:** 20.
 
 ---
 
