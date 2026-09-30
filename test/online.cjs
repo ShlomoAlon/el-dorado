@@ -110,7 +110,13 @@ const T = report('online');
     await A.click('[data-addai="fawcett"]'); await wait(A, () => __ED.NET.room.seats.length === 2);
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 3);
     T.ok('AI seats added from the room lobby', (await A.evaluate(() => __ED.NET.room.seats.map(s => s.ai || '').join())) === ',fawcett,raleigh', code2);
+    // the game starts in a hidden tab (no frames drawn, messages still arriving) and an AI moves before anything is drawn
+    await A.evaluate(() => { window.__raf = window.requestAnimationFrame; window.__q = []; window.requestAnimationFrame = f => { window.__q.push(f); return 0; }; });
     await A.click('#rlStart'); await wait(A, () => __ED.online());
+    if (await A.evaluate(() => __ED.canAct())) await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'end', keep: [] } }));
+    const aiMoved = await wait(A, () => __ED.S.log.some(e => e.e === 'play' && __ED.S.players[e.pl].ai), null, 30000);
+    await A.evaluate(() => { window.requestAnimationFrame = window.__raf; for (const f of window.__q.splice(0)) requestAnimationFrame(f); }); // (the tab comes back)
+    T.ok('an AI moving while the tab is hidden: no error, the board catches up', aiMoved && await wait(A, () => document.querySelectorAll('#pieces .piece').length === __ED.S.players.length) && !A.errors.length, A.errors.slice(0, 2).join(' | '));
     let noClockOnAI = true;
     for (let t = 0; t < 2; t++) {
       for (let i = 0; i < 120 && !(await A.evaluate(() => __ED.canAct() || __ED.S.over)); i++) { if (await A.evaluate(() => __ED.S.cur !== __ED.NET.seat && !!__ED.NET.deadline)) noClockOnAI = false; await A.waitForTimeout(250); }

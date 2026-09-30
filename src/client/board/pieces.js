@@ -3,7 +3,7 @@
    the explorer slides from space to space (easing in and out at each one) while its figure hops once per space above a
    shadow that stays on the ground. Whose turn it is: a pool of light and a marker (fading in and out); the explorer to
    move (two-explorer games): a dashed ring. */
-import { S, MAP, R, hexAt, assert } from '../../engine.gen.js';
+import { S, MAP, R, hexAt } from '../../engine.gen.js';
 import { $, reduceMotion } from '../dom.js';
 import { UI } from '../state.js';
 import { render } from '../frame.js';
@@ -57,7 +57,8 @@ function update() {
    which a phone can take a few hundred ms to draw; an animation started before it would have its clock running during
    that frame (Safari) and appear already half done. Until then the explorer stays on its old space. */
 export function animateMove(pl, i, keys) {
-  const P = els.get(pl + '-' + i); assert(P, 'animateMove: the explorer is drawn');
+  const P = els.get(pl + '-' + i);
+  if (!P) return; // not drawn yet (a hidden tab draws no frames, but a game's moves still arrive): update() puts it where it ends
   const pts = keys.map(k => { const h = hexAt(k); return [h.x, h.y]; });
   if (S.players[pl].pieces[i] === 'done') pts.push(piecePos(pl, i));
   const T = pts.map(p => tf(...p)); stopAnims(P);
