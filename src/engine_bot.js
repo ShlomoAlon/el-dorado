@@ -146,7 +146,7 @@ const BOT_STARTER={explorer:1,traveler:1,sailor:1};
 /* buying: only while more than 7 of route is left, only a card worth more than 2 (botCardWorth, plus 8% per coin of cost) */
 const BOT_BUY={stop:7,min:2,costW:.08};
 function botPlanMoves(gs,me){
-  const root=gs,memo=new Map();let best=null,nodes=0;
+  const memo=new Map();let best=null,nodes=0;
   const score=st=>{const P=st.players[me];const c=P.pieces.reduce((a,k)=>a+(k==='done'?-5:botCost(gs,k)),0);const coin=P.hand.reduce((a,id)=>a+coinVal(gs,id),0);
     return -c*10+coin;};
   const dfs=(st,path,depth)=>{
@@ -155,15 +155,15 @@ function botPlanMoves(gs,me){
     if(depth>=9||st.over||st.cur!==me)return;
     const P=st.players[me],key=P.pieces.join('|')+'#'+P.hand.map(id=>st.cards[id]).sort().join()+'#'+(st.turn.active?st.turn.active.id+st.turn.active.left:'');
     if(memo.has(key)&&memo.get(key)<=depth)return;memo.set(key,depth);
-    gs=st;const acts=botActions(gs).filter(a=>a.t==='move'||a.t==='native'||a.t==='pay');gs=root;
+    const acts=botActions(st).filter(a=>a.t==='move'||a.t==='native'||a.t==='pay');
     // per card and explorer keep the 3 targets that get closest (the search stays small)
     const groups=new Map();for(const a of acts){const g=a.t+(a.card||'')+a.pi;if(!groups.has(g))groups.set(g,[]);groups.get(g).push(a);}
     for(const[,list]of groups){
       const ranked=list.map(a=>({a,c:a.to[0]==='B'?-1:botCost(gs,a.to)})).sort((x,y)=>x.c-y.c).slice(0,3);
-      for(const{a}of ranked){gs=botClone(st);const r=applyAction(gs,me,a);const nx=gs;gs=root;if(!r.ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
+      for(const{a}of ranked){const nx=botClone(st);if(!applyAction(nx,me,a).ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
     }
   };
-  dfs(botClone(root),[],0);gs=root;return best?best.path:[];
+  dfs(botClone(gs),[],0);return best?best.path:[];
 }
 function botCardWorth(gs,t,me){ // how useful a new card is for the rest of the route
   const P=gs.players[me],bd=botDist(gs),live=P.pieces.filter(k=>k!=='done');const m={j:0,w:0,v:0,r:0,c:0};
@@ -296,7 +296,7 @@ function botClone(st){
 function botEndView(gs,me,keep){const P=gs.players[me];keep=(keep||[]).filter(id=>P.hand.includes(id));
   P.discard.push(...P.play,...P.hand.filter(id=>!keep.includes(id)));P.play=[];P.hand=keep.slice();
   gs.turn={bought:false,active:null,pending:null};gs._endView=me;}
-function botEndFeatures(gs,me,keep){const root=gs;gs=botClone(root);botEndView(gs,me,keep);const f=botNetFeatures(gs,me);gs=root;return f;}
+function botEndFeatures(gs,me,keep){const st=botClone(gs);botEndView(st,me,keep);return botNetFeatures(st,me);}
 const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
 /* Pick an action. Each option is scored by the value network's estimate of my chance of finishing ahead
    from the position right after it (TD-Gammon / AlphaZero style; mid-turn positions include the cards still in hand).
@@ -305,11 +305,10 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
    Training exploration: eps = uniformly random action; temp = softmax over scores; turnState.noBuy = a turn without gaining a card. */
 /* value of one legal action for `me`: copy the state, reshuffle my own draw pile (hidden order), apply it and score the
    position (for "end turn": after discarding, before drawing); actions that draw cards: mean over K reshuffles */
-function botActionValue(gs,me,a,mode,rnd,K){const root=gs;K=K||4;
-  const one=()=>{gs=botClone(root);shuffle(gs.players[me].deck,rnd);let v;
-    if(a.t==='end'){botEndView(gs,me,a.keep);v=botValue(gs,me,mode);}
-    else{const r=applyAction(gs,me,a,rnd);v=r.ok?botValue(gs,me,mode):-Infinity;}
-    gs=root;return v;};
+function botActionValue(gs,me,a,mode,rnd,K){K=K||4;
+  const one=()=>{const st=botClone(gs);shuffle(st.players[me].deck,rnd);
+    if(a.t==='end'){botEndView(st,me,a.keep);return botValue(st,me,mode);}
+    const r=applyAction(st,me,a,rnd);return r.ok?botValue(st,me,mode):-Infinity;};
   return a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)]?[...Array(K)].reduce(x=>x+one(),0)/K:one();}
 function botChoose(gs,opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
@@ -351,40 +350,39 @@ function botTurnKey(gs,me){const P=gs.players[me],T=gs.turn,ty=ids=>ids.map(id=>
   return[P.pieces.join('|'),ty(P.hand),ty(P.play),P.discard.length,ty(P.discard),T.bought?1:0,T.active?typeOf(gs,T.active.id)+T.active.pi+T.active.sym+T.active.left:'',T.pending?T.pending.max:'',
     gs.market.map(x=>x.n).join(''),gs.reserve.map(x=>x.n).join(''),gs.blockades.map(b=>b.owner??'-').join(''),gs.trash.length].join('#');}
 function botPlanTurn(gs,me,B,rnd,K,noBuy,top){ // top: optional array that receives every complete line {v,line}
-  const root=gs,seen=new Set(),start=botClone(root);gs=start;shuffle(gs.players[me].deck,rnd);gs=root; // my deck order stays hidden
+  const seen=new Set(),start=botClone(gs);shuffle(start.players[me].deck,rnd); // my deck order stays hidden
   let beam=[{st:start,line:[]}],best={v:-Infinity,line:null};
   for(let depth=0;depth<14&&beam.length;depth++){
     const next=[];
     for(const node of beam){
-      gs=node.st;const acts=botActions(gs);gs=root;
+      const acts=botActions(node.st);
       for(const a of acts){
         if(noBuy&&(a.t==='buy'||a.t==='transmit'))continue; // exploration: a turn without gaining a card
         const line=[...node.line,a];
-        if(a.t==='end'){gs=botClone(node.st);botEndView(gs,me,a.keep);const v=botValue(gs,me,'net');gs=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}
-        if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)]){let v=0;for(let k=0;k<K;k++){gs=botClone(node.st);shuffle(gs.players[me].deck,rnd);const r=applyAction(gs,me,a,rnd);v+=r.ok?botValue(gs,me,'net'):-1;gs=root;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
-        gs=botClone(node.st);const r=applyAction(gs,me,a,rnd);
-        if(!r.ok){gs=root;continue;}
-        const v=botValue(gs,me,'net');
-        if(gs.over||gs.cur!==me){gs=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
-        const key=botTurnKey(gs,me);if(seen.has(key)){gs=root;continue;}seen.add(key);
-        next.push({st:gs,line,v});gs=root;
+        if(a.t==='end'){const st=botClone(node.st);botEndView(st,me,a.keep);const v=botValue(st,me,'net');if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}
+        if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)]){let v=0;for(let k=0;k<K;k++){const st=botClone(node.st);shuffle(st.players[me].deck,rnd);const r=applyAction(st,me,a,rnd);v+=r.ok?botValue(st,me,'net'):-1;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
+        const st=botClone(node.st);if(!applyAction(st,me,a,rnd).ok)continue;
+        const v=botValue(st,me,'net');
+        if(st.over||st.cur!==me){if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
+        const key=botTurnKey(st,me);if(seen.has(key))continue;seen.add(key);
+        next.push({st,line,v});
       }
     }
     next.sort((x,y)=>y.v-x.v);beam=next.slice(0,B);
   }
-  gs=root;return best;
+  return best;
 }
 let BOT_PLAN_CACHE=null;
 function botPlanTurnChoose(gs,opts){
   const me=gs.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
   // follow the current plan while it still applies (same player, same round, same position the plan expects)
   if(C&&C.me===me&&C.round===gs.round&&C.i<C.line.length&&C.key===botTurnKey(gs,me)){
-    const a=C.line[C.i];const root=gs;gs=botClone(root);const ok=applyAction(gs,me,a,rnd).ok;const nk=ok&&!gs.over&&gs.cur===me?botTurnKey(gs,me):null;gs=root;
+    const a=C.line[C.i],st=botClone(gs),ok=applyAction(st,me,a,rnd).ok,nk=ok&&!st.over&&st.cur===me?botTurnKey(st,me):null;
     if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])BOT_PLAN_CACHE=null;return{a,v:C.v,why:'plan'};}
   }
   const best=botPlanTurn(gs,me,o.beam||3,rnd,opts.draws||4,!!(opts.turnState&&opts.turnState.noBuy));
   if(!best.line||!best.line.length){BOT_PLAN_CACHE=null;return{a:{t:'end',keep:[]},why:'plan'};}
-  const a=best.line[0];const root=gs;gs=botClone(root);applyAction(gs,me,a,rnd);const nk=!gs.over&&gs.cur===me?botTurnKey(gs,me):null;gs=root;
+  const a=best.line[0],st=botClone(gs);applyAction(st,me,a,rnd);const nk=!st.over&&st.cur===me?botTurnKey(st,me):null;
   BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])?{me,round:gs.round,line:best.line,i:1,key:nk,v:best.v}:null;
   return{a,v:best.v,why:'plan'};
 }
