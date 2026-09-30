@@ -41,7 +41,7 @@ function aiChoose(id,mem){
   if(++mem.n>60)return S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
   BOT_PLAN_CACHE=mem.plan||null;
   let a;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;}
-  return aiFinishGuard(a);
+  return aiFinishGuard(a,mem);
 }
 /* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
    the line (the cards it draws change the plan). null: this AI doesn't plan whole turns with the network, or it isn't loaded */
@@ -53,16 +53,30 @@ function aiPlan(id,rnd){
 /* El Dorado can only be entered with a card of its symbol (paddle on the water side, machete on the jungle side) or a joker.
    The bot sometimes trashes its last such card (or nearly its whole deck) and, near the end, stops buying, so it could wait forever next to the finish
    (seen on the newer courses). Keep one such card when trashing, and buy one before ending a turn without any. */
-function aiFinishGuard(a){
+function aiFinishGuard(a,mem){
   const P=S.players[S.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>botFinishCard(S.cards[id])).length;
   if(a.t==='trash'){let c=a.cards;
     if(n){const out=c.filter(id=>botFinishCard(S.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
-    c=c.slice(0,Math.max(0,all.length-4)); // and never thin the deck below 4 cards (owner: 4 can be valid, fewer can't)
+    // and never thin the deck below 4 cards (owner: 4 can be valid, fewer can't), nor below what a base camp that is its
+    // next step takes (it keeps 4 after paying it)
+    const camp=Math.max(0,...aiNextSteps(P).filter(h=>h.type==='c').map(h=>h.val));
+    c=c.slice(0,Math.max(0,all.length-4-camp));
     if(c.length!==a.cards.length)return{...a,cards:c};}
+  // (a base camp is open to an expedition that keeps 4 cards after paying it, botCanRemove: every card bought brings it closer)
+  const steps=aiNextSteps(P),open=(t,h)=>h.type==='c'?all.length-h.val>=4:aiEnters(t,h);
+  const stuck=steps.length>0&&!all.some(id=>steps.some(h=>open(S.cards[id],h)));
+  // once an explorer's planned way is shut to its cards, it keeps to a way they can take for the rest of the game (else the
+  // plan walks it straight back): steps along that way instead of ending the turn or stepping off it
+  if(stuck)mem.detour=true;
+  if(mem.detour&&!S.turn.pending&&(a.t==='end'||a.t==='move'||a.t==='native'||a.t==='pay')){
+    const cap=aiRouteFor(all.map(id=>S.cards[id]),all.length),far=k=>k==='done'?0:(cap.get(k)??Infinity);
+    const off=a.t!=='end'&&a.to[0]!=='B'&&far(a.to)>=far(P.pieces[a.pi]);
+    if(a.t==='end'||off){
+      const det=botActions().filter(b=>(b.t==='move'||b.t==='native'||b.t==='pay')&&b.to[0]!=='B'&&far(b.to)<far(P.pieces[b.pi]));
+      if(det.length){det.sort((x,y)=>far(x.to)-far(y.to));return det[0];}}}
   if(a.t==='end'&&!S.turn.bought&&!S.turn.pending){
     // an expedition with no card that could take the next step (or enter El Dorado) buys one, the cheapest way
-    const steps=aiNextSteps(P),stuck=steps.length&&!all.some(id=>steps.some(h=>aiEnters(S.cards[id],h)));
-    const want=!n?t=>botFinishCard(t):stuck?t=>steps.some(h=>aiEnters(t,h)):null;
+    const want=!n?t=>botFinishCard(t):stuck?t=>steps.some(h=>h.type==='c'||aiEnters(t,h)):null;
     const buys=want?botActions().filter(b=>b.t==='buy'&&want(b.type)):[];
     if(buys.length){buys.sort((x,y)=>x.cards.length-y.cards.length);return buys[0];}
   }
@@ -72,6 +86,13 @@ function aiFinishGuard(a){
 function aiNextSteps(P){const out=[];
   for(const k of P.pieces){if(k==='done')continue;const c=botCost(k);for(const nb of neighbors(k))if(hexAt(nb).type!=='m'&&botCost(nb)<c)out.push(hexAt(nb));}
   return out;}
+/* steps to El Dorado from every space over spaces cards of these types can enter (an expedition of `total` cards: base
+   camps that leave it 4); Map key → steps, a space missing: no way from there */
+function aiRouteFor(types,total){const d=new Map(),q=[],ok=h=>h.type==='c'?total-h.val>=4:types.some(t=>aiEnters(t,h));
+  for(const k of MAP.goals)if(ok(hexAt(k))){d.set(k,0);q.push(k);}
+  for(let i=0;i<q.length;i++){const k=q[i];for(const nb of neighbors(k)){const h=hexAt(nb);
+    if(d.has(nb)||h.type==='m'||h.type==='g'||h.type==='s'||!ok(h))continue;d.set(nb,d.get(k)+1);q.push(nb);}}
+  return d;}
 /* a card of type t could enter space h: its symbol (El Dorado: the course's) and strength, a joker, the Native; rubble and base
    camps take any cards */
 function aiEnters(t,h){const d=CT[t];if(t==='native'||h.type==='r'||h.type==='c')return true;if(d.c==='p')return false;
