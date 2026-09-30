@@ -19,8 +19,8 @@ The AI tools (`tools/ai/*.mjs`) drive the engine directly in Node.
 The engine holds no game. Every function that needs one takes it first: `gs`, the game state (§1.4), as in
 `applyAction(gs, seat, a, rnd)`, `cardTargets(gs, seat, pi, id)`, `botChoose(gs, opts)`. A game's board (§1.3) comes from
 its course and seed: `mapOf(gs)` builds it once and caches it (the last 16 boards), so every copy of a game shares it.
-The functions that make a game return it: `newGame(o, rnd)` → gs, `recNewGame(o)` → `{gs, rec}`, `recState(rec)` → gs,
-`recUndo(rec)` → gs, `replayStart(log)` → `{gs, g}`, and `replay(log)` yields `{i, gs, …}`. The page keeps the game on show
+The functions that make a game return it: `newGame(o, rnd)` → gs, `recNewGame(o, rng)` → `{gs, rec}`, `recState(rec)` → gs,
+`recUndo(rec)` → gs, `replayStart(log)` → gs, and `replay(log)` yields `{i, gs, …}`. The page keeps the game on show
 itself (`state.js`: `S`, and its board `MAP`); the server keeps each room's (`this.S`).
 - **Randomness is always passed in** (`rnd: () => [0, 1)`): `newGame(o, rnd)` and `applyAction(gs, seat, a, rnd)` shuffle with the
   generator they are given (default `Math.random`). A record gives each action its own (§1.8), so the same record always
@@ -194,33 +194,34 @@ Every target's `t` is the action that goes there (`move`, `native`, or `pay` wit
 A game is its setup plus its list of actions; any position is rebuilt by replaying them.
 
 ```
-{ kind: 'eldorado-replay', v: 3, course: id, seed, rng, fullRace, privacy?,
+{ kind: 'eldorado-replay', v: 3, course: id, seed, rng, fullRace, privacy?, gift?,
   players: [{name, color, bot?}], actions: [[seat, action]…],
   mark,                          // records in play only: actions before it can't be undone
   title?, result?: {places, rounds} }  // finished logs
 ```
 
 **Randomness:** each action's shuffles use their own generator, `recRng(rng, i) = mulberry32((rng + imul(i + 2, 0x9E3779B1)) >>> 0)`;
-`newGame` uses i = −1.
+`newGame` uses i = −1, and so does `gift` (training exploration: every player starts with the same extra card, shuffled into
+the draw pile).
 
 - Replaying therefore needs no generator state between moves.
 - `rng` reveals every future shuffle, so a record in play stays on the server (or in the local save) until the game is over.
 
 | function | |
 |---|---|
-| `recNewGame(opts)` → `{gs, rec}` | Starts a game and its record (`opts` as for `newGame`; `rng` comes from `crypto.getRandomValues`, or `Math.random` where there is none). |
+| `recSecret()` | A new game's secret number, from `crypto.getRandomValues`. |
+| `recNewGame(opts, rng)` → `{gs, rec}` | Starts a game and its record (`opts` as for `newGame`, plus `privacy?` and `gift?`). `rng` is required: `recSecret()` for games people play; tools and tests pass a fixed number to get the same game again. |
 | `recApply(gs, rec, seat, a, rnd?)` | `applyAction` with the action's generator (`rnd` only for a game without a record). On success the action is recorded (`rec` may be `null`: not recorded). `mark` moves up when an action reveals cards, passes the turn, resigns or ends the game. |
 | `recCanUndo(rec)` | `actions.length > mark` |
 | `recUndo(rec)` → gs | Drops the last action and returns the rebuilt game. |
 | `recState(rec)` → gs | The game a record leads to. |
 | `recFinal(rec, state)` | The finished log, with `title` and `result` (`{places, rounds}`, read from `state`, the record's game), and without `mark`. |
 | `replayCheck(log)` | `null`, or why the log can't be played. Records before v3 were played under older rules (the turn went on after the last explorer arrived) and are refused; the server deleted its stored ones once (settings `logs_v3`), rooms with one close, and the page dropped its old saves (keys `-v1`). |
-| `replay(log)` | A generator: plays the log back on `S` one action at a time, yielding `{i, ok, err, ev}` after each (`i = -1`: the setup). Stop early, or snapshot `S` at each step. |
-| `replayStart(log)` → `g` | Sets up the log's game on `S` (tools start new training games with it); `g` is the generator a training log's actions share (records ignore it: each action has its own). |
+| `replay(log)` | A generator: plays the log back one action at a time, yielding `{i, gs, ok, err, ev}` after each (`i = -1`: the setup; `gs` is one game, changed step by step). Stop early, or snapshot `gs` at each step. |
+| `replayStart(log)` → gs | The log's game at its start. |
 
-**Training logs** (`v: 1`, tools only) use one generator for the whole game, `mulberry32(rng)`, consumed only by the recorded actions.
-They may give every player one extra card (`gift`) shuffled into the deck. `replayStart` returns their generator for the
-steps that follow. Tool logs also carry `notes` and `result: {capped, arrived}`.
+Tools record their games the same way (`recNewGame` with a fixed `rng`, `recApply`, `recFinal`); their logs' `result` is
+`{capped, arrived}`.
 
 `newGame({course, seed, players: [{name, color, ai?}], fullRace?})` starts a game without a record (tools and tests). (`privacy`, the page's pass-and-play cover, goes to `recNewGame` and lives in the record only.)
 

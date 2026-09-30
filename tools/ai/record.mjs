@@ -20,22 +20,19 @@ const NAME = { net: 'Bot (net)', plan: 'Heuristic planner', heur: 'Heuristic', '
 const optsOf = pol => { if (pol === 'new' || pol === 'new+search') E.aiSetNet(NETS.new); else if (pol === 'old') E.aiSetNet(NETS.old);
   return pol === 'new+search' ? { mode: 'net', search: { kind: 'plan', beam: 3 } } : pol === 'new' || pol === 'old' ? { mode: 'net' } : null; };
 mkdirSync('tools/ai/data/replays', { recursive: true });
-const slim = a => { const o = { ...a }; for (const k of Object.keys(o)) if (o[k] === undefined) delete o[k]; return o; };
 let kept = 0;
 for (let g = 0; g < G; g++) {
   if (process.env.SHUFFLE) { const k = Math.floor(Math.random() * pols.length), j = pols.indexOf('net'); if (j >= 0) [pols[j], pols[k]] = [pols[k], pols[j]]; }
-  const seed = seed0 + g, log = { kind: 'eldorado-replay', v: 1, course: course.id, seed, rng: (seed * 2654435761) >>> 0, fullRace: true,
-    players: pols.map((p, i) => ({ name: `${NAME[p] || p} ${i + 1}`, bot: p })), actions: [] };
-  const { gs, g: gen } = E.replayStart(log);
+  const seed = seed0 + g, { gs, rec } = E.recNewGame({ course, seed, fullRace: true,
+    players: pols.map((p, i) => ({ name: `${NAME[p] || p} ${i + 1}`, color: E.COLORS[i].hex })) }, (seed * 2654435761) >>> 0);
   let acts = 0, capped = false; const plans = pols.map(() => ({ plan: null }));
   while (!gs.over) {
     if (gs.round > 25 || acts++ > 20000) { capped = true; break; }
     const me = gs.cur, pol = pols[me];
     const c = E.botChoose(gs, { ...(optsOf(pol) || { mode: pol }), planMem: plans[me] }); // (its look-ahead has its own randomness: the game's stream is for the game)
-    const r = E.applyAction(gs, me, c.a, gen), a = r.ok ? c.a : { t: 'end', keep: [] };
-    if (!r.ok) E.applyAction(gs, me, a, gen);
-    log.actions.push([me, slim(a)]);
+    if (!E.recApply(gs, rec, me, c.a).ok) E.recApply(gs, rec, me, { t: 'end', keep: [] });
   }
+  const log = E.recFinal(rec, gs);
   const fin = gs.players.map(p => p.fin), netLost = pols.some((p, i) => p === 'net') && !pols.some((p, i) => p === 'net' && gs.places && gs.places[i] === 1);
   if (FILTER === 'capped' && !capped) continue;
   if (FILTER === 'netlost' && !netLost) continue;
@@ -50,7 +47,7 @@ for (let g = 0; g < G; g++) {
   if (base) {
     const res = await fetch(base + '/api/replays', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(log) });
     const j = await res.json().catch(() => ({}));
-    link = res.ok ? `${base}/?replay=${j.id}` : `upload failed: ${res.status} ${j.error || ''}`;
+    link = res.ok ? `${base}/?replay=${j.id}` : `upload failed: ${res.status} ${j.err || ''}`;
   }
   console.log(`${file} · ${log.actions.length} actions · rounds ${gs.round} · arrived ${fin.join('/')}${capped ? ' · CAPPED' : ''}${link ? ' · ' + link : ''}`);
 }

@@ -63,18 +63,19 @@ if (!isMainThread) {
     if (PAIRED && mode === 'eval' && !table && !EVAL_SELF) { const gi = wi * games + g, deal = Math.floor(gi / 7) * 2 + (gi % 7 < 3 ? 0 : 1); // same deal for each seat
       if (MAPS) C = MAPS[deal % MAPS.length]; dealSeed = 1000003 * (deal + 1) % 2147483647; dealRng = (2654435761 * (deal + 7)) >>> 0; }
     st.byCourse = st.byCourse || {}; st.byCourse[C.id] = (st.byCourse[C.id] || 0) + 1;
-    const glog = { kind: 'eldorado-replay', v: 1, course: C.id, seed: dealSeed, rng: dealRng, fullRace: true,
-      players: pols.map((p, i) => ({ name: `${{ net: search ? 'Net + search' : 'Bot (net)', netP: 'Net (no search)', old: 'Old net', oldS: 'Old net + search' }[p] || 'Planner'} ${i + 1}`, bot: p === 'heur' ? bench : p })), actions: [] };
+    const names = pols.map((p, i) => `${{ net: search ? 'Net + search' : 'Bot (net)', netP: 'Net (no search)', old: 'Old net', oldS: 'Old net + search' }[p] || 'Planner'} ${i + 1}`);
+    let gift;
     // exploration: now and then every player starts with the same extra card, favouring cards the bot rarely buys
-    if (mode === 'self' && !lotemp && !ANNEAL && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { glog.gift = t; break; } } glog.gift = glog.gift || giftW[giftW.length - 1][0];
-      st.explore.gift = (st.explore.gift || 0) + 1; inc('Gift card given to every player (exploration)', glog.gift); }
+    if (mode === 'self' && !lotemp && !ANNEAL && giftW && rnd() < giftRate) { let r = rnd() * giftW.reduce((a, x) => a + x[1], 0); for (const [t, w] of giftW) { r -= w; if (r <= 0) { gift = t; break; } } gift = gift || giftW[giftW.length - 1][0];
+      st.explore.gift = (st.explore.gift || 0) + 1; inc('Gift card given to every player (exploration)', gift); }
     // MIX_PLAIN=1 (search runs): one net seat per self-play game plays plain (no planner), the others through the planner.
     // Off by default: the mixed run (2026-09-27) saw search's lead over the old net stall while the plain net caught up.
     const plainSeat = pols.map(() => false);
     if (mode === 'self' && search && process.env.MIX_PLAIN === '1') { const ns = pols.map((p, i) => p === 'net' ? i : -1).filter(i => i >= 0);
       if (ns.length > 1 || rnd() < .5) plainSeat[ns[Math.floor(rnd() * ns.length)]] = true; }
-    glog.players.forEach((p, i) => { if (pols[i] === 'net' && search) p.name = `${plainSeat[i] ? 'Net (no search)' : 'Net + search'} ${i + 1}`; });
-    const { gs, g: shuf } = E.replayStart(glog), T = id => gs.cards[id]; // (the game's shuffles; the bots' look-ahead uses its own)
+    pols.forEach((p, i) => { if (p === 'net' && search) names[i] = `${plainSeat[i] ? 'Net (no search)' : 'Net + search'} ${i + 1}`; });
+    // (the bots' look-ahead has randomness of its own: the record's is for the game)
+    const { gs, rec: glog } = E.recNewGame({ course: C, seed: dealSeed, fullRace: true, gift, players: names.map((name, i) => ({ name, color: E.COLORS[i].hex })) }, dealRng), T = id => gs.cards[id];
     const traj = pols.map(() => []), trajU = pols.map(() => []), trajB = pols.map(() => []), lastPush = pols.map(() => null), plans = pols.map(() => ({ plan: null })); let acts = 0, lastMe = -1, lastRound = -1, turnState = null, capped = false;
     while (!gs.over) {
       if (gs.round > H || acts > 20000) { capped = gs.round > H; E.endGame(gs); break; }
@@ -131,9 +132,8 @@ if (!isMainThread) {
       if (c.a.t === 'buy' || c.a.t === 'transmit') { const stk = { t: c.a.type }; if (stk.t) { const b = c.a.t === 'transmit' ? (isNet ? st.transNet : st.transHeur) : (isNet ? st.buysNet : st.buysHeur); b[stk.t] = (b[stk.t] || 0) + 1; } }
       // sample = the position right after my action, as I'll see it: for "end turn", before the next hand is drawn
       const f = mode === 'self' ? (c.a.t === 'end' ? E.botEndFeatures(gs, me, c.a.keep) : null) : null;
-      const r = E.applyAction(gs, me, c.a, shuf); acts++;
-      if (!r.ok) E.applyAction(gs, me, { t: 'end', keep: [] }, shuf);
-      glog.actions.push([me, r.ok ? c.a : { t: 'end', keep: [] }]);
+      const r = E.recApply(gs, glog, me, c.a); acts++;
+      if (!r.ok) E.recApply(gs, glog, me, { t: 'end', keep: [] });
       if (r.ok && isNet) for (const e of r.ev) if (e.e === 'block') inc('Blockades taken', '#' + e.n);
       // no samples once my place is settled: play never asks the network about those positions (they get the exact place value),
       // and bootstrapping through its guess for them (the average over all places) inflated the moves just before arriving,
@@ -143,10 +143,10 @@ if (!isMainThread) {
       if (mode === 'self' && (isNet || HEUR_SAMPLES) && !gs.over && (!E.playerDone(gs.players[me]) || !E.botPlaceSettled(gs, me))) { traj[me].push(f || E.botNetFeatures(gs, me)); trajU[me].push(E.playerDone(gs.players[me])); trajB[me].push(null); lastPush[me] = { idx: traj[me].length - 1, round: gs.round, ended: c.a.t === 'end' || gs.cur !== me }; }
     }
     if (capped) st.capped++;
-    if (process.env.REPLAYALL) writeFileSync(`${process.env.REPLAYALL}/g-${glog.seed}.json`, JSON.stringify(glog)); // testing: keep every game
+    if (process.env.REPLAYALL) writeFileSync(`${process.env.REPLAYALL}/g-${glog.seed}.json`, JSON.stringify(E.recFinal(glog, gs))); // testing: keep every game
     // a full-length game where someone still hasn't arrived by the cap is probably a bug: save it
-    if (capped && H >= 25 && stuckFile && st.stuck < 5) { st.stuck++; glog.title = `training ${mode} game · hit the 25-round cap`; glog.result = { capped: true, arrived: gs.players.map(p => p.fin) };
-      mkdirSync('tools/ai/data/replays', { recursive: true }); writeFileSync(`tools/ai/data/replays/stuck-${glog.seed}.json`, JSON.stringify(glog));
+    if (capped && H >= 25 && stuckFile && st.stuck < 5) { st.stuck++; const out = { ...E.recFinal(glog, gs), title: `training ${mode} game · hit the 25-round cap`, result: { capped: true, arrived: gs.players.map(p => p.fin) } };
+      mkdirSync('tools/ai/data/replays', { recursive: true }); writeFileSync(`tools/ai/data/replays/stuck-${glog.seed}.json`, JSON.stringify(out));
       appendFileSync(stuckFile, JSON.stringify({ mode, round: gs.round, pols, players: gs.players.map((p, i) => ({ pieces: p.pieces, left: E.botRemaining(gs, i), fin: p.fin, hand: p.hand.map(T), cards: [...p.deck, ...p.hand, ...p.discard, ...p.play].map(T).sort().join(',') })), blockades: gs.blockades }) + '\n'); }
     const n = pols.length, rem = gs.players.map((_, i) => E.botRemaining(gs, i));
     gs.players.forEach((p, i) => {

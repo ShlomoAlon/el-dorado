@@ -2,7 +2,7 @@
    `hidden`; choices are native form controls that keep their own state (the Online tabs are pure CSS). This file wires
    them, reads them when they're used, and fills only the boxes that hold data (seats, rooms, leaderboard, profile,
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
-import { COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, plural, shuffle } from '../engine.gen.js';
+import { COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, recSecret, plural, shuffle } from '../engine.gen.js';
 import { $, esc, setHTML, setText } from './dom.js';
 import { S, setS, UI, NET, G, clearSelection, isAI, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
@@ -154,7 +154,7 @@ export function setupOpts(){
 export function prepareGame(force){
   if(inGame()&&!force)return;
   if(online())exitOnline(); // a finished online game: its room is left (rejoin a running one from Online)
-  const g=recNewGame(setupOpts());G.rec=g.rec;setS(g.gs);UI.preview=true;UI.lastReplay=null;
+  const g=recNewGame(setupOpts(),recSecret());G.rec=g.rec;setS(g.gs);UI.preview=true;UI.lastReplay=null;
   clearSelection();UI.piece=0;UI.viewer=null;
   UI.cover=!!G.rec.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;showGame();
 }

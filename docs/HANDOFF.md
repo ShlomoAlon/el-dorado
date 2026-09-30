@@ -215,11 +215,10 @@ Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), s
   fallback to the planner for 2-player games in `aiChoose`.
 
 ### Replays (game logs)
-- A game log is `{kind:'eldorado-replay', v:1, title, course, seed, rng, fullRace, players:[{name,bot}], actions:[[seat,action],…], notes:[…]}`.
-  `replayStart(log)` starts the game and returns its generator (seeded with `log.rng`); passing it to each `applyAction`
-  rebuilds the identical game. Randomness is always a parameter (`newGame(o, rnd)`, `applyAction(seat, a, rnd)`).
-- `node tools/ai/record.mjs net,plan,plan [games] [seed] [--upload]` records bot games (the net's top options and win-chance
-  estimates go in `notes`); `FILTER=capped|netlost` keeps only those games. Bots' look-ahead has its own randomness, so it
+- Every game log is a record, `{kind:'eldorado-replay', v:3, title, course, seed, rng, fullRace, gift?, players:[{name,color,bot?}], actions:[[seat,action],…]}`
+  (API_SPEC §1.8): each action draws from its own generator, `recRng(rng, i)`, so replaying the actions rebuilds the identical
+  game. Tools make theirs with `recNewGame(o, fixedNumber)` and `recApply`, like the page and the server.
+- `node tools/ai/record.mjs net,plan,plan [games] [seed] [--upload]` records bot games ; `FILTER=capped|netlost` keeps only those games. Bots' look-ahead has its own randomness, so it
   can't consume the game's shuffle stream.
 - Server: `POST /api/replays` (public, ≤1.9 MB, `replayCheck` validation, newest 1000 kept in D1 `replays`), `GET /api/replays`,
   `GET /api/replays/<id>`. Page: `/?replay=<id>`, or "Replays" on the start screen (upload + recent list).

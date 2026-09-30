@@ -44,30 +44,33 @@ function buyOptions(gs,seat){
   return out;
 }
 /* ---- game logs (replays) ----
-   {kind:'eldorado-replay', v:1 (training logs) or 3 (game records, below), title, course, seed, rng, fullRace, players:[{name,color,bot}], actions:[[seat,action],…], notes:[…]}
+   {kind:'eldorado-replay', v:3 (game records, below), title, course, seed, rng, fullRace, gift?, players:[{name,color,bot?}], actions:[[seat,action],…]}
    Game records before v3 were played under older rules (the turn went on after the last explorer arrived): not replayable.
    Every shuffle draws from a generator seeded with log.rng, so re-applying the same actions rebuilds the identical game. */
 const REPLAY_MAX_ACTIONS=20000;
 function replayCheck(log){
   if(!log||log.kind!=='eldorado-replay')return'Not an El Dorado game log.';
-  if(log.v!==1&&log.v!==3)return'This game was recorded by an older version of the game.';
+  if(log.v!==3)return'This game was recorded by an older version of the game.';
   if(!courseById(log.course))return'Unknown course: '+log.course;
   if(!Array.isArray(log.players)||log.players.length<2||log.players.length>4)return'A game log needs 2 to 4 players.';
-  if(log.v===3&&!log.players.every(p=>typeof p.name==='string'&&p.name&&p.name.length<=24&&COLORS.some(c=>c.hex===p.color)&&(p.bot===undefined||aiById(p.bot))))return'The game log names its players wrongly.';
+  if(!log.players.every(p=>typeof p.name==='string'&&p.name&&p.name.length<=24&&COLORS.some(c=>c.hex===p.color)&&(p.bot===undefined||aiById(p.bot))))return'The game log names its players wrongly.';
   if(!Number.isFinite(log.seed)||!Number.isFinite(log.rng))return'The game log is missing its seeds.';
   if(log.gift&&!(CT[log.gift]&&CT[log.gift].cost))return'Unknown gift card: '+log.gift;
   if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
   return null;}
-/* the log's game at its start: {gs, g}, g being the generator a training log's actions share (records give each action its own) */
-function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry32(log.rng>>>0);
-  const gs=newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>rec?{name:p.name,color:p.color,ai:p.bot}:{name:String(p.name),color:COLORS[i].hex})},g); // (training logs: colours by seat)
-  // training exploration: every player starts with the same extra card, shuffled into the draw pile
-  if(log.gift)for(const p of gs.players)p.deck.splice(Math.floor(g()*(p.deck.length+1)),0,newCard(gs,log.gift));
-  return{gs,g};}
+/* the log's game at its start */
+function replayStart(log){
+  return gameStart({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,gift:log.gift,
+    players:log.players.map(p=>({name:p.name,color:p.color,ai:p.bot}))},log.rng);}
+/* a new game from its setup and its number (rng): the deal draws from action index -1's generator. gift (training
+   exploration): every player starts with the same extra card, shuffled into the draw pile */
+function gameStart(o,rng){const g=recRng(rng,-1),gs=newGame(o,g);
+  if(o.gift)for(const p of gs.players)p.deck.splice(Math.floor(g()*(p.deck.length+1)),0,newCard(gs,o.gift));
+  return gs;}
 /* a log played back one action at a time: yields {i, gs, ok, err, ev} after each (i = -1: the setup), gs being the game (one
    game, changed step by step: stop early, or snapshot it at each step) */
-function* replay(log){const{gs,g}=replayStart(log);yield{i:-1,gs,ok:true,ev:[]};
-  for(let i=0;i<log.actions.length;i++){const[seat,a]=log.actions[i];yield{i,gs,...applyAction(gs,seat,a,log.v===3?recRng(log.rng,i):g)};}}
+function* replay(log){const gs=replayStart(log);yield{i:-1,gs,ok:true,ev:[]};
+  for(let i=0;i<log.actions.length;i++){const[seat,a]=log.actions[i];yield{i,gs,...applyAction(gs,seat,a,recRng(log.rng,i))};}}
 /* ---- game records (log v3): a game is its setup and its list of actions; the state is rebuilt from them ----
    Each action's shuffles come from a generator of its own, seeded from the game's secret number (rec.rng) and the action's
    index (newGame's: index -1), so re-applying the log rebuilds the same game and nothing needs a generator's state between
@@ -75,13 +78,15 @@ function* replay(log){const{gs,g}=replayStart(log);yield{i:-1,gs,ok:true,ev:[]};
    is over. Undo drops the last action and rebuilds; rec.mark = how many actions can no longer be undone (up to the last
    one that drew cards, passed the turn, or was a resignation). The saved game is the record (the state is rebuilt). */
 function recRng(rng,k){return mulberry32(((rng>>>0)+Math.imul(k+2,0x9E3779B1))>>>0);}
-/* a new game and its record: {gs, rec} */
-function recNewGame(o){
-  // the secret: from the platform's cryptographic generator where there is one (Math.random's state could be guessed)
-  const rng=crypto.getRandomValues(new Uint32Array(1))[0];
-  const gs=newGame(o,recRng(rng,-1));
+/* a new game's secret number, from the platform's cryptographic generator (Math.random's state could be guessed) */
+function recSecret(){return crypto.getRandomValues(new Uint32Array(1))[0];}
+/* a new game and its record: {gs, rec}. rng: the game's number (recSecret() for a game people play; tools and tests pass
+   a fixed one to get the same game again) */
+function recNewGame(o,rng){
+  assert(Number.isInteger(rng)&&rng>=0&&rng<2**32,'recNewGame: the game\'s number (rng) is a 32-bit integer');
+  const gs=gameStart(o,rng);
   // (privacy: the page's pass-and-play cover, a setting of the table rather than of the game: kept in the record only)
-  return{gs,rec:{kind:'eldorado-replay',v:3,course:gs.course.id,seed:gs.seed,rng,fullRace:gs.fullRace,...(o.privacy?{privacy:true}:{}),
+  return{gs,rec:{kind:'eldorado-replay',v:3,course:gs.course.id,seed:gs.seed,rng,fullRace:gs.fullRace,...(o.privacy?{privacy:true}:{}),...(o.gift?{gift:o.gift}:{}),
     players:gs.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0}};
 }
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
