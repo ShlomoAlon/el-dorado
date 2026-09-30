@@ -31,6 +31,11 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
   await p.click('#sMode label[data-v="local"]'); await check('This device tab', new Function(`return ${screen('setup')}`));
   await p.click('#sGo'); await check('the game starts', () => !!window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
   await settle(p);
+  // a player's chip shows what can be seen of their cards: another player's hand face down, never its faces
+  const other = await p.evaluate(() => (window.__ED.S.cur + 1) % window.__ED.S.players.length);
+  await p.click(`#players .pchip:nth-child(${other + 1})`);
+  await check("another player's chip: their hand face down", i => { const o = document.querySelector('#overlay .ppart'); return !!o && o.querySelectorAll('.pback').length === window.__ED.S.players[i].hand.length && !o.querySelector('.mcard'); }, other);
+  await p.click('#pClose'); await settle(p);
   const pos = await p.evaluate(() => JSON.stringify(window.__ED.S.players.map(q => q.hand)));
   await p.click('#menuBtn'); await check('Menu during a game: the game bar and the tabs', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && !document.querySelector('#sMode').hidden);
   await p.click('#sMode label[data-v="replays"]'); await p.click('#rMine [data-lid]');

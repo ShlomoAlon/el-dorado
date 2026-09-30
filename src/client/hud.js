@@ -5,7 +5,7 @@ import { $, esc, setText, setHTML, setStyle } from './dom.js';
 import { UI, NET, G, cur, canAct, online, isAI } from './state.js';
 import { onGeo, geo } from './geometry.js';
 import { render } from './frame.js';
-import { banner, showGameOver } from './dialogs.js';
+import { banner, showGameOver, showPlayer } from './dialogs.js';
 import { showSetup } from './menu.js';
 import { openAll } from './market.js';
 import { replayPromptHTML } from './replay.js';
@@ -21,7 +21,8 @@ function updateHeader(){
   setText($('#roundLbl'),'Round '+S.round+(S.endTriggered&&!S.over?' · final':''));
   while(box.children.length>S.players.length)box.lastChild.remove();
   S.players.forEach((p,i)=>{
-    let c=box.children[i];if(!c){c=document.createElement('div');box.appendChild(c);}
+    let c=box.children[i];if(!c){c=document.createElement('div');c.setAttribute('role','button');c.tabIndex=0;box.appendChild(c);
+      c.onclick=()=>showPlayer(i);c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showPlayer(i);}};} // (what can be seen of that player's cards)
     const fin=p.pieces.filter(k=>k==='done').length;
     // blockades held: one diamond each, then how many and the biggest (what breaks a tie: most blockades, then the biggest one)
     const held=blocksOf(i),bmax=Math.max(0,...held.map(b=>S.blockades[b].n)),bk=held.length?held.map(b=>`<i style="background:${SYMCOL[S.blockades[b].k]}"></i>`).join('')+`<b title="${plural(held.length,'blockade')}, biggest #${bmax} (ties go to the most blockades, then the biggest one)">${held.length} · #${bmax}</b>`:'';
@@ -47,7 +48,7 @@ function updatePrompt(){
   switch(UI.mode){
     case 'idle':{
       const hasDisc=[...UI.targets.values()].some(t=>t.t==='pay');
-      txt=who+'Drag a card onto the board, or tap it'+(S.turn.bought?'.':', or buy from the market.')+(hasDisc?' <span class="m">Dashed spaces cost cards from your hand.</span>':'');
+      txt=who+'Play a card'+(S.turn.bought?'.':' or buy one.')+(hasDisc?' <span class="m">Dashed spaces cost cards.</span>':'');
       if(pl.pieces.length>1&&pl.pieces.every(k=>k!=='done'))txt+=' <span class="m">Tap a pawn to switch.</span>';
       btns=[undoBtn,{t:'End turn',id:'bEnd',pri:1,big:1,fn:startEndTurn}];break;}
     case 'card':{

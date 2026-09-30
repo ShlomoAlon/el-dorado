@@ -2,7 +2,7 @@
    The menu is its own dialog (menu.js); opening a modal closes it. */
 import { S, CT, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
 import { $, esc } from './dom.js';
-import { UI, NET, online, hp } from './state.js';
+import { UI, NET, online, hp, viewIdx } from './state.js';
 import { cardHTML } from './cards.js';
 import { MENU, menuClose, showSetup, showHub } from './menu.js';
 import { exitOnline } from './online.js';
@@ -45,6 +45,19 @@ export function showGameOver(){
   modal(`<h2>${w.length?w.map(i=>esc(S.players[i].name)).join(' & ')+' win'+(w.length>1?'':'s'):'Expedition over'}</h2><p class="sub">The race ended in round ${S.round}.${res&&res.deltas?' Ratings updated.':res&&res.unrated?' Unrated game: ratings unchanged.':''}</p>${rows}${tie}<div class="mrow">${rid||UI.lastReplay&&!online()?'<button class="btn" id="gRep">Watch replay</button>':''}<button class="btn" id="gClose">View board</button><button class="btn pri" id="gNew">New game</button></div>`,
     sc=>{sc.querySelector('#gClose').onclick=closeModal;
       const gr=sc.querySelector('#gRep');if(gr)gr.onclick=()=>{closeModal();if(online()){exitOnline();loadReplayId(rid);}else openReplay(UI.lastReplay,null);};sc.querySelector('#gNew').onclick=()=>{if(online()){exitOnline();showHub();}else showSetup();};},true);
+}
+/* a player's cards, as far as the viewer may see them (redact() keeps the rest from online pages anyway): another player's
+   hand face down and draw pile as a count; cards in play and the discard pile face up (public: played or thrown face up) */
+export function showPlayer(i){
+  const p=S.players[i],me=i===viewIdx()&&!UI.cover,order=Object.keys(CT);
+  const faces=ids=>ids.map(typeOf).sort((a,b)=>order.indexOf(a)-order.indexOf(b)).map(t=>`<div class="mcard">${cardHTML(t)}</div>`).join('');
+  const backs=n=>Array.from({length:n},()=>'<div class="pback"><div class="back"></div></div>').join('');
+  const part=(title,n,body)=>`<div class="ppart"><h3>${title} <span class="m">${n}</span></h3>${n?`<div class="deckgrid">${body}</div>`:''}</div>`;
+  const held=blocksOf(i).map(b=>'#'+S.blockades[b].n);
+  modal(`<h2><i class="pdot" style="background:${p.color}"></i>${esc(p.name)}</h2><p class="sub">${plural(p.deck.length+p.hand.length+p.discard.length+p.play.length,'card')} in the expedition${held.length?` · blockades ${held.join(', ')}`:''}${playerDone(p)?' · reached El Dorado':p.resigned?' · left the game':''}</p>
+    ${part('Hand',p.hand.length,me?faces(p.hand):backs(p.hand.length))}${part('In play',p.play.length,faces(p.play))}
+    ${part('Draw pile',p.deck.length,me?faces(p.deck):backs(Math.min(p.deck.length,1)))}${part('Discard pile',p.discard.length,faces(p.discard))}
+    <div class="mrow"><button class="btn pri" id="pClose">Close</button></div>`,sc=>{sc.querySelector('#pClose').onclick=closeModal;},true);
 }
 export function showPile(which){
   if(UI.cover)return;const pl=hp();

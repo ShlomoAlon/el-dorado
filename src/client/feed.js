@@ -176,9 +176,7 @@ function update(){
   if(HOVER)setTrail(HOVER.paths,HOVER.color);else setTrail(p&&!G.replay&&MODE!=='off'?FEED.trail:[],p?p.color:'');
   if(G.replay||UI.cover||MODE!=='center'){hide();return;}
   if(!FEED.groups.length||!p){latestUpdate(F,hide);return;}
-  if(F.dataset.pl!==String(FEED.pl)){F.innerHTML='<div class="fwho"></div><div class="frow"></div>';F.dataset.pl=FEED.pl;}
-  const recap=S.cur!==FEED.pl||S.over; // their turn is over: say whose turn this was
-  const who=F.querySelector('.fwho');setHTML(who,recap?`<i style="background:${p.color}"></i>${esc(p.name)}’s turn`:'');who.hidden=!recap;
+  if(F.dataset.pl!==String(FEED.pl)){F.innerHTML='<div class="frow"></div>';F.dataset.pl=FEED.pl;} // (no name: whose turn it is shows in the chips and the prompt)
   // newest first in the row (it runs right to left and wraps: steps that don't fit drop out whole, never half a card)
   const row=F.querySelector('.frow'),ids=new Set(FEED.groups.map(g=>String(g.id)));
   for(const el of[...row.children])if(!ids.has(el.dataset.g))el.remove();
@@ -191,11 +189,10 @@ function update(){
 /* no one else's turn on show (it is your turn and you have acted): the row shows the newest turn in the journal */
 let LATEST=null;
 function latestUpdate(F,hide){
-  const t=LATEST=turnsOf(S.log).filter(t=>!t.sys).pop();if(!t||!t.steps.length){hide();return;}
+  const t=LATEST=turnsOf(S.log).filter(t=>!t.sys).pop();
+  if(!t||!t.steps.length){if(F.dataset.pl!=='none'){F.innerHTML='<div class="frow"></div>';F.dataset.pl='none';}F.hidden=false;return;} // (nothing played yet: the row keeps its place, so the box doesn't change size)
   const pl=S.players[t.pl],id='t'+t.key;
-  if(F.dataset.pl!==id){F.innerHTML='<div class="fwho"></div><div class="frow"></div>';F.dataset.pl=id;}
-  const recap=S.cur!==t.pl||t.done||S.over;
-  const who=F.querySelector('.fwho');setHTML(who,recap?`<i style="background:${pl.color}"></i>${esc(pl.name)}’s turn`:'');who.hidden=!recap;
+  if(F.dataset.pl!==id){F.innerHTML='<div class="frow"></div>';F.dataset.pl=id;}
   setHTML(F.querySelector('.frow'),t.steps.map((g,i)=>stepHTML(g,`data-s="${t.key}|${i}"`,pl)).reverse().join('')); // (newest first, as above)
   F.hidden=false;
 }
