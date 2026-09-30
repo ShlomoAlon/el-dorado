@@ -25,7 +25,7 @@ function buildReplay(log,id){
   }
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
   let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}
-  return{log,id,states,lines,evs,rem,i:0,timer:0,speed:sp,side,ev:{},adv:{}};
+  return{log,id,states,lines,evs,rem,i:0,timer:0,speed:sp,side,ev:{},adv:{},played:{}};
 }
 /* ---- the evaluation: the shipped network's estimate for the position on screen, and the turn the strongest AI would play
    from it. Only where a network was trained (First Expedition, 3-4 players: aiAllowed); elsewhere the replay shows none. */
@@ -46,6 +46,11 @@ function replayAdvice(){const R=G.replay;if(R.i in R.adv)return R.adv[R.i];if(!r
       for(const a of line){const st=JSON.parse(JSON.stringify(S));steps.push({a,html:describeAction(a,st),key:actionKey(a,st)});const me=S.cur;if(!applyAction(me,a,g).ok||S.over||S.cur!==me)break;}}}
   finally{setS(root);}
   return R.adv[R.i]=steps;}
+/* what the player actually did from position i to the end of their turn: [{a, html, key}] (as the advice) */
+function playedTurn(i){const R=G.replay;if(R.played[i])return R.played[i];const out=[],seat=R.log.actions[i][0];
+  for(let k=i;k<R.log.actions.length&&R.log.actions[k][0]===seat;k++){const a=R.log.actions[k][1],st=JSON.parse(R.states[k]);
+    out.push({a,html:describeAction(a,st),key:actionKey(a,st)});if(a.t==='end'||a.t==='timeout'||a.t==='resign')break;}
+  return R.played[i]=out;}
 /* the same move whichever copy of a card it uses */
 function actionKey(a,st){const ty=id=>st.cards[id]||id,tys=ids=>(ids||[]).map(ty).sort().join('+');
   switch(a.t){case'move':case'native':return`${a.t} ${ty(a.card)} ${a.pi} ${a.to}`;case'pay':return`pay ${a.pi} ${a.to} ${tys(a.cards)}`;
@@ -151,20 +156,25 @@ function replayBar(){
   let h=`<div class="rwh">Evaluation <span class="m">· estimated winning chances</span></div>`;
   if(!ev)h+=`<p class="m">Loading the network…</p>`;
   else h+=`<div class="revl">${S.players.map((p,j)=>`<div class="rev${j===S.cur&&!S.over?' now':''}"><i style="background:${p.color}"></i><span class="n">${esc(p.name)}</span><span class="bar"><span style="transform:scaleX(${ev.share[j]==null?0:Math.max(0,Math.min(1,ev.share[j]))})"></span></span><b>${p.resigned?'left':pc(ev.share[j])}</b></div>`).join('')}</div>`;
-  const nx=replayNext(),A=aiById(ADVISOR),who=esc(S.players[S.cur].name);let steps=null;
+  const nx=replayNext(),A=aiById(ADVISOR),who=esc(S.players[S.cur].name);let steps=null,played=null;
   if(ev&&!S.over){
     h+=`<div class="rwh radv">${esc(A.name)}’s turn for ${who} <span class="m">· the strongest AI’s plan from here</span></div>`;
     if(R.timer)h+=`<p class="m">Pause to see it.</p>`;
     else if(!(R.i in R.adv)){h+=`<p class="m">${esc(A.name)} is thinking…</p>`;adviceSoon();}
     else if(!(steps=R.adv[R.i]))h+=`<p class="m">No plan for this position.</p>`;
-    else{const same=nx&&nx[0]===S.cur&&steps[0].key===actionKey(nx[1],JSON.parse(R.states[R.i]));
-      h+=`<ol class="rplan">${steps.map((o,j)=>`<li class="ralt${j===0&&same?' on':''}" data-j="${j}"><span>${o.html}</span></li>`).join('')}</ol>`;
+    else{
+      // compared with what the player did, step by step: m steps of the plan match theirs (✓), then what they did instead
+      played=nx&&nx[0]===S.cur?playedTurn(R.i):null;let m=0;while(played&&m<steps.length&&m<played.length&&steps[m].key===played[m].key)m++;
+      h+=`<ol class="rplan">${steps.map((o,j)=>`<li class="ralt${j<m?' on':''}" data-j="${j}"><span>${o.html}${j<m?' <b>✓</b>':''}</span></li>`).join('')}</ol>`;
       if(steps[steps.length-1].a.t==='action')h+=`<p class="rcmp">…then decides the rest after seeing the cards it draws.</p>`; // (every action card draws)
-      if(nx&&nx[0]===S.cur)h+=`<p class="rcmp">${same?`<b>✓</b> ${who} made this move.`:`${who} played instead: ${describeAction(nx[1],JSON.parse(R.states[R.i]))}`}</p>`;}
+      if(played){
+        if(m===steps.length)h+=`<p class="rcmp"><b>✓</b> ${who} played ${steps[m-1].a.t==='end'?'this turn':'these steps'}.</p>`;
+        else h+=`<p class="rcmp">${m?`${who} played the first ${m===1?'step':m+' steps'}, then:`:`${who} played instead:`}</p><ol class="rplan" style="counter-reset:st ${m}">${played.slice(m).map((o,j)=>`<li class="ralt rme" data-p="${m+j}"><span>${o.html}</span></li>`).join('')}</ol>`;}
+    }
   }
   if(side.__h===h)return;setHTML(side,h); // (rewritten only when it changes: hovering a step redraws the board, not this list)
   // hovering a step marks its space on the board
-  side.querySelectorAll('.ralt').forEach(el=>{const o=steps[+el.dataset.j].a;
+  side.querySelectorAll('.ralt').forEach(el=>{const o=(el.dataset.p!=null?played[+el.dataset.p]:steps[+el.dataset.j]).a;
     el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(o.to)){R.hover=o.to;render();}};
     el.onpointerleave=()=>{R.hover=null;render();};});
 }
