@@ -83,7 +83,7 @@ function btnWire(B,btns){
 
 /* ---------- the online turn clock (in the prompt) ---------- */
 function timeLeft(){if(!online()||NET.clockEnd==null||S.over)return null;return Math.max(0,Math.round((NET.clockEnd-Date.now())/1000));}
-export function renderTimer(){
+function renderTimer(){
   const el=document.getElementById('turnTimer');if(!el)return;
   const t=timeLeft();if(t===null){el.hidden=true;return;}
   if(t<10&&t>0&&t!==SND.lastT&&canAct())sfx('timer');SND.lastT=t;

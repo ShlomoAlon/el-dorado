@@ -121,7 +121,7 @@ function turnsOf(log){
 /* ---------- which of the three ways it shows (the History button cycles them) ---------- */
 const MODES=['center','left','off'],MODE_KEY='eldorado-hist';
 let MODE='center';try{const v=localStorage.getItem(MODE_KEY);if(MODES.includes(v))MODE=v;}catch(e){}
-export function histCycle(){MODE=MODES[(MODES.indexOf(MODE)+1)%3];try{localStorage.setItem(MODE_KEY,MODE);}catch(e){}HOVER=null;render();}
+function histCycle(){MODE=MODES[(MODES.indexOf(MODE)+1)%3];try{localStorage.setItem(MODE_KEY,MODE);}catch(e){}HOVER=null;render();}
 
 /* ---------- a step pointed at (or tapped): its explorer's path on the board, instead of the live trail ---------- */
 let HOVER=null; // {el, paths, color}

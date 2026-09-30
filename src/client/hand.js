@@ -29,7 +29,7 @@ function newCard(S,id) {
 }
 
 /* ---------- layout: where every card of the hand and the play area goes (pure arithmetic) ---------- */
-export function layoutCards() {
+function layoutCards() {
   if (!S) return;
   const W = geo.app.width, H = geo.app.height, cw = geo.cw, ch = cw * 1.4, phone = W < 600;
   const pl = hp(), hand = UI.cover ? [] : pl.hand, play = UI.cover ? [] : pl.play, n = hand.length;

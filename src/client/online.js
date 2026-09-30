@@ -35,8 +35,8 @@ export function gsiMount(el,err,after,size){
     if(el.isConnected)google.accounts.id.renderButton(el,{theme:'filled_black',size:size||'large',shape:'pill',text:'signin_with'});}).catch(()=>err('Could not load Google sign-in.'));}
 export function signOut(then){NET.token=null;NET.user=null;try{localStorage.removeItem('ed-token');}catch(e){}closeLobbyWs();(then||showHub)();}
 let gsiLoading=null;
-export function loadGsi(){if(window.google&&google.accounts)return Promise.resolve();if(!gsiLoading)gsiLoading=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=res;s.onerror=rej;document.head.appendChild(s);});return gsiLoading;}
-export function wsUrl(path){return(location.protocol==='https:'?'wss://':'ws://')+location.host+path+(path.includes('?')?'&':'?')+'t='+encodeURIComponent(NET.token);}
+function loadGsi(){if(window.google&&google.accounts)return Promise.resolve();if(!gsiLoading)gsiLoading=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=res;s.onerror=rej;document.head.appendChild(s);});return gsiLoading;}
+function wsUrl(path){return(location.protocol==='https:'?'wss://':'ws://')+location.host+path+(path.includes('?')?'&':'?')+'t='+encodeURIComponent(NET.token);}
 
 export function openLobbyWs(){
   if(NET.lobbyWs||!NET.user)return;
@@ -57,7 +57,7 @@ export function joinRoom(code,mine){
   connectRoom();showRoomLobby();
 }
 export function leaveRoomSocket(){if(NET.ws){const w=NET.ws;NET.ws=null;w.close();}clearTimeout(NET.retryT);NET.connected=false;}
-export function connectRoom(){
+function connectRoom(){
   const code=NET.code;if(!code)return;
   const ws=new WebSocket(wsUrl('/api/rooms/'+code+'/ws'));NET.ws=ws;NET.heard=Date.now();
   ws.onopen=()=>{NET.connected=true;NET.retries=0;NET.status='';NET.heard=Date.now();if(S)render();};
@@ -83,13 +83,13 @@ export function netAct(m){NET.busy=true;netSend(m);const ws=NET.ws;clearTimeout(
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible'||!NET.code)return;const ws=NET.ws;
   if(!ws){clearTimeout(NET.retryT);connectRoom();return;}
   if(ws.readyState!==1)return;const t=Date.now();ws.send('ping');setTimeout(()=>{if(NET.ws===ws&&NET.heard<t)lostConnection(ws);},5000);});
-export function onRoomMsg(m){
+function onRoomMsg(m){
   if(m.t==='error'){diag('server: '+m.err);NET.busy=false;NET.leaving=false;clearTimeout(NET.busyT);sfx('error');toast(m.err);if(S)render();return;}
   if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}renderRoomLobby();return;}
   if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.clockEnd=m.left==null?null:Date.now()+m.left;NET.busy=false;clearTimeout(NET.busyT);applyServerState(m.S,m.ev);
     if(NET.leaving&&m.S.players[m.seat].resigned){NET.leaving=false;exitOnline();showHub();}} // (left the game: to the Online screen once the server has it)
 }
-export function applyServerState(S2,ev){
+function applyServerState(S2,ev){
   const old=S,fresh=!online();UI.preview=false; // (joining a room clears NET.S: its first state is a new game on show)
   setS(S2);NET.S=S2;
   if(fresh){closeModal();UI.cover=false;showGame();}

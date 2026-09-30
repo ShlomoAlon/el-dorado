@@ -80,7 +80,7 @@ export function sfxEvent(e,viewer){
   }
   if(e.e==='turn')SND.prevCur=e.pl;
 }
-export function setSound(on){
+function setSound(on){
   SND.muted=!on;try{localStorage.setItem('eldorado-sound',on?'1':'0');}catch(e){}
   const b=document.getElementById('sndBtn');b.classList.toggle('off',!on);b.title=b.ariaLabel=on?'Mute sounds':'Unmute sounds';
 }

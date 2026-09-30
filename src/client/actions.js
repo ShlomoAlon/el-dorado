@@ -35,7 +35,7 @@ export function resync(){
   toast('Something went wrong, sorry. The game was restored.',3200);render();
 }
 
-export function computeTargets(){
+function computeTargets(){
   const T=new Map();UI.targets=T;if(S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
   const src=UI.mode==='card'?cardTargets(S,S.cur,UI.piece,UI.card):UI.mode==='idle'?payTargets(S,S.cur,UI.piece):null;
   if(src)for(const[k,v]of src)T.set(k,v);
@@ -46,7 +46,7 @@ export function cardUsable(id){return(def(S,id).c==='p'&&typeOf(S,id)!=='native'
 export const isTargeted=id=>def(S,id).c!=='p'||typeOf(S,id)==='native';
 export function firstPiece(){return Math.max(0,cur().pieces.findIndex(k=>k!=='done'));}
 /* after the state changed, put the UI into the matching mode */
-export function syncMode(turnChanged){
+function syncMode(turnChanged){
   if(turnChanged||!canAct())clearSelection();
   if(S.turn.pending){UI.mode='trashPick';UI.max=S.turn.pending.max;if(turnChanged)UI.picks=[];}
   else if(UI.mode==='trashPick'){UI.mode='idle';UI.picks=[];}

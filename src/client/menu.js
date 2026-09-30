@@ -12,9 +12,9 @@ import { aiKick, aiNetLoad } from './ai.js';
 import { api, gsiMount, signOut, signedIn, joinRoom, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, exitOnline, resignOnline } from './online.js';
 import { loadReplayId, openReplay } from './replay.js';
 /* course list: official routes first; 'random' picks one of them */
-export function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:courseById(id);}
+function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:courseById(id);}
 // (a room's course, as the server sends it: one this page doesn't know yet, from a newer version, shows as the first)
-export function courseName(id){return id==='random'?'Random course':(courseById(id)||COURSES[0]).name;}
+function courseName(id){return id==='random'?'Random course':(courseById(id)||COURSES[0]).name;}
 export const MENU={dlg:$('#menu'),f:$('#mform'),screen:null,acct:null,closeT:0};
 const mq=s=>MENU.f.querySelector(s),mqa=s=>MENU.f.querySelectorAll(s);
 export const radio=n=>{const e=MENU.f.querySelector(`input[name="${n}"]:checked`);return e?e.value:null;};
@@ -51,7 +51,7 @@ const MODE={setup:'local',online:'online',room:'online',replays:'replays'};
 export function showMenu(){if(online()&&S.over){exitOnline();showHub();}else if(onlineGame())showHub();else showSetup();}
 
 /* show a screen (opening the dialog if it isn't open) */
-export function menuOpen(screen){
+function menuOpen(screen){
   $('#overlay').innerHTML=''; // one window at a time: the menu replaces results, rules or a pile (never left underneath it)
   const d=MENU.dlg,ig=inGame(),rs=ig?resignSeat():-1;
   mq('#ingame').hidden=!ig;
@@ -70,10 +70,10 @@ export function menuOpen(screen){
 }
 export function menuClose(){const d=MENU.dlg;document.documentElement.classList.remove('resume');if(!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
 // after signing in or out: the account bar and whatever depends on it
-export function menuRefresh(){acctRender();if(MENU.screen==='online'){if(NET.user)openLobbyWs();onlineRender();}} // (signed in on the Online screen: its room list goes live at once)
+function menuRefresh(){acctRender();if(MENU.screen==='online'){if(NET.user)openLobbyWs();onlineRender();}} // (signed in on the Online screen: its room list goes live at once)
 
 /* ---- the account bar (rebuilt only when who's signed in, or their numbers, change) ---- */
-export function acctRender(){
+function acctRender(){
   const el=mq('#acct'),u=NET.user,key=!NET.available?'-':u?[u.id,u.name,Math.round(u.rating),u.games,u.wins].join('|'):'out';
   if(MENU.acct===key)return;MENU.acct=key;el.hidden=!NET.available;if(!NET.available)return;
   if(!u){const g=NET.cfg.google;el.innerHTML=`<span class="m">Not signed in</span>${g?'<div id="gsiTop" class="gsiSm gsi"></div>':''}`;if(g)gsiMount(el.querySelector('#gsiTop'),t=>toast(t,3000),menuRefresh,'medium');return;}
@@ -81,7 +81,7 @@ export function acctRender(){
 }
 
 /* ---- every choice ---- */
-export function menuChange(e){
+function menuChange(e){
   const n=e.target.name||e.target.id;
   if(n==='mode'){({local:showSetup,online:showHub,replays:showReplays})[e.target.value]();return;}
   if(n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){setupSync();prepareGame();
@@ -91,7 +91,7 @@ export function menuChange(e){
   if(n==='rlrated'){netSend({t:'rated',v:e.target.value==='1'});return;}
   if(n==='rlcol'){netSend({t:'color',color:e.target.value});return;}
 }
-export function menuClick(e){
+function menuClick(e){
   const b=e.target.closest('button');if(!b||b.disabled)return;
   const err=t=>{mq('#hErr').textContent=t;};
   const run=f=>Promise.resolve().then(f).catch(x=>err(x.message));
@@ -143,7 +143,7 @@ export function setupSync(){
    out exactly as it will be played (board, pieces, hand, top bar). A changed choice remakes it behind the menu; Start
    only takes the menu away: nothing is redrawn or refitted. UI.preview marks a game not started yet (no AI moves, not
    saved). */
-export function setupOpts(){
+function setupOpts(){
   const n=+radio('np'),rows=[...mqa('#seats .seat')].slice(0,n),who=rows.map(r=>r.querySelector('select').value),id=radio('course');
   if(SETUP.id!==id||!SETUP.cur){SETUP.id=id;SETUP.cur=pickCourse(id);}
   const players=rows.map((r,i)=>{const A=aiById(who[i]),k=who.slice(0,i).filter(x=>x===who[i]).length;
@@ -169,9 +169,9 @@ export function startLocal(){
 
 /* ---- Online ---- */
 /* leave the room this page is in (before its game starts: afterwards the server ignores it and the socket just closes) */
-export function leaveRoom(){if(!NET.code)return;if(NET.connected)netSend({t:'leave'});NET.code=null;leaveRoomSocket();try{history.replaceState(null,'',location.pathname);}catch(_){}}
+function leaveRoom(){if(!NET.code)return;if(NET.connected)netSend({t:'leave'});NET.code=null;leaveRoomSocket();try{history.replaceState(null,'',location.pathname);}catch(_){}}
 export function showHub(){if(NET.user)openLobbyWs();onlineRender();menuOpen('online');}
-export function onlineRender(){
+function onlineRender(){
   const u=NET.user;mq('#oOff').hidden=NET.available;mq('#oOut').hidden=!NET.available||!!u;mq('#oIn').hidden=!NET.available||!u;
   if(!NET.available)return;
   if(!u){mq('#oNoG').hidden=!!NET.cfg.google;mq('#oDev').hidden=!NET.cfg.dev;return;}
@@ -186,10 +186,10 @@ export function roomsRender(){
 }
 /* the Online tabs show by themselves (CSS); this fetches what the shown tab needs (at most every 5 s) */
 const PROFILES={},FETCHED={};
-export function fetchOnce(key,url,done){const t=FETCHED[key];if(t&&(t.busy||Date.now()-t.at<5000))return;FETCHED[key]={busy:true};
+function fetchOnce(key,url,done){const t=FETCHED[key];if(t&&(t.busy||Date.now()-t.at<5000))return;FETCHED[key]={busy:true};
   api(url).then(r=>{FETCHED[key]={at:Date.now()};done(r);}).catch(()=>{FETCHED[key]={at:Date.now()};});}
 export function loadProfile(id){return api('/api/users/'+encodeURIComponent(id)).then(r=>{PROFILES[id]=r;});}
-export function onlineTab(){
+function onlineTab(){
   if(!NET.user)return;const t=radio('otab');
   if(t==='board')fetchOnce('lb','/api/leaderboard',r=>setHTML(mq('#lbList'),lbHTML(r.players)));
   if(t==='me'){const id=NET.viewUser||myId(),own=id===myId();mq('#pfBack').hidden=own;mq('#meNameBox').hidden=!own;
@@ -199,7 +199,7 @@ export function onlineTab(){
 }
 const lbHTML=players=>players.length?`<div class="lb">${players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span class="m">${i+1}</span><span class="lbp"><button type="button" class="lbn${p.id===myId()?' me':''}" data-uid="${esc(p.id)}">${esc(p.name)}</button>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span class="m">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';
 const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
-export function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
+function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
   const stat=(v,l)=>`<div class="pst"><b>${v}</b><span>${l}</span></div>`;
   return`<div class="pfh"><span class="av big">${esc(u.name.slice(0,1).toUpperCase())}</span><div><h3>${esc(u.name)}${A?' <span class="aitag">AI</span>':''}</h3>${A?`<span class="note">${esc(A.tier)} · ${esc(A.desc)}</span>`:''}</div></div>
   <div class="pstats">${stat(Math.round(u.rating),'rating')}${stat('#'+u.rank,'rank')}${stat(u.games,'rated games')}${stat(u.wins,'wins')}${stat(u.games?Math.round(100*u.wins/u.games)+'%':'–','win rate')}</div>

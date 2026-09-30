@@ -12,7 +12,7 @@ import { setT, placeAt, buySlotBox } from './hand.js';
 import { sfx } from './sound.js';
 
 const noMkt=()=>$('#app').classList.toggle('nomkt',!UI.mktOpen||$('#mkt').classList.contains('cramped'));
-export function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
+function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
   if(!cam.userZoomed)fitSoon(true);}
 export function openAll(open){UI.allOpen=open;$('#allc').hidden=!open;if(open){$('#allc').scrollTop=0;update();}}
 /* size the market column so it always ends above the turn buttons and the discard pile: smaller cards, and more columns
