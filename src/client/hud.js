@@ -53,10 +53,10 @@ function updatePrompt(){
     case 'card':{
       const d=def(UI.card);const act=S.turn.active&&S.turn.active.id===UI.card;
       if(typeOf(UI.card)==='native')txt=who+'<b>Native</b>: move to any adjacent free space, or tear down an adjacent blockade.';
-      else if(act)txt=who+`<b>${esc(d.n)}</b> has <b>${S.turn.active.left}</b> ${SYMNAME[S.turn.active.sym]}${S.turn.active.left>1?'s':''} left. Keep moving, or play another card.`;
+      else if(act)txt=who+`<b>${esc(d.n)}</b> has <b>${S.turn.active.left}</b> ${SYMNAME[S.turn.active.sym]}${S.turn.active.left>1?'s':''} left. <span class="m">Tap a highlighted space to keep going, or anywhere else to stop.</span>`;
       else txt=who+`<b>${esc(d.n)}</b> · ${d.p} ${d.s==='*'?'of any one symbol':SYMNAME[d.s]+(d.p>1?'s':'')}. Choose a highlighted space.`;
       if(!UI.targets.size)txt+=' <span class="m">No reachable spaces with this card.</span>';
-      btns=[undoBtn,{t:act?'Done':'Cancel',id:'bCan',fn:cancelMode},{t:'End turn',id:'bEnd',pri:1,big:1,fn:startEndTurn}];break;}
+      btns=[undoBtn,{t:act?'Stop moving':'Cancel',id:'bCan',fn:cancelMode},{t:'End turn',id:'bEnd',pri:1,big:1,fn:startEndTurn}];break;}
     case 'pay':{
       const c=CT[UI.buy.t].cost,t=payTotal();
       // no Buy button: the card is bought as soon as the cards paid in cover its price (payProgress)

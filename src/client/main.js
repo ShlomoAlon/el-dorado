@@ -36,7 +36,7 @@ function boot() {
   if (!document.documentElement.classList.contains('resume')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check)
   $('#deckPile').onclick = () => showPile('deck'); $('#discPile').onclick = () => showPile('discard');
   $('#rulesBtn').onclick = showRules; histInit();
-  $('#stage').addEventListener('click', onBoardClick); $('#stage').addEventListener('pointerover', onBoardHover); $('#stage').addEventListener('pointerout', onBoardOut);
+  $('#vp').addEventListener('click', onBoardClick); $('#stage').addEventListener('pointerover', onBoardHover); $('#stage').addEventListener('pointerout', onBoardOut);
   // full screen (hidden where the browser can't do it, e.g. iPhone Safari — there, Add to Home Screen gives a full-screen app)
   const fsEl = document.documentElement, fsOn = () => document.fullscreenElement || document.webkitFullscreenElement;
   if (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen) {
@@ -66,10 +66,11 @@ function boot() {
   });
 }
 
-/* clicks and hovers on the board's targets (explorers handle their own clicks: board/pieces.js) */
+/* clicks and hovers on the board's targets (explorers handle their own clicks: board/pieces.js). A tap anywhere else puts
+   the chosen card down: that is how a player stops moving with a card that has strength left */
 function onBoardClick(e) {
   if (!canAct() || cam.dragMoved || drag || UI.anim) return;
-  const t = e.target.closest('[data-t]'); if (t && t.dataset.t) doMove(t.dataset.t);
+  const t = e.target.closest('[data-t]'); if (t && t.dataset.t) doMove(t.dataset.t); else if (UI.mode === 'card') cancelMode();
 }
 function onBoardHover(e) {
   if (drag) return; const t = e.target.closest('[data-t]'); if (!t || !t.dataset.t) return;

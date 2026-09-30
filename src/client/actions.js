@@ -191,6 +191,7 @@ export function onPiece(pl,i){
   if(!canAct())return;
   if(pl!==S.cur||S.over)return;
   if(cur().pieces[i]==='done')return;
+  if(UI.mode==='card'&&i===UI.piece){cancelMode();return;} // the explorer the card would move: put the card down (stop moving)
   if(S.turn.active&&UI.mode==='card'&&UI.card===S.turn.active.id&&S.turn.active.pi!==i){UI.mode='idle';UI.card=null;}
   UI.piece=i;render();
 }

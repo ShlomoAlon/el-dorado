@@ -18,10 +18,20 @@ const genCode = () => Array.from({ length: 5 }, () => CODE_CH[Math.floor(Math.ra
 const TURN_CHOICES = [60, 90, 120, 180, 300];
 
 /* ---------------- database ---------------- */
+/* Setting the database up takes ~25 queries in a row (seconds from a far colo), so it runs only when this stamp changes:
+   a new instance of the worker (they start often) then costs one query. Bump SCHEMA_V when createSchema changes; the
+   named AIs and their calibrated ratings are part of the stamp. */
+const SCHEMA_V = 1, SCHEMA = SCHEMA_V + ':' + E.AIS.map(A => A.id + '=' + A.rating).join(',');
 let schemaReady = null;
 function ensureSchema(env) {
-  if (!schemaReady) schemaReady = createSchema(env).catch(e => { schemaReady = null; throw e; });
+  if (!schemaReady) schemaReady = checkSchema(env).catch(e => { schemaReady = null; throw e; });
   return schemaReady;
+}
+async function checkSchema(env) {
+  const row = await env.DB.prepare(`SELECT v FROM settings WHERE k='schema'`).first().catch(() => null); // no table yet: a new database
+  if (row && row.v === SCHEMA) return;
+  await createSchema(env);
+  await env.DB.prepare(`INSERT INTO settings(k,v) VALUES('schema',?) ON CONFLICT(k) DO UPDATE SET v = excluded.v`).bind(SCHEMA).run();
 }
 const aiUid = id => 'ai-' + id; // the named AIs are players in the users table (bot = AI id, no Google account)
 async function createSchema(env) {
