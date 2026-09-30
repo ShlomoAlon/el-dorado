@@ -90,9 +90,9 @@ function recNewGame(o,rng){
     players:gs.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0}};
 }
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
-function recApply(gs,rec,seat,a,rnd=Math.random){ // (rnd: for a game without a record)
-  const prev=gs.cur,r=applyAction(gs,seat,a,rec?recRng(rec.rng,rec.actions.length):rnd);
-  if(r.ok&&rec){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||gs.cur!==prev||gs.over)rec.mark=rec.actions.length;}
+function recApply(gs,rec,seat,a){assert(rec&&Array.isArray(rec.actions),'recApply: the game\'s record');
+  const prev=gs.cur,r=applyAction(gs,seat,a,recRng(rec.rng,rec.actions.length));
+  if(r.ok){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||gs.cur!==prev||gs.over)rec.mark=rec.actions.length;}
   return r;
 }
 const recCanUndo=rec=>rec.actions.length>rec.mark;
@@ -109,7 +109,7 @@ function recFinal(rec,st){
   return L;
 }
 /* a new game (its state) */
-function newGame(o,rnd=Math.random){
+function newGame(o,rnd){assert(typeof rnd==='function','newGame: a random source (rnd)');
   assert(o.players.length>=2&&o.players.length<=4,'newGame: 2 to 4 players');
   const course=o.course||COURSES[0],M=mapOf({course,seed:o.seed});
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
@@ -219,7 +219,7 @@ function payTargets(gs,pl,pi){
      {t:'resign'}                    the player leaves the game (any time, in or out of turn)
      {t:'endgame'}                   (local play) the game ends now for everyone: arrivals first, then who is closest
    ========================================================= */
-function applyAction(gs,seat,a,rnd=Math.random){
+function applyAction(gs,seat,a,rnd){assert(typeof rnd==='function','applyAction: a random source (rnd)');
   const fail=err=>({ok:false,err,ev:[]});
   if(gs.over)return fail('The game is over.');
   if(!a||typeof a!=='object')return fail('Bad action.');

@@ -145,7 +145,7 @@ function botHeuristic(gs,me){ // hand-tuned: be close to the goal, own a strong 
 const BOT_STARTER={explorer:1,traveler:1,sailor:1};
 /* buying: only while more than 7 of route is left, only a card worth more than 2 (botCardWorth, plus 8% per coin of cost) */
 const BOT_BUY={stop:7,min:2,costW:.08};
-function botPlanMoves(gs,me){
+function botPlanMoves(gs,me,rnd){
   const memo=new Map();let best=null,nodes=0;
   const score=st=>{const P=st.players[me];const c=P.pieces.reduce((a,k)=>a+(k==='done'?-5:botCost(gs,k)),0);const coin=P.hand.reduce((a,id)=>a+coinVal(gs,id),0);
     return -c*10+coin;};
@@ -160,7 +160,7 @@ function botPlanMoves(gs,me){
     const groups=new Map();for(const a of acts){const g=a.t+(a.card||'')+a.pi;if(!groups.has(g))groups.set(g,[]);groups.get(g).push(a);}
     for(const[,list]of groups){
       const ranked=list.map(a=>({a,c:a.to[0]==='B'?-1:botCost(gs,a.to)})).sort((x,y)=>x.c-y.c).slice(0,3);
-      for(const{a}of ranked){const nx=botClone(st);if(!applyAction(nx,me,a).ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
+      for(const{a}of ranked){const nx=botClone(st);if(!applyAction(nx,me,a,rnd).ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
     }
   };
   dfs(botClone(gs),[],0);return best?best.path:[];
@@ -172,11 +172,11 @@ function botCardWorth(gs,t,me){ // how useful a new card is for the rest of the 
   if(d.c==='p')return {cartographer:2.6,native:2.2,compass:2.3,scientist:2.2,travellog:2.2,transmitter:1.5}[t]||1;
   const fit=d.s==='*'?1:(m[d.s]||0)/mt;return d.p*(0.35+fit)+(d.c==='y'?0.6:0);
 }
-function botPlanChoose(gs,me){
+function botPlanChoose(gs,me,rnd){
   const P=gs.players[me],T=gs.turn;
   if(T.pending)return{t:'trash',cards:P.hand.filter(id=>BOT_STARTER[typeOf(gs,id)]).slice(0,T.pending.max)}; // the weak starting cards
   const draw=P.hand.find(id=>BOT_DRAW[typeOf(gs,id)]);if(draw)return{t:'action',card:draw};
-  const moves=botPlanMoves(gs,me);if(moves.length)return moves[0];
+  const moves=botPlanMoves(gs,me,rnd);if(moves.length)return moves[0];
   // buy with what's left
   const left=botRemaining(gs,me);
   if(!T.bought&&left>BOT_BUY.stop){
@@ -311,8 +311,9 @@ function botActionValue(gs,me,a,mode,rnd,K){K=K||4;
     const r=applyAction(st,me,a,rnd);return r.ok?botValue(st,me,mode):-Infinity;};
   return a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)]?[...Array(K)].reduce(x=>x+one(),0)/K:one();}
 function botChoose(gs,opts){
-  opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
-  if(mode==='plan')return{a:botPlanChoose(gs,gs.cur)};
+  let mode=opts.mode;const eps=opts.eps||0,rnd=opts.rnd;
+  assert(typeof mode==='string'&&typeof rnd==='function','botChoose: opts.mode and a random source (opts.rnd)');
+  if(mode==='plan')return{a:botPlanChoose(gs,gs.cur,rnd)};
   const me=gs.cur,root=gs;let acts=botActions(gs);if(mode==='net'&&!botNetReady(gs))mode='heur';
   if(opts.turnState&&opts.turnState.noBuy){const f=acts.filter(a=>a.t!=='buy'&&a.t!=='transmit');if(f.length)acts=f;} // exploration: a turn without gaining a card
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],why:'random'};
@@ -375,7 +376,7 @@ function botPlanTurn(gs,me,B,rnd,K,noBuy,top){ // top: optional array that recei
 // the plan being followed lives on the caller's holder, opts.planMem ({plan}: one per seat; a named AI passes its memory)
 function botPlanTurnChoose(gs,opts){
   const M=opts.planMem;assert(M&&typeof M==='object','botChoose: a search needs opts.planMem, the seat\'s plan holder');
-  const me=gs.cur,o=opts.search,rnd=opts.rnd||Math.random,C=M.plan;
+  const me=gs.cur,o=opts.search,rnd=opts.rnd,C=M.plan;
   // follow the current plan while it still applies (same player, same round, same position the plan expects)
   if(C&&C.me===me&&C.round===gs.round&&C.i<C.line.length&&C.key===botTurnKey(gs,me)){
     const a=C.line[C.i],st=botClone(gs),ok=applyAction(st,me,a,rnd).ok,nk=ok&&!st.over&&st.cur===me?botTurnKey(st,me):null;

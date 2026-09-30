@@ -90,7 +90,6 @@ const key=(q,r)=>q+','+r;
 const rot=(q,r,k)=>{for(let i=0;i<k;i++){const t=q;q=-r;r=t+r;}return[q,r];};
 const pxOf=(q,r)=>[R*SQ3*(q+r/2),R*1.5*r];
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
-/* where shuffles get their randomness: Math.random in play; a seeded generator while recording or replaying a game log */
 /* randomness is always passed in (rnd: () => [0, 1)): a game's shuffles come from its record's generators (engine_rules.js) */
 function shuffle(a,rnd){for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 const hash=(x,y)=>{let h=Math.imul(x|0,374761393)+Math.imul(y|0,668265263);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};

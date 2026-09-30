@@ -16,7 +16,7 @@ if (!isMainThread) {
     const r = (g >> 2) % n, ids = base.map((_, i) => base[(i + r) % n]);
     const mem = ids.map(() => ({})), t = { hA: [0, 0, 0], hB: [0, 0, 0] }; let turnKey = '';
     const { gs, capped } = playout({ seed: seed0 + g, players: seatPlayers(ids.length, ids), choose: (gs, me) => { // (timed: the AI's thinking)
-      const k = me + ':' + gs.round, id = ids[me], e0 = E.BOT_EVALS, t0 = performance.now(), a = E.aiChoose(gs, id, mem[me]);
+      const k = me + ':' + gs.round, id = ids[me], e0 = E.BOT_EVALS, t0 = performance.now(), a = E.aiChoose(gs, id, mem[me], Math.random);
       t[id][0] += performance.now() - t0; t[id][1] += E.BOT_EVALS - e0; if (k !== turnKey) { t[id][2]++; turnKey = k; }
       return a; } });
     parentPort.postMessage({ n, seats: ids.map((id, i) => ({ id, place: capped && !gs.players[i].fin ? n : gs.places[i] })), t });

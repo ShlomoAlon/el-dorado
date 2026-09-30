@@ -23,7 +23,7 @@ The functions that make a game return it: `newGame(o, rnd)` → gs, `recNewGame(
 `recUndo(rec)` → gs, `replayStart(log)` → gs, and `replay(log)` yields `{i, gs, …}`. The page keeps the game on show
 itself (`state.js`: `S`, and its board `MAP`); the server keeps each room's (`this.S`).
 - **Randomness is always passed in** (`rnd: () => [0, 1)`): `newGame(o, rnd)` and `applyAction(gs, seat, a, rnd)` shuffle with the
-  generator they are given (default `Math.random`). A record gives each action its own (§1.8), so the same record always
+  generator they are given (required: there is no default). A record gives each action its own (§1.8), so the same record always
   gives the same game. The AIs' look-ahead shuffles with its own `rnd`, never the game's.
 
 ### 1.2 Data
@@ -108,9 +108,9 @@ P = { name, color, ai?: AI id, pieces: [key|'done'], deck: [id], hand: [id], dis
 - **`turn.pending`:** a Scientist or Travel Log is waiting for its `trash` action.
 - **Online:** the server never writes into `S` (who plays each seat is the room's `seats`, in seat order).
 
-### 1.5 Actions — `applyAction(gs, seat, a, rnd = Math.random)` → `{ok, err?, ev: [event], reveal?}`
+### 1.5 Actions — `applyAction(gs, seat, a, rnd)` → `{ok, err?, ev: [event], reveal?}`
 
-The acting seat must be `S.cur`, except for `resign`. A refused action returns `{ok: false, err: text}` and changes nothing.
+The acting seat must be `gs.cur`, except for `resign`. A refused action returns `{ok: false, err: text}` and changes nothing.
 
 | action | effect |
 |---|---|
@@ -211,7 +211,7 @@ the draw pile).
 |---|---|
 | `recSecret()` | A new game's secret number, from `crypto.getRandomValues`. |
 | `recNewGame(opts, rng)` → `{gs, rec}` | Starts a game and its record (`opts` as for `newGame`, plus `privacy?` and `gift?`). `rng` is required: `recSecret()` for games people play; tools and tests pass a fixed number to get the same game again. |
-| `recApply(gs, rec, seat, a, rnd?)` | `applyAction` with the action's generator (`rnd` only for a game without a record). On success the action is recorded (`rec` may be `null`: not recorded). `mark` moves up when an action reveals cards, passes the turn, resigns or ends the game. |
+| `recApply(gs, rec, seat, a)` | `applyAction` with the action's generator. On success the action is recorded (`rec` is required). `mark` moves up when an action reveals cards, passes the turn, resigns or ends the game. |
 | `recCanUndo(rec)` | `actions.length > mark` |
 | `recUndo(rec)` → gs | Drops the last action and returns the rebuilt game. |
 | `recState(rec)` → gs | The game a record leads to. |
@@ -240,9 +240,9 @@ Each entry also has `rating` (its calibrated starting rating), `desc` and `opts`
 |---|---|
 | `aiById(id)`, `aiUsesNet(id)` | |
 | `aiAllowed(course, n)` | AIs are offered on First Expedition with 3–4 players (`aiCourseOK(course)` checks the course alone). |
-| `aiChoose(gs, id, mem)` → action | One decision for `S.cur`. `mem` is `{}` per game and seat; it keeps the turn planner's cache. An unknown id, a 2-player game, or no fitting network: the route planner. After 60 decisions in one turn it ends the turn. It never removes its last card that can enter El Dorado, never thins its deck below 4 cards, and buys such a card before ending a turn without one. |
-| `aiStep(gs, id, mem, rec, rnd?)` | `recApply` of `aiChoose` (the AI's choice is always legal: asserted). |
-| `aiPlan(gs, id, rnd)` → `[action]` or null | The whole turn that AI would play from here for `S.cur` (its planner's best line; a draw card ends the line). null unless the AI plans whole turns with a loaded network. The replay shows Fawcett's. |
+| `aiChoose(gs, id, mem, rnd)` → action | One decision for `gs.cur`. `mem` is `{}` per game and seat; it keeps the turn planner's cache. `rnd`: its look-ahead's random source. An unknown id, a 2-player game, or no fitting network: the route planner. After 60 decisions in one turn it ends the turn. It never removes its last card that can enter El Dorado, never thins its deck below 4 cards, and buys such a card before ending a turn without one. |
+| `aiStep(gs, id, mem, rec, rnd)` | `recApply` of `aiChoose` (the AI's choice is always legal: asserted); `rnd` is the AI's look-ahead's. |
+| `aiPlan(gs, id, rnd)` → `[action]` or null | The whole turn that AI would play from here for `gs.cur` (its planner's best line; a draw card ends the line). null unless the AI plans whole turns with a loaded network. The replay shows Fawcett's. |
 | `aiNetDecode(bytes)`, `aiSetNet(net)`, `botNetReady(gs)` | Load and select the network; `botNetReady(gs)` says whether it fits the course on show. |
 
 **The network file** (`src/ai/first.bin`, made by `tools/ai/pack.mjs`):
@@ -257,7 +257,7 @@ A multi-course network's header also names its inputs (`courses`, `onehot`, `ext
 
 ### 1.10 Bot and training API (`engine_bot.js`)
 
-These functions belong to the training code. `botActions` and `botChoose` act for `S.cur`; the others take a seat `me`.
+These functions belong to the training code. `botActions` and `botChoose` act for `gs.cur`; the others take a seat `me`.
 
 | function | |
 |---|---|
@@ -275,10 +275,11 @@ These functions belong to the training code. `botActions` and `botChoose` act fo
 
 | option | values |
 |---|---|
-| `mode` | `net` (the default when a network is set; without a fitting network it becomes `heur`), `heur`, or `plan` (the hand-written planner, the AI Raleigh; it returns before any option below is read) |
+| `mode` | Required. `net` (without a fitting network it becomes `heur`), `heur`, or `plan` (the hand-written planner, the AI Raleigh; it returns before any option below is read) |
 | `search` | `{kind: 'plan', beam}`: the whole-turn planner (Humboldt, Fawcett, and training with `SEARCH_BEAM`) |
 | `planMem` | Required with `search`: the seat's plan holder `{plan}`, one per seat, kept between its moves (the planner follows its plan while the position is the one it expected). `aiChoose` passes the AI's memory. |
-| exploration | `rnd`, `eps`, `typeEps`, `temp`, `lotemp`, `noise`, `turnState: {noBuy, forceTransmit}` |
+| `rnd` | Required: the look-ahead's random source (never the game's). |
+| exploration | `eps`, `typeEps`, `temp`, `lotemp`, `noise`, `turnState: {noBuy, forceTransmit}` |
 | other | `draws`: imagined draws per draw card (default 4; Fawcett uses 8) |
 
 **Contract:** the feature vectors, including the order of `BOT_TYPES`, space keys sorted as strings and connection order, must stay

@@ -7,7 +7,7 @@ aiSetNet(aiNetDecode(readFileSync(new URL('../../src/ai/first.bin', import.meta.
 const seats = ['humboldt', 'raleigh', 'humboldt'];
 const { gs: S, rec } = recNewGame({ course: courseById('first'), seed: 4242, fullRace: true, players: seats.map((ai, i) => ({ name: ['Humboldt', 'Raleigh', 'Humboldt 2'][i], color: ['#e5484d', '#efe9dc', '#9d7df7'][i], ai })) }, 4242);
 const mem = seats.map(() => ({}));
-while (!S.over && S.round <= 30) aiStep(S, S.players[S.cur].ai, mem[S.cur], rec);
+while (!S.over && S.round <= 30) aiStep(S, S.players[S.cur].ai, mem[S.cur], rec, Math.random);
 const log = recFinal(rec, S);
 writeFileSync(new URL('./replay.json', import.meta.url), JSON.stringify(log));
 console.log(`replay.json: ${log.actions.length} actions, ${S.round} rounds, places ${S.places}`);

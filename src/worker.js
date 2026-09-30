@@ -585,7 +585,7 @@ export class Room extends DurableObject {
     useNet(); const ev = []; const fast = !this.watched(); let n = 0;
     do {
       const seat = this.S.cur, mem = this.aiMem[seat] || (this.aiMem[seat] = {});
-      const r = E.aiStep(this.S, this.S.players[seat].ai, mem, this.rec); ev.push(...r.ev);
+      const r = E.aiStep(this.S, this.S.players[seat].ai, mem, this.rec, Math.random); ev.push(...r.ev);
     } while (fast && this.aiToMove() && ++n < AI_BATCH);
     if (!this.S.over) { if (this.aiToMove()) await this.scheduleAI(700); else await this.startTurnTimer(); }
     await this.afterChange(ev);

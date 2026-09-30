@@ -31,7 +31,7 @@ export function aiKick(){
     if(gen!==AIX.gen)return;
     if(S.over||S.cur!==seat){AIX.timer=0;return;}
     aiSetNet(AIX.net);
-    const a=aiChoose(S,id,AIX.mem[seat]||(AIX.mem[seat]={}));
+    const a=aiChoose(S,id,AIX.mem[seat]||(AIX.mem[seat]={}),Math.random);
     AIX.timer=0; // (before applying: the change schedules the next AI move)
     assert(applyLocal(seat,a,viewIdx()).ok,'the AI chooses a legal action');
   };

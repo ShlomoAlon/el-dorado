@@ -28,7 +28,7 @@ if (!isMainThread) {
   const { games } = workerData; E.aiSetNet(E.aiNetDecode(readFileSync(new URL('../../src/ai/first.bin', import.meta.url))));
   for (const g of games) {
     const ai = table(g), mem = ai.map(() => ({})); // (the AIs' look-ahead runs with its own randomness: aiChoose)
-    const { gs, capped } = playout({ seed: SEED0 + g, players: seatPlayers(ai.length, ai), cap: CAP, choose: (gs, me) => E.aiChoose(gs, ai[me], mem[me]) });
+    const { gs, capped } = playout({ seed: SEED0 + g, players: seatPlayers(ai.length, ai), cap: CAP, choose: (gs, me) => E.aiChoose(gs, ai[me], mem[me], Math.random) });
     parentPort.postMessage({ g, ai, places: gs.places.slice(), fin: gs.players.map(p => p.fin || 0), round: gs.round, capped });
   }
   parentPort.postMessage({ done: true });

@@ -29,7 +29,7 @@ let boards = 0;
 function game(rows, { players = 3, fullRace = true, blockades = [] } = {}) {
   const course = { ...COURSES[0], id: 'check' + (++boards) }; // a course of its own, whose board (mapOf) is this one
   MAPS.set(course.id + '#1', { ...board(rows, blockades.map(b => b.slice(0, 2))), course: course.id, seed: 1 });
-  S = newGame({ course, seed: 1, fullRace, players: [...Array(players)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
+  S = newGame({ course, seed: 1, fullRace, players: [...Array(players)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) }, Math.random);
   S.blockades = blockades.map(([, , B], conn) => ({ n: 1, k: 'j', v: 1, ...B, conn, owner: null }));
   S.players.forEach((p, i) => { p.hand = []; p.deck = []; p.discard = []; p.play = []; p.pieces = p.pieces.map((_, j) => key(i * 2 + j, 4)); });
   S.players[0].pieces[0] = key(0, 0);
@@ -38,7 +38,7 @@ function game(rows, { players = 3, fullRace = true, blockades = [] } = {}) {
 const give = (pl, ...types) => types.map(t => { const id = newCard(S, t); S.players[pl].hand.push(id); return id; });
 const deck = (pl, ...types) => { S.players[pl].deck = types.map(t => newCard(S, t)); };
 const at = (pl, pi = 0) => S.players[pl].pieces[pi];
-const act = (a, seat = S.cur) => applyAction(S, seat, a);
+const act = (a, seat = S.cur) => applyAction(S, seat, a, Math.random);
 const targets = (pl, pi, t) => { const d = CT[t]; return reach(S, pl, pi, d.s === '*' ? ['j', 'w', 'v'] : [d.s], d.p); };
 
 // ---------- movement

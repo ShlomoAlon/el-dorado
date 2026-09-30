@@ -6,10 +6,11 @@ import { readFileSync } from 'node:fs';
 const [,, G = '40', NP = '3', POL = '', NET = '', MAPS = 'first'] = process.argv; // MAPS: first | rnd (held-out random courses 900+)
 if (NET) E.aiSetNet(JSON.parse(readFileSync(NET, 'utf8')));
 const pols = (POL || Array(+NP).fill('heur').join(',')).split(',');
-export function playGame(pols, seed, cap = 60, opts = {}, course = E.COURSES[0]) {
+export function playGame(pols, seed, cap, course) {
+  const rnd = E.mulberry32(seed * 13 + 5); // (the bots' look-ahead; playout seeds the game's shuffles)
   const { gs, capped } = playout({ seed, course, cap, players: seatPlayers(pols.length), choose: (gs, me) => {
     if (pols[me] === 'random') { const L = E.botActions(gs); return L[Math.floor(Math.random() * L.length)]; }
-    return E.botChoose(gs, { mode: pols[me] === 'net' ? 'net' : 'heur', ...opts }).a; } });
+    return E.botChoose(gs, { mode: pols[me] === 'net' ? 'net' : 'heur', rnd }).a; } });
   return { places: gs.places, fin: gs.players.map(p => p.fin || null), rounds: gs.round, capped };
 }
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -17,7 +18,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   for (let g = 0; g < +G; g++) {
     const rot = g % pols.length, order = pols.map((_, i) => pols[(i + rot) % pols.length]); // rotate seats
     const course = MAPS === 'rnd' ? E.botRandomCourse(900 + (g % 10), 3 + (g % 3)) : E.COURSES[0];
-    const r = playGame(order, (g * 7919 + 13) | 0, 60, {}, course);
+    const r = playGame(order, (g * 7919 + 13) | 0, 60, course);
     const f = r.fin.filter(x => x); if (f.length) firstArr.push(Math.min(...f)); allArr.push(...f); if (r.capped) capped++;
     r.places.forEach((pl, i) => { if (pl === 1) wins[(i + rot) % pols.length]++; });
   }

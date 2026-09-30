@@ -107,7 +107,7 @@ if (!isMainThread) {
       // option available after it, within my turn), so positions my habits never reach (e.g. move before buying) get trained too.
       if (TREESTRAP && mode === 'self' && isNet) { const root = gs, sib = E.botActions(gs).filter(a => a.t !== 'end' && JSON.stringify(a) !== JSON.stringify(c.a));
         for (let k = 0; k < TREESTRAP && sib.length; k++) { const a = sib.splice(Math.floor(rnd() * sib.length), 1)[0];
-          const gs = E.botClone(root); const r = E.applyAction(gs, me, a);
+          const gs = E.botClone(root); const r = E.applyAction(gs, me, a, rnd);
           if (r.ok && !gs.over && gs.cur === me && !E.playerDone(gs.players[me])) { const f = E.botNetFeatures(gs, me), b = E.botChoose(gs, { mode: 'net', rnd }).best;
             if (b != null && b > -Infinity) { X.push(f); Y.push(b); GID.push(wi * games + g); st.treestrap = (st.treestrap || 0) + 1; } }
           } }

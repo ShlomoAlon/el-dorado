@@ -159,7 +159,7 @@ endTriggered, over, places, fullRace, turn{bought, active, pending}, trash[], lo
 - `S.log` is the journal: the game's public events (§6.3, all but turn changes), each with its round; the History
   (`feed.js`) shows it turn by turn, newest first, with each step's words on hover. The engine keeps the last 200.
 
-### 6.3 Actions and events (`applyAction(seat, a, rnd)` → `{ok, err, ev[], reveal}`)
+### 6.3 Actions and events (`applyAction(gs, seat, a, rnd)` → `{ok, err, ev[], reveal}`)
 Full list: `docs/API_SPEC.md` §1.5–1.6. Player actions: `move{card,pi,to}` · `native{card,pi,to}` · `pay{pi,to,cards}` ·
 `action{card}` · `trash{cards}` · `transmit{card,type}` · `buy{type,cards}` · `end{keep}` · `resign`; system actions (the server's
 turn clock, local play's End game): `timeout`, `endgame`. `to` is a hex key `"q,r"` or `"B<blockadeIndex>"`. `rnd` is where any

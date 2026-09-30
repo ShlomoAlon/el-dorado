@@ -33,19 +33,19 @@ function aiNetDecode(bin){
 }
 function aiSetNet(n){BOT_NET=n;}
 /* one decision for the AI in seat gs.cur. mem: per-game object ({}) that keeps the turn planner's cache between calls.
-   Returns a legal action. */
-function aiChoose(gs,id,mem){
+   rnd: its look-ahead's random source. Returns a legal action. */
+function aiChoose(gs,id,mem,rnd){
   const A=aiById(id);assert(A,'aiChoose: a named AI');
   let opts=A.opts;if(opts.mode==='net'&&(!botNetReady(gs)||gs.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
   const me=gs.cur,tk=me+':'+gs.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
   if(++mem.n>60)return gs.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
-  return aiFinishGuard(gs,botChoose(gs,{...opts,planMem:mem}).a,mem);
+  return aiFinishGuard(gs,botChoose(gs,{...opts,planMem:mem,rnd}).a,mem);
 }
 /* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
    the line (the cards it draws change the plan). null: this AI doesn't plan whole turns with the network, or it isn't loaded */
 function aiPlan(gs,id,rnd){
   const o=aiById(id).opts;if(o.mode!=='net'||!o.search||o.search.kind!=='plan'||!botNetReady(gs)||gs.players.length===2||gs.over)return null;
-  const best=botPlanTurn(gs,gs.cur,o.search.beam||3,rnd||Math.random,o.draws||4,false);
+  const best=botPlanTurn(gs,gs.cur,o.search.beam||3,rnd,o.draws||4,false);
   return best.line&&best.line.length?best.line:[gs.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}];
 }
 /* El Dorado can only be entered with a card of its symbol (paddle on the water side, machete on the jungle side) or a joker.
@@ -96,8 +96,8 @@ function aiRouteFor(gs,types,total){const d=new Map(),q=[],ok=h=>h.type==='c'?to
 function aiEnters(gs,t,h){const d=CT[t];if(t==='native'||h.type==='r'||h.type==='c')return true;if(d.c==='p')return false;
   const sym=h.type==='g'?mapOf(gs).endSym:h.type;return(d.s===sym||d.s==='*')&&d.p>=(h.val||1);}
 /* apply the AI's decision (recorded in rec, the game's log; may be null). Returns applyAction's result. */
-function aiStep(gs,id,mem,rec,rnd){ // rnd: the game's shuffles when there is no record (tools)
-  const r=recApply(gs,rec,gs.cur,aiChoose(gs,id,mem),rnd);
+function aiStep(gs,id,mem,rec,rnd){ // rnd: the AI's look-ahead (the game's shuffles come from its record)
+  const r=recApply(gs,rec,gs.cur,aiChoose(gs,id,mem,rnd));
   assert(r.ok,'aiStep: the AI chooses a legal action');
   return r;
 }

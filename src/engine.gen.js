@@ -91,7 +91,6 @@ const key=(q,r)=>q+','+r;
 const rot=(q,r,k)=>{for(let i=0;i<k;i++){const t=q;q=-r;r=t+r;}return[q,r];};
 const pxOf=(q,r)=>[R*SQ3*(q+r/2),R*1.5*r];
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
-/* where shuffles get their randomness: Math.random in play; a seeded generator while recording or replaying a game log */
 /* randomness is always passed in (rnd: () => [0, 1)): a game's shuffles come from its record's generators (engine_rules.js) */
 function shuffle(a,rnd){for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 const hash=(x,y)=>{let h=Math.imul(x|0,374761393)+Math.imul(y|0,668265263);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
@@ -251,9 +250,9 @@ function recNewGame(o,rng){
     players:gs.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0}};
 }
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
-function recApply(gs,rec,seat,a,rnd=Math.random){ // (rnd: for a game without a record)
-  const prev=gs.cur,r=applyAction(gs,seat,a,rec?recRng(rec.rng,rec.actions.length):rnd);
-  if(r.ok&&rec){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||gs.cur!==prev||gs.over)rec.mark=rec.actions.length;}
+function recApply(gs,rec,seat,a){assert(rec&&Array.isArray(rec.actions),'recApply: the game\'s record');
+  const prev=gs.cur,r=applyAction(gs,seat,a,recRng(rec.rng,rec.actions.length));
+  if(r.ok){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||gs.cur!==prev||gs.over)rec.mark=rec.actions.length;}
   return r;
 }
 const recCanUndo=rec=>rec.actions.length>rec.mark;
@@ -270,7 +269,7 @@ function recFinal(rec,st){
   return L;
 }
 /* a new game (its state) */
-function newGame(o,rnd=Math.random){
+function newGame(o,rnd){assert(typeof rnd==='function','newGame: a random source (rnd)');
   assert(o.players.length>=2&&o.players.length<=4,'newGame: 2 to 4 players');
   const course=o.course||COURSES[0],M=mapOf({course,seed:o.seed});
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
@@ -380,7 +379,7 @@ function payTargets(gs,pl,pi){
      {t:'resign'}                    the player leaves the game (any time, in or out of turn)
      {t:'endgame'}                   (local play) the game ends now for everyone: arrivals first, then who is closest
    ========================================================= */
-function applyAction(gs,seat,a,rnd=Math.random){
+function applyAction(gs,seat,a,rnd){assert(typeof rnd==='function','applyAction: a random source (rnd)');
   const fail=err=>({ok:false,err,ev:[]});
   if(gs.over)return fail('The game is over.');
   if(!a||typeof a!=='object')return fail('Bad action.');
@@ -709,7 +708,7 @@ function botHeuristic(gs,me){ // hand-tuned: be close to the goal, own a strong 
 const BOT_STARTER={explorer:1,traveler:1,sailor:1};
 /* buying: only while more than 7 of route is left, only a card worth more than 2 (botCardWorth, plus 8% per coin of cost) */
 const BOT_BUY={stop:7,min:2,costW:.08};
-function botPlanMoves(gs,me){
+function botPlanMoves(gs,me,rnd){
   const memo=new Map();let best=null,nodes=0;
   const score=st=>{const P=st.players[me];const c=P.pieces.reduce((a,k)=>a+(k==='done'?-5:botCost(gs,k)),0);const coin=P.hand.reduce((a,id)=>a+coinVal(gs,id),0);
     return -c*10+coin;};
@@ -724,7 +723,7 @@ function botPlanMoves(gs,me){
     const groups=new Map();for(const a of acts){const g=a.t+(a.card||'')+a.pi;if(!groups.has(g))groups.set(g,[]);groups.get(g).push(a);}
     for(const[,list]of groups){
       const ranked=list.map(a=>({a,c:a.to[0]==='B'?-1:botCost(gs,a.to)})).sort((x,y)=>x.c-y.c).slice(0,3);
-      for(const{a}of ranked){const nx=botClone(st);if(!applyAction(nx,me,a).ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
+      for(const{a}of ranked){const nx=botClone(st);if(!applyAction(nx,me,a,rnd).ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
     }
   };
   dfs(botClone(gs),[],0);return best?best.path:[];
@@ -736,11 +735,11 @@ function botCardWorth(gs,t,me){ // how useful a new card is for the rest of the 
   if(d.c==='p')return {cartographer:2.6,native:2.2,compass:2.3,scientist:2.2,travellog:2.2,transmitter:1.5}[t]||1;
   const fit=d.s==='*'?1:(m[d.s]||0)/mt;return d.p*(0.35+fit)+(d.c==='y'?0.6:0);
 }
-function botPlanChoose(gs,me){
+function botPlanChoose(gs,me,rnd){
   const P=gs.players[me],T=gs.turn;
   if(T.pending)return{t:'trash',cards:P.hand.filter(id=>BOT_STARTER[typeOf(gs,id)]).slice(0,T.pending.max)}; // the weak starting cards
   const draw=P.hand.find(id=>BOT_DRAW[typeOf(gs,id)]);if(draw)return{t:'action',card:draw};
-  const moves=botPlanMoves(gs,me);if(moves.length)return moves[0];
+  const moves=botPlanMoves(gs,me,rnd);if(moves.length)return moves[0];
   // buy with what's left
   const left=botRemaining(gs,me);
   if(!T.bought&&left>BOT_BUY.stop){
@@ -875,8 +874,9 @@ function botActionValue(gs,me,a,mode,rnd,K){K=K||4;
     const r=applyAction(st,me,a,rnd);return r.ok?botValue(st,me,mode):-Infinity;};
   return a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)]?[...Array(K)].reduce(x=>x+one(),0)/K:one();}
 function botChoose(gs,opts){
-  opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
-  if(mode==='plan')return{a:botPlanChoose(gs,gs.cur)};
+  let mode=opts.mode;const eps=opts.eps||0,rnd=opts.rnd;
+  assert(typeof mode==='string'&&typeof rnd==='function','botChoose: opts.mode and a random source (opts.rnd)');
+  if(mode==='plan')return{a:botPlanChoose(gs,gs.cur,rnd)};
   const me=gs.cur,root=gs;let acts=botActions(gs);if(mode==='net'&&!botNetReady(gs))mode='heur';
   if(opts.turnState&&opts.turnState.noBuy){const f=acts.filter(a=>a.t!=='buy'&&a.t!=='transmit');if(f.length)acts=f;} // exploration: a turn without gaining a card
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],why:'random'};
@@ -939,7 +939,7 @@ function botPlanTurn(gs,me,B,rnd,K,noBuy,top){ // top: optional array that recei
 // the plan being followed lives on the caller's holder, opts.planMem ({plan}: one per seat; a named AI passes its memory)
 function botPlanTurnChoose(gs,opts){
   const M=opts.planMem;assert(M&&typeof M==='object','botChoose: a search needs opts.planMem, the seat\'s plan holder');
-  const me=gs.cur,o=opts.search,rnd=opts.rnd||Math.random,C=M.plan;
+  const me=gs.cur,o=opts.search,rnd=opts.rnd,C=M.plan;
   // follow the current plan while it still applies (same player, same round, same position the plan expects)
   if(C&&C.me===me&&C.round===gs.round&&C.i<C.line.length&&C.key===botTurnKey(gs,me)){
     const a=C.line[C.i],st=botClone(gs),ok=applyAction(st,me,a,rnd).ok,nk=ok&&!st.over&&st.cur===me?botTurnKey(st,me):null;
@@ -1015,19 +1015,19 @@ function aiNetDecode(bin){
 }
 function aiSetNet(n){BOT_NET=n;}
 /* one decision for the AI in seat gs.cur. mem: per-game object ({}) that keeps the turn planner's cache between calls.
-   Returns a legal action. */
-function aiChoose(gs,id,mem){
+   rnd: its look-ahead's random source. Returns a legal action. */
+function aiChoose(gs,id,mem,rnd){
   const A=aiById(id);assert(A,'aiChoose: a named AI');
   let opts=A.opts;if(opts.mode==='net'&&(!botNetReady(gs)||gs.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
   const me=gs.cur,tk=me+':'+gs.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
   if(++mem.n>60)return gs.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
-  return aiFinishGuard(gs,botChoose(gs,{...opts,planMem:mem}).a,mem);
+  return aiFinishGuard(gs,botChoose(gs,{...opts,planMem:mem,rnd}).a,mem);
 }
 /* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
    the line (the cards it draws change the plan). null: this AI doesn't plan whole turns with the network, or it isn't loaded */
 function aiPlan(gs,id,rnd){
   const o=aiById(id).opts;if(o.mode!=='net'||!o.search||o.search.kind!=='plan'||!botNetReady(gs)||gs.players.length===2||gs.over)return null;
-  const best=botPlanTurn(gs,gs.cur,o.search.beam||3,rnd||Math.random,o.draws||4,false);
+  const best=botPlanTurn(gs,gs.cur,o.search.beam||3,rnd,o.draws||4,false);
   return best.line&&best.line.length?best.line:[gs.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}];
 }
 /* El Dorado can only be entered with a card of its symbol (paddle on the water side, machete on the jungle side) or a joker.
@@ -1078,11 +1078,11 @@ function aiRouteFor(gs,types,total){const d=new Map(),q=[],ok=h=>h.type==='c'?to
 function aiEnters(gs,t,h){const d=CT[t];if(t==='native'||h.type==='r'||h.type==='c')return true;if(d.c==='p')return false;
   const sym=h.type==='g'?mapOf(gs).endSym:h.type;return(d.s===sym||d.s==='*')&&d.p>=(h.val||1);}
 /* apply the AI's decision (recorded in rec, the game's log; may be null). Returns applyAction's result. */
-function aiStep(gs,id,mem,rec,rnd){ // rnd: the game's shuffles when there is no record (tools)
-  const r=recApply(gs,rec,gs.cur,aiChoose(gs,id,mem),rnd);
+function aiStep(gs,id,mem,rec,rnd){ // rnd: the AI's look-ahead (the game's shuffles come from its record)
+  const r=recApply(gs,rec,gs.cur,aiChoose(gs,id,mem,rnd));
   assert(r.ok,'aiStep: the AI chooses a legal action');
   return r;
 }
 
 // every name
-export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,mapOf,MAPS,lastMap,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,replay,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,gameStart,recRng,newGame,newCard,applyAction,recSecret,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiRouteFor,aiStep};
+export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,SQ3,R,DIRS,key,rot,pxOf,mulberry32,shuffle,hash,COURSES,courseById,buildCourse,mapOf,MAPS,lastMap,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,replay,log,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,gameStart,recRng,newGame,newCard,applyAction,recSecret,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiRouteFor,aiStep};

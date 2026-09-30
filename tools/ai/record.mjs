@@ -29,7 +29,7 @@ for (let g = 0; g < G; g++) {
   while (!gs.over) {
     if (gs.round > 25 || acts++ > 20000) { capped = true; break; }
     const me = gs.cur, pol = pols[me];
-    const c = E.botChoose(gs, { ...(optsOf(pol) || { mode: pol }), planMem: plans[me] }); // (its look-ahead has its own randomness: the game's stream is for the game)
+    const c = E.botChoose(gs, { ...(optsOf(pol) || { mode: pol }), planMem: plans[me], rnd: Math.random }); // (its look-ahead has its own randomness: the record's is for the game)
     if (!E.recApply(gs, rec, me, c.a).ok) E.recApply(gs, rec, me, { t: 'end', keep: [] });
   }
   const log = E.recFinal(rec, gs);

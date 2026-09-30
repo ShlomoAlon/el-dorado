@@ -25,13 +25,13 @@ for (const C of E.COURSES) {
 let games = 0, maxAct = 0;
 for (let g = 0; g < (QUICK ? 12 : 60); g++) {
   const np = 2 + (g % 3);
-  gs = E.newGame({ course: E.COURSES[g % E.COURSES.length], seed: (Math.random() * 1e9) | 0, fullRace: g % 5 !== 0, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
+  gs = E.newGame({ course: E.COURSES[g % E.COURSES.length], seed: (Math.random() * 1e9) | 0, fullRace: g % 5 !== 0, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) }, Math.random);
   const M = E.mapOf(gs), goals = M.goals.map(k => M.hexes.get(k));
   const dg = k => { if (k === 'done') return -1; const h = M.hexes.get(k); return Math.min(...goals.map(q => Math.hypot(q.x - h.x, q.y - h.y))); };
   let turns = 0;
   while (!gs.over && turns < 3000) {
     turns++; const seat = gs.cur, P = gs.players[seat];
-    if (turns > 300) { E.applyAction(gs, seat, { t: 'resign' }); continue; }
+    if (turns > 300) { E.applyAction(gs, seat, { t: 'resign' }, Math.random); continue; }
     for (let guard = 0; guard < 20; guard++) {
       let did = false;
       for (const pi of P.pieces.keys()) {
@@ -40,10 +40,10 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
           const d = E.CT[gs.cards[id]]; if (!d || d.c === 'p') continue;
           const T = E.reach(gs, seat, pi, d.s === '*' ? ['j', 'w', 'v'] : [d.s], d.p); let best = null, bd = dg(P.pieces[pi]) - 1;
           for (const [k] of T) { if (k[0] === 'B') { best = best || k; continue; } const dd = dg(k); if (dd < bd) { bd = dd; best = k; } }
-          if (best) { const t1 = performance.now(); const r = E.applyAction(gs, seat, { t: 'move', card: id, pi, to: best }); maxAct = Math.max(maxAct, performance.now() - t1); assert(r.ok, r.err); did = true; break; }
+          if (best) { const t1 = performance.now(); const r = E.applyAction(gs, seat, { t: 'move', card: id, pi, to: best }, Math.random); maxAct = Math.max(maxAct, performance.now() - t1); assert(r.ok, r.err); did = true; break; }
         }
         if (did) break;
-        for (const [k, t] of E.payTargets(gs, seat, pi)) { if (k[0] !== 'B' && dg(k) >= dg(P.pieces[pi])) continue; const r = E.applyAction(gs, seat, { t: 'pay', pi, to: k, cards: P.hand.slice(0, t.need) }); if (r.ok) { did = true; break; } }
+        for (const [k, t] of E.payTargets(gs, seat, pi)) { if (k[0] !== 'B' && dg(k) >= dg(P.pieces[pi])) continue; const r = E.applyAction(gs, seat, { t: 'pay', pi, to: k, cards: P.hand.slice(0, t.need) }, Math.random); if (r.ok) { did = true; break; } }
         if (did) break;
       }
       if (!did || gs.over || gs.cur !== seat) break;
@@ -51,13 +51,13 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
     if (gs.over) break;
     const S2 = gs;
     // illegal actions must be rejected
-    assert(!E.applyAction(gs, (seat + 1) % np, { t: 'end', keep: [] }).ok, 'out-of-turn action accepted');
-    assert(!E.applyAction(gs, seat, { t: 'buy', type: S2.market[0].t, cards: ['nope'] }).ok, 'fake card accepted');
+    assert(!E.applyAction(gs, (seat + 1) % np, { t: 'end', keep: [] }, Math.random).ok, 'out-of-turn action accepted');
+    assert(!E.applyAction(gs, seat, { t: 'buy', type: S2.market[0].t, cards: ['nope'] }, Math.random).ok, 'fake card accepted');
     const tot = P.hand.reduce((a, id) => a + (['y', 'x'].includes(E.CT[S2.cards[id]].c) ? E.CT[S2.cards[id]].p : .5), 0);
     const opts = S2.market.map((s, i) => [i, s]).filter(([i, s]) => s.n > 0 && E.CT[s.t].cost <= tot && E.CT[s.t].c !== 'p');
-    if (opts.length && !S2.turn.bought) { const [i] = opts[Math.floor(Math.random() * opts.length)]; assert(E.applyAction(gs, seat, { t: 'buy', type: S2.market[i].t, cards: P.hand.slice() }).ok, 'buy failed'); }
-    if (Math.random() < .01 && S2.players.filter(p => !p.resigned).length > 2) { E.applyAction(gs, seat, { t: 'resign' }); continue; }
-    const r = E.applyAction(gs, seat, { t: 'end', keep: [] }); assert(r.ok, r.err);
+    if (opts.length && !S2.turn.bought) { const [i] = opts[Math.floor(Math.random() * opts.length)]; assert(E.applyAction(gs, seat, { t: 'buy', type: S2.market[i].t, cards: P.hand.slice() }, Math.random).ok, 'buy failed'); }
+    if (Math.random() < .01 && S2.players.filter(p => !p.resigned).length > 2) { E.applyAction(gs, seat, { t: 'resign' }, Math.random); continue; }
+    const r = E.applyAction(gs, seat, { t: 'end', keep: [] }, Math.random); assert(r.ok, r.err);
   }
   games++;
   assert(gs.over, 'game did not end');
@@ -85,9 +85,9 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
     const pub = {}; for (const id of [...gs.players[e.pl].play, ...gs.players[e.pl].discard, ...gs.trash]) pub[gs.cards[id]] = (pub[gs.cards[id]] || 0) + 1;
     for (const t of e.ts) assert(pub[t]-- > 0, 'play event names a card that is not public: ' + e.k + ' ' + t); } };
   const aiGame = (course, ais, check) => {
-    gs = E.newGame({ course, seed: (Math.random() * 1e9) | 0, fullRace: true, players: ais.map((a, i) => ({ name: 'P' + i, color: '#fff', ai: a })) });
+    let rec; ({ gs, rec } = E.recNewGame({ course, seed: (Math.random() * 1e9) | 0, fullRace: true, players: ais.map((a, i) => ({ name: 'P' + i, color: E.COLORS[i].hex, ai: a })) }, E.recSecret()));
     const mem = ais.map(() => ({})); let steps = 0;
-    while (!gs.over && steps++ < 20000) { if (check) check(); const me = gs.cur; assert(gs.players[me].ai === ais[me], 'ai seat kept'); const r = E.aiStep(gs, ais[me], mem[me]); assert(r.ok, 'ai action rejected'); publicEvents(r.ev); }
+    while (!gs.over && steps++ < 20000) { if (check) check(); const me = gs.cur; assert(gs.players[me].ai === ais[me], 'ai seat kept'); const r = E.aiStep(gs, ais[me], mem[me], rec, Math.random); assert(r.ok, 'ai action rejected'); publicEvents(r.ev); }
     assert(gs.over && gs.places.includes(1), 'AI game did not finish: ' + course.id + ' ' + ais + ' round ' + gs.round + ' ' + gs.players.map(p => p.fin ? 'fin' : p.pieces.join('/')).join(' | '));
   };
   E.aiSetNet(half);
@@ -111,12 +111,12 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
 }
 // single-use cards played for movement are removed from the game (Giant Machete, Prop Plane, Treasure Chest), never discarded
 for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's reach from the start)
-  gs = E.newGame({ course: E.COURSES[0], seed: 4242, fullRace: true, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) });
+  gs = E.newGame({ course: E.COURSES[0], seed: 4242, fullRace: true, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) }, Math.random);
   const seat = gs.cur, P = gs.players[seat], id = P.hand[0]; gs.cards[id] = t;
   let to = null, pi = 0; for (; pi < P.pieces.length && !to; pi++) for (const [k] of E.reach(gs, seat, pi, t === 'plane' ? ['j', 'w', 'v'] : [E.CT[t].s], E.CT[t].p)) if (k[0] !== 'B') { to = k; break; }
-  assert(to, t + ': no move found'); const r = E.applyAction(gs, seat, { t: 'move', card: id, pi: pi - 1, to }); assert(r.ok, r.err);
+  assert(to, t + ': no move found'); const r = E.applyAction(gs, seat, { t: 'move', card: id, pi: pi - 1, to }, Math.random); assert(r.ok, r.err);
   assert(gs.trash.includes(id) && !P.play.includes(id), t + ' played for movement was not removed from the game');
-  E.applyAction(gs, seat, { t: 'end', keep: [] });
+  E.applyAction(gs, seat, { t: 'end', keep: [] }, Math.random);
   assert(!P.discard.includes(id) && !P.deck.includes(id) && !P.hand.includes(id), t + ' came back after the turn');
 }
 // game records (log v3): a recorded game with undos, timeouts and a resignation replays to exactly the same final position
@@ -129,7 +129,7 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
       const me = gs.cur;
       if (steps === 150 && np > 2) { E.recApply(gs, rec, (me + 1) % np, { t: 'resign' }); continue; }
       if (rnd() < .01) { E.recApply(gs, rec, me, { t: 'timeout' }); continue; }
-      const a = E.aiChoose(gs, 'raleigh', mem[me]);
+      const a = E.aiChoose(gs, 'raleigh', mem[me], rnd);
       const before = JSON.stringify(gs), prevCur = gs.cur;
       const r = E.recApply(gs, rec, me, a); if (!r.ok) { E.recApply(gs, rec, me, { t: 'timeout' }); continue; }
       // sometimes undo (as the page does: bring back the earlier state), when the action drew nothing and the turn did not pass
@@ -146,9 +146,9 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
   console.log(`ok: ${recs} recorded games replay exactly (undo, timeouts, resignations)`);
 }
 // a buy / transmit names a card type; anything else is refused without touching the state
-{ gs = E.newGame({ course: E.COURSES[0], seed: 77, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) });
+{ gs = E.newGame({ course: E.COURSES[0], seed: 77, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: '#fff' })) }, Math.random);
   const before = JSON.stringify(gs);
-  for (const type of ['__proto__', 'constructor', 'length', 'nope', 0, null, undefined, {}]) { const r = E.applyAction(gs, 0, { t: 'buy', type, cards: gs.players[0].hand.slice() }); assert(!r.ok, 'buy of ' + String(type) + ' accepted'); }
+  for (const type of ['__proto__', 'constructor', 'length', 'nope', 0, null, undefined, {}]) { const r = E.applyAction(gs, 0, { t: 'buy', type, cards: gs.players[0].hand.slice() }, Math.random); assert(!r.ok, 'buy of ' + String(type) + ' accepted'); }
   assert(JSON.stringify(gs) === before && Array.prototype.n === undefined, 'refused buys changed the state'); }
 // the value network's inputs and outputs at fixed positions are exactly as when the shipped networks were trained
 { const { golden } = await import('../tools/ai/golden.mjs'), { readFileSync } = await import('node:fs');
