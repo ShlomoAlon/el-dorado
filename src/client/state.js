@@ -32,10 +32,8 @@ export const hp = () => S.players[viewIdx()];
 export const humanRacing = () => S.players.some(p => !p.ai && isActive(p));
 export const inGame = () => !!(S && !S.over && !G.replay && !UI.preview);
 
-/* the local save is the game's record (the state is rebuilt from it).
-   (-v1 keys: games recorded under older rules, which can't be replayed; dropped) */
+/* the local save is the game's record (the state is rebuilt from it) */
 const SAVE_KEY = 'eldorado-game-v2';
-try { localStorage.removeItem('eldorado-game-v1'); localStorage.removeItem('eldorado-games-v1'); } catch (e) { }
 /* the saved game rebuilt from its record, {rec, S}, or null. Storage can fail, or hold a game that this version can't
    rebuild: a bug, reported, and the page goes on without it */
 export function loadSave() {

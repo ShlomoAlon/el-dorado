@@ -216,7 +216,7 @@ the draw pile).
 | `recUndo(rec)` → gs | Drops the last action and returns the rebuilt game. |
 | `recState(rec)` → gs | The game a record leads to. |
 | `recFinal(rec, state)` | The finished log, with `title` and `result` (`{places, rounds}`, read from `state`, the record's game), and without `mark`. |
-| `replayCheck(log)` | `null`, or why the log can't be played. Records before v3 were played under older rules (the turn went on after the last explorer arrived) and are refused; the server deleted its stored ones once (settings `logs_v3`), rooms with one close, and the page dropped its old saves (keys `-v1`). |
+| `replayCheck(log)` | `null`, or why the log can't be played. Records before v3 were played under older rules (the turn went on after the last explorer arrived) and are refused; the server deletes stored logs that aren't v3 once (settings `logs_only_v3`), and rooms with one close. |
 | `replay(log)` | A generator: plays the log back one action at a time, yielding `{i, gs, ok, err, ev}` after each (`i = -1`: the setup; `gs` is one game, changed step by step). Stop early, or snapshot `gs` at each step. |
 | `replayStart(log)` → gs | The log's game at its start. |
 

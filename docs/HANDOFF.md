@@ -206,7 +206,7 @@ Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), s
   network, had Humboldt at 1530.) **Anchor: Raleigh = 1200**, the rating every new person starts with: Raleigh is the "Steady"
   level for newcomers, so a new player is assumed equal to it, and real rated games then move everyone from there. Applied by
   `ensureSchema()`: it shifts each ai-* row by (calibrated − applied) and records the applied rating in `settings`
-  `ai_rating:<id>` (the first calibration is in `ai_calibration_v1`), in one conditional transaction — so AIs that already
+  `ai_rating:<id>`, in one conditional transaction — so AIs that already
   played keep their gains/losses, and changing `AIS[].rating` later (a new calibration, or a new AI) moves that AI by the
   difference exactly once.
 - **Known problem (2 players):** in the 180 two-player calibration games the network AIs (Humboldt, Orellana) mostly failed to

@@ -23,7 +23,7 @@ const TURN_CHOICES = [60, 90, 120, 180, 300];
 /* Setting the database up takes ~25 queries in a row (seconds from a far colo), so it runs only when this stamp changes:
    a new instance of the worker (they start often) then costs one query. Bump SCHEMA_V when createSchema changes; the
    named AIs and their calibrated ratings are part of the stamp. */
-const SCHEMA_V = 1, SCHEMA = SCHEMA_V + ':' + E.AIS.map(A => A.id + '=' + A.rating).join(',');
+const SCHEMA_V = 2, SCHEMA = SCHEMA_V + ':' + E.AIS.map(A => A.id + '=' + A.rating).join(',');
 let schemaReady = null;
 function ensureSchema(env) {
   if (!schemaReady) schemaReady = checkSchema(env).catch(e => { schemaReady = null; throw e; });
@@ -55,12 +55,13 @@ async function createSchema(env) {
   // places: finishing places in the order of uids (no longer written or read: the log's own result has them; columns stay)
   for (const c of ['game INTEGER NOT NULL DEFAULT 0', 'uids TEXT', 'listed INTEGER NOT NULL DEFAULT 1', 'places TEXT'])
     try { await env.DB.prepare(`ALTER TABLE replays ADD COLUMN ${c}`).run(); } catch (e) { }
-  // game logs from before log v3 were played under older rules and can't be replayed: deleted, once (ratings stay).
+  // one-time (2026-09-30): logs that aren't v3 records can't be replayed any more (v1 training uploads went on after the
+  // first clean-up, 'logs_v3'): deleted once (ratings stay). Delete this block once it has run on the live database.
   // (a failure only means it runs again on the next start)
   try {
-    if (!(await env.DB.prepare(`SELECT v FROM settings WHERE k='logs_v3'`).first()))
+    if (!(await env.DB.prepare(`SELECT v FROM settings WHERE k='logs_only_v3'`).first()))
       await env.DB.batch([env.DB.prepare(`DELETE FROM replays WHERE CASE WHEN json_valid(body) THEN json_extract(body,'$.v') IS NOT 3 ELSE 1 END`),
-        env.DB.prepare(`INSERT OR IGNORE INTO settings(k,v) VALUES('logs_v3','1')`)]);
+        env.DB.prepare(`INSERT OR IGNORE INTO settings(k,v) VALUES('logs_only_v3','1')`)]);
   } catch (e) { }
   for (const A of E.AIS) { // one rated player per named AI; if a person already has the name, the AI gets "(AI)" after it
     const id = aiUid(A.id);
@@ -73,14 +74,12 @@ async function createSchema(env) {
   // The AIs start from the ratings measured in AI-vs-AI games (AIS[].rating, tools/ai/calibrate_ais.mjs) instead of the
   // default 1200, applied as a shift (rating += calibrated - applied), so an AI that already played rated games keeps what it
   // won or lost, and a new calibration later moves it by the difference. settings 'ai_rating:<id>' holds the rating applied
-  // (before these keys existed, the first calibration was recorded in 'ai_calibration_v1'). Each shift and its key are
+  // (none yet: the default 1200). Each shift and its key are
   // written in one transaction, conditional on the key still holding the old value: it applies exactly once, whichever
   // isolate gets here first.
-  const v1 = await env.DB.prepare(`SELECT v FROM settings WHERE k='ai_calibration_v1'`).first();
-  const first = v1 ? (JSON.parse(v1.v).ratings || {}) : {};
   for (const A of E.AIS.filter(A => Number.isFinite(A.rating))) {
     const k = 'ai_rating:' + A.id, row = await env.DB.prepare(`SELECT v FROM settings WHERE k=?`).bind(k).first();
-    const applied = row ? +row.v : Number.isFinite(first[A.id]) ? first[A.id] : 1200;
+    const applied = row ? +row.v : 1200;
     if (row && applied === A.rating) continue;
     await env.DB.batch([
       env.DB.prepare(`UPDATE users SET rating = rating + ? WHERE id = ? AND COALESCE((SELECT v FROM settings WHERE k = ?), ?) = ?`).bind(A.rating - applied, aiUid(A.id), k, String(applied), String(applied)),
