@@ -100,7 +100,8 @@ export function menuClick(e){
     case'acOut':{const was=MENU.screen;leaveRoom();if(online())exitOnline();signOut(was==='room'||was==='online'?showHub:menuRefresh);return;} // signed out: out of any room
     case'devGo':run(async()=>signedIn(await api('/api/auth/dev',{method:'POST',body:JSON.stringify({name:mq('#devName').value||'Tester'})}),menuRefresh));return;
     case'qGo':run(async()=>joinRoom((await api('/api/match',{method:'POST',body:'{}'})).code));return;
-    case'cGo':run(async()=>joinRoom((await api('/api/rooms',{method:'POST',body:JSON.stringify({max:+radio('max'),turn:+radio('turn'),course:radio('ocourse'),pub:radio('pub')==='1',rated:radio('rated')==='1'})})).code));return;
+    case'cGo':{const o={max:+radio('max'),turn:+radio('turn'),course:radio('ocourse'),pub:radio('pub')==='1',rated:radio('rated')==='1'};
+      run(async()=>joinRoom((await api('/api/rooms',{method:'POST',body:JSON.stringify(o)})).code,o));return;}
     case'jGo':{const c=mq('#jCode').value.toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length<4){err('Enter the 5-letter room code.');return;}joinRoom(c);return;}
     case'rejoinGo':joinRoom(NET.active);return;
     case'pfBack':NET.viewUser=null;setRadio('otab','board');onlineTab();return;
@@ -213,7 +214,7 @@ export function renderRoomLobby(){
   mq('#rlCount').textContent=`Players ${seats.length}/${max}`;
   setHTML(mq('#rlSeats'),seats.map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="seatrow"><span><i style="background:${s.color}"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note">(you)</span>':''}</span>${A?`<span class="lbp"><span class="note">${esc(A.tier)}</span>${host&&lobby?`<button type="button" class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note">${s.now?'wants to start · ':''}${s.uid===r.host&&!auto?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('')||'<p class="note">Connecting…</p>');
   const ctl=host&&!auto&&lobby,aiOK=!!(o&&aiAllowed(o.course,o.max));
-  mq('#rlAIBox').hidden=!ctl;mq('#rlAINo').hidden=aiOK;mq('#rlAIList').hidden=!aiOK||!room;mq('#rlFull').hidden=!aiOK||room;
+  mq('#rlAIBox').hidden=!ctl;for(const b of mqa('[data-addai]'))b.disabled=!NET.connected; // (adding one is the server's: once it's connected)mq('#rlAINo').hidden=aiOK;mq('#rlAIList').hidden=!aiOK||!room;mq('#rlFull').hidden=!aiOK||room;
   mq('#rlAINote').textContent='AI players move on the server'+(rated?' and gain or lose rating like everyone else':'')+'.';
   mq('#rlRatedBox').hidden=!ctl;setRadio('rlrated',rated?'1':'0');
   mq('#rlColBox').hidden=!mine;

@@ -1,7 +1,7 @@
 /* ONLINE — talks to the game server (Cloudflare Worker).
    Sign in with Google → hub (profile, rooms, leaderboard) → room lobby → game. */
 import { S, mapFor, setS, setMAP } from '../engine.gen.js';
-import { UI, NET, online, viewIdx } from './state.js';
+import { UI, NET, online, viewIdx, myId } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, modal, closeModal } from './dialogs.js';
 import { showHub, showRoomLobby, renderRoomLobby, roomsRender, loadProfile } from './menu.js';
@@ -48,9 +48,11 @@ export function closeLobbyWs(){if(NET.lobbyWs){NET.lobbyWs.close();NET.lobbyWs=n
 
 /* ---------- room connection ---------- */
 export function netSend(m){if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(m));else{NET.busy=false;toast('Reconnecting…');}}
-export function joinRoom(code){
+/* mine: a room this page just created, so the lobby is drawn at once from what it already knows (host, options), before
+   the server's first word about it */
+export function joinRoom(code,mine){
   closeLobbyWs();leaveRoomSocket();
-  NET.room={code,status:'connecting',seats:[]};NET.code=code;NET.S=null;NET.retries=0;
+  NET.room=mine?{code,status:'lobby',host:myId(),opts:mine,seats:[]}:{code,status:'connecting',seats:[]};NET.code=code;NET.S=null;NET.retries=0;
   try{history.replaceState(null,'',location.pathname+'?room='+code);}catch(e){}
   connectRoom();showRoomLobby();
 }
