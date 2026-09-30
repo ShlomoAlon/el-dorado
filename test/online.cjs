@@ -89,6 +89,10 @@ const T = report('online');
     // B leaves through the menu (Resign, then Leave game): the Online screen comes up as soon as the server has it
     await B.click('#menuBtn'); await B.click('#sResign'); await B.click('#rsYes');
     T.ok('resign from the menu: out of the game, on the Online screen', await wait(B, () => !__ED.S && document.querySelector('#menu').open && !document.querySelector('section[data-screen="online"]').hidden));
+    // the others play on without B: B is out of that room (no Rejoin; Quick match doesn't send B back into it)
+    const bActive = () => B.evaluate(async () => (await (await fetch('/api/me', { headers: { authorization: 'Bearer ' + __ED.NET.token } })).json()).active);
+    let bIn = await bActive(); for (let i = 0; i < 20 && bIn; i++) { await B.waitForTimeout(250); bIn = await bActive(); }
+    T.ok('a resigned player is out of the room (no Rejoin, no quick match back into it)', bIn === null && await B.evaluate(() => document.querySelector('#rejoin').hidden), bIn);
     await C.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('game over after two resign', await wait(A, () => __ED.S.over && __ED.NET.room.results));
     const res = await A.evaluate(() => __ED.NET.room.results), lb1 = await board(A);

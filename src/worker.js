@@ -354,7 +354,7 @@ export class Lobby extends DurableObject {
       this.prune(); await this.ctx.storage.put('list', this.rooms); this.broadcast(); return json({ ok: true });
     }
     if (url.pathname === '/match') {
-      const { uid, opts } = await req.json(), now = Date.now(), seated = x => x.seats.some(s => s.uid === uid);
+      const { uid, opts } = await req.json(), now = Date.now(), seated = x => x.seats.some(s => s.uid === uid && !s.left);
       const mine = Object.values(this.rooms).find(x => seated(x) && (x.status === 'lobby' || x.status === 'playing'));
       if (mine) return json({ code: mine.code });
       const open = Object.values(this.rooms).filter(x => x.opts.auto && x.status === 'lobby' && x.seats.length < x.opts.max && now - x.updated < 15 * 60e3).sort((a, b) => b.seats.length - a.seats.length);
@@ -364,7 +364,7 @@ export class Lobby extends DurableObject {
       this.rooms[code] = { code, host: uid, status: 'lobby', opts, seats: [], results: null, updated: now };
       await this.ctx.storage.put('list', this.rooms); this.broadcast(); return json({ code });
     }
-    if (url.pathname === '/find') { const uid = url.searchParams.get('uid'); const r = Object.values(this.rooms).find(x => x.seats.some(s => s.uid === uid)); return json({ code: r ? r.code : null }); }
+    if (url.pathname === '/find') { const uid = url.searchParams.get('uid'); const r = Object.values(this.rooms).find(x => x.seats.some(s => s.uid === uid && !s.left)); return json({ code: r ? r.code : null }); }
     return bad('Not found', 404);
   }
   async webSocketMessage(ws, msg) { if (msg === 'ping') ws.send('pong'); }
@@ -431,7 +431,8 @@ export class Room extends DurableObject {
   engine() { E.setS(this.S); E.setMAP(this.MAP); return E; }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.roomInfo()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
-  roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map(s => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid) })), results: d.results || null }; }
+  // left: the player resigned; the game goes on without them, so they are no longer in this room (the lobby's /find, /match)
+  roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map((s, i) => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid), left: !!(this.S && this.S.players[i].resigned) })), results: d.results || null }; }
   send(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (e) { } }
   stateFor(uid, ev) {
     const seat = this.owners.indexOf(uid);
@@ -532,6 +533,7 @@ export class Room extends DurableObject {
       if (!r.ok) return err(r.err); // (a refused action changes nothing)
       this.S = E.S; d.timeouts[seat] = 0;
       if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn();
+      if (m.a.t === 'resign') await this.tellLobby(); // (they are out of the room now)
       await this.afterChange(r.ev); return;
     }
   }
@@ -586,9 +588,10 @@ export class Room extends DurableObject {
     if (Date.now() < d.deadline - 1000) { await this.ctx.storage.setAlarm(d.deadline); return; }
     // the clock ran out: the turn ends; the third time in a row the player forfeits
     const eng = this.engine(), seat = this.S.cur; d.timeouts[seat] = (d.timeouts[seat] || 0) + 1;
-    const { ev } = eng.recApply(this.rec, seat, { t: d.timeouts[seat] >= 3 ? 'resign' : 'timeout' });
+    const forfeit = d.timeouts[seat] >= 3, { ev } = eng.recApply(this.rec, seat, { t: forfeit ? 'resign' : 'timeout' });
     this.S = E.S;
     if (!this.S.over) await this.nextTurn();
+    if (forfeit) await this.tellLobby();
     await this.afterChange(ev);
   }
   /* the finished game's log becomes its replay (/?replay=<id>): kept for good, listed publicly unless the room was private.
