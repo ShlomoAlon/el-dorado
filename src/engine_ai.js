@@ -32,74 +32,74 @@ function aiNetDecode(bin){
   return N;
 }
 function aiSetNet(n){BOT_NET=n;}
-/* one decision for the AI in seat S.cur. mem: per-game object ({}) that keeps the turn planner's cache between calls.
+/* one decision for the AI in seat gs.cur. mem: per-game object ({}) that keeps the turn planner's cache between calls.
    Returns a legal action. */
-function aiChoose(id,mem){
+function aiChoose(gs,id,mem){
   const A=aiById(id);assert(A,'aiChoose: a named AI');
-  let opts=A.opts;if(opts.mode==='net'&&(!botNetReady()||S.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
-  const me=S.cur,tk=me+':'+S.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
-  if(++mem.n>60)return S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
+  let opts=A.opts;if(opts.mode==='net'&&(!botNetReady(gs)||gs.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
+  const me=gs.cur,tk=me+':'+gs.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
+  if(++mem.n>60)return gs.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
   BOT_PLAN_CACHE=mem.plan||null;
-  let a;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;}
-  return aiFinishGuard(a,mem);
+  let a;try{a=botChoose(gs,opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;}
+  return aiFinishGuard(gs,a,mem);
 }
 /* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
    the line (the cards it draws change the plan). null: this AI doesn't plan whole turns with the network, or it isn't loaded */
-function aiPlan(id,rnd){
-  const o=aiById(id).opts;if(o.mode!=='net'||!o.search||o.search.kind!=='plan'||!botNetReady()||S.players.length===2||S.over)return null;
-  const best=botPlanTurn(S.cur,o.search.beam||3,rnd||Math.random,o.draws||4,false);
-  return best.line&&best.line.length?best.line:[S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}];
+function aiPlan(gs,id,rnd){
+  const o=aiById(id).opts;if(o.mode!=='net'||!o.search||o.search.kind!=='plan'||!botNetReady(gs)||gs.players.length===2||gs.over)return null;
+  const best=botPlanTurn(gs,gs.cur,o.search.beam||3,rnd||Math.random,o.draws||4,false);
+  return best.line&&best.line.length?best.line:[gs.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}];
 }
 /* El Dorado can only be entered with a card of its symbol (paddle on the water side, machete on the jungle side) or a joker.
    The bot sometimes trashes its last such card (or nearly its whole deck) and, near the end, stops buying, so it could wait forever next to the finish
    (seen on the newer courses). Keep one such card when trashing, and buy one before ending a turn without any. */
-function aiFinishGuard(a,mem){
-  const P=S.players[S.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>botFinishCard(S.cards[id])).length;
+function aiFinishGuard(gs,a,mem){
+  const P=gs.players[gs.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>botFinishCard(gs,gs.cards[id])).length;
   if(a.t==='trash'){let c=a.cards;
-    if(n){const out=c.filter(id=>botFinishCard(S.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
+    if(n){const out=c.filter(id=>botFinishCard(gs,gs.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
     // and never thin the deck below 4 cards (owner: 4 can be valid, fewer can't), nor below what a base camp that is its
     // next step takes (it keeps 4 after paying it)
-    const camp=Math.max(0,...aiNextSteps(P).filter(h=>h.type==='c').map(h=>h.val));
+    const camp=Math.max(0,...aiNextSteps(gs,P).filter(h=>h.type==='c').map(h=>h.val));
     c=c.slice(0,Math.max(0,all.length-4-camp));
     if(c.length!==a.cards.length)return{...a,cards:c};}
   // (a base camp is open to an expedition that keeps 4 cards after paying it, botCanRemove: every card bought brings it closer)
-  const steps=aiNextSteps(P),open=(t,h)=>h.type==='c'?all.length-h.val>=4:aiEnters(t,h);
-  const stuck=steps.length>0&&!all.some(id=>steps.some(h=>open(S.cards[id],h)));
+  const steps=aiNextSteps(gs,P),open=(t,h)=>h.type==='c'?all.length-h.val>=4:aiEnters(gs,t,h);
+  const stuck=steps.length>0&&!all.some(id=>steps.some(h=>open(gs.cards[id],h)));
   // once an explorer's planned way is shut to its cards, it keeps to a way they can take for the rest of the game (else the
   // plan walks it straight back): steps along that way instead of ending the turn or stepping off it
   if(stuck)mem.detour=true;
-  if(mem.detour&&!S.turn.pending&&(a.t==='end'||a.t==='move'||a.t==='native'||a.t==='pay')){
-    const cap=aiRouteFor(all.map(id=>S.cards[id]),all.length),far=k=>k==='done'?0:(cap.get(k)??Infinity);
+  if(mem.detour&&!gs.turn.pending&&(a.t==='end'||a.t==='move'||a.t==='native'||a.t==='pay')){
+    const cap=aiRouteFor(gs,all.map(id=>gs.cards[id]),all.length),far=k=>k==='done'?0:(cap.get(k)??Infinity);
     const off=a.t!=='end'&&a.to[0]!=='B'&&far(a.to)>=far(P.pieces[a.pi]);
     if(a.t==='end'||off){
-      const det=botActions().filter(b=>(b.t==='move'||b.t==='native'||b.t==='pay')&&b.to[0]!=='B'&&far(b.to)<far(P.pieces[b.pi]));
+      const det=botActions(gs).filter(b=>(b.t==='move'||b.t==='native'||b.t==='pay')&&b.to[0]!=='B'&&far(b.to)<far(P.pieces[b.pi]));
       if(det.length){det.sort((x,y)=>far(x.to)-far(y.to));return det[0];}}}
-  if(a.t==='end'&&!S.turn.bought&&!S.turn.pending){
+  if(a.t==='end'&&!gs.turn.bought&&!gs.turn.pending){
     // an expedition with no card that could take the next step (or enter El Dorado) buys one, the cheapest way
-    const want=!n?t=>botFinishCard(t):stuck?t=>steps.some(h=>h.type==='c'||aiEnters(t,h)):null;
-    const buys=want?botActions().filter(b=>b.t==='buy'&&want(b.type)):[];
+    const want=!n?t=>botFinishCard(gs,t):stuck?t=>steps.some(h=>h.type==='c'||aiEnters(gs,t,h)):null;
+    const buys=want?botActions(gs).filter(b=>b.t==='buy'&&want(b.type)):[];
     if(buys.length){buys.sort((x,y)=>x.cards.length-y.cards.length);return buys[0];}
   }
   return a;
 }
 /* the spaces the player's explorers could step to next on their way: neighbours closer to El Dorado */
-function aiNextSteps(P){const out=[];
-  for(const k of P.pieces){if(k==='done')continue;const c=botCost(k);for(const nb of neighbors(k))if(hexAt(nb).type!=='m'&&botCost(nb)<c)out.push(hexAt(nb));}
+function aiNextSteps(gs,P){const out=[];
+  for(const k of P.pieces){if(k==='done')continue;const c=botCost(gs,k);for(const nb of neighbors(gs,k))if(hexAt(gs,nb).type!=='m'&&botCost(gs,nb)<c)out.push(hexAt(gs,nb));}
   return out;}
 /* steps to El Dorado from every space over spaces cards of these types can enter (an expedition of `total` cards: base
    camps that leave it 4); Map key → steps, a space missing: no way from there */
-function aiRouteFor(types,total){const d=new Map(),q=[],ok=h=>h.type==='c'?total-h.val>=4:types.some(t=>aiEnters(t,h));
-  for(const k of MAP.goals)if(ok(hexAt(k))){d.set(k,0);q.push(k);}
-  for(let i=0;i<q.length;i++){const k=q[i];for(const nb of neighbors(k)){const h=hexAt(nb);
+function aiRouteFor(gs,types,total){const d=new Map(),q=[],ok=h=>h.type==='c'?total-h.val>=4:types.some(t=>aiEnters(gs,t,h));
+  for(const k of mapOf(gs).goals)if(ok(hexAt(gs,k))){d.set(k,0);q.push(k);}
+  for(let i=0;i<q.length;i++){const k=q[i];for(const nb of neighbors(gs,k)){const h=hexAt(gs,nb);
     if(d.has(nb)||h.type==='m'||h.type==='g'||h.type==='s'||!ok(h))continue;d.set(nb,d.get(k)+1);q.push(nb);}}
   return d;}
 /* a card of type t could enter space h: its symbol (El Dorado: the course's) and strength, a joker, the Native; rubble and base
    camps take any cards */
-function aiEnters(t,h){const d=CT[t];if(t==='native'||h.type==='r'||h.type==='c')return true;if(d.c==='p')return false;
-  const sym=h.type==='g'?MAP.endSym:h.type;return(d.s===sym||d.s==='*')&&d.p>=(h.val||1);}
+function aiEnters(gs,t,h){const d=CT[t];if(t==='native'||h.type==='r'||h.type==='c')return true;if(d.c==='p')return false;
+  const sym=h.type==='g'?mapOf(gs).endSym:h.type;return(d.s===sym||d.s==='*')&&d.p>=(h.val||1);}
 /* apply the AI's decision (recorded in rec, the game's log; may be null). Returns applyAction's result. */
-function aiStep(id,mem,rec,rnd){ // rnd: the game's shuffles when there is no record (tools)
-  const r=recApply(rec,S.cur,aiChoose(id,mem),rnd);
+function aiStep(gs,id,mem,rec,rnd){ // rnd: the game's shuffles when there is no record (tools)
+  const r=recApply(gs,rec,gs.cur,aiChoose(gs,id,mem),rnd);
   assert(r.ok,'aiStep: the AI chooses a legal action');
   return r;
 }

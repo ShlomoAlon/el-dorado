@@ -14,18 +14,15 @@ The AI tools (`tools/ai/*.mjs`) drive the engine directly in Node.
 
 ## 1. Engine
 
-### 1.1 Module state
+### 1.1 The game is a parameter
 
-The engine works on three module-level variables:
-
-| name | what |
-|---|---|
-| `S` | the game on show (§1.4); `null` before a game |
-| `MAP` | the board built from `S.course` and `S.seed` (§1.3) |
-
-- **Access from outside:** consumers read them through the live exports (`S`, `MAP`, or `E.S` with `import * as E`) and
-  replace them with `setS(v)` and `setMAP(v)`.
-- **Randomness is always passed in** (`rnd: () => [0, 1)`): `newGame(o, rnd)` and `applyAction(seat, a, rnd)` shuffle with the
+The engine holds no game. Every function that needs one takes it first: `gs`, the game state (§1.4), as in
+`applyAction(gs, seat, a, rnd)`, `cardTargets(gs, seat, pi, id)`, `botChoose(gs, opts)`. A game's board (§1.3) comes from
+its course and seed: `mapOf(gs)` builds it once and caches it (the last 16 boards), so every copy of a game shares it.
+The functions that make a game return it: `newGame(o, rnd)` → gs, `recNewGame(o)` → `{gs, rec}`, `recState(rec)` → gs,
+`recUndo(rec)` → gs, `replayStart(log)` → `{gs, g}`, and `replay(log)` yields `{i, gs, …}`. The page keeps the game on show
+itself (`state.js`: `S`, and its board `MAP`); the server keeps each room's (`this.S`).
+- **Randomness is always passed in** (`rnd: () => [0, 1)`): `newGame(o, rnd)` and `applyAction(gs, seat, a, rnd)` shuffle with the
   generator they are given (default `Math.random`). A record gives each action its own (§1.8), so the same record always
   gives the same game. The AIs' look-ahead shuffles with its own `rnd`, never the game's.
 
@@ -104,20 +101,20 @@ page's: `src/client/board/layout.js` places each space at `pxOf(q, r)` and works
   turn: { bought, active: {id, pi, sym, left}|null, pending: {max}|null },
   trash: [id], log: [{...event, r: round}] }  // the journal: the last 200 events but turn changes (§1.6)
 P = { name, color, ai?: AI id, pieces: [key|'done'], deck: [id], hand: [id], discard: [id], play: [id],
-      fin: round arrived|0, resigned: 0|order of resigning }             // blockades held: blocksOf(seat)
+      fin: round arrived|0, resigned: 0|order of resigning }             // blockades held: blocksOf(gs, seat)
 ```
 
 - **`turn.active`:** the card whose leftover strength can keep moving the same explorer.
 - **`turn.pending`:** a Scientist or Travel Log is waiting for its `trash` action.
 - **Online:** the server never writes into `S` (who plays each seat is the room's `seats`, in seat order).
 
-### 1.5 Actions — `applyAction(seat, a, rnd = Math.random)` → `{ok, err?, ev: [event], reveal?}`
+### 1.5 Actions — `applyAction(gs, seat, a, rnd = Math.random)` → `{ok, err?, ev: [event], reveal?}`
 
 The acting seat must be `S.cur`, except for `resign`. A refused action returns `{ok: false, err: text}` and changes nothing.
 
 | action | effect |
 |---|---|
-| `{t:'move', card, pi, to}` | Move explorer `pi` to `to`: a space key, or `'B'+index` for a blockade. `card` is a movement card in hand, or `turn.active.id` to use its leftover strength (then `pi` is ignored: the same explorer moves on). The target must be in `reach(seat, pi, symbols, strength)`. Blockades crossed on the path are taken. |
+| `{t:'move', card, pi, to}` | Move explorer `pi` to `to`: a space key, or `'B'+index` for a blockade. `card` is a movement card in hand, or `turn.active.id` to use its leftover strength (then `pi` is ignored: the same explorer moves on). The target must be in `reach(gs, seat, pi, symbols, strength)`. Blockades crossed on the path are taken. |
 | `{t:'native', card, pi, to}` | The Native moves to an adjacent free space, or tears down an adjacent blockade (`nativeTargets`). |
 | `{t:'pay', pi, to, cards}` | Rubble or a rubble blockade (discard) or base camp (remove from the game), per `payTargets`. `cards` must be exactly `need` distinct cards from the hand. |
 | `{t:'action', card}` | Cartographer (draw 2), Compass (draw 3), Scientist (draw 1, then remove up to 1) or Travel Log (draw 2, then remove up to 2). Sets `reveal`. |
@@ -175,16 +172,16 @@ column shows it turn by turn and writes its words (`feed.js`). It is as public a
 
 | function | result |
 |---|---|
-| `reach(seat, pi, syms, budget)` | `Map<key or 'B'+i, {t: 'move', kind: 'move'\|'bl', cost, sym, path: [key…], pi, bl?}>`: the cheapest route to each space (Dijkstra per symbol, first symbol wins ties). A route may pass blockades of its symbol by paying their cost; it can't enter occupied spaces, and it stops at El Dorado. |
-| `nativeTargets(seat, pi)` | `Map<key or 'B'+i, {t: 'native', kind: 'native'\|'nativebl', path, cost: 0, pi, bl}>` |
-| `payTargets(seat, pi)` | `Map<key or 'B'+i, {t: 'pay', kind: 'rubble'\|'camp'\|'blr', need, path?, pi, bl?}>` (only those the hand can pay) |
-| `cardTargets(seat, pi, id)` | Where that card can go now: a movement card's reach plus the rubble / camps / rubble blockades it could be given up for; the card in play: its leftover strength's reach; the Native: `nativeTargets`. The page's targets and "card usable" come from it. |
-| `blocksOf(seat)` | the blockades that player has taken (indexes; each blockade's `owner` is the one record of it) |
-| `stackOf(type)` | `{src: 'm'\|'r', i, s}` or `null` |
-| `cantBuy(seat, type)` | Why `seat` can't buy that card now, payment aside (`''` if it can): not their turn, a removal still to choose, already bought this turn, sold out, reserve closed. The buy action and the page's market both use it. |
-| `buyOptions(seat)` | `[{src, i, t}]`: what `seat` can buy now with the coins in hand (market first) |
-| `reserveOpen()` | a market slot is empty, so the reserve can be bought from |
-| `coinVal(id)` | a card's value when paying |
+| `reach(gs, seat, pi, syms, budget)` | `Map<key or 'B'+i, {t: 'move', kind: 'move'\|'bl', cost, sym, path: [key…], pi, bl?}>`: the cheapest route to each space (Dijkstra per symbol, first symbol wins ties). A route may pass blockades of its symbol by paying their cost; it can't enter occupied spaces, and it stops at El Dorado. |
+| `nativeTargets(gs, seat, pi)` | `Map<key or 'B'+i, {t: 'native', kind: 'native'\|'nativebl', path, cost: 0, pi, bl}>` |
+| `payTargets(gs, seat, pi)` | `Map<key or 'B'+i, {t: 'pay', kind: 'rubble'\|'camp'\|'blr', need, path?, pi, bl?}>` (only those the hand can pay) |
+| `cardTargets(gs, seat, pi, id)` | Where that card can go now: a movement card's reach plus the rubble / camps / rubble blockades it could be given up for; the card in play: its leftover strength's reach; the Native: `nativeTargets`. The page's targets and "card usable" come from it. |
+| `blocksOf(gs, seat)` | the blockades that player has taken (indexes; each blockade's `owner` is the one record of it) |
+| `stackOf(gs, type)` | `{src: 'm'\|'r', i, s}` or `null` |
+| `cantBuy(gs, seat, type)` | Why `seat` can't buy that card now, payment aside (`''` if it can): not their turn, a removal still to choose, already bought this turn, sold out, reserve closed. The buy action and the page's market both use it. |
+| `buyOptions(gs, seat)` | `[{src, i, t}]`: what `seat` can buy now with the coins in hand (market first) |
+| `reserveOpen(gs)` | a market slot is empty, so the reserve can be bought from |
+| `coinVal(gs, id)` | a card's value when paying |
 | `playerDone(p)`, `isActive(p)` | the player has arrived / is still racing |
 | `eloDeltas(ratings, places, games)` | Multiplayer Elo. For every pair of players, K = (48 in a player's first 10 games, else 32) / (n−1); rounded to 0.1. |
 | `redact(state, seat)` | A copy safe to send to `seat`: the other players' hands and decks become placeholder ids (`h1_0`, `d2_3`); the seat's own deck is sorted by type (its order stays hidden); `cards` lists only the ids the seat may see. |
@@ -211,11 +208,11 @@ A game is its setup plus its list of actions; any position is rebuilt by replayi
 
 | function | |
 |---|---|
-| `recNewGame(opts)` → rec | Starts a game (`opts` as for `newGame`; `rng` comes from `crypto.getRandomValues`, or `Math.random` where there is none). Sets `S` and `MAP`. |
-| `recApply(rec, seat, a, rnd?)` | `applyAction` with the action's generator (`rnd` only for a game without a record). On success the action is recorded (`rec` may be `null`: not recorded). `mark` moves up when an action reveals cards, passes the turn, resigns or ends the game. |
+| `recNewGame(opts)` → `{gs, rec}` | Starts a game and its record (`opts` as for `newGame`; `rng` comes from `crypto.getRandomValues`, or `Math.random` where there is none). |
+| `recApply(gs, rec, seat, a, rnd?)` | `applyAction` with the action's generator (`rnd` only for a game without a record). On success the action is recorded (`rec` may be `null`: not recorded). `mark` moves up when an action reveals cards, passes the turn, resigns or ends the game. |
 | `recCanUndo(rec)` | `actions.length > mark` |
-| `recUndo(rec)` | Drops the last action and rebuilds `S` and `MAP`. |
-| `recState(rec)` → `{S, MAP}` | The position a record leads to (the module's `S` and `MAP` are left as they were). |
+| `recUndo(rec)` → gs | Drops the last action and returns the rebuilt game. |
+| `recState(rec)` → gs | The game a record leads to. |
 | `recFinal(rec, state)` | The finished log, with `title` and `result` (`{places, rounds}`, read from `state`, the record's game), and without `mark`. |
 | `replayCheck(log)` | `null`, or why the log can't be played. Records before v3 were played under older rules (the turn went on after the last explorer arrived) and are refused; the server deleted its stored ones once (settings `logs_v3`), rooms with one close, and the page dropped its old saves (keys `-v1`). |
 | `replay(log)` | A generator: plays the log back on `S` one action at a time, yielding `{i, ok, err, ev}` after each (`i = -1`: the setup). Stop early, or snapshot `S` at each step. |
@@ -242,10 +239,10 @@ Each entry also has `rating` (its calibrated starting rating), `desc` and `opts`
 |---|---|
 | `aiById(id)`, `aiUsesNet(id)` | |
 | `aiAllowed(course, n)` | AIs are offered on First Expedition with 3–4 players (`aiCourseOK(course)` checks the course alone). |
-| `aiChoose(id, mem)` → action | One decision for `S.cur`. `mem` is `{}` per game and seat; it keeps the turn planner's cache. An unknown id, a 2-player game, or no fitting network: the route planner. After 60 decisions in one turn it ends the turn. It never removes its last card that can enter El Dorado, never thins its deck below 4 cards, and buys such a card before ending a turn without one. |
-| `aiStep(id, mem, rec, rnd?)` | `recApply` of `aiChoose` (the AI's choice is always legal: asserted). |
-| `aiPlan(id, rnd)` → `[action]` or null | The whole turn that AI would play from here for `S.cur` (its planner's best line; a draw card ends the line). null unless the AI plans whole turns with a loaded network. The replay shows Fawcett's. |
-| `aiNetDecode(bytes)`, `aiSetNet(net)`, `botNetReady()` | Load and select the network; `botNetReady()` says whether it fits the course on show. |
+| `aiChoose(gs, id, mem)` → action | One decision for `S.cur`. `mem` is `{}` per game and seat; it keeps the turn planner's cache. An unknown id, a 2-player game, or no fitting network: the route planner. After 60 decisions in one turn it ends the turn. It never removes its last card that can enter El Dorado, never thins its deck below 4 cards, and buys such a card before ending a turn without one. |
+| `aiStep(gs, id, mem, rec, rnd?)` | `recApply` of `aiChoose` (the AI's choice is always legal: asserted). |
+| `aiPlan(gs, id, rnd)` → `[action]` or null | The whole turn that AI would play from here for `S.cur` (its planner's best line; a draw card ends the line). null unless the AI plans whole turns with a loaded network. The replay shows Fawcett's. |
+| `aiNetDecode(bytes)`, `aiSetNet(net)`, `botNetReady(gs)` | Load and select the network; `botNetReady(gs)` says whether it fits the course on show. |
 
 **The network file** (`src/ai/first.bin`, made by `tools/ai/pack.mjs`):
 
@@ -263,11 +260,11 @@ These functions belong to the training code. `botActions` and `botChoose` act fo
 
 | function | |
 |---|---|
-| `botActions()` | Every distinct legal action, one per card type. Payments are minimal; end-of-turn keeps are 0–3 cards. |
-| `botChoose(opts)` → `{a, v?, …}` | See the options below. |
-| `botNetFeatures(me)`, `botEndFeatures(me, keep)` | The network's inputs (Float32Array). |
-| `botNetValue(f)`, `botValue(me, mode)`, `botPlaceValue(place, n)` | Scoring. `botPlaceValue` is the training target: 1st = 1, last = 0, otherwise 1 / (`BOT_FIRST_RATIO` · 2^(place−2)). |
-| `botCost(key)`, `botRemaining(seat)` | Route cost to El Dorado. |
+| `botActions(gs)` | Every distinct legal action, one per card type. Payments are minimal; end-of-turn keeps are 0–3 cards. |
+| `botChoose(gs, opts)` → `{a, v?, …}` | See the options below. |
+| `botNetFeatures(gs, me)`, `botEndFeatures(gs, me, keep)` | The network's inputs (Float32Array). |
+| `botNetValue(f)`, `botValue(gs, me, mode)`, `botPlaceValue(place, n)` | Scoring. `botPlaceValue` is the training target: 1st = 1, last = 0, otherwise 1 / (`BOT_FIRST_RATIO` · 2^(place−2)). |
+| `botCost(gs, key)`, `botRemaining(gs, seat)` | Route cost to El Dorado. |
 | `botClone(S)` | A copy for look-ahead. |
 | `botRandomCourse(seed, nMid)` | A random legal course (training only). |
 | `BOT_NF`, `BOT_FLAGS`, `BOT_EVALS` | Constants and an evaluation counter. |
@@ -287,9 +284,8 @@ bit-for-bit identical for trained networks to keep working. `test/fixtures/featu
 
 ### 1.11 Exports
 
-- Every top-level name is exported (live bindings). The page's modules import names; the server, the tools and the tests
-  import the whole engine as a namespace (`import * as E from './engine.gen.js'`), so `E.S` and `E.BOT_EVALS` are live.
-- `setS(v)` and `setMAP(v)` replace the game (a module's bindings can't be assigned from outside).
+- Every top-level name is exported. The page's modules import names; the server, the tools and the tests import the
+  whole engine as a namespace (`import * as E from './engine.gen.js'`; `E.BOT_EVALS` is live).
 
 ### 1.12 What a port must reproduce exactly
 
@@ -449,7 +445,7 @@ playout({seed, players: seatPlayers(n, aiIds?), choose: me => action, course?, c
 ```
 
 - The game shuffles with `mulberry32(seed * 7 + 1)`, so a seed replays the same game when the choices are seeded too
-  (`botChoose({rnd})`; the bot's look-ahead uses only that `rnd`).
+  (`botChoose(gs, {rnd})`; the bot's look-ahead uses only that `rnd`).
 - The choices must be legal (asserted). A round cap ends a game with `E.endGame()`.
 - The training generator (`gen.mjs`) and the recorder (`record.mjs`) keep their own loops: they write game logs.
 - The game's generator goes only to the game's own `applyAction` calls, so the bots' look-ahead never consumes it.

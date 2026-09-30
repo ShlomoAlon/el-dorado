@@ -18,7 +18,7 @@ That shape has no module globals and no `setRng`, and nothing in it is English t
 
 **Status (2026-09-30).**
 
-- **Done:** 2 (randomness is a parameter), 3 (records only, log v3), 6 (state trimmed), 7 (the server doesn't write into
+- **Done:** 1 (the game is a parameter: `gs` first; `mapOf(gs)`; no `S`/`MAP`/`setS`), 2 (randomness is a parameter), 3 (records only, log v3), 6 (state trimmed), 7 (the server doesn't write into
   `S`), 8 (dead bot code), 9 (one export surface: `import * as E`), 10, 12 (events), 13 (player vs. system actions,
   `keep` required), 11 (the packed network names its inputs), 15, 16, 17 (one `replay(log)` generator; `recFinal` takes the state), 21 (the map is topology; the page lays it out), 23 (tools share `tools/ai/playout.mjs`; four finished one-off investigations deleted), 24.
 - **Partly done:**
@@ -28,7 +28,7 @@ That shape has no module globals and no `setRng`, and nothing in it is English t
     need a log version bump, which drops every stored game).
   - 19: the server keeps each room's board with its state; the bot's caches on `MAP` remain.
   - 22: one `passTurn`.
-- **Open:** 1 (pass the game explicitly), 18, 20.
+- **Open:** 18, 20.
 
 ---
 

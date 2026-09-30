@@ -26,18 +26,18 @@ for (let g = 0; g < G; g++) {
   if (process.env.SHUFFLE) { const k = Math.floor(Math.random() * pols.length), j = pols.indexOf('net'); if (j >= 0) [pols[j], pols[k]] = [pols[k], pols[j]]; }
   const seed = seed0 + g, log = { kind: 'eldorado-replay', v: 1, course: course.id, seed, rng: (seed * 2654435761) >>> 0, fullRace: true,
     players: pols.map((p, i) => ({ name: `${NAME[p] || p} ${i + 1}`, bot: p })), actions: [] };
-  const gen = E.replayStart(log);
+  const { gs, g: gen } = E.replayStart(log);
   let acts = 0, capped = false;
-  while (!E.S.over) {
-    const S = E.S;
+  while (!gs.over) {
+    const S = gs;
     if (S.round > 25 || acts++ > 20000) { capped = true; break; }
     const me = S.cur, pol = pols[me];
-    const c = E.botChoose(optsOf(pol) || { mode: pol }); // (its look-ahead has its own randomness: the game's stream is for the game)
-    const r = E.applyAction(me, c.a, gen), a = r.ok ? c.a : { t: 'end', keep: [] };
-    if (!r.ok) E.applyAction(me, a, gen);
+    const c = E.botChoose(gs, optsOf(pol) || { mode: pol }); // (its look-ahead has its own randomness: the game's stream is for the game)
+    const r = E.applyAction(gs, me, c.a, gen), a = r.ok ? c.a : { t: 'end', keep: [] };
+    if (!r.ok) E.applyAction(gs, me, a, gen);
     log.actions.push([me, slim(a)]);
   }
-  const S = E.S, fin = S.players.map(p => p.fin), netLost = pols.some((p, i) => p === 'net') && !pols.some((p, i) => p === 'net' && S.places && S.places[i] === 1);
+  const S = gs, fin = S.players.map(p => p.fin), netLost = pols.some((p, i) => p === 'net') && !pols.some((p, i) => p === 'net' && S.places && S.places[i] === 1);
   if (FILTER === 'capped' && !capped) continue;
   if (FILTER === 'netlost' && !netLost) continue;
   if (FILTER === 'netclose') { // net won, and the runner-up arrived within one round of it

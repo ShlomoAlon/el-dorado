@@ -3,9 +3,9 @@
    the explorer slides from space to space (easing in and out at each one) while its figure hops once per space above a
    shadow that stays on the ground. Whose turn it is: a pool of light and a marker (fading in and out); the explorer to
    move (two-explorer games): a dashed ring. */
-import { S, MAP, R, hexAt } from '../../engine.gen.js';
+import { R } from '../../engine.gen.js';
 import { $, reduceMotion } from '../dom.js';
-import { UI } from '../state.js';
+import { S, UI } from '../state.js';
 import { render } from '../frame.js';
 import { meepleSVG } from '../meeple.js';
 import { cam, view } from './camera.js';

@@ -10,63 +10,63 @@
    ========================================================= */
 const BOT_TYPES=Object.keys(CT);
 /* ---- static distances to El Dorado, per map (cost = sum of space values along the way) ---- */
-function botDist(){
-  if(MAP._bd)return MAP._bd;
+function botDist(gs){
+  if(mapOf(gs)._bd)return mapOf(gs)._bd;
   const cost=new Map(),steps=new Map(),next=new Map(),pq=[];
-  for(const g of MAP.goals){cost.set(g,0);steps.set(g,0);pq.push([0,g]);}
+  for(const g of mapOf(gs).goals){cost.set(g,0);steps.set(g,0);pq.push([0,g]);}
   while(pq.length){let bi=0;for(let i=1;i<pq.length;i++)if(pq[i][0]<pq[bi][0])bi=i;const[d,u]=pq.splice(bi,1)[0];if(d>cost.get(u))continue;
-    const hu=hexAt(u);if(hu.type==='s')continue;           // start spaces can't be entered, so nothing routes through them
+    const hu=hexAt(gs,u);if(hu.type==='s')continue;           // start spaces can't be entered, so nothing routes through them
     const enter=hu.type==='g'?1:hu.val;                     // cost of stepping onto u
-    for(const n of neighbors(u)){const h=hexAt(n);if(h.type==='m'||h.type==='g')continue;
+    for(const n of neighbors(gs,u)){const h=hexAt(gs,n);if(h.type==='m'||h.type==='g')continue;
       const nd=d+enter;if(!cost.has(n)||nd<cost.get(n)){cost.set(n,nd);steps.set(n,steps.get(u)+1);next.set(n,u);pq.push([nd,n]);}}}
   const mix=new Map(); // terrain still ahead on the cheapest route, per type (tells the bot what to buy)
   for(const k of cost.keys()){const m={j:0,w:0,v:0,r:0,c:0};let x=next.get(k),guard=0;
-    while(x&&guard++<200){const h=hexAt(x);if(h.type==='g'){m[h.sym]+=1;break;}if(m[h.type]!=null)m[h.type]+=h.val;x=next.get(x);}mix.set(k,m);}
-  MAP._bd={cost,steps,mix};return MAP._bd;
+    while(x&&guard++<200){const h=hexAt(gs,x);if(h.type==='g'){m[h.sym]+=1;break;}if(m[h.type]!=null)m[h.type]+=h.val;x=next.get(x);}mix.set(k,m);}
+  mapOf(gs)._bd={cost,steps,mix};return mapOf(gs)._bd;
 }
-const botCost=k=>k==='done'?0:(botDist().cost.get(k)??60);
-function botRemaining(pl){const p=S.players[pl];return p.pieces.reduce((a,k)=>a+botCost(k),0)/p.pieces.length;} // route cost still ahead
+const botCost=(gs,k)=>k==='done'?0:(botDist(gs).cost.get(k)??60);
+function botRemaining(gs,pl){const p=gs.players[pl];return p.pieces.reduce((a,k)=>a+botCost(gs,k),0)/p.pieces.length;} // route cost still ahead
 /* ---- legal atomic actions for the player to move (deduplicated by card type) ---- */
 /* every distinct subset (by card types) of `ids` with exactly k cards */
-function botCombos(ids,k){const out=[],seen=new Set(),cur=[];
-  const rec=i=>{if(cur.length===k){const sig=cur.map(typeOf).sort().join();if(!seen.has(sig)){seen.add(sig);out.push(cur.slice());}return;}
+function botCombos(gs,ids,k){const out=[],seen=new Set(),cur=[];
+  const rec=i=>{if(cur.length===k){const sig=cur.map(id=>typeOf(gs,id)).sort().join();if(!seen.has(sig)){seen.add(sig);out.push(cur.slice());}return;}
     for(let j=i;j<ids.length;j++){cur.push(ids[j]);rec(j+1);cur.pop();}};rec(0);return out;}
 /* a card that can enter El Dorado on this course (its symbol, or a joker) */
-const botFinishCard=t=>{const d=CT[t];return d.c!=='p'&&(d.s===MAP.endSym||d.s==='*');};
+const botFinishCard=(gs,t)=>{const d=CT[t];return d.c!=='p'&&(d.s===mapOf(gs).endSym||d.s==='*');};
 /* removing these cards from the game still leaves an expedition that can finish: at least 4 cards (owner: 4 can be valid,
    fewer can't), and a card that can enter El Dorado if it had one. (Without this an AI paid for base camps down to 2
    cards, none able to enter, and stood forever beside the finish, blocking the way for others: Witch's Cauldron) */
-function botCanRemove(P,out){const all=[...P.deck,...P.hand,...P.discard,...P.play],fin=id=>botFinishCard(S.cards[id]);
+function botCanRemove(gs,P,out){const all=[...P.deck,...P.hand,...P.discard,...P.play],fin=id=>botFinishCard(gs,gs.cards[id]);
   return all.length-out.length>=4&&(!all.some(fin)||all.filter(fin).length>out.filter(fin).length);}
-function botActions(){
-  const seat=S.cur,P=S.players[seat],T=S.turn,out=[];
+function botActions(gs){
+  const seat=gs.cur,P=gs.players[seat],T=gs.turn,out=[];
   // Scientist / Travel Log: remove nothing, or any distinct choice of up to `max` cards
-  if(T.pending){for(let k=0;k<=Math.min(T.pending.max,P.hand.length);k++)for(const c of botCombos(P.hand,k))out.push({t:'trash',cards:c});return out;}
-  const seen=new Set(),hand=P.hand.filter(id=>{const t=typeOf(id);if(seen.has(t))return false;seen.add(t);return true;}); // one of each type
+  if(T.pending){for(let k=0;k<=Math.min(T.pending.max,P.hand.length);k++)for(const c of botCombos(gs,P.hand,k))out.push({t:'trash',cards:c});return out;}
+  const seen=new Set(),hand=P.hand.filter(id=>{const t=typeOf(gs,id);if(seen.has(t))return false;seen.add(t);return true;}); // one of each type
   P.pieces.forEach((pk,pi)=>{if(pk==='done')return;
-    if(T.active&&T.active.pi===pi)for(const[k]of reach(seat,pi,[T.active.sym],T.active.left))out.push({t:'move',card:T.active.id,pi,to:k});
-    for(const id of hand){const d=def(id),t=typeOf(id);
-      if(t==='native'){for(const[k]of nativeTargets(seat,pi))out.push({t:'native',card:id,pi,to:k});continue;}
+    if(T.active&&T.active.pi===pi)for(const[k]of reach(gs,seat,pi,[T.active.sym],T.active.left))out.push({t:'move',card:T.active.id,pi,to:k});
+    for(const id of hand){const d=def(gs,id),t=typeOf(gs,id);
+      if(t==='native'){for(const[k]of nativeTargets(gs,seat,pi))out.push({t:'native',card:id,pi,to:k});continue;}
       if(d.c==='p')continue;
-      for(const[k]of reach(seat,pi,d.s==='*'?['j','w','v']:[d.s],d.p))out.push({t:'move',card:id,pi,to:k});}
+      for(const[k]of reach(gs,seat,pi,d.s==='*'?['j','w','v']:[d.s],d.p))out.push({t:'move',card:id,pi,to:k});}
     // rubble / base camp / rubble blockade: every distinct choice of cards to give up (a base camp removes them from the game:
     // never so many that the expedition can't finish)
-    for(const[k,tg]of payTargets(seat,pi))for(const c of botCombos(P.hand,tg.need))if(tg.kind!=='camp'||botCanRemove(P,c))out.push({t:'pay',pi,to:k,cards:c});
+    for(const[k,tg]of payTargets(gs,seat,pi))for(const c of botCombos(gs,P.hand,tg.need))if(tg.kind!=='camp'||botCanRemove(gs,P,c))out.push({t:'pay',pi,to:k,cards:c});
   });
-  for(const id of hand){const t=typeOf(id);if(['cartographer','compass','scientist','travellog'].includes(t))out.push({t:'action',card:id});}
-  const open=S.market.some(s=>s.n===0);
-  const tr=hand.find(id=>typeOf(id)==='transmitter');
-  if(tr)for(const s of[...S.market,...S.reserve])if(s.n>0)out.push({t:'transmit',card:tr,type:s.t});
+  for(const id of hand){const t=typeOf(gs,id);if(['cartographer','compass','scientist','travellog'].includes(t))out.push({t:'action',card:id});}
+  const open=gs.market.some(s=>s.n===0);
+  const tr=hand.find(id=>typeOf(gs,id)==='transmitter');
+  if(tr)for(const s of[...gs.market,...gs.reserve])if(s.n>0)out.push({t:'transmit',card:tr,type:s.t});
   if(!T.bought){
     // every minimal way to pay (no card could be left out), distinct by card types
-    const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),pays=new Map();
+    const cash=P.hand.reduce((a,id)=>a+coinVal(gs,id),0),pays=new Map();
     const payFor=cost=>{if(pays.has(cost))return pays.get(cost);const res=[];
-      for(let k=1;k<=P.hand.length&&res.length<8;k++)for(const c of botCombos(P.hand,k)){const tot=c.reduce((a,id)=>a+coinVal(id),0);if(tot>=cost&&c.every(id=>tot-coinVal(id)<cost))res.push(c);}
+      for(let k=1;k<=P.hand.length&&res.length<8;k++)for(const c of botCombos(gs,P.hand,k)){const tot=c.reduce((a,id)=>a+coinVal(gs,id),0);if(tot>=cost&&c.every(id=>tot-coinVal(gs,id)<cost))res.push(c);}
       pays.set(cost,res);return res;};
-    for(const s of open?[...S.market,...S.reserve]:S.market)if(s.n>0&&CT[s.t].cost<=cash)for(const cards of payFor(CT[s.t].cost))out.push({t:'buy',type:s.t,cards});
+    for(const s of open?[...gs.market,...gs.reserve]:gs.market)if(s.n>0&&CT[s.t].cost<=cash)for(const cards of payFor(CT[s.t].cost))out.push({t:'buy',type:s.t,cards});
   }
   // end turn keeping any distinct choice of 0–3 cards
-  for(let k=0;k<=Math.min(3,P.hand.length);k++)for(const c of botCombos(P.hand,k))out.push({t:'end',keep:c});
+  for(let k=0;k<=Math.min(3,P.hand.length);k++)for(const c of botCombos(gs,P.hand,k))out.push({t:'end',keep:c});
   return out;
 }
 /* ---- features: everything a player can see at a glance, from `me`'s point of view ----
@@ -75,65 +75,65 @@ function botActions(){
    the "steps to El Dorado" axis, so the same inputs work on any course. */
 const BOT_BINS=16,BOT_BW=3,BOT_NT=BOT_TYPES.length;
 const BOT_NF=16*9+14+BOT_NT*4+12+3*(BOT_NT*2+8)+BOT_NT*2+2+6*9+4;
-function botCounts(ids){const c=new Float32Array(BOT_NT);for(const id of ids){const k=BOT_TYPES.indexOf(S.cards[id]);if(k>=0)c[k]++;}return c;}
-function botFeatures(me,into){ // into: write the summary at the start of this (zeroed) array instead of a new one
+function botCounts(gs,ids){const c=new Float32Array(BOT_NT);for(const id of ids){const k=BOT_TYPES.indexOf(gs.cards[id]);if(k>=0)c[k]++;}return c;}
+function botFeatures(gs,me,into){ // into: write the summary at the start of this (zeroed) array instead of a new one
   const f=into||new Float32Array(BOT_NF);let i=0;const put=(v)=>{f[i++]=v;},putArr=(a,sc)=>{for(const x of a)f[i++]=x*sc;};
-  const P=S.players[me],endView=S._endView===me,myTurn=S.cur===me&&!S.over&&!endView,bd=botDist(),n=S.players.length;
+  const P=gs.players[me],endView=gs._endView===me,myTurn=gs.cur===me&&!gs.over&&!endView,bd=botDist(gs),n=gs.players.length;
   const stepsOf=k=>k==='done'?0:(bd.steps.get(k)??48);
   // 1. the map, binned by steps to El Dorado: width, terrain mix, difficulty, crowding, blockades
   // the terrain part never changes on a course: computed once per map (same order of additions, so the same values); per call
   // only the occupied spaces and the open blockades are added
-  if(!MAP._fb){const st=new Float32Array(BOT_BINS*9),binOf=new Map();
-    for(const[k,sv]of bd.steps){const h=hexAt(k);if(h.type==='g'||h.type==='s')continue;const bi=Math.min(BOT_BINS-1,Math.floor(sv/BOT_BW)),o=bi*9;binOf.set(k,bi);
+  if(!mapOf(gs)._fb){const st=new Float32Array(BOT_BINS*9),binOf=new Map();
+    for(const[k,sv]of bd.steps){const h=hexAt(gs,k);if(h.type==='g'||h.type==='s')continue;const bi=Math.min(BOT_BINS-1,Math.floor(sv/BOT_BW)),o=bi*9;binOf.set(k,bi);
       st[o]++;const t='jwvrc'.indexOf(h.type);if(t>=0)st[o+1+t]++;st[o+6]+=h.val;}
-    MAP._fb={st,binOf,b:new Float32Array(BOT_BINS*9)};}
-  const FB=MAP._fb,bins=FB.b;bins.set(FB.st);const seen=[];
-  for(const p of S.players)for(const k of p.pieces){if(k==='done'||seen.includes(k))continue;seen.push(k);const bi=FB.binOf.get(k);if(bi!=null)bins[bi*9+7]++;}
-  S.blockades.forEach(B=>{if(B.owner!==null)return;const e=MAP.conns[B.conn].edges[0];const st=Math.min(stepsOf(e[0]),stepsOf(e[1]));bins[Math.min(BOT_BINS-1,Math.floor(st/BOT_BW))*9+8]+=B.v;});
+    mapOf(gs)._fb={st,binOf,b:new Float32Array(BOT_BINS*9)};}
+  const FB=mapOf(gs)._fb,bins=FB.b;bins.set(FB.st);const seen=[];
+  for(const p of gs.players)for(const k of p.pieces){if(k==='done'||seen.includes(k))continue;seen.push(k);const bi=FB.binOf.get(k);if(bi!=null)bins[bi*9+7]++;}
+  gs.blockades.forEach(B=>{if(B.owner!==null)return;const e=mapOf(gs).conns[B.conn].edges[0];const st=Math.min(stepsOf(e[0]),stepsOf(e[1]));bins[Math.min(BOT_BINS-1,Math.floor(st/BOT_BW))*9+8]+=B.v;});
   for(let o=0;o<BOT_BINS*9;o+=9){const c=bins[o]||1;put(bins[o]/10);for(let t=1;t<=5;t++)put(bins[o+t]/c);put(bins[o+6]/c/3);put(bins[o+7]/2);put(bins[o+8]/2);}
   // 2. me: where I am and what's ahead
-  const pieceCost=p=>p.pieces.reduce((a,k)=>a+botCost(k),0)/p.pieces.length,pieceSteps=p=>p.pieces.reduce((a,k)=>a+stepsOf(k),0)/p.pieces.length;
-  const myCost=pieceCost(P);put(myCost/40);put(pieceSteps(P)/40);put(Math.min(...P.pieces.map(stepsOf))/40);put(playerDone(P)?1:0);put(blocksOf(me).length/3);
+  const pieceCost=p=>p.pieces.reduce((a,k)=>a+botCost(gs,k),0)/p.pieces.length,pieceSteps=p=>p.pieces.reduce((a,k)=>a+stepsOf(k),0)/p.pieces.length;
+  const myCost=pieceCost(P);put(myCost/40);put(pieceSteps(P)/40);put(Math.min(...P.pieces.map(stepsOf))/40);put(playerDone(P)?1:0);put(blocksOf(gs,me).length/3);
   const mix={j:0,w:0,v:0,r:0,c:0};for(const k of P.pieces){if(k==='done')continue;const m=bd.mix.get(k);if(m)for(const s in mix)mix[s]+=m[s];}
   for(const s of'jwvrc')put(mix[s]/P.pieces.length/20);
-  put(myTurn?1:0);put(me/3);put(S.turn&&S.cur===me&&S.turn.bought?1:0);put(n===2?1:0);
+  put(myTurn?1:0);put(me/3);put(gs.turn&&gs.cur===me&&gs.turn.bought?1:0);put(n===2?1:0);
   // 3. my cards: hand (only meaningful on my turn), draw pile, discard, in play
   // hand: my cards on my turn; in the end-of-turn view, the cards I kept
-  putArr(myTurn||endView?botCounts(P.hand):new Float32Array(BOT_NT),1/3);putArr(botCounts(P.deck),1/4);putArr(botCounts(P.discard),1/4);putArr(botCounts(P.play),1/3);
+  putArr(myTurn||endView?botCounts(gs,P.hand):new Float32Array(BOT_NT),1/3);putArr(botCounts(gs,P.deck),1/4);putArr(botCounts(gs,P.discard),1/4);putArr(botCounts(gs,P.play),1/3);
   // 4. this turn: leftover strength, pending removal, what the hand could still do
-  if(myTurn){const a=S.turn.active;put(a?a.left/4:0);for(const s of'jwv')put(a&&a.sym===s?1:0);put(S.turn.pending?S.turn.pending.max/2:0);
-    let coins=0;for(const id of P.hand)coins+=coinVal(id);put(coins/6);put(P.hand.length/6);put(P.hand.filter(id=>def(id).c==='p').length/2);
+  if(myTurn){const a=gs.turn.active;put(a?a.left/4:0);for(const s of'jwv')put(a&&a.sym===s?1:0);put(gs.turn.pending?gs.turn.pending.max/2:0);
+    let coins=0;for(const id of P.hand)coins+=coinVal(gs,id);put(coins/6);put(P.hand.length/6);put(P.hand.filter(id=>def(gs,id).c==='p').length/2);
     let bestRed=0,sumRed=0;
-    for(const id of P.hand){const d=def(id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(pk);for(const[k]of reach(me,pi,d.s==='*'?['j','w','v']:[d.s],d.p)){if(k[0]!=='B')r=Math.max(r,base-botCost(k));}});bestRed=Math.max(bestRed,r);sumRed+=r;}
-    if(a){const pk=P.pieces[a.pi];if(pk!=='done'){const base=botCost(pk);for(const[k]of reach(me,a.pi,[a.sym],a.left))if(k[0]!=='B'){const r=base-botCost(k);bestRed=Math.max(bestRed,r);sumRed+=r;}}}
+    for(const id of P.hand){const d=def(gs,id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(gs,pk);for(const[k]of reach(gs,me,pi,d.s==='*'?['j','w','v']:[d.s],d.p)){if(k[0]!=='B')r=Math.max(r,base-botCost(gs,k));}});bestRed=Math.max(bestRed,r);sumRed+=r;}
+    if(a){const pk=P.pieces[a.pi];if(pk!=='done'){const base=botCost(gs,pk);for(const[k]of reach(gs,me,a.pi,[a.sym],a.left))if(k[0]!=='B'){const r=base-botCost(gs,k);bestRed=Math.max(bestRed,r);sumRed+=r;}}}
     put(bestRed/8);put(sumRed/12);put(myCost>0?Math.min(1,sumRed/myCost):1);put(1);
   }else i+=12;
   // 5. opponents in turn order after me: all cards they own, their discard pile, position, blockades
-  for(let k=1;k<=3;k++){const j=(me+k)%n;const p=k<n?S.players[j]:null;if(!p){i+=BOT_NT*2+8;continue;}
-    putArr(botCounts([...p.deck,...p.hand,...p.discard,...p.play]),1/4);putArr(botCounts(p.discard),1/4);
-    put(pieceCost(p)/40);put(pieceSteps(p)/40);put(playerDone(p)?1:0);put(p.resigned?1:0);put(blocksOf(j).length/3);put(p.hand.length/6);put(j===S.cur?1:0);put((pieceCost(p)-myCost)/20);}
+  for(let k=1;k<=3;k++){const j=(me+k)%n;const p=k<n?gs.players[j]:null;if(!p){i+=BOT_NT*2+8;continue;}
+    putArr(botCounts(gs,[...p.deck,...p.hand,...p.discard,...p.play]),1/4);putArr(botCounts(gs,p.discard),1/4);
+    put(pieceCost(p)/40);put(pieceSteps(p)/40);put(playerDone(p)?1:0);put(p.resigned?1:0);put(blocksOf(gs,j).length/3);put(p.hand.length/6);put(j===gs.cur?1:0);put((pieceCost(p)-myCost)/20);}
   // 6. market and reserve (cards left of each type) + reserve open
-  const mk=new Float32Array(BOT_NT),rs=new Float32Array(BOT_NT);S.market.forEach(s=>{mk[BOT_TYPES.indexOf(s.t)]+=s.n;});S.reserve.forEach(s=>{rs[BOT_TYPES.indexOf(s.t)]+=s.n;});
-  putArr(mk,1/3);putArr(rs,1/3);put(S.market.some(s=>s.n===0)?1:0);put(S.market.filter(s=>s.n>0).length/6);
+  const mk=new Float32Array(BOT_NT),rs=new Float32Array(BOT_NT);gs.market.forEach(s=>{mk[BOT_TYPES.indexOf(s.t)]+=s.n;});gs.reserve.forEach(s=>{rs[BOT_TYPES.indexOf(s.t)]+=s.n;});
+  putArr(mk,1/3);putArr(rs,1/3);put(gs.market.some(s=>s.n===0)?1:0);put(gs.market.filter(s=>s.n>0).length/6);
   // 7. blockades #1–6: on the board / mine / someone else's, cost, where, type
-  for(let num=1;num<=6;num++){const bi=S.blockades.findIndex(B=>B.n===num);if(bi<0){i+=9;continue;}const B=S.blockades[bi];
-    const e=MAP.conns[B.conn].edges[0];put(B.owner===null?1:0);put(B.owner===me?1:0);put(B.owner!==null&&B.owner!==me?1:0);put(B.v/2);put(Math.min(stepsOf(e[0]),stepsOf(e[1]))/40);
+  for(let num=1;num<=6;num++){const bi=gs.blockades.findIndex(B=>B.n===num);if(bi<0){i+=9;continue;}const B=gs.blockades[bi];
+    const e=mapOf(gs).conns[B.conn].edges[0];put(B.owner===null?1:0);put(B.owner===me?1:0);put(B.owner!==null&&B.owner!==me?1:0);put(B.v/2);put(Math.min(stepsOf(e[0]),stepsOf(e[1]))/40);
     for(const s of'jwvr')put(B.k===s?1:0);}
   // 8. game clock
-  put(S.round/40);put((n-2)/2);put(S.endTriggered?1:0);put(S.players.filter(p=>playerDone(p)).length/3);
+  put(gs.round/40);put((n-2)/2);put(gs.endTriggered?1:0);put(gs.players.filter(p=>playerDone(p)).length/3);
   if(i!==BOT_NF)throw new Error('bot features: wrote '+i+' of '+BOT_NF);
   return f;
 }
 /* ---- values ---- */
-function botHeuristic(me){ // hand-tuned: be close to the goal, own a strong deck, use this turn's cards well
-  const P=S.players[me];if(playerDone(P))return 100-P.fin;
+function botHeuristic(gs,me){ // hand-tuned: be close to the goal, own a strong deck, use this turn's cards well
+  const P=gs.players[me];if(playerDone(P))return 100-P.fin;
   const own=[...P.deck,...P.hand,...P.discard,...P.play],tot=own.length||1;let pw=0;
-  for(const id of own){const d=CT[S.cards[id]];if(d.c!=='p')pw+=d.p*(d.c==='x'?1.2:1);else pw+=1.2;}
-  let v=-P.pieces.reduce((a,k)=>a+botCost(k),0)/P.pieces.length;
-  v+=pw/tot*9-Math.max(0,tot-12)*.35+blocksOf(S.players.indexOf(P)).length*1.5;
-  if(S.cur===me&&!S.over&&S._endView!==me){let sumRed=0;
-    for(const id of P.hand){const d=def(id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(pk);for(const[k]of reach(me,pi,d.s==='*'?['j','w','v']:[d.s],d.p))if(k[0]!=='B')r=Math.max(r,base-botCost(k));});sumRed+=r;}
-    const a=S.turn.active;if(a&&P.pieces[a.pi]!=='done'){const base=botCost(P.pieces[a.pi]);let r=0;for(const[k]of reach(me,a.pi,[a.sym],a.left))if(k[0]!=='B')r=Math.max(r,base-botCost(k));sumRed+=r;}
+  for(const id of own){const d=CT[gs.cards[id]];if(d.c!=='p')pw+=d.p*(d.c==='x'?1.2:1);else pw+=1.2;}
+  let v=-P.pieces.reduce((a,k)=>a+botCost(gs,k),0)/P.pieces.length;
+  v+=pw/tot*9-Math.max(0,tot-12)*.35+blocksOf(gs,gs.players.indexOf(P)).length*1.5;
+  if(gs.cur===me&&!gs.over&&gs._endView!==me){let sumRed=0;
+    for(const id of P.hand){const d=def(gs,id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(gs,pk);for(const[k]of reach(gs,me,pi,d.s==='*'?['j','w','v']:[d.s],d.p))if(k[0]!=='B')r=Math.max(r,base-botCost(gs,k));});sumRed+=r;}
+    const a=gs.turn.active;if(a&&P.pieces[a.pi]!=='done'){const base=botCost(gs,P.pieces[a.pi]);let r=0;for(const[k]of reach(gs,me,a.pi,[a.sym],a.left))if(k[0]!=='B')r=Math.max(r,base-botCost(gs,k));sumRed+=r;}
     v+=sumRed*.95;}
   return v;
 }
@@ -145,9 +145,9 @@ function botHeuristic(me){ // hand-tuned: be close to the goal, own a strong dec
 const BOT_STARTER={explorer:1,traveler:1,sailor:1};
 /* buying: only while more than 7 of route is left, only a card worth more than 2 (botCardWorth, plus 8% per coin of cost) */
 const BOT_BUY={stop:7,min:2,costW:.08};
-function botPlanMoves(me){
-  const root=S,memo=new Map();let best=null,nodes=0;
-  const score=st=>{const P=st.players[me];const c=P.pieces.reduce((a,k)=>a+(k==='done'?-5:botCost(k)),0);const coin=P.hand.reduce((a,id)=>a+coinVal(id),0);
+function botPlanMoves(gs,me){
+  const root=gs,memo=new Map();let best=null,nodes=0;
+  const score=st=>{const P=st.players[me];const c=P.pieces.reduce((a,k)=>a+(k==='done'?-5:botCost(gs,k)),0);const coin=P.hand.reduce((a,id)=>a+coinVal(gs,id),0);
     return -c*10+coin;};
   const dfs=(st,path,depth)=>{
     if(++nodes>4000)return;
@@ -155,50 +155,50 @@ function botPlanMoves(me){
     if(depth>=9||st.over||st.cur!==me)return;
     const P=st.players[me],key=P.pieces.join('|')+'#'+P.hand.map(id=>st.cards[id]).sort().join()+'#'+(st.turn.active?st.turn.active.id+st.turn.active.left:'');
     if(memo.has(key)&&memo.get(key)<=depth)return;memo.set(key,depth);
-    S=st;const acts=botActions().filter(a=>a.t==='move'||a.t==='native'||a.t==='pay');S=root;
+    gs=st;const acts=botActions(gs).filter(a=>a.t==='move'||a.t==='native'||a.t==='pay');gs=root;
     // per card and explorer keep the 3 targets that get closest (the search stays small)
     const groups=new Map();for(const a of acts){const g=a.t+(a.card||'')+a.pi;if(!groups.has(g))groups.set(g,[]);groups.get(g).push(a);}
     for(const[,list]of groups){
-      const ranked=list.map(a=>({a,c:a.to[0]==='B'?-1:botCost(a.to)})).sort((x,y)=>x.c-y.c).slice(0,3);
-      for(const{a}of ranked){S=botClone(st);const r=applyAction(me,a);const nx=S;S=root;if(!r.ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
+      const ranked=list.map(a=>({a,c:a.to[0]==='B'?-1:botCost(gs,a.to)})).sort((x,y)=>x.c-y.c).slice(0,3);
+      for(const{a}of ranked){gs=botClone(st);const r=applyAction(gs,me,a);const nx=gs;gs=root;if(!r.ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
     }
   };
-  dfs(botClone(root),[],0);S=root;return best?best.path:[];
+  dfs(botClone(root),[],0);gs=root;return best?best.path:[];
 }
-function botCardWorth(t,me){ // how useful a new card is for the rest of the route
-  const P=S.players[me],bd=botDist(),live=P.pieces.filter(k=>k!=='done');const m={j:0,w:0,v:0,r:0,c:0};
+function botCardWorth(gs,t,me){ // how useful a new card is for the rest of the route
+  const P=gs.players[me],bd=botDist(gs),live=P.pieces.filter(k=>k!=='done');const m={j:0,w:0,v:0,r:0,c:0};
   for(const k of live){const x=bd.mix.get(k);if(x)for(const s in m)m[s]+=x[s]/live.length;}
   const mt=m.j+m.w+m.v+1,d=CT[t];
   if(d.c==='p')return {cartographer:2.6,native:2.2,compass:2.3,scientist:2.2,travellog:2.2,transmitter:1.5}[t]||1;
   const fit=d.s==='*'?1:(m[d.s]||0)/mt;return d.p*(0.35+fit)+(d.c==='y'?0.6:0);
 }
-function botPlanChoose(me){
-  const P=S.players[me],T=S.turn;
-  if(T.pending)return{t:'trash',cards:P.hand.filter(id=>BOT_STARTER[typeOf(id)]).slice(0,T.pending.max)}; // the weak starting cards
-  const draw=P.hand.find(id=>BOT_DRAW[typeOf(id)]);if(draw)return{t:'action',card:draw};
-  const moves=botPlanMoves(me);if(moves.length)return moves[0];
+function botPlanChoose(gs,me){
+  const P=gs.players[me],T=gs.turn;
+  if(T.pending)return{t:'trash',cards:P.hand.filter(id=>BOT_STARTER[typeOf(gs,id)]).slice(0,T.pending.max)}; // the weak starting cards
+  const draw=P.hand.find(id=>BOT_DRAW[typeOf(gs,id)]);if(draw)return{t:'action',card:draw};
+  const moves=botPlanMoves(gs,me);if(moves.length)return moves[0];
   // buy with what's left
-  const left=botRemaining(me);
+  const left=botRemaining(gs,me);
   if(!T.bought&&left>BOT_BUY.stop){
-    const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),open=S.market.some(s=>s.n===0);let pick=null;
-    for(const s of open?[...S.market,...S.reserve]:S.market){if(s.n<=0||CT[s.t].cost>cash)continue;const w=botCardWorth(s.t,me)*(1+CT[s.t].cost*BOT_BUY.costW);if(!pick||w>pick.w)pick={w,t:s.t};}
-    if(pick&&pick.w>BOT_BUY.min){const buys=botActions().filter(a=>a.t==='buy'&&a.type===pick.t);
+    const cash=P.hand.reduce((a,id)=>a+coinVal(gs,id),0),open=gs.market.some(s=>s.n===0);let pick=null;
+    for(const s of open?[...gs.market,...gs.reserve]:gs.market){if(s.n<=0||CT[s.t].cost>cash)continue;const w=botCardWorth(gs,s.t,me)*(1+CT[s.t].cost*BOT_BUY.costW);if(!pick||w>pick.w)pick={w,t:s.t};}
+    if(pick&&pick.w>BOT_BUY.min){const buys=botActions(gs).filter(a=>a.t==='buy'&&a.type===pick.t);
       if(buys.length){buys.sort((a,b)=>a.cards.length-b.cards.length);return buys[0];}}
   }
-  const tr=P.hand.find(id=>typeOf(id)==='transmitter');
-  if(tr&&left>BOT_BUY.stop){let pick=null;for(const s of[...S.market,...S.reserve]){if(s.n<=0)continue;const w=botCardWorth(s.t,me)+CT[s.t].cost*.3;if(!pick||w>pick.w)pick={w,t:s.t};}if(pick)return{t:'transmit',card:tr,type:pick.t};}
+  const tr=P.hand.find(id=>typeOf(gs,id)==='transmitter');
+  if(tr&&left>BOT_BUY.stop){let pick=null;for(const s of[...gs.market,...gs.reserve]){if(s.n<=0)continue;const w=botCardWorth(gs,s.t,me)+CT[s.t].cost*.3;if(!pick||w>pick.w)pick={w,t:s.t};}if(pick)return{t:'transmit',card:tr,type:pick.t};}
   return{t:'end',keep:[]};
 }
 /* ---- per-map network input: the summary above + every space on this course + every tile connection ----
    Each space gets 4 slots (my explorer here / opponent 1, 2, 3 here, in turn order after me);
    each connection between tiles gets 8 (which blockade type was dealt there, its cost, owned by nobody / me / an opponent).
    The terrain itself never changes on a given course, so the network learns it per slot. */
-function botMapOrder(){if(MAP._bo)return MAP._bo;const keys=[...MAP.hexes.keys()].filter(k=>MAP.hexes.get(k).type!=='m').sort();const idx=new Map(keys.map((k,i)=>[k,i]));MAP._bo={keys,idx};return MAP._bo;}
+function botMapOrder(gs){if(mapOf(gs)._bo)return mapOf(gs)._bo;const keys=[...mapOf(gs).hexes.keys()].filter(k=>mapOf(gs).hexes.get(k).type!=='m').sort();const idx=new Map(keys.map((k,i)=>[k,i]));mapOf(gs)._bo={keys,idx};return mapOf(gs)._bo;}
 /* multi-course networks (net.courses = [course ids]): input = the summary (BOT_NF) + BOT_FLAGS rule switches + one board block per
    course in that order; only the current course's block is filled. Single-course networks (net.course) keep the old layout. */
 const BOT_FLAGS=4,BOT_BLOCK={};
-function botBlockSize(id){if(BOT_BLOCK[id]!=null)return BOT_BLOCK[id];const C=courseById(id);if(!C)return BOT_BLOCK[id]=0;
-  const m=MAP&&MAP.course===id?MAP:buildCourse(C,1),keys=[...m.hexes.keys()].filter(k=>m.hexes.get(k).type!=='m');return BOT_BLOCK[id]=keys.length*4+m.conns.length*8;}
+function botBlockSize(gs,id){if(BOT_BLOCK[id]!=null)return BOT_BLOCK[id];const C=courseById(id);if(!C)return BOT_BLOCK[id]=0;
+  const m=mapOf(gs)&&mapOf(gs).course===id?mapOf(gs):buildCourse(C,1),keys=[...m.hexes.keys()].filter(k=>m.hexes.get(k).type!=='m');return BOT_BLOCK[id]=keys.length*4+m.conns.length*8;}
 const botMulti=()=>!!(BOT_NET&&BOT_NET.courses);
 // net.onehot: one input per course (1 = the current course) right after the rule switches, so the network can shift its whole evaluation per map
 /* optional extra input groups (net.extra = ['cards', 'patch']), appended after everything above in that order:
@@ -206,43 +206,43 @@ const botMulti=()=>!!(BOT_NET&&BOT_NET.courses);
           card's value can be inferred from what it is, not only from its name; patch: the 37 spaces within 3 steps of my
           explorer (terrain, strength, occupied, closer to / farther from El Dorado), the same on every course */
 const BOT_XF={cards:9*12,patch:37*12},botExtra=()=>(BOT_NET&&BOT_NET.extra)||[],botExtraNF=()=>botExtra().reduce((a,g)=>a+BOT_XF[g],0);
-function botNetNF(){if(botMulti())return BOT_NF+BOT_FLAGS+(BOT_NET.onehot?BOT_NET.courses.length:0)+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(id),0)+botExtraNF();return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8+botExtraNF();}
+function botNetNF(gs){if(botMulti())return BOT_NF+BOT_FLAGS+(BOT_NET.onehot?BOT_NET.courses.length:0)+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(gs,id),0)+botExtraNF();return BOT_NF+botMapOrder(gs).keys.length*4+mapOf(gs).conns.length*8+botExtraNF();}
 const BOT_CP={},BOT_CPS=[1/10,1/20,1/10,1/10,1/10,1/10,1/10,1/5,1/5,1/5,1/5];
 // per card type, the 11 properties already scaled (count, cost, green, blue, yellow, joker strength, coins, draws, removals, single-use, action)
 function botCardProps(t){if(BOT_CP[t])return BOT_CP[t];const d=CT[t]||{},col=d.c;
   const v=[1,d.cost||0,col==='g'?d.p:0,col==='b'?d.p:0,col==='y'?d.p:0,col==='x'?d.p:0,col==='y'||col==='x'?d.p:.5,
     ({cartographer:2,compass:3,scientist:1,travellog:2})[t]||0,({scientist:1,travellog:2})[t]||0,d.once?1:0,col==='p'?1:0];
   return BOT_CP[t]=Float64Array.from(v,(x,i)=>x*BOT_CPS[i]);}
-function botAddIds(f,o,ids){for(let n=0;n<ids.length;n++){const c=botCardProps(S.cards[ids[n]]);for(let i=0;i<11;i++)f[o+i]+=c[i];}}
+function botAddIds(gs,f,o,ids){for(let n=0;n<ids.length;n++){const c=botCardProps(gs.cards[ids[n]]);for(let i=0;i<11;i++)f[o+i]+=c[i];}}
 function botMeanCost(f,o){f[o+11]=f[o]?f[o+1]*10/f[o]/5*0.5:0;} // mean cost per card /5 (count is /10, cost /20)
 // per map: for every space, its 37 neighbours within 3 steps (fixed order) with their static values precomputed
-function botPatchOf(k){const m=MAP._pt||(MAP._pt=new Map());let r=m.get(k);if(r)return r;const h0=hexAt(k);r=[];
-  for(let dq=-3;dq<=3;dq++)for(let dr=-3;dr<=3;dr++){if(Math.abs(dq+dr)>3)continue;const K=key(h0.q+dq,h0.r+dr),h=MAP.hexes.get(K);r.push(h?{K,t:'mjwvrcgs'.indexOf(h.type),v:(h.val||0)/4}:null);}
+function botPatchOf(gs,k){const m=mapOf(gs)._pt||(mapOf(gs)._pt=new Map());let r=m.get(k);if(r)return r;const h0=hexAt(gs,k);r=[];
+  for(let dq=-3;dq<=3;dq++)for(let dr=-3;dr<=3;dr++){if(Math.abs(dq+dr)>3)continue;const K=key(h0.q+dq,h0.r+dr),h=mapOf(gs).hexes.get(K);r.push(h?{K,t:'mjwvrcgs'.indexOf(h.type),v:(h.val||0)/4}:null);}
   m.set(k,r);return r;}
-function botExtraFeatures(me,f,o){const P=S.players[me],n=S.players.length;
+function botExtraFeatures(gs,me,f,o){const P=gs.players[me],n=gs.players.length;
   for(const g of botExtra()){
-    if(g==='cards'){const endView=S._endView===me,myTurn=S.cur===me&&!S.over&&!endView;
-      botAddIds(f,o,P.deck);botAddIds(f,o,P.hand);botAddIds(f,o,P.discard);botAddIds(f,o,P.play);botMeanCost(f,o);
-      if(myTurn||endView){botAddIds(f,o+12,P.hand);botMeanCost(f,o+12);}
-      botAddIds(f,o+24,P.deck);botMeanCost(f,o+24);botAddIds(f,o+36,P.discard);botMeanCost(f,o+36);
-      for(let k=1;k<=3;k++){const p=k<n?S.players[(me+k)%n]:null;if(!p)continue;const b=o+36+12*k;botAddIds(f,b,p.deck);botAddIds(f,b,p.hand);botAddIds(f,b,p.discard);botAddIds(f,b,p.play);botMeanCost(f,b);}
-      for(const[L,b]of[[S.market,o+84],[S.reserve,o+96]]){for(const x of L){if(x.n<=0)continue;const c=botCardProps(x.t);for(let i=0;i<11;i++)f[b+i]+=c[i]*x.n;}botMeanCost(f,b);}}
+    if(g==='cards'){const endView=gs._endView===me,myTurn=gs.cur===me&&!gs.over&&!endView;
+      botAddIds(gs,f,o,P.deck);botAddIds(gs,f,o,P.hand);botAddIds(gs,f,o,P.discard);botAddIds(gs,f,o,P.play);botMeanCost(f,o);
+      if(myTurn||endView){botAddIds(gs,f,o+12,P.hand);botMeanCost(f,o+12);}
+      botAddIds(gs,f,o+24,P.deck);botMeanCost(f,o+24);botAddIds(gs,f,o+36,P.discard);botMeanCost(f,o+36);
+      for(let k=1;k<=3;k++){const p=k<n?gs.players[(me+k)%n]:null;if(!p)continue;const b=o+36+12*k;botAddIds(gs,f,b,p.deck);botAddIds(gs,f,b,p.hand);botAddIds(gs,f,b,p.discard);botAddIds(gs,f,b,p.play);botMeanCost(f,b);}
+      for(const[L,b]of[[gs.market,o+84],[gs.reserve,o+96]]){for(const x of L){if(x.n<=0)continue;const c=botCardProps(x.t);for(let i=0;i<11;i++)f[b+i]+=c[i]*x.n;}botMeanCost(f,b);}}
     else if(g==='patch'){const k0=P.pieces.find(k=>k!=='done');
-      if(k0){const bd=botDist(),s0=bd.steps.get(k0)??48,nb=botPatchOf(k0);
+      if(k0){const bd=botDist(gs),s0=bd.steps.get(k0)??48,nb=botPatchOf(gs,k0);
         for(let i=0;i<nb.length;i++){const c=nb[i];if(!c)continue;const b=o+i*12;if(c.t>=0)f[b+1+c.t]=1;f[b+9]=c.v; // slot b+0 unused (terrain implies the space exists)
           const st=bd.steps.get(c.K);f[b+11]=st==null?1:Math.max(-1,Math.min(1,(st-s0)/6));}
-        S.players.forEach((p,j)=>{if(j===me)return;for(const k of p.pieces){if(k==='done')continue;const x=nb.findIndex(c=>c&&c.K===k);if(x>=0)f[o+x*12+10]=1;}});}}
+        gs.players.forEach((p,j)=>{if(j===me)return;for(const k of p.pieces){if(k==='done')continue;const x=nb.findIndex(c=>c&&c.K===k);if(x>=0)f[o+x*12+10]=1;}});}}
     o+=BOT_XF[g];}}
 let BOT_FBUF=null;
-function botNetFeatures(me,scratch){ // scratch: reuse one buffer (only for values used at once, never for stored training samples)
-  const{keys,idx}=botMapOrder(),n=S.players.length,nf=botNetNF();let f;
+function botNetFeatures(gs,me,scratch){ // scratch: reuse one buffer (only for values used at once, never for stored training samples)
+  const{keys,idx}=botMapOrder(gs),n=gs.players.length,nf=botNetNF(gs);let f;
   if(scratch){if(!BOT_FBUF||BOT_FBUF.length!==nf)BOT_FBUF=new Float32Array(nf);else BOT_FBUF.fill(0);f=BOT_FBUF;}else f=new Float32Array(nf);
-  botFeatures(me,f);let o=BOT_NF;
-  if(botMulti()){o+=BOT_FLAGS;if(BOT_NET.onehot){f[o+BOT_NET.courses.indexOf(MAP.course)]=1;o+=BOT_NET.courses.length;}for(const id of BOT_NET.courses){if(id===MAP.course)break;o+=botBlockSize(id);}}
-  S.players.forEach((p,j)=>{const rel=(j-me+n)%n;if(rel>3)return;for(const k of p.pieces){if(k==='done')continue;const x=idx.get(k);if(x!=null)f[o+x*4+rel]=1;}});
+  botFeatures(gs,me,f);let o=BOT_NF;
+  if(botMulti()){o+=BOT_FLAGS;if(BOT_NET.onehot){f[o+BOT_NET.courses.indexOf(mapOf(gs).course)]=1;o+=BOT_NET.courses.length;}for(const id of BOT_NET.courses){if(id===mapOf(gs).course)break;o+=botBlockSize(gs,id);}}
+  gs.players.forEach((p,j)=>{const rel=(j-me+n)%n;if(rel>3)return;for(const k of p.pieces){if(k==='done')continue;const x=idx.get(k);if(x!=null)f[o+x*4+rel]=1;}});
   o+=keys.length*4;
-  S.blockades.forEach(B=>{const c=o+B.conn*8;const t='jwvr'.indexOf(B.k);if(t>=0)f[c+t]=1;f[c+4]=B.v/2;f[c+5]=B.owner===null?1:0;f[c+6]=B.owner===me?1:0;f[c+7]=B.owner!==null&&B.owner!==me?1:0;});
-  if(botExtra().length)botExtraFeatures(me,f,nf-botExtraNF());
+  gs.blockades.forEach(B=>{const c=o+B.conn*8;const t='jwvr'.indexOf(B.k);if(t>=0)f[c+t]=1;f[c+4]=B.v/2;f[c+5]=B.owner===null?1:0;f[c+6]=B.owner===me?1:0;f[c+7]=B.owner!==null&&B.owner!==me?1:0;});
+  if(botExtra().length)botExtraFeatures(gs,me,f,nf-botExtraNF());
   return f;
 }
 /* network: {course, nf, w1T (input-major, nf×h1), b1, w2 (h2×h1), b2, w3 (h2), b3, leak}; leaky-ReLU (negative slope `leak`,
@@ -258,26 +258,26 @@ function botNetValue(f){BOT_EVALS++;const N=BOT_NET,P=botNetPrep(N),H1=P.b1.leng
   for(let j=0;j<H1;j++)if(h1[j]<0)h1[j]*=lk;
   let s=N.b3[0];for(let j=0;j<H2;j++){let a=b2[j];const r=j*H1;for(let k=0;k<H1;k++)a+=w2[r+k]*h1[k];s+=w3[j]*(a>0?a:lk*a);}
   return 1/(1+Math.exp(-s));}
-const botNetReady=()=>!!(BOT_NET&&MAP&&(botMulti()?BOT_NET.courses.includes(MAP.course):BOT_NET.course===MAP.course)&&BOT_NET.nf===botNetNF());
+const botNetReady=(gs)=>!!(BOT_NET&&mapOf(gs)&&(botMulti()?BOT_NET.courses.includes(mapOf(gs).course):BOT_NET.course===mapOf(gs).course)&&BOT_NET.nf===botNetNF(gs));
 /* what a finishing place is worth: 1st = 1, 2nd = 1/BOT_FIRST_RATIO, each further place half the one above, last = 0
    (3 players: 1, ¼, 0 · 4 players: 1, ¼, ⅛, 0). Training targets use the same values (tools/ai/gen.mjs). */
 const BOT_FIRST_RATIO=4;
 function botPlaceValue(pl,n){return pl>=n?0:pl<=1?1:1/BOT_FIRST_RATIO/2**(pl-2);}
 // my place is final once no one still racing moves after me in this round (every round starts with player 0)
-function botPlaceSettled(me){const n=S.players.length;for(let i=(me+1)%n;i!==0;i=(i+1)%n)if(isActive(S.players[i]))return false;return true;}
-function botValue(me,mode){
-  if(S.over){const pl=S.places[me],n=S.players.length;return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
-  const P=S.players[me];
+function botPlaceSettled(gs,me){const n=gs.players.length;for(let i=(me+1)%n;i!==0;i=(i+1)%n)if(isActive(gs.players[i]))return false;return true;}
+function botValue(gs,me,mode){
+  if(gs.over){const pl=gs.places[me],n=gs.players.length;return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
+  const P=gs.players[me];
   if(playerDone(P)){
     // arrived, but players still to move this round can arrive in the same round and beat me on the tie-break
     // (more blockades, then the biggest blockade): until the round is over my place is a chance, which the network estimates
     // once it has been trained on such positions (net.unsettled); older networks get the place as if settled (optimistic)
-    if(mode==='net'&&botNetReady()&&BOT_NET.unsettled&&!botPlaceSettled(me))return botNetValue(botNetFeatures(me,true));
+    if(mode==='net'&&botNetReady(gs)&&BOT_NET.unsettled&&!botPlaceSettled(gs,me))return botNetValue(botNetFeatures(gs,me,true));
     // settled: only players who arrived earlier, or in the same round with a better tie-break, are ahead of me (as endGame ranks)
-    const n=S.players.length,bk=p=>blocksOf(S.players.indexOf(p)),mb=p=>Math.max(0,...bk(p).map(b=>S.blockades[b].n));
-    const pl=1+S.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&(bk(q).length>bk(P).length||bk(q).length===bk(P).length&&mb(q)>mb(P)))).length;
+    const n=gs.players.length,bk=p=>blocksOf(gs,gs.players.indexOf(p)),mb=p=>Math.max(0,...bk(p).map(b=>gs.blockades[b].n));
+    const pl=1+gs.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&(bk(q).length>bk(P).length||bk(q).length===bk(P).length&&mb(q)>mb(P)))).length;
     return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
-  return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me,true)):botHeuristic(me);
+  return mode==='net'&&botNetReady(gs)?botNetValue(botNetFeatures(gs,me,true)):botHeuristic(gs,me);
 }
 /* ---- choose and play ---- */
 /* fast structural copy of the game state (everything applyAction can change gets its own copy) */
@@ -293,10 +293,10 @@ function botClone(st){
 }
 /* "My turn is over, next hand not drawn yet": played and unkept cards go to the discard pile.
    Scoring "end turn" here (instead of after the real draw) values it as an expectation over the draw, without peeking. */
-function botEndView(me,keep){const P=S.players[me];keep=(keep||[]).filter(id=>P.hand.includes(id));
+function botEndView(gs,me,keep){const P=gs.players[me];keep=(keep||[]).filter(id=>P.hand.includes(id));
   P.discard.push(...P.play,...P.hand.filter(id=>!keep.includes(id)));P.play=[];P.hand=keep.slice();
-  S.turn={bought:false,active:null,pending:null};S._endView=me;}
-function botEndFeatures(me,keep){const root=S;S=botClone(root);botEndView(me,keep);const f=botNetFeatures(me);S=root;return f;}
+  gs.turn={bought:false,active:null,pending:null};gs._endView=me;}
+function botEndFeatures(gs,me,keep){const root=gs;gs=botClone(root);botEndView(gs,me,keep);const f=botNetFeatures(gs,me);gs=root;return f;}
 const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
 /* Pick an action. Each option is scored by the value network's estimate of my chance of finishing ahead
    from the position right after it (TD-Gammon / AlphaZero style; mid-turn positions include the cards still in hand).
@@ -305,16 +305,16 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
    Training exploration: eps = uniformly random action; temp = softmax over scores; turnState.noBuy = a turn without gaining a card. */
 /* value of one legal action for `me`: copy the state, reshuffle my own draw pile (hidden order), apply it and score the
    position (for "end turn": after discarding, before drawing); actions that draw cards: mean over K reshuffles */
-function botActionValue(me,a,mode,rnd,K){const root=S;K=K||4;
-  const one=()=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
-    if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}
-    else{const r=applyAction(me,a,rnd);v=r.ok?botValue(me,mode):-Infinity;}
-    S=root;return v;};
-  return a.t==='action'&&BOT_DRAW[typeOf(a.card)]?[...Array(K)].reduce(x=>x+one(),0)/K:one();}
-function botChoose(opts){
+function botActionValue(gs,me,a,mode,rnd,K){const root=gs;K=K||4;
+  const one=()=>{gs=botClone(root);shuffle(gs.players[me].deck,rnd);let v;
+    if(a.t==='end'){botEndView(gs,me,a.keep);v=botValue(gs,me,mode);}
+    else{const r=applyAction(gs,me,a,rnd);v=r.ok?botValue(gs,me,mode):-Infinity;}
+    gs=root;return v;};
+  return a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)]?[...Array(K)].reduce(x=>x+one(),0)/K:one();}
+function botChoose(gs,opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
-  if(mode==='plan')return{a:botPlanChoose(S.cur)};
-  const me=S.cur,root=S;let acts=botActions();if(mode==='net'&&!botNetReady())mode='heur';
+  if(mode==='plan')return{a:botPlanChoose(gs,gs.cur)};
+  const me=gs.cur,root=gs;let acts=botActions(gs);if(mode==='net'&&!botNetReady(gs))mode='heur';
   if(opts.turnState&&opts.turnState.noBuy){const f=acts.filter(a=>a.t!=='buy'&&a.t!=='transmit');if(f.length)acts=f;} // exploration: a turn without gaining a card
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],why:'random'};
   // typed exploration: a random KIND of decision (buy / remove / keep / pay rubble / play a draw card / …), then a random option of it,
@@ -324,10 +324,10 @@ function botChoose(opts){
   if(ts&&ts.forceTransmit){const tr=acts.filter(a=>a.t==='transmit');if(tr.length){ts.forceTransmit=false; // a random card, reserve included, weighted toward expensive ones (cost²)
     const w=tr.map(a=>CT[a.type].cost**2);let r=rnd()*w.reduce((x,y)=>x+y,0);for(let i=0;i<tr.length;i++){r-=w[i];if(r<=0)return{a:tr[i],why:'forceTransmit'};}return{a:tr[tr.length-1],why:'forceTransmit'};}}
   // the whole-turn planner (after exploration, so random / typed moves and no-buy turns still happen in training)
-  if(opts.search&&mode==='net')return botPlanTurnChoose(opts);
+  if(opts.search&&mode==='net')return botPlanTurnChoose(gs,opts);
   const vals=[];let best=null,bv=-Infinity;const K=opts.draws||4;
   for(const a of acts){
-    let v=botActionValue(me,a,mode,rnd,K);
+    let v=botActionValue(gs,me,a,mode,rnd,K);
     if(opts.noise&&v>-Infinity)v+=(rnd()-.5)*opts.noise;
     vals.push(v);if(v>bv){bv=v;best=a;}
   }
@@ -347,45 +347,45 @@ function botChoose(opts){
    `draws` imagined draws and ends that line (the real draw reveals new cards, so the plan is redone after it). The same
    position reached in a different order is expanded once. The plan is made once per turn and followed; it is redone after
    a draw card, or if the next step is no longer legal. Cost ≈ beam × the plain bot's (measured with BOT_EVALS). */
-function botTurnKey(me){const P=S.players[me],T=S.turn,ty=ids=>ids.map(typeOf).sort().join(',');
-  return[P.pieces.join('|'),ty(P.hand),ty(P.play),P.discard.length,ty(P.discard),T.bought?1:0,T.active?typeOf(T.active.id)+T.active.pi+T.active.sym+T.active.left:'',T.pending?T.pending.max:'',
-    S.market.map(x=>x.n).join(''),S.reserve.map(x=>x.n).join(''),S.blockades.map(b=>b.owner??'-').join(''),S.trash.length].join('#');}
-function botPlanTurn(me,B,rnd,K,noBuy,top){ // top: optional array that receives every complete line {v,line}
-  const root=S,seen=new Set(),start=botClone(root);S=start;shuffle(S.players[me].deck,rnd);S=root; // my deck order stays hidden
+function botTurnKey(gs,me){const P=gs.players[me],T=gs.turn,ty=ids=>ids.map(id=>typeOf(gs,id)).sort().join(',');
+  return[P.pieces.join('|'),ty(P.hand),ty(P.play),P.discard.length,ty(P.discard),T.bought?1:0,T.active?typeOf(gs,T.active.id)+T.active.pi+T.active.sym+T.active.left:'',T.pending?T.pending.max:'',
+    gs.market.map(x=>x.n).join(''),gs.reserve.map(x=>x.n).join(''),gs.blockades.map(b=>b.owner??'-').join(''),gs.trash.length].join('#');}
+function botPlanTurn(gs,me,B,rnd,K,noBuy,top){ // top: optional array that receives every complete line {v,line}
+  const root=gs,seen=new Set(),start=botClone(root);gs=start;shuffle(gs.players[me].deck,rnd);gs=root; // my deck order stays hidden
   let beam=[{st:start,line:[]}],best={v:-Infinity,line:null};
   for(let depth=0;depth<14&&beam.length;depth++){
     const next=[];
     for(const node of beam){
-      S=node.st;const acts=botActions();S=root;
+      gs=node.st;const acts=botActions(gs);gs=root;
       for(const a of acts){
         if(noBuy&&(a.t==='buy'||a.t==='transmit'))continue; // exploration: a turn without gaining a card
         const line=[...node.line,a];
-        if(a.t==='end'){S=botClone(node.st);botEndView(me,a.keep);const v=botValue(me,'net');S=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}
-        if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(node.st);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a,rnd);v+=r.ok?botValue(me,'net'):-1;S=root;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
-        S=botClone(node.st);const r=applyAction(me,a,rnd);
-        if(!r.ok){S=root;continue;}
-        const v=botValue(me,'net');
-        if(S.over||S.cur!==me){S=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
-        const key=botTurnKey(me);if(seen.has(key)){S=root;continue;}seen.add(key);
-        next.push({st:S,line,v});S=root;
+        if(a.t==='end'){gs=botClone(node.st);botEndView(gs,me,a.keep);const v=botValue(gs,me,'net');gs=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}
+        if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)]){let v=0;for(let k=0;k<K;k++){gs=botClone(node.st);shuffle(gs.players[me].deck,rnd);const r=applyAction(gs,me,a,rnd);v+=r.ok?botValue(gs,me,'net'):-1;gs=root;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
+        gs=botClone(node.st);const r=applyAction(gs,me,a,rnd);
+        if(!r.ok){gs=root;continue;}
+        const v=botValue(gs,me,'net');
+        if(gs.over||gs.cur!==me){gs=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
+        const key=botTurnKey(gs,me);if(seen.has(key)){gs=root;continue;}seen.add(key);
+        next.push({st:gs,line,v});gs=root;
       }
     }
     next.sort((x,y)=>y.v-x.v);beam=next.slice(0,B);
   }
-  S=root;return best;
+  gs=root;return best;
 }
 let BOT_PLAN_CACHE=null;
-function botPlanTurnChoose(opts){
-  const me=S.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
+function botPlanTurnChoose(gs,opts){
+  const me=gs.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
   // follow the current plan while it still applies (same player, same round, same position the plan expects)
-  if(C&&C.me===me&&C.round===S.round&&C.i<C.line.length&&C.key===botTurnKey(me)){
-    const a=C.line[C.i];const root=S;S=botClone(root);const ok=applyAction(me,a,rnd).ok;const nk=ok&&!S.over&&S.cur===me?botTurnKey(me):null;S=root;
-    if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(a.card)])BOT_PLAN_CACHE=null;return{a,v:C.v,why:'plan'};}
+  if(C&&C.me===me&&C.round===gs.round&&C.i<C.line.length&&C.key===botTurnKey(gs,me)){
+    const a=C.line[C.i];const root=gs;gs=botClone(root);const ok=applyAction(gs,me,a,rnd).ok;const nk=ok&&!gs.over&&gs.cur===me?botTurnKey(gs,me):null;gs=root;
+    if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])BOT_PLAN_CACHE=null;return{a,v:C.v,why:'plan'};}
   }
-  const best=botPlanTurn(me,o.beam||3,rnd,opts.draws||4,!!(opts.turnState&&opts.turnState.noBuy));
+  const best=botPlanTurn(gs,me,o.beam||3,rnd,opts.draws||4,!!(opts.turnState&&opts.turnState.noBuy));
   if(!best.line||!best.line.length){BOT_PLAN_CACHE=null;return{a:{t:'end',keep:[]},why:'plan'};}
-  const a=best.line[0];const root=S;S=botClone(root);applyAction(me,a,rnd);const nk=!S.over&&S.cur===me?botTurnKey(me):null;S=root;
-  BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(a.card)])?{me,round:S.round,line:best.line,i:1,key:nk,v:best.v}:null;
+  const a=best.line[0];const root=gs;gs=botClone(root);applyAction(gs,me,a,rnd);const nk=!gs.over&&gs.cur===me?botTurnKey(gs,me):null;gs=root;
+  BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])?{me,round:gs.round,line:best.line,i:1,key:nk,v:best.v}:null;
   return{a,v:best.v,why:'plan'};
 }
 /* ---- random courses for training (so the bot learns to play, not to memorise one map) ----

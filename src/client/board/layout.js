@@ -1,7 +1,8 @@
 /* Where the board is drawn, in board units: the engine's map has the topology only (spaces, neighbours, boards,
    connections), so the page works out each space's centre from its hex coordinates, the city beside El Dorado, and the
    board's bounds. Computed once per map (a new deal or a replay's course). */
-import { MAP, R, pxOf } from '../../engine.gen.js';
+import { R, pxOf } from '../../engine.gen.js';
+import { MAP } from '../state.js';
 
 const cache = new WeakMap();
 /* the layout of the map on show: { pos: Map key → {x, y}, city: {x, y, dx, dy}, minX, minY, w, h } */

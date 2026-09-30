@@ -3,7 +3,8 @@
 // the reserve, the Transmitter, action cards, single-use cards, the end of a turn, both end-of-game rules and their
 // tie-break, two explorers each, resigning, what undo may take back, and what each player is shown.
 //   node test/rules.test.mjs
-import { S, CT, key, newGame, newCard, setMAP, applyAction, reach, payTargets, nativeTargets, cardTargets, blocksOf, cantBuy, buyOptions, COURSES, COLORS, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck, setAssertMode } from '../src/engine.gen.js';
+import { CT, key, newGame, newCard, applyAction, reach, payTargets, nativeTargets, cardTargets, blocksOf, cantBuy, buyOptions, COURSES, COLORS, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck, setAssertMode, MAPS } from '../src/engine.gen.js';
+let S = null; // the game of the check under way
 setAssertMode({ debug: true }); // a broken invariant fails the run
 let checks = 0; const failures = [];
 const ok = (cond, what) => { checks++; if (!cond) failures.push(what); };
@@ -24,19 +25,21 @@ function board(rows, blockades = []) {
   return { hexes, edgeConn, tiles: [], conns: [], starts: [], goals: [], blockDefs: [], city: { x: 0, y: 0, dx: 1, dy: 0 }, endSym: 'j', minX: 0, minY: 0, w: 1, h: 1, route: [], name: 'test', course: 'test' };
 }
 /* a game on that board: empty hands and piles, explorer 0 of player 0 on (0,0), everyone else parked; blockades as [[a, b, {k, v, n}]…] */
+let boards = 0;
 function game(rows, { players = 3, fullRace = true, blockades = [] } = {}) {
-  newGame({ course: COURSES[0], seed: 1, fullRace, players: [...Array(players)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
-  setMAP(board(rows, blockades.map(b => b.slice(0, 2))));
+  const course = { ...COURSES[0], id: 'check' + (++boards) }; // a course of its own, whose board (mapOf) is this one
+  MAPS.set(course.id + '#1', { ...board(rows, blockades.map(b => b.slice(0, 2))), course: course.id, seed: 1 });
+  S = newGame({ course, seed: 1, fullRace, players: [...Array(players)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) });
   S.blockades = blockades.map(([, , B], conn) => ({ n: 1, k: 'j', v: 1, ...B, conn, owner: null }));
   S.players.forEach((p, i) => { p.hand = []; p.deck = []; p.discard = []; p.play = []; p.pieces = p.pieces.map((_, j) => key(i * 2 + j, 4)); });
   S.players[0].pieces[0] = key(0, 0);
   return S;
 }
-const give = (pl, ...types) => types.map(t => { const id = newCard(t); S.players[pl].hand.push(id); return id; });
-const deck = (pl, ...types) => { S.players[pl].deck = types.map(t => newCard(t)); };
+const give = (pl, ...types) => types.map(t => { const id = newCard(S, t); S.players[pl].hand.push(id); return id; });
+const deck = (pl, ...types) => { S.players[pl].deck = types.map(t => newCard(S, t)); };
 const at = (pl, pi = 0) => S.players[pl].pieces[pi];
-const act = (a, seat = S.cur) => applyAction(seat, a);
-const targets = (pl, pi, t) => { const d = CT[t]; return reach(pl, pi, d.s === '*' ? ['j', 'w', 'v'] : [d.s], d.p); };
+const act = (a, seat = S.cur) => applyAction(S, seat, a);
+const targets = (pl, pi, t) => { const d = CT[t]; return reach(S, pl, pi, d.s === '*' ? ['j', 'w', 'v'] : [d.s], d.p); };
 
 // ---------- movement
 game(['s j1 j2 j1 w1']);
@@ -58,42 +61,42 @@ ok(S.turn.active === null && !act({ t: 'move', card: tb, pi: 0, to: '3,0' }).ok,
 game(['s w1 w1 j1']); let [adv] = give(0, 'adventurer');
 ok(targets(0, 0, 'adventurer').has('2,0'), 'a joker counts as any one symbol');
 ok(act({ t: 'move', card: adv, pi: 0, to: '1,0' }).ok && S.turn.active.sym === 'w', 'the joker keeps the symbol it was played as');
-ok(!reach(0, 0, [S.turn.active.sym], S.turn.active.left).has('3,0') && reach(0, 0, ['w'], 1).has('2,0'), 'its leftover strength moves only on that symbol');
+ok(!reach(S, 0, 0, [S.turn.active.sym], S.turn.active.left).has('3,0') && reach(S, 0, 0, ['w'], 1).has('2,0'), 'its leftover strength moves only on that symbol');
 // ---------- blocked spaces
 game(['s j1 j1', 'm']); S.players[1].pieces[0] = '1,0'; give(0, 'trailblazer');
 ok(!targets(0, 0, 'trailblazer').has('1,0') && !targets(0, 0, 'trailblazer').has('2,0'), 'an occupied space can\'t be entered or crossed');
 ok(!targets(0, 0, 'trailblazer').has('0,1'), 'mountains can\'t be entered');
 // ---------- rubble and base camps
 game(['s r2 c1']); let hand = give(0, 'explorer', 'traveler', 'sailor');
-let pt = payTargets(0, 0);
+let pt = payTargets(S, 0, 0);
 ok(pt.get('1,0') && pt.get('1,0').kind === 'rubble' && pt.get('1,0').need === 2, 'rubble: discard as many cards as shown');
 ok(!act({ t: 'pay', pi: 0, to: '1,0', cards: hand.slice(0, 1) }).ok, 'rubble: exactly that many');
 ok(!act({ t: 'pay', pi: 0, to: '1,0', cards: [hand[0], hand[0]] }).ok, 'rubble: different cards');
 ok(act({ t: 'pay', pi: 0, to: '1,0', cards: hand.slice(0, 2) }).ok && at(0) === '1,0' && S.players[0].play.length === 2, 'rubble: the cards are discarded (in play until the turn ends)');
 ok(act({ t: 'pay', pi: 0, to: '2,0', cards: [hand[2]] }).ok && S.trash.includes(hand[2]), 'base camp: the cards leave the game');
 game(['s r2']); give(0, 'explorer');
-ok(!payTargets(0, 0).has('1,0'), 'rubble can\'t be entered without enough cards in hand');
+ok(!payTargets(S, 0, 0).has('1,0'), 'rubble can\'t be entered without enough cards in hand');
 // ---------- blockades
 game(['s j1 j1 j1'], { blockades: [['1,0', '2,0', { k: 'j', v: 1, n: 5 }]] }); S.players[0].pieces[0] = '1,0';
 [ex, sc] = give(0, 'explorer', 'scout');
 ok(!targets(0, 0, 'explorer').has('2,0'), 'a blockade adds its cost to the space behind it');
 ok(targets(0, 0, 'scout').has('2,0'), 'a card that covers both crosses it');
-ok(act({ t: 'move', card: sc, pi: 0, to: '2,0' }).ok && S.blockades[0].owner === 0 && blocksOf(0).join() === '0', 'the first explorer across takes the blockade');
+ok(act({ t: 'move', card: sc, pi: 0, to: '2,0' }).ok && S.blockades[0].owner === 0 && blocksOf(S, 0).join() === '0', 'the first explorer across takes the blockade');
 S.players[0].pieces[0] = key(7, 4); S.cur = 1; S.players[1].pieces[0] = '1,0'; give(1, 'explorer');
 ok(targets(1, 0, 'explorer').has('2,0'), 'a taken blockade is open for everyone after');
 game(['s j1 j1'], { blockades: [['1,0', '2,0', { k: 'w', v: 1 }]] }); S.players[0].pieces[0] = '1,0'; give(0, 'trailblazer');
 ok(!targets(0, 0, 'trailblazer').has('2,0'), 'a water blockade can\'t be crossed with machetes');
 game(['s j1 j1'], { blockades: [['1,0', '2,0', { k: 'r', v: 2, n: 6 }]] }); S.players[0].pieces[0] = '1,0'; hand = give(0, 'explorer', 'sailor');
-pt = payTargets(0, 0);
+pt = payTargets(S, 0, 0);
 ok(pt.get('B0') && pt.get('B0').kind === 'blr' && pt.get('B0').need === 2, 'a rubble blockade: discard its count');
 ok(act({ t: 'pay', pi: 0, to: 'B0', cards: hand }).ok && S.blockades[0].owner === 0 && at(0) === '1,0', 'paying it takes the blockade (the explorer stays)');
 // ---------- the Native
 game(['s j3 m', 'c2'], { blockades: [['0,0', '1,0', { k: 'j', v: 2 }]] }); let [nat] = give(0, 'native');
-const nt = nativeTargets(0, 0);
+const nt = nativeTargets(S, 0, 0);
 ok(nt.has('1,0') && nt.get('1,0').bl === 0, 'the Native moves to an adjacent space whatever it needs, across a blockade');
 ok(nt.has('0,1') && nt.has('B0'), 'the Native reaches rubble and camps too, or tears a blockade down on its own');
 ok(act({ t: 'native', card: nat, pi: 0, to: '1,0' }).ok && at(0) === '1,0' && S.blockades[0].owner === 0, 'crossing a blockade with the Native takes it');
-ok(!nativeTargets(0, 0).has('2,0'), 'the Native can\'t enter mountains');
+ok(!nativeTargets(S, 0, 0).has('2,0'), 'the Native can\'t enter mountains');
 // ---------- buying
 game(['s j1']); hand = give(0, 'traveler', 'explorer', 'sailor');
 const stack = t => S.market.find(s => s.t === t) || S.reserve.find(s => s.t === t);
@@ -112,23 +115,23 @@ act({ t: 'buy', type: 'scout', cards: hand });
 ok(S.trash.includes(hand[0]) && S.players[0].play.includes(hand[1]), 'single use: a coin card paying its value leaves the game, a card paying ½ is discarded');
 // ---------- where a card can go (the engine answers the page's targets too)
 game(['s j1 r2', 'j1']); let [ctE, ctS, ctA] = give(0, 'explorer', 'sailor', 'cartographer');
-ok(cardTargets(0, 0, ctE).has('1,0') && cardTargets(0, 0, ctE).has('0,1') && cardTargets(0, 0, ctE).get('1,0').kind === 'move', 'a movement card: the spaces it reaches');
-ok(!cardTargets(0, 0, ctS).has('1,0') && cardTargets(0, 0, ctS).get('2,0') === undefined, 'a paddle: no jungle');
+ok(cardTargets(S, 0, 0, ctE).has('1,0') && cardTargets(S, 0, 0, ctE).has('0,1') && cardTargets(S, 0, 0, ctE).get('1,0').kind === 'move', 'a movement card: the spaces it reaches');
+ok(!cardTargets(S, 0, 0, ctS).has('1,0') && cardTargets(S, 0, 0, ctS).get('2,0') === undefined, 'a paddle: no jungle');
 game(['s r2']); [ctE, ctS, ctA] = give(0, 'explorer', 'sailor', 'cartographer');
-ok(cardTargets(0, 0, ctA).get('1,0') && cardTargets(0, 0, ctA).get('1,0').kind === 'rubble', 'any card can be given up for rubble next to the explorer');
-ok(!cardTargets(1, 0, ctE).size, 'nothing out of turn');
+ok(cardTargets(S, 0, 0, ctA).get('1,0') && cardTargets(S, 0, 0, ctA).get('1,0').kind === 'rubble', 'any card can be given up for rubble next to the explorer');
+ok(!cardTargets(S, 1, 0, ctE).size, 'nothing out of turn');
 game(['s j1 j1 j1']); [ctE] = give(0, 'trailblazer'); act({ t: 'move', card: ctE, pi: 0, to: '1,0' });
-ok([...cardTargets(0, 0, ctE).keys()].join() === '2,0,3,0', 'the card in play: where its leftover strength reaches');
+ok([...cardTargets(S, 0, 0, ctE).keys()].join() === '2,0,3,0', 'the card in play: where its leftover strength reaches');
 // ---------- what can be bought now (the engine answers the page's market too)
 game(['s j1']); hand = give(0, 'traveler', 'traveler', 'explorer');
-let bo = buyOptions(0);
+let bo = buyOptions(S, 0);
 ok(bo.length && bo.every(o => o.src === 'm' && CT[o.t].cost <= 2.5) && S.market.every((s, i) => CT[s.t].cost > 2.5 || bo.some(o => o.i === i)), 'buy options: the market cards the hand can pay for');
-ok(cantBuy(1, 'scout') === 'It is not your turn.' && !buyOptions(1).length, 'only the player to act can buy');
-ok(/reserve/.test(cantBuy(0, S.reserve[0].t)), 'the reserve is closed while every market slot has cards');
+ok(cantBuy(S, 1, 'scout') === 'It is not your turn.' && !buyOptions(S, 1).length, 'only the player to act can buy');
+ok(/reserve/.test(cantBuy(S, 0, S.reserve[0].t)), 'the reserve is closed while every market slot has cards');
 S.turn.pending = { max: 1 };
-ok(!buyOptions(0).length && /remove/.test(cantBuy(0, 'scout')), 'nothing can be bought while a removal is still to choose');
+ok(!buyOptions(S, 0).length && /remove/.test(cantBuy(S, 0, 'scout')), 'nothing can be bought while a removal is still to choose');
 S.turn.pending = null; S.turn.bought = true;
-ok(!buyOptions(0).length && /one card per turn/.test(cantBuy(0, 'scout')), 'nor once the turn\'s card is bought');
+ok(!buyOptions(S, 0).length && /one card per turn/.test(cantBuy(S, 0, 'scout')), 'nor once the turn\'s card is bought');
 game(['s j1']); deck(0, 'traveler', 'photographer'); let [log1] = give(0, 'travellog'); hand = give(0, 'traveler', 'traveler', 'traveler');
 act({ t: 'action', card: log1 });
 ok(!act({ t: 'buy', type: 'trailblazer', cards: hand }).ok && !S.turn.bought, 'Travel Log, then a buy before choosing what to remove: refused');
@@ -152,14 +155,14 @@ ok(act({ t: 'action', card: tl }).ok && S.turn.pending.max === 2 && act({ t: 'tr
 game(['s j1 j1']); let [gm] = give(0, 'giant');
 ok(act({ t: 'move', card: gm, pi: 0, to: '2,0' }).ok && S.trash.includes(gm) && !S.players[0].play.includes(gm), 'a single-use card played for movement leaves the game');
 // ---------- the end of a turn
-game(['s j1']); deck(0, 'traveler', 'traveler', 'traveler'); S.players[0].discard = [newCard('sailor'), newCard('sailor')];
+game(['s j1']); deck(0, 'traveler', 'traveler', 'traveler'); S.players[0].discard = [newCard(S, 'sailor'), newCard(S, 'sailor')];
 let hand2 = give(0, 'explorer', 'explorer', 'scout');
 act({ t: 'move', card: hand2[0], pi: 0, to: '1,0' });
 ok(act({ t: 'end', keep: [hand2[2]] }).ok, 'end turn');
 const P0 = S.players[0];
 ok(P0.hand.includes(hand2[2]) && P0.hand.length === 4 && P0.discard.includes(hand2[1]) && P0.discard.includes(hand2[0]), 'kept cards stay, the rest and the played cards are discarded, then draw up to 4');
 ok(S.cur === 1, 'the turn passes');
-game(['s j1']); deck(0, 'traveler'); S.players[0].discard = ['a', 'b', 'c'].map(() => newCard('sailor'));
+game(['s j1']); deck(0, 'traveler'); S.players[0].discard = ['a', 'b', 'c'].map(() => newCard(S, 'sailor'));
 act({ t: 'end', keep: [] });
 ok(S.players[0].hand.length === 4 && S.players[0].discard.length === 0, 'an empty draw pile is refilled from the shuffled discard pile');
 game(['s j1']); S.cur = 2; act({ t: 'end', keep: [] });
@@ -206,13 +209,13 @@ ok(act({ t: 'resign' }, 2).ok && S.over && S.places.join() === '1,3,2', 'one lef
 // ---------- undo (records)
 let rec = null, before = null;
 for (let seed = 1; seed < 40 && !before; seed++) { // a deal where the first player has a move
-  rec = recNewGame({ course: COURSES[0], seed, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: COLORS[i].hex })) });
+  ({ gs: S, rec } = recNewGame({ course: COURSES[0], seed, players: [0, 1, 2].map(i => ({ name: 'P' + i, color: COLORS[i].hex })) }));
   const me = S.cur, pos = JSON.stringify(S.players[me].pieces);
   for (const id of S.players[me].hand) { const t = [...targets(me, 0, S.cards[id])].find(([, v]) => v.kind === 'move');
-    if (CT[S.cards[id]].c !== 'p' && t && recApply(rec, me, { t: 'move', card: id, pi: 0, to: t[0] }).ok) { before = pos; break; } }
+    if (CT[S.cards[id]].c !== 'p' && t && recApply(S, rec, me, { t: 'move', card: id, pi: 0, to: t[0] }).ok) { before = pos; break; } }
 }
-ok(before && recCanUndo(rec) && recUndo(rec) && JSON.stringify(S.players[S.cur].pieces) === before, 'a move can be taken back');
-recApply(rec, S.cur, { t: 'end', keep: [] });
+ok(before && recCanUndo(rec) && (S = recUndo(rec)) && JSON.stringify(S.players[S.cur].pieces) === before, 'a move can be taken back');
+recApply(S, rec, S.cur, { t: 'end', keep: [] });
 ok(!recCanUndo(rec), 'nothing before a draw or a new turn can be taken back');
 ok(rec.v === 3 && !replayCheck(rec) && /older version/.test(replayCheck({ ...rec, v: 2 })), 'records are log v3; records from before (older rules) are refused');
 // ---------- what each player is shown

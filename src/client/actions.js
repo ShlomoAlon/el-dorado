@@ -1,9 +1,9 @@
 /* Turning what the player does into engine actions. Every rules change goes through act(): locally it runs the shared
    engine (and is recorded: G.rec); online it is sent to the server, which runs the same engine and sends back the new
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
-import { S, CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, setS, setMAP, assert } from '../engine.gen.js';
+import { CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, assert } from '../engine.gen.js';
 import { esc } from './dom.js';
-import { UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave, humanRacing } from './state.js';
+import { S, setS, UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave, humanRacing } from './state.js';
 import { showSetup, buyReminder } from './menu.js';
 import { replayDecorate } from './replay.js';
 import { render, resetView } from './frame.js';
@@ -25,25 +25,25 @@ import { diag } from './debug.js';
 export function showGame(){aiReset();buildBoard();resetView();fitSoon();}
 /* continue the saved local game (first visit, or back from a replay). Returns false if there is none in progress. */
 export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
-  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);setMAP(g.MAP);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!G.rec.privacy;syncMode(false);render();aiKick();return true;}
+  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!G.rec.privacy;syncMode(false);render();aiKick();return true;}
 /* after a bug (boundary.js): the game on show again from its source, with nothing selected. Online: a new connection
    brings the server's state. A local game: rebuilt from its record (the action that failed was never recorded) */
 export function resync(){
   clearSelection();
   if(online())reconnect();
-  else if(G.rec&&!G.replay){const g=recState(G.rec);aiReset();setS(g.S);setMAP(g.MAP);syncMode(true);resetView();aiKick();}
+  else if(G.rec&&!G.replay){aiReset();setS(recState(G.rec));syncMode(true);resetView();aiKick();}
   toast('Something went wrong, sorry. The game was restored.',3200);render();
 }
 
 export function computeTargets(){
   const T=new Map();UI.targets=T;if(S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
-  const src=UI.mode==='card'?cardTargets(S.cur,UI.piece,UI.card):UI.mode==='idle'?payTargets(S.cur,UI.piece):null;
+  const src=UI.mode==='card'?cardTargets(S,S.cur,UI.piece,UI.card):UI.mode==='idle'?payTargets(S,S.cur,UI.piece):null;
   if(src)for(const[k,v]of src)T.set(k,v);
   else if(UI.mode==='discardFor')T.set(UI.pending.tk,UI.pending);
 }
 /* the card can do something now: an action card (played from the hand), or somewhere on the board to put it */
-export function cardUsable(id){return(def(id).c==='p'&&typeOf(id)!=='native')||cardTargets(S.cur,UI.piece,id).size>0;}
-export const isTargeted=id=>def(id).c!=='p'||typeOf(id)==='native';
+export function cardUsable(id){return(def(S,id).c==='p'&&typeOf(S,id)!=='native')||cardTargets(S,S.cur,UI.piece,id).size>0;}
+export const isTargeted=id=>def(S,id).c!=='p'||typeOf(S,id)==='native';
 export function firstPiece(){return Math.max(0,cur().pieces.findIndex(k=>k!=='done'));}
 /* after the state changed, put the UI into the matching mode */
 export function syncMode(turnChanged){
@@ -80,7 +80,7 @@ export function act(a){
    it is recorded (G.rec), then shown. viewer: whose view the events play for (an AI's purchase doesn't fly into the
    watching human's discard pile) */
 export function applyLocal(seat,a,viewer){
-  const prev=S.cur,round=S.round,r=recApply(G.rec,seat,a);
+  const prev=S.cur,round=S.round,r=recApply(S,G.rec,seat,a);
   if(r.ok){playEvents(r.ev,viewer);afterLocalChange(S.over||S.cur!==prev||S.round!==round);}
   return r;
 }
@@ -123,7 +123,7 @@ export function addDiscard(id){
 }
 export function confirmDiscardFor(){const P=UI.pending;sfx(P.kind==='camp'?'trash':'discard');act({t:'pay',pi:P.pi,to:P.tk,cards:UI.picks.slice()});}
 export function playAction(id){
-  const t=typeOf(id);
+  const t=typeOf(S,id);
   if(t==='native'){UI.mode='card';UI.card=id;render();return;}
   if(t==='transmitter'){UI.mode='transmit';UI.card=id;render();openAll(true);return;}
   act({t:'action',card:id});
@@ -134,11 +134,11 @@ export function pickFromMarket(src,idx){
   const stack=src==='m'?S.market[idx]:S.reserve[idx];if(!stack||stack.n<=0)return;
   if(UI.mode==='transmit'){openAll(false);act({t:'transmit',card:UI.card,type:stack.t});return;}
   if(UI.mode==='pay'&&UI.buy.src===src&&UI.buy.idx===idx){cancelMode();return;}
-  const no=cantBuy(S.cur,stack.t);if(no){sfx('error');toast(no);return;}
+  const no=cantBuy(S,S.cur,stack.t);if(no){sfx('error');toast(no);return;}
   UI.mode='pay';UI.buy={src,idx,t:stack.t};UI.picks=[];UI.card=null;
   render();
 }
-export function payTotal(){return UI.picks.reduce((a,id)=>a+coinVal(id),0);}
+export function payTotal(){return UI.picks.reduce((a,id)=>a+coinVal(S,id),0);}
 let buyFrom=null;const takeBuyFrom=()=>{const r=buyFrom;buyFrom=null;return r&&Date.now()-r.at<3000?r:null;};
 export function confirmBuy(){const r=document.querySelector('#buySlot .mcard').getBoundingClientRect();buyFrom={left:r.left,top:r.top,width:r.width,height:r.height,at:Date.now()};act({t:'buy',type:UI.buy.t,cards:UI.picks.slice()});}
 /* drop the selection. A removal still to choose (Scientist, Travel Log) stays asked: nothing else can happen before it */
@@ -146,7 +146,7 @@ export function cancelMode(){
   UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.mode=S.turn.pending?'trashPick':'idle';render();
 }
 /* what the player to act could buy right now with the cards in hand ([{src, i, t}]: the engine's rule) */
-export function affordable(){return UI.cover||!canAct()?[]:buyOptions(S.cur);}
+export function affordable(){return UI.cover||!canAct()?[]:buyOptions(S,S.cur);}
 export function startEndTurn(){
   if(!canAct())return; // (online, the turn can pass before the tap arrives)
   if(UI.mode!=='buyWarn'&&buyReminder()&&affordable().length){UI.mode='buyWarn';UI.card=null;UI.picks=[];UI.buy=null;render();return;} // nudge before skipping a purchase
@@ -157,7 +157,7 @@ export function finishTurn(){act({t:'end',keep:UI.mode==='endTurn'?UI.picks.slic
 export function undo(){
   if(!inGame()||!canAct()||!canUndo())return;
   if(online()){netAct({t:'undo'});return;}
-  recUndo(G.rec);
+  setS(recUndo(G.rec));
   clearSelection();
   syncMode(false);render();save();
 }
@@ -173,7 +173,7 @@ export function onHandCard(id){
     case 'transmit':{if(id===UI.card)cancelMode();return;}
   }
   if(UI.mode==='card'&&UI.card===id){cancelMode();return;}
-  if(def(id).c==='p'&&typeOf(id)!=='native'){playAction(id);return;}
+  if(def(S,id).c==='p'&&typeOf(S,id)!=='native'){playAction(id);return;}
   UI.mode='card';UI.card=id;render();
 }
 export function togglePick(id){const add=!UI.picks.includes(id);if(add)UI.picks.push(id);else rm(UI.picks,id);render();if(add&&UI.mode==='pay')payProgress();}

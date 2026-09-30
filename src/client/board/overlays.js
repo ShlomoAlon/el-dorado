@@ -1,9 +1,9 @@
 /* What is drawn over the board for the current turn: the spaces you can move to (targets), the blockades, the dotted
    path and tip while you point at a target, the cards-paid dots on a rubble space, and another player's trail.
    Each is its own layer and changes only when what it shows does. */
-import { S, MAP, R, SQ3, key, hexAt, def, SYMCOL, SYMNAME, blkLabel } from '../../engine.gen.js';
+import { R, SQ3, key, hexAt, def, SYMCOL, SYMNAME, blkLabel } from '../../engine.gen.js';
 import { $, sv, reduceMotion } from '../dom.js';
-import { UI, G, cur } from '../state.js';
+import { S, MAP, UI, G, cur } from '../state.js';
 import { L, hexPts, label, edgeSeg } from './terrain.js';
 import { layout, xy } from './layout.js';
 import { view, boardPoint, onViewMove } from './camera.js';
@@ -65,8 +65,8 @@ function targetLabel(k, tg) {
   const act = S.turn.active && S.turn.active.id === UI.card;
   if (tg.kind === 'move' || tg.kind === 'bl') {
     if (!UI.card) return G.replay ? 'The next move goes here' : ''; // (a replay marks the next move's space)
-    const budget = act ? S.turn.active.left : def(UI.card).p;
-    if (tg.kind === 'move' && hexAt(k).type === 'g') return 'Reach El Dorado · uses <b>' + tg.cost + '</b> of ' + budget;
+    const budget = act ? S.turn.active.left : def(S,UI.card).p;
+    if (tg.kind === 'move' && hexAt(S,k).type === 'g') return 'Reach El Dorado · uses <b>' + tg.cost + '</b> of ' + budget;
     return (tg.kind === 'bl' ? 'Tear down blockade · ' : '') + 'Uses <b>' + tg.cost + '</b> of ' + budget + ' ' + SYMNAME[tg.sym] + (budget > 1 ? 's' : '');
   }
   if (tg.kind === 'native') return 'Native: move here for free' + (tg.bl != null ? ' and take the blockade' : '');

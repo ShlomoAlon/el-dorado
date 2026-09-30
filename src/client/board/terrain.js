@@ -1,7 +1,8 @@
 /* The static board: terrain, board plates, seams and the city, drawn once per deal into #board (SVG)
    with their text as HTML labels (#blabels): Chrome re-lays out SVG text whenever an ancestor's scale changes, HTML
    text it doesn't. The live layers (targets, blockades, trails: #board2; explorers: #pieces) sit above it. */
-import { MAP, R, hash } from '../../engine.gen.js';
+import { R, hash } from '../../engine.gen.js';
+import { MAP } from '../state.js';
 import { layout, xy } from './layout.js';
 import { $, sv } from '../dom.js';
 export function hexPts(x,y,r){let s='';for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);s+=(x+r*Math.cos(a)).toFixed(1)+','+(y+r*Math.sin(a)).toFixed(1)+' ';}return s;}

@@ -1,9 +1,9 @@
 /* The market: six cards floating at the top right (plus an "All cards" tile), the All cards spread (market and
    reserve), the purchase slot above the hand, and dragging a market card down to buy it. Slots are made once and
    updated in place; a card's artwork is drawn again only when another card takes its slot. */
-import { S, CT, MARKET0, stackOf, reserveOpen, cantBuy, fmt } from '../engine.gen.js';
+import { CT, MARKET0, stackOf, reserveOpen, cantBuy, fmt } from '../engine.gen.js';
 import { $, setText, setStyle } from './dom.js';
-import { UI, canAct } from './state.js';
+import { S, UI, canAct } from './state.js';
 import { geo, onGeo } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
 import { cam, fitSoon } from './board/camera.js';
@@ -48,10 +48,10 @@ function patchSlots(box,specs,before){
 }
 function update(){
   if(!S)return;
-  const tr=UI.mode==='transmit',openSlot=reserveOpen(),aff=new Set(tr?[]:affordable().map(a=>a.src+a.i));
+  const tr=UI.mode==='transmit',openSlot=reserveOpen(S),aff=new Set(tr?[]:affordable().map(a=>a.src+a.i));
   // a slot is 'no' when the player to act can't buy it now whatever they pay (the engine's rule), 'can' when they can afford it
   const spec=(src,s,i)=>{if(s.n<=0)return{src,i,n:0,cls:'mslot empty'};
-    const ok=tr||(!UI.cover&&!cantBuy(S.cur,s.t)),chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src===src&&UI.buy.idx===i;
+    const ok=tr||(!UI.cover&&!cantBuy(S,S.cur,s.t)),chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src===src&&UI.buy.idx===i;
     return{src,i,t:s.t,n:s.n,cls:`mslot${ok?'':' no'}${aff.has(src+i)?' can':chosen?'':' dimc'}${chosen?' chosen':''}`};};
   const resAff=[...aff].some(k=>k[0]==='r');
   const mk=$('#market');let at=$('#allTile');
@@ -78,7 +78,7 @@ export const buySlotPart = { name: 'buySlot', update(){const bs=$('#buySlot'),on
 /* where a card of the market is on screen now (a bought card flies from there): its slot, or the button that opens it */
 /* where a card type's stack is on screen now, or null: an event can describe an earlier action of the same batch (the server
    sends several AI actions at once), and by now its stack may be sold out and its slot refilled from the reserve */
-export function marketRectOf(t){const s=stackOf(t);return s?marketRect(s.src,s.i):null;}
+export function marketRectOf(t){const s=stackOf(S,t);return s?marketRect(s.src,s.i):null;}
 function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpen?`#market [data-i="${idx}"] .mcard`:'#mktBtn'):(UI.allOpen?`#reserve [data-i="${idx}"] .mcard`:(UI.mktOpen?'#allTile':'#mktBtn')));if(!e)return null;const r=e.getBoundingClientRect();
   if(src==='r'){const cw=86;return{left:r.left+r.width/2-cw/2,top:r.top-cw*.7+r.height/2,width:cw,height:cw*1.4};}return r;}
 

@@ -10,9 +10,9 @@
    Pointing at a step (tapping it on a touch screen) says in words everything it did and shows on the board where its
    explorer went. Public information only: the engine's events carry the types of cards that became public (played, spent,
    removed, taken) and just counts for the cards kept at the end of a turn. */
-import { S, CT, MAP, SYMNAME, plural, fmt, assert } from '../engine.gen.js';
+import { CT, SYMNAME, plural, fmt, assert } from '../engine.gen.js';
 import { $, esc, setHTML, reduceMotion, EASE } from './dom.js';
-import { UI, NET, G, online, isAI } from './state.js';
+import { S, MAP, UI, NET, G, online, isAI } from './state.js';
 import { toast } from './dialogs.js';
 import { render, after } from './frame.js';
 import { cardHTML } from './cards.js';

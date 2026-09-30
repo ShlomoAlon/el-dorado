@@ -2,9 +2,9 @@
    Cards are positioned with transforms computed from cached sizes (geometry.js), never by measuring; every move is a
    CSS transition on transform, which the compositor runs. A new card is placed at the deck first and moved into the
    hand one frame later, so it slides in without the browser having to lay out anything in between. */
-import { S, CT, typeOf, plural } from '../engine.gen.js';
+import { CT, typeOf, plural } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
-import { UI, cur, hp, viewIdx, canAct, G } from './state.js';
+import { S, UI, cur, hp, viewIdx, canAct, G } from './state.js';
 import { geo } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
 import { render } from './frame.js';
@@ -23,8 +23,8 @@ export function setT(el, x, y, rot, sc) { el.__t = { x, y, rot, sc }; setStyle(e
 /* the card's box (cw × 1.4 cw, scaled about its centre) covering a screen rectangle */
 export function rectT(rect, rot) { const cw = geo.cw, ch = cw * 1.4, A = geo.app, sc = rect.width / cw; return [rect.left - A.left - (cw - rect.width) / 2, rect.top - A.top - (ch - rect.height) / 2, rot || 0, sc]; }
 export const placeAt = (el, rect, rot) => setT(el, ...rectT(rect, rot));
-function newCard(id) {
-  const el = document.createElement('div'); el.className = 'card'; el.innerHTML = cardHTML(typeOf(id)); el.title = cardTitle(typeOf(id));
+function newCard(S,id) {
+  const el = document.createElement('div'); el.className = 'card'; el.innerHTML = cardHTML(typeOf(S,id)); el.title = cardTitle(typeOf(S,id));
   $('#cards').appendChild(el); cardEls.set(id, el); wire(el, id); return el;
 }
 
@@ -76,7 +76,7 @@ function update() {
   // new cards: drawn from the deck (or, a new player's hand, from below), one after another
   let k = 0;
   for (const id of [...want, ...wantPlay]) {
-    if (cardEls.has(id)) continue; const el = newCard(id);
+    if (cardEls.has(id)) continue; const el = newCard(S,id);
     if (switching) setT(el, A.width / 2 - geo.cw / 2, A.height + 30, 0, 1); else placeAt(el, geo.deck, 0);
     if (!reduceMotion) { el.style.transitionDelay = (switching ? k * 50 : k * 70) + 'ms'; setTimeout(() => { el.style.transitionDelay = ''; }, 420 + k * 70); }
     el.__enter = true; entering.push(el); k++;
@@ -111,7 +111,7 @@ function update() {
   const dn = Math.min(3, pl.deck.length);
   setHTML($('#deckStack'), dn ? (dn > 2 ? '<div class="back b3"></div>' : '') + (dn > 1 ? '<div class="back b2"></div>' : '') + '<div class="back"></div>' : '<div class="empty-slot"></div>');
   const top = pl.discard[pl.discard.length - 1];
-  setHTML($('#discStack'), top ? `<div class="mcard">${cardHTML(typeOf(top))}</div>` : '<div class="empty-slot"></div>');
+  setHTML($('#discStack'), top ? `<div class="mcard">${cardHTML(typeOf(S,top))}</div>` : '<div class="empty-slot"></div>');
 }
 function setLeft(el, txt) { let b = el.querySelector('.left'); if (!txt) { if (b) b.remove(); return; } if (!b) { b = document.createElement('div'); b.className = 'left'; el.appendChild(b); } setText(b, txt); }
 function clear() { for (const [, el] of cardEls) el.remove(); cardEls.clear(); lastViewer = -1; entering = []; }

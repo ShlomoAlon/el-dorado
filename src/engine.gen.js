@@ -161,41 +161,47 @@ function buildCourse(C,seed){
 
 /* =========================================================
    RULES ENGINE — pure game logic shared by the browser and the server.
-   Works on the module-level S (game state) and MAP (board built from S.course + S.seed).
-   Nothing in here touches the page.
+   Every function that needs the game takes it first (gs, the game state); its board comes from its course and seed
+   (mapOf). Nothing in here touches the page.
    ========================================================= */
-let S=null,MAP=null;
-const hexAt=k=>MAP.hexes.get(k);
-const typeOf=id=>S.cards[id];
-const def=id=>CT[S.cards[id]];
+/* a game's board: built from its course and seed once, and shared by every copy of the game (the last few are kept) */
+const MAPS=new Map();let lastMap=null;
+function mapOf(gs){
+  if(lastMap&&lastMap.course===gs.course.id&&lastMap.seed===gs.seed)return lastMap;
+  const k=gs.course.id+'#'+gs.seed;let m=MAPS.get(k);
+  if(!m){m=buildCourse(gs.course,gs.seed);m.seed=gs.seed;MAPS.set(k,m);if(MAPS.size>16)MAPS.delete(MAPS.keys().next().value);}
+  return lastMap=m;
+}
+const hexAt=(gs,k)=>mapOf(gs).hexes.get(k);
+const typeOf=(gs,id)=>gs.cards[id];
+const def=(gs,id)=>CT[gs.cards[id]];
 const plural=(n,w)=>n+' '+w+(n===1?'':'s');
 const fmt=n=>(n%1?(Math.floor(n)?Math.floor(n)+'½':'½'):String(n));
 function rm(arr,id){const i=arr.indexOf(id);assert(i>=0,'rm: the item is in the list');arr.splice(i,1);}
 function playerDone(p){return p.pieces.every(k=>k==='done');}
 function isActive(p){return !playerDone(p)&&!p.resigned;}
 /* the blockades player pl has taken (by index), and how many */
-function blocksOf(pl){const out=[];S.blockades.forEach((B,i)=>{if(B.owner===pl)out.push(i);});return out;}
+function blocksOf(gs,pl){const out=[];gs.blockades.forEach((B,i)=>{if(B.owner===pl)out.push(i);});return out;}
 
-function mapFor(st){return buildCourse(st.course,st.seed);}
 /* where a card type is sold: every type has exactly one stack, in the market or the reserve. {src:'m'|'r', i, s} or null */
-function stackOf(t){let i=S.market.findIndex(s=>s.t===t);if(i>=0)return{src:'m',i,s:S.market[i]};i=S.reserve.findIndex(s=>s.t===t);return i>=0?{src:'r',i,s:S.reserve[i]}:null;}
+function stackOf(gs,t){let i=gs.market.findIndex(s=>s.t===t);if(i>=0)return{src:'m',i,s:gs.market[i]};i=gs.reserve.findIndex(s=>s.t===t);return i>=0?{src:'r',i,s:gs.reserve[i]}:null;}
 /* the reserve can be bought from once a market slot is empty */
-function reserveOpen(){return S.market.some(s=>s.n===0);}
+function reserveOpen(gs){return gs.market.some(s=>s.n===0);}
 /* why seat can't buy a card of type t now, payment aside ('' if it can). The purchase rules live here: the buy action and
    the page's market both ask */
-function cantBuy(seat,t){
-  if(S.over)return'The game is over.';
-  if(seat!==S.cur)return'It is not your turn.';
-  if(S.turn.pending)return'Choose which cards to remove first.';
-  if(S.turn.bought)return'You can buy only one card per turn.';
-  const st=stackOf(t);if(!st||st.s.n<=0)return'That card is sold out.';
-  if(st.src==='r'&&!reserveOpen())return'The reserve opens once a market slot is empty.';
+function cantBuy(gs,seat,t){
+  if(gs.over)return'The game is over.';
+  if(seat!==gs.cur)return'It is not your turn.';
+  if(gs.turn.pending)return'Choose which cards to remove first.';
+  if(gs.turn.bought)return'You can buy only one card per turn.';
+  const st=stackOf(gs,t);if(!st||st.s.n<=0)return'That card is sold out.';
+  if(st.src==='r'&&!reserveOpen(gs))return'The reserve opens once a market slot is empty.';
   return'';
 }
 /* what seat can buy now with the coins in its hand: [{src:'m'|'r', i, t}], market first */
-function buyOptions(seat){
-  const P=S.players[seat],cash=P.hand.reduce((a,id)=>a+coinVal(id),0),out=[];
-  for(const[src,list]of[['m',S.market],['r',S.reserve]])list.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash&&!cantBuy(seat,s.t))out.push({src,i,t:s.t});});
+function buyOptions(gs,seat){
+  const P=gs.players[seat],cash=P.hand.reduce((a,id)=>a+coinVal(gs,id),0),out=[];
+  for(const[src,list]of[['m',gs.market],['r',gs.reserve]])list.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash&&!cantBuy(gs,seat,s.t))out.push({src,i,t:s.t});});
   return out;
 }
 /* ---- game logs (replays) ----
@@ -213,16 +219,16 @@ function replayCheck(log){
   if(log.gift&&!(CT[log.gift]&&CT[log.gift].cost))return'Unknown gift card: '+log.gift;
   if(!Array.isArray(log.actions)||log.actions.length>REPLAY_MAX_ACTIONS||!log.actions.every(x=>Array.isArray(x)&&Number.isInteger(x[0])&&x[1]&&typeof x[1].t==='string'))return'The game log has no valid list of actions.';
   return null;}
-/* set up the log's game (S, MAP). Returns the generator a training log's actions share (records give each action its own) */
+/* the log's game at its start: {gs, g}, g being the generator a training log's actions share (records give each action its own) */
 function replayStart(log){const rec=log.v===3,g=rec?recRng(log.rng,-1):mulberry32(log.rng>>>0);
-  newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>rec?{name:p.name,color:p.color,ai:p.bot}:{name:String(p.name),color:COLORS[i].hex})},g); // (training logs: colours by seat)
+  const gs=newGame({course:courseById(log.course),seed:log.seed,fullRace:log.fullRace!==false,players:log.players.map((p,i)=>rec?{name:p.name,color:p.color,ai:p.bot}:{name:String(p.name),color:COLORS[i].hex})},g); // (training logs: colours by seat)
   // training exploration: every player starts with the same extra card, shuffled into the draw pile
-  if(log.gift)for(const p of S.players)p.deck.splice(Math.floor(g()*(p.deck.length+1)),0,newCard(log.gift));
-  return g;}
-/* a log played back on S, one action at a time: yields {i, ok, err, ev} after each (i = -1: the setup), S then being the
-   position after it. (A generator: stop early, or snapshot S at each step) */
-function* replay(log){const g=replayStart(log);yield{i:-1,ok:true,ev:[]};
-  for(let i=0;i<log.actions.length;i++){const[seat,a]=log.actions[i];yield{i,...applyAction(seat,a,log.v===3?recRng(log.rng,i):g)};}}
+  if(log.gift)for(const p of gs.players)p.deck.splice(Math.floor(g()*(p.deck.length+1)),0,newCard(gs,log.gift));
+  return{gs,g};}
+/* a log played back one action at a time: yields {i, gs, ok, err, ev} after each (i = -1: the setup), gs being the game (one
+   game, changed step by step: stop early, or snapshot it at each step) */
+function* replay(log){const{gs,g}=replayStart(log);yield{i:-1,gs,ok:true,ev:[]};
+  for(let i=0;i<log.actions.length;i++){const[seat,a]=log.actions[i];yield{i,gs,...applyAction(gs,seat,a,log.v===3?recRng(log.rng,i):g)};}}
 /* ---- game records (log v3): a game is its setup and its list of actions; the state is rebuilt from them ----
    Each action's shuffles come from a generator of its own, seeded from the game's secret number (rec.rng) and the action's
    index (newGame's: index -1), so re-applying the log rebuilds the same game and nothing needs a generator's state between
@@ -230,26 +236,26 @@ function* replay(log){const g=replayStart(log);yield{i:-1,ok:true,ev:[]};
    is over. Undo drops the last action and rebuilds; rec.mark = how many actions can no longer be undone (up to the last
    one that drew cards, passed the turn, or was a resignation). The saved game is the record (the state is rebuilt). */
 function recRng(rng,k){return mulberry32(((rng>>>0)+Math.imul(k+2,0x9E3779B1))>>>0);}
+/* a new game and its record: {gs, rec} */
 function recNewGame(o){
   // the secret: from the platform's cryptographic generator where there is one (Math.random's state could be guessed)
   const rng=crypto.getRandomValues(new Uint32Array(1))[0];
-  newGame(o,recRng(rng,-1));
+  const gs=newGame(o,recRng(rng,-1));
   // (privacy: the page's pass-and-play cover, a setting of the table rather than of the game: kept in the record only)
-  return{kind:'eldorado-replay',v:3,course:S.course.id,seed:S.seed,rng,fullRace:S.fullRace,...(o.privacy?{privacy:true}:{}),
-    players:S.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0};
+  return{gs,rec:{kind:'eldorado-replay',v:3,course:gs.course.id,seed:gs.seed,rng,fullRace:gs.fullRace,...(o.privacy?{privacy:true}:{}),
+    players:gs.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0}};
 }
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
-function recApply(rec,seat,a,rnd=Math.random){ // (rnd: for a game without a record)
-  const prev=S.cur,r=applyAction(seat,a,rec?recRng(rec.rng,rec.actions.length):rnd);
-  if(r.ok&&rec){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||S.cur!==prev||S.over)rec.mark=rec.actions.length;}
+function recApply(gs,rec,seat,a,rnd=Math.random){ // (rnd: for a game without a record)
+  const prev=gs.cur,r=applyAction(gs,seat,a,rec?recRng(rec.rng,rec.actions.length):rnd);
+  if(r.ok&&rec){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||gs.cur!==prev||gs.over)rec.mark=rec.actions.length;}
   return r;
 }
 const recCanUndo=rec=>rec.actions.length>rec.mark;
-/* the state a record leads to, as {S, MAP} (the module's S and MAP are left as they were) */
-function recState(rec){const s0=S,m0=MAP;
-  try{for(const _ of replay(rec));return{S,MAP};}finally{S=s0;MAP=m0;}}
-/* take back the last action (S becomes the rebuilt state; callers check recCanUndo first) */
-function recUndo(rec){assert(recCanUndo(rec),'recUndo: an action can be taken back');rec.actions.pop();({S,MAP}=recState(rec));return true;}
+/* the game a record leads to */
+function recState(rec){let gs=null;for(const r of replay(rec))gs=r.gs;return gs;}
+/* take back the last action: the rebuilt game (callers check recCanUndo first) */
+function recUndo(rec){assert(recCanUndo(rec),'recUndo: an action can be taken back');rec.actions.pop();return recState(rec);}
 /* the log of game st (rec's state), ready to save and watch, with a title. places: null for a game that didn't finish (a
    training log stopped at its round cap) */
 function recFinal(rec,st){
@@ -258,10 +264,10 @@ function recFinal(rec,st){
   L.result={places:st.places,rounds:st.round};
   return L;
 }
+/* a new game (its state) */
 function newGame(o,rnd=Math.random){
   assert(o.players.length>=2&&o.players.length<=4,'newGame: 2 to 4 players');
-  const course=o.course||COURSES[0];
-  MAP=buildCourse(course,o.seed);
+  const course=o.course||COURSES[0],M=mapOf({course,seed:o.seed});
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
     const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
@@ -269,45 +275,45 @@ function newGame(o,rnd=Math.random){
     if(p.ai){assert(aiById(p.ai),'newGame: a known AI');pl.ai=p.ai;} // a named AI plays this seat (engine_ai.js)
     return pl;
   });
-  const st=MAP.starts;
+  const st=M.starts;
   if(players.length===2){players[0].pieces=[st[0],st[2]];players[1].pieces=[st[1],st[3]];}
   else players.forEach((p,i)=>p.pieces=[st[i]]);
-  S={seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
-     blockades:MAP.blockDefs.map(d=>({...d,owner:null})),cur:0,round:1,endTriggered:false,over:false,places:null,
+  const gs={seed:o.seed,course,players,cards,nid,market:MARKET0.map(t=>({t,n:3})),reserve:RESERVE0.map(t=>({t,n:3})),
+     blockades:M.blockDefs.map(d=>({...d,owner:null})),cur:0,round:1,endTriggered:false,over:false,places:null,
      fullRace:o.fullRace!==false,turn:{bought:false,active:null,pending:null},trash:[],log:[]};
   players.forEach(p=>drawCards(p,4,rnd));
-  log({e:'start'});
-  return S;
+  log(gs,{e:'start'});
+  return gs;
 }
-function newCard(t){const id='c'+(S.nid++);S.cards[id]=t;return id;}
+function newCard(gs,t){const id='c'+(gs.nid++);gs.cards[id]=t;return id;}
 function drawCards(p,n,rnd){const got=[];for(let i=0;i<n;i++){if(!p.deck.length){if(!p.discard.length)break;p.deck=shuffle(p.discard,rnd);p.discard=[];}const c=p.deck.pop();p.hand.push(c);got.push(c);}return got;}
-/* the journal (S.log): the game's public events, each with its round (all but the turn changes); the page's history panel
+/* the journal (gs.log): the game's public events, each with its round (all but the turn changes); the page's history panel
    shows it turn by turn (feed.js). Only the last LOG_MAX are kept */
 const LOG_MAX=200;
-function log(e){S.log.push({...e,r:S.round});if(S.log.length>LOG_MAX)S.log.shift();}
-const tell=(ev,e)=>{ev.push(e);log(e);}; // an event that also goes in the journal
-function occupied(k,exPl,exPi){return S.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
+function log(gs,e){gs.log.push({...e,r:gs.round});if(gs.log.length>LOG_MAX)gs.log.shift();}
+const tell=(gs,ev,e)=>{ev.push(e);log(gs,e);}; // an event that also goes in the journal
+function occupied(gs,k,exPl,exPi){return gs.players.some((p,pi)=>p.pieces.some((pk,i)=>pk===k&&!(pi===exPl&&i===exPi)));}
 /* the standing blockade between spaces a and b (its index), or null. Blockade i sits on connection i (buildCourse deals one per connection) */
-function blockAt(a,b){const c=MAP.edgeConn.get(a+'|'+b);return c===undefined||S.blockades[c].owner!==null?null:c;}
-function neighbors(k){const nb=MAP._nb||(MAP._nb=new Map());let r=nb.get(k);if(!r){const h=hexAt(k);r=DIRS.map(([dq,dr])=>key(h.q+dq,h.r+dr)).filter(n=>MAP.hexes.has(n));nb.set(k,r);}return r;} // cached per map
-function coinVal(id){const d=def(id);if(d.c==='y'||d.c==='x')return d.p;return .5;}
+function blockAt(gs,a,b){const c=mapOf(gs).edgeConn.get(a+'|'+b);return c===undefined||gs.blockades[c].owner!==null?null:c;}
+function neighbors(gs,k){const nb=mapOf(gs)._nb||(mapOf(gs)._nb=new Map());let r=nb.get(k);if(!r){const h=hexAt(gs,k);r=DIRS.map(([dq,dr])=>key(h.q+dq,h.r+dr)).filter(n=>mapOf(gs).hexes.has(n));nb.set(k,r);}return r;} // cached per map
+function coinVal(gs,id){const d=def(gs,id);if(d.c==='y'||d.c==='x')return d.p;return .5;}
 function blkLabel(B){return B.k==='r'?'discard '+plural(B.v,'card'):plural(B.v,SYMNAME[B.k]);}
 
 /* ---------- reachability ---------- */
-function reach(pl,pi,syms,budget){
-  const out=new Map(),from=S.players[pl].pieces[pi];assert(from&&from!=='done','reach: the explorer is on the board');
+function reach(gs,pl,pi,syms,budget){
+  const out=new Map(),from=gs.players[pl].pieces[pi];assert(from&&from!=='done','reach: the explorer is on the board');
   for(const sym of syms){
     const dist=new Map([[from,0]]),prev=new Map(),pq=[[0,from]];
     while(pq.length){
       let bi=0;for(let i=1;i<pq.length;i++)if(pq[i][0]<pq[bi][0])bi=i;
       const[d,u]=pq[bi];pq[bi]=pq[pq.length-1];pq.pop();if(d>dist.get(u))continue;
-      if(u!==from&&hexAt(u).type==='g')continue;
-      for(const n of neighbors(u)){
-        const h=hexAt(n);
+      if(u!==from&&hexAt(gs,u).type==='g')continue;
+      for(const n of neighbors(gs,u)){
+        const h=hexAt(gs,n);
         if(!(h.type===sym||(h.type==='g'&&h.sym===sym)))continue;
-        if(occupied(n,pl,pi))continue;
-        let c=h.val;const b=blockAt(u,n);
-        if(b!==null){if(S.blockades[b].k!==sym)continue;c+=S.blockades[b].v;}
+        if(occupied(gs,n,pl,pi))continue;
+        let c=h.val;const b=blockAt(gs,u,n);
+        if(b!==null){if(gs.blockades[b].k!==sym)continue;c+=gs.blockades[b].v;}
         const nd=d+c;if(nd>budget)continue;
         if(!dist.has(n)||nd<dist.get(n)){dist.set(n,nd);prev.set(n,u);pq.push([nd,n]);}
       }
@@ -315,39 +321,39 @@ function reach(pl,pi,syms,budget){
     const pathTo=k=>{const p=[];let x=k;while(x!==from){p.unshift(x);x=prev.get(x);}return p;};
     for(const[k,d]of dist){if(k===from)continue;const o=out.get(k);if(!o||d<o.cost)out.set(k,{t:'move',kind:'move',cost:d,sym,path:pathTo(k),pi});}
     for(const[k,d]of dist){
-      if(hexAt(k).type==='g')continue;
-      for(const n of neighbors(k)){const b=blockAt(k,n);if(b===null)continue;const B=S.blockades[b];
+      if(hexAt(gs,k).type==='g')continue;
+      for(const n of neighbors(gs,k)){const b=blockAt(gs,k,n);if(b===null)continue;const B=gs.blockades[b];
         if(B.k!==sym||d+B.v>budget)continue;const K='B'+b;const o=out.get(K);
         if(!o||d+B.v<o.cost)out.set(K,{t:'move',kind:'bl',bl:b,cost:d+B.v,sym,path:k===from?[]:pathTo(k),pi});}
     }
   }
   return out;
 }
-function nativeTargets(pl,pi){
-  const T=new Map(),pk=S.players[pl].pieces[pi];assert(pk&&pk!=='done','nativeTargets: the explorer is on the board');
-  for(const n of neighbors(pk)){const h=hexAt(n);if(h.type==='m'||h.type==='s'||occupied(n))continue;T.set(n,{t:'native',kind:'native',path:[n],cost:0,pi,bl:blockAt(pk,n)});}
-  for(const n of neighbors(pk)){const b=blockAt(pk,n);if(b!==null&&!T.has('B'+b))T.set('B'+b,{t:'native',kind:'nativebl',bl:b,path:[],cost:0,pi});}
+function nativeTargets(gs,pl,pi){
+  const T=new Map(),pk=gs.players[pl].pieces[pi];assert(pk&&pk!=='done','nativeTargets: the explorer is on the board');
+  for(const n of neighbors(gs,pk)){const h=hexAt(gs,n);if(h.type==='m'||h.type==='s'||occupied(gs,n))continue;T.set(n,{t:'native',kind:'native',path:[n],cost:0,pi,bl:blockAt(gs,pk,n)});}
+  for(const n of neighbors(gs,pk)){const b=blockAt(gs,pk,n);if(b!==null&&!T.has('B'+b))T.set('B'+b,{t:'native',kind:'nativebl',bl:b,path:[],cost:0,pi});}
   return T;
 }
 /* where seat can play card id with explorer pi now: Map<key or 'B'+i, target>. A movement card from the hand: the spaces its
    strength reaches, plus the rubble, base camps and rubble blockades it could be given up for (any card can be); the card in
    play with leftover strength: where that reaches; the Native: its own targets. Empty: not on the board now */
-function cardTargets(seat,pi,id){
-  const T=new Map(),P=S.players[seat],d=def(id),act=S.turn.active&&S.turn.active.id===id?S.turn.active:null;
-  if(S.over||seat!==S.cur||S.turn.pending)return T;
-  if(act){for(const[k,v]of reach(seat,act.pi,[act.sym],act.left))T.set(k,v);return T;}
+function cardTargets(gs,seat,pi,id){
+  const T=new Map(),P=gs.players[seat],d=def(gs,id),act=gs.turn.active&&gs.turn.active.id===id?gs.turn.active:null;
+  if(gs.over||seat!==gs.cur||gs.turn.pending)return T;
+  if(act){for(const[k,v]of reach(gs,seat,act.pi,[act.sym],act.left))T.set(k,v);return T;}
   if(!P.hand.includes(id))return T;
-  if(typeOf(id)==='native'){for(const[k,v]of nativeTargets(seat,pi))T.set(k,v);return T;}
-  if(d.c!=='p')for(const[k,v]of reach(seat,pi,d.s==='*'?['j','w','v']:[d.s],d.p))T.set(k,v);
-  for(const[k,v]of payTargets(seat,pi))if(!T.has(k))T.set(k,v);
+  if(typeOf(gs,id)==='native'){for(const[k,v]of nativeTargets(gs,seat,pi))T.set(k,v);return T;}
+  if(d.c!=='p')for(const[k,v]of reach(gs,seat,pi,d.s==='*'?['j','w','v']:[d.s],d.p))T.set(k,v);
+  for(const[k,v]of payTargets(gs,seat,pi))if(!T.has(k))T.set(k,v);
   return T;
 }
 /* spaces/blockades entered by discarding (rubble, grey blockade) or removing cards (base camp) */
-function payTargets(pl,pi){
-  const T=new Map(),P=S.players[pl],pk=P.pieces[pi],hn=P.hand.length;assert(pk&&pk!=='done','payTargets: the explorer is on the board');
-  for(const n of neighbors(pk)){const h=hexAt(n);
-    if((h.type==='r'||h.type==='c')&&!occupied(n)&&blockAt(pk,n)===null&&hn>=h.val)T.set(n,{t:'pay',kind:h.type==='r'?'rubble':'camp',need:h.val,path:[n],pi});
-    const b=blockAt(pk,n);if(b!==null&&S.blockades[b].k==='r'&&hn>=S.blockades[b].v&&!T.has('B'+b))T.set('B'+b,{t:'pay',kind:'blr',bl:b,need:S.blockades[b].v,pi});
+function payTargets(gs,pl,pi){
+  const T=new Map(),P=gs.players[pl],pk=P.pieces[pi],hn=P.hand.length;assert(pk&&pk!=='done','payTargets: the explorer is on the board');
+  for(const n of neighbors(gs,pk)){const h=hexAt(gs,n);
+    if((h.type==='r'||h.type==='c')&&!occupied(gs,n)&&blockAt(gs,pk,n)===null&&hn>=h.val)T.set(n,{t:'pay',kind:h.type==='r'?'rubble':'camp',need:h.val,path:[n],pi});
+    const b=blockAt(gs,pk,n);if(b!==null&&gs.blockades[b].k==='r'&&hn>=gs.blockades[b].v&&!T.has('B'+b))T.set('B'+b,{t:'pay',kind:'blr',bl:b,need:gs.blockades[b].v,pi});
   }
   return T;
 }
@@ -356,7 +362,7 @@ function payTargets(pl,pi){
    APPLY AN ACTION. Returns {ok, err?, ev:[events], reveal}
    reveal = new information came out (cards drawn), so undo stops here. rnd: where any shuffle this action needs comes from
    (a record passes the action's own generator; look-ahead copies of a game don't care)
-   Actions (acting player = S.cur, except resign):
+   Actions (acting player = gs.cur, except resign):
      {t:'move', card, pi, to}        movement card (or a card with leftover strength)
      {t:'native', card, pi, to}
      {t:'pay', pi, to, cards}        rubble / base camp / grey blockade
@@ -369,163 +375,163 @@ function payTargets(pl,pi){
      {t:'resign'}                    the player leaves the game (any time, in or out of turn)
      {t:'endgame'}                   (local play) the game ends now for everyone: arrivals first, then who is closest
    ========================================================= */
-function applyAction(seat,a,rnd=Math.random){
+function applyAction(gs,seat,a,rnd=Math.random){
   const fail=err=>({ok:false,err,ev:[]});
-  if(S.over)return fail('The game is over.');
+  if(gs.over)return fail('The game is over.');
   if(!a||typeof a!=='object')return fail('Bad action.');
-  if(a.t==='resign')return resign(seat);
-  if(seat!==S.cur)return fail('It is not your turn.');
-  if(a.t==='endgame'){const ev=[];tell(ev,{e:'endgame',pl:seat});endGame();return{ok:true,ev:[...ev,{e:'over'}]};} // local play only (the server refuses it)
-  if(a.t==='timeout'){log({e:'timeout',pl:seat});if(S.turn.pending)applyAction(seat,{t:'trash',cards:[]},rnd);S.turn.active=null;
-    const r=applyAction(seat,{t:'end',keep:[]},rnd);return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}
-  const P=S.players[seat],T=S.turn,ev=[];let reveal=false;
+  if(a.t==='resign')return resign(gs,seat);
+  if(seat!==gs.cur)return fail('It is not your turn.');
+  if(a.t==='endgame'){const ev=[];tell(gs,ev,{e:'endgame',pl:seat});endGame(gs);return{ok:true,ev:[...ev,{e:'over'}]};} // local play only (the server refuses it)
+  if(a.t==='timeout'){log(gs,{e:'timeout',pl:seat});if(gs.turn.pending)applyAction(gs,seat,{t:'trash',cards:[]},rnd);gs.turn.active=null;
+    const r=applyAction(gs,seat,{t:'end',keep:[]},rnd);return{...r,ev:[{e:'timeout',pl:seat},...r.ev]};}
+  const P=gs.players[seat],T=gs.turn,ev=[];let reveal=false;
   const inHand=id=>typeof id==='string'&&P.hand.includes(id);
   const distinctHand=ids=>Array.isArray(ids)&&new Set(ids).size===ids.length&&ids.every(inHand);
   const pieceOk=pi=>Number.isInteger(pi)&&pi>=0&&pi<P.pieces.length&&P.pieces[pi]!=='done';
   if(T.pending&&a.t!=='trash')return fail('Choose which cards to remove first.');
-  const takeBlock=b=>{const B=S.blockades[b];assert(B.owner===null,'a blockade is taken once');B.owner=seat;tell(ev,{e:'block',pl:seat,n:B.n});};
-  const arrive=pi=>{if(P.pieces[pi]!=='done')return;tell(ev,{e:'arrive',pl:seat,pi});
-    if(playerDone(P)){P.fin=S.round;checkEnd(ev);}};
+  const takeBlock=b=>{const B=gs.blockades[b];assert(B.owner===null,'a blockade is taken once');B.owner=seat;tell(gs,ev,{e:'block',pl:seat,n:B.n});};
+  const arrive=pi=>{if(P.pieces[pi]!=='done')return;tell(gs,ev,{e:'arrive',pl:seat,pi});
+    if(playerDone(P)){P.fin=gs.round;checkEnd(gs,ev);}};
   switch(a.t){
     case 'move':{
       const act=T.active&&T.active.id===a.card?T.active:null;
       if(!act&&!inHand(a.card))return fail('That card is not in your hand.');
-      const d=def(a.card);if(d.c==='p')return fail('That card cannot move.');
+      const d=def(gs,a.card);if(d.c==='p')return fail('That card cannot move.');
       const pi=act?act.pi:a.pi;if(!pieceOk(pi))return fail('Choose one of your explorers.');
       const syms=act?[act.sym]:(d.s==='*'?['j','w','v']:[d.s]);const budget=act?act.left:d.p;
-      const tg=reach(seat,pi,syms,budget).get(a.to);if(!tg)return fail('That space is out of reach.');
-      tell(ev,{e:'play',pl:seat,k:'move',ts:[typeOf(a.card)],more:!!act,n:tg.path.length,sym:tg.sym});
-      if(!act){T.active=null;rm(P.hand,a.card);if(d.once)S.trash.push(a.card);else P.play.push(a.card);} // single-use (Giant Machete, Prop Plane, Treasure Chest): removed from the game
+      const tg=reach(gs,seat,pi,syms,budget).get(a.to);if(!tg)return fail('That space is out of reach.');
+      tell(gs,ev,{e:'play',pl:seat,k:'move',ts:[typeOf(gs,a.card)],more:!!act,n:tg.path.length,sym:tg.sym});
+      if(!act){T.active=null;rm(P.hand,a.card);if(d.once)gs.trash.push(a.card);else P.play.push(a.card);} // single-use (Giant Machete, Prop Plane, Treasure Chest): removed from the game
       const from=P.pieces[pi];let pos=from;const path=[from];
-      for(const st of tg.path){const b=blockAt(pos,st);if(b!==null)takeBlock(b);pos=st;path.push(st);}
+      for(const st of tg.path){const b=blockAt(gs,pos,st);if(b!==null)takeBlock(b);pos=st;path.push(st);}
       if(tg.kind==='bl')takeBlock(tg.bl);
-      const done=hexAt(pos).type==='g';P.pieces[pi]=done?'done':pos;
+      const done=hexAt(gs,pos).type==='g';P.pieces[pi]=done?'done':pos;
       const left=budget-tg.cost;T.active=(left>0&&!done)?{id:a.card,pi,sym:tg.sym,left}:null;
-      if(tg.path.length)tell(ev,{e:'move',pl:seat,pi,path});
+      if(tg.path.length)tell(gs,ev,{e:'move',pl:seat,pi,path});
       arrive(pi);break;
     }
     case 'native':{
-      if(!inHand(a.card)||typeOf(a.card)!=='native')return fail('You need the Native.');
+      if(!inHand(a.card)||typeOf(gs,a.card)!=='native')return fail('You need the Native.');
       if(!pieceOk(a.pi))return fail('Choose one of your explorers.');
-      const tg=nativeTargets(seat,a.pi).get(a.to);if(!tg)return fail('The Native can only reach an adjacent free space.');
-      T.active=null;rm(P.hand,a.card);P.play.push(a.card);tell(ev,{e:'play',pl:seat,k:'native',ts:['native'],n:tg.kind==='native'?1:0});
+      const tg=nativeTargets(gs,seat,a.pi).get(a.to);if(!tg)return fail('The Native can only reach an adjacent free space.');
+      T.active=null;rm(P.hand,a.card);P.play.push(a.card);tell(gs,ev,{e:'play',pl:seat,k:'native',ts:['native'],n:tg.kind==='native'?1:0});
       if(tg.bl!=null)takeBlock(tg.bl);
-      if(tg.kind==='native'){const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=hexAt(n).type==='g'?'done':n;
-        tell(ev,{e:'move',pl:seat,pi:a.pi,path:[from,n]});arrive(a.pi);}
+      if(tg.kind==='native'){const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=hexAt(gs,n).type==='g'?'done':n;
+        tell(gs,ev,{e:'move',pl:seat,pi:a.pi,path:[from,n]});arrive(a.pi);}
       break;
     }
     case 'pay':{
       if(!pieceOk(a.pi))return fail('Choose one of your explorers.');
-      const tg=payTargets(seat,a.pi).get(a.to);if(!tg)return fail('You cannot enter there.');
+      const tg=payTargets(gs,seat,a.pi).get(a.to);if(!tg)return fail('You cannot enter there.');
       if(!distinctHand(a.cards)||a.cards.length!==tg.need)return fail('Choose exactly '+plural(tg.need,'card')+'.');
-      T.active=null;const trash=tg.kind==='camp';tell(ev,{e:'play',pl:seat,k:tg.kind,ts:a.cards.map(typeOf)});
-      for(const id of a.cards){rm(P.hand,id);if(trash)S.trash.push(id);else P.play.push(id);}
+      T.active=null;const trash=tg.kind==='camp';tell(gs,ev,{e:'play',pl:seat,k:tg.kind,ts:a.cards.map(id=>typeOf(gs,id))});
+      for(const id of a.cards){rm(P.hand,id);if(trash)gs.trash.push(id);else P.play.push(id);}
       if(tg.kind==='blr')takeBlock(tg.bl);
       else{const from=P.pieces[a.pi];const n=tg.path[0];P.pieces[a.pi]=n;
-        tell(ev,{e:'move',pl:seat,pi:a.pi,path:[from,n]});}
+        tell(gs,ev,{e:'move',pl:seat,pi:a.pi,path:[from,n]});}
       break;
     }
     case 'action':{
-      const t=inHand(a.card)&&typeOf(a.card);
+      const t=inHand(a.card)&&typeOf(gs,a.card);
       const n={cartographer:2,compass:3,scientist:1,travellog:2}[t];if(!n)return fail('That card has no draw effect.');
-      T.active=null;rm(P.hand,a.card);if(CT[t].once)S.trash.push(a.card);else P.play.push(a.card);
-      const got=drawCards(P,n,rnd);reveal=true;tell(ev,{e:'play',pl:seat,k:'action',ts:[t],n:got.length});
+      T.active=null;rm(P.hand,a.card);if(CT[t].once)gs.trash.push(a.card);else P.play.push(a.card);
+      const got=drawCards(P,n,rnd);reveal=true;tell(gs,ev,{e:'play',pl:seat,k:'action',ts:[t],n:got.length});
       if(t==='scientist'||t==='travellog')T.pending={by:t,max:t==='scientist'?1:2}; // by: the card asking (shown while it's answered)
       break;
     }
     case 'trash':{
       if(!T.pending)return fail('Nothing to remove.');
       if(!distinctHand(a.cards)||a.cards.length>T.pending.max)return fail('Choose up to '+plural(T.pending.max,'card')+'.');
-      tell(ev,{e:'play',pl:seat,k:'trash',ts:a.cards.map(typeOf)});
-      for(const id of a.cards){rm(P.hand,id);S.trash.push(id);}
+      tell(gs,ev,{e:'play',pl:seat,k:'trash',ts:a.cards.map(id=>typeOf(gs,id))});
+      for(const id of a.cards){rm(P.hand,id);gs.trash.push(id);}
       T.pending=null;break;
     }
     case 'transmit':{
-      if(!inHand(a.card)||typeOf(a.card)!=='transmitter')return fail('You need the Transmitter.');
-      const st=stackOf(a.type),stack=st&&st.s;if(!stack||stack.n<=0)return fail('That card is sold out.');
-      T.active=null;rm(P.hand,a.card);S.trash.push(a.card);
-      stack.n--;P.discard.push(newCard(stack.t));tell(ev,{e:'play',pl:seat,k:'transmit',ts:['transmitter'],got:stack.t});
+      if(!inHand(a.card)||typeOf(gs,a.card)!=='transmitter')return fail('You need the Transmitter.');
+      const st=stackOf(gs,a.type),stack=st&&st.s;if(!stack||stack.n<=0)return fail('That card is sold out.');
+      T.active=null;rm(P.hand,a.card);gs.trash.push(a.card);
+      stack.n--;P.discard.push(newCard(gs,stack.t));tell(gs,ev,{e:'play',pl:seat,k:'transmit',ts:['transmitter'],got:stack.t});
       break;
     }
     case 'buy':{
-      const no=cantBuy(seat,a.type);if(no)return fail(no);
-      const st=stackOf(a.type);let stack=st.s;
+      const no=cantBuy(gs,seat,a.type);if(no)return fail(no);
+      const st=stackOf(gs,a.type);let stack=st.s;
       if(!distinctHand(a.cards))return fail('Pay with cards from your hand.');
-      const total=a.cards.reduce((s,id)=>s+coinVal(id),0),cost=CT[stack.t].cost;
+      const total=a.cards.reduce((s,id)=>s+coinVal(gs,id),0),cost=CT[stack.t].cost;
       if(total<cost)return fail('Not enough coins.');
-      T.active=null;tell(ev,{e:'play',pl:seat,k:'buy',ts:a.cards.map(typeOf),got:stack.t,paid:total});
-      for(const id of a.cards){rm(P.hand,id);const d=def(id);if(d.once&&(d.c==='y'||d.c==='x'))S.trash.push(id);else P.play.push(id);}
+      T.active=null;tell(gs,ev,{e:'play',pl:seat,k:'buy',ts:a.cards.map(id=>typeOf(gs,id)),got:stack.t,paid:total});
+      for(const id of a.cards){rm(P.hand,id);const d=def(gs,id);if(d.once&&(d.c==='y'||d.c==='x'))gs.trash.push(id);else P.play.push(id);}
       const t=stack.t;
-      if(st.src==='r'){const slot=S.market.findIndex(s=>s.n===0);S.market[slot]={t,n:stack.n};S.reserve.splice(st.i,1);stack=S.market[slot];}
-      stack.n--;P.discard.push(newCard(t));T.bought=true;
+      if(st.src==='r'){const slot=gs.market.findIndex(s=>s.n===0);gs.market[slot]={t,n:stack.n};gs.reserve.splice(st.i,1);stack=gs.market[slot];}
+      stack.n--;P.discard.push(newCard(gs,t));T.bought=true;
       break;
     }
     case 'end':{
       const keep=a.keep;if(!distinctHand(keep))return fail('Bad cards to keep.');
       // the kept cards stay; the rest of the hand and the cards played are discarded; draw up to 4
-      const toDisc=P.hand.filter(id=>!keep.includes(id));tell(ev,{e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length,ts:toDisc.map(typeOf)}); // kept: a count (the hand is private); discarded: face up on the pile
+      const toDisc=P.hand.filter(id=>!keep.includes(id));tell(gs,ev,{e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length,ts:toDisc.map(id=>typeOf(gs,id))}); // kept: a count (the hand is private); discarded: face up on the pile
       for(const id of toDisc){rm(P.hand,id);P.discard.push(id);}
       P.discard.push(...P.play);P.play=[];
       drawCards(P,4-P.hand.length,rnd);reveal=true;
-      passTurn(ev);break;
+      passTurn(gs,ev);break;
     }
     default:return fail('Unknown action.');
   }
   // arriving with your last explorer ends your turn: nothing is left to do, or to draw for
-  if(!S.over&&S.cur===seat&&(a.t==='move'||a.t==='native')&&playerDone(P)){P.discard.push(...P.hand,...P.play);P.hand=[];P.play=[];passTurn(ev);}
-  if(S.over)ev.push({e:'over'});
+  if(!gs.over&&gs.cur===seat&&(a.t==='move'||a.t==='native')&&playerDone(P)){P.discard.push(...P.hand,...P.play);P.hand=[];P.play=[];passTurn(gs,ev);}
+  if(gs.over)ev.push({e:'over'});
   return{ok:true,ev,reveal};
 }
 /* who still races */
 /* the race's end is set off (the round is still finished): in a full race once at most one player is racing, under the
    official rule at the first arrival */
-function checkEnd(ev){
-  if(S.endTriggered||!(S.fullRace?S.players.filter(isActive).length<=1:S.players.some(playerDone)))return;
-  S.endTriggered=true;tell(ev,{e:'final'});
+function checkEnd(gs,ev){
+  if(gs.endTriggered||!(gs.fullRace?gs.players.filter(isActive).length<=1:gs.players.some(playerDone)))return;
+  gs.endTriggered=true;tell(gs,ev,{e:'final'});
 }
-function advance(){
-  const n=S.players.length;let i=S.cur;
+function advance(gs){
+  const n=gs.players.length;let i=gs.cur;
   for(let step=0;step<n*2+2;step++){
     i=(i+1)%n;
-    if(i===0){if(S.endTriggered){endGame();return;}S.round++;} // (player 0 starts every round)
-    const p=S.players[i];
-    if(S.fullRace?isActive(p):!p.resigned){S.cur=i;return;}
+    if(i===0){if(gs.endTriggered){endGame(gs);return;}gs.round++;} // (player 0 starts every round)
+    const p=gs.players[i];
+    if(gs.fullRace?isActive(p):!p.resigned){gs.cur=i;return;}
   }
   assert(false,'advance: someone takes the turn, or the game ends'); // (checkEnd and resign end the game before nobody is left)
 }
 /* the turn passes to the next player racing (or the game ends: advance) */
-function passTurn(ev){S.turn={bought:false,active:null,pending:null};advance();ev.push({e:'turn',pl:S.cur});}
+function passTurn(gs,ev){gs.turn={bought:false,active:null,pending:null};advance(gs);ev.push({e:'turn',pl:gs.cur});}
 /* A player leaves a game for good (online): placed below everyone still racing. */
-function resign(seat){
-  const P=S.players[seat];if(P.resigned||playerDone(P))return{ok:false,err:'You are not racing.',ev:[]};
-  P.resigned=1+Math.max(...S.players.map(p=>p.resigned)); // the order of resigning (the first to leave places last)
-  const ev=[];tell(ev,{e:'resign',pl:seat});
-  const others=S.players.filter((p,i)=>i!==seat&&!p.resigned);
-  if(others.length<=1||!S.players.some(isActive)){endGame();ev.push({e:'over'});return{ok:true,ev};} // nobody left to race: finish now
-  checkEnd(ev);
-  if(seat===S.cur)passTurn(ev);
-  if(S.over)ev.push({e:'over'});
+function resign(gs,seat){
+  const P=gs.players[seat];if(P.resigned||playerDone(P))return{ok:false,err:'You are not racing.',ev:[]};
+  P.resigned=1+Math.max(...gs.players.map(p=>p.resigned)); // the order of resigning (the first to leave places last)
+  const ev=[];tell(gs,ev,{e:'resign',pl:seat});
+  const others=gs.players.filter((p,i)=>i!==seat&&!p.resigned);
+  if(others.length<=1||!gs.players.some(isActive)){endGame(gs);ev.push({e:'over'});return{ok:true,ev};} // nobody left to race: finish now
+  checkEnd(gs,ev);
+  if(seat===gs.cur)passTurn(gs,ev);
+  if(gs.over)ev.push({e:'over'});
   return{ok:true,ev};
 }
-function progress(p){ // lower = closer: sum of shortest step counts from each explorer to a finishing space
+function progress(gs,p){ // lower = closer: sum of shortest step counts from each explorer to a finishing space
   let tot=0;
   for(const k of p.pieces){if(k==='done')continue;
     const seen=new Set([k]);let q=[k],d=0,found=false;
-    while(!found){d++;const nq=[];for(const u of q)for(const n of neighbors(u)){if(seen.has(n))continue;const h=hexAt(n);if(h.type==='m')continue;if(h.type==='g'){found=true;break;}seen.add(n);nq.push(n);}q=nq;
+    while(!found){d++;const nq=[];for(const u of q)for(const n of neighbors(gs,u)){if(seen.has(n))continue;const h=hexAt(gs,n);if(h.type==='m')continue;if(h.type==='g'){found=true;break;}seen.add(n);nq.push(n);}q=nq;
       assert(found||q.length,'progress: El Dorado can be reached from every explorer');}
     tot+=d;}
   return tot;
 }
-function endGame(){
-  S.over=true;
-  const bk=p=>blocksOf(S.players.indexOf(p)),mb=p=>Math.max(0,...bk(p).map(b=>S.blockades[b].n));
-  const keyOf=(p)=>playerDone(p)?[0,p.fin,-bk(p).length,-mb(p)]:p.resigned?[2,-p.resigned,0,0]:[1,progress(p),-bk(p).length,-mb(p)];
-  const idx=S.players.map((p,i)=>({i,k:keyOf(p)}));
+function endGame(gs){
+  gs.over=true;
+  const bk=p=>blocksOf(gs,gs.players.indexOf(p)),mb=p=>Math.max(0,...bk(p).map(b=>gs.blockades[b].n));
+  const keyOf=(p)=>playerDone(p)?[0,p.fin,-bk(p).length,-mb(p)]:p.resigned?[2,-p.resigned,0,0]:[1,progress(gs,p),-bk(p).length,-mb(p)];
+  const idx=gs.players.map((p,i)=>({i,k:keyOf(p)}));
   const cmp=(a,b)=>{for(let j=0;j<4;j++)if(a.k[j]!==b.k[j])return a.k[j]-b.k[j];return 0;};
   idx.sort(cmp);
-  const places=new Array(S.players.length);
+  const places=new Array(gs.players.length);
   idx.forEach((x,j)=>{places[x.i]=j>0&&cmp(x,idx[j-1])===0?places[idx[j-1].i]:j+1;});
-  S.places=places;log({e:'over'});
+  gs.places=places;log(gs,{e:'over'});
 }
 /* ---------- multiplayer Elo from a finishing order ---------- */
 function eloDeltas(ratings,places,games){
@@ -563,63 +569,63 @@ function redact(state,seat){
    ========================================================= */
 const BOT_TYPES=Object.keys(CT);
 /* ---- static distances to El Dorado, per map (cost = sum of space values along the way) ---- */
-function botDist(){
-  if(MAP._bd)return MAP._bd;
+function botDist(gs){
+  if(mapOf(gs)._bd)return mapOf(gs)._bd;
   const cost=new Map(),steps=new Map(),next=new Map(),pq=[];
-  for(const g of MAP.goals){cost.set(g,0);steps.set(g,0);pq.push([0,g]);}
+  for(const g of mapOf(gs).goals){cost.set(g,0);steps.set(g,0);pq.push([0,g]);}
   while(pq.length){let bi=0;for(let i=1;i<pq.length;i++)if(pq[i][0]<pq[bi][0])bi=i;const[d,u]=pq.splice(bi,1)[0];if(d>cost.get(u))continue;
-    const hu=hexAt(u);if(hu.type==='s')continue;           // start spaces can't be entered, so nothing routes through them
+    const hu=hexAt(gs,u);if(hu.type==='s')continue;           // start spaces can't be entered, so nothing routes through them
     const enter=hu.type==='g'?1:hu.val;                     // cost of stepping onto u
-    for(const n of neighbors(u)){const h=hexAt(n);if(h.type==='m'||h.type==='g')continue;
+    for(const n of neighbors(gs,u)){const h=hexAt(gs,n);if(h.type==='m'||h.type==='g')continue;
       const nd=d+enter;if(!cost.has(n)||nd<cost.get(n)){cost.set(n,nd);steps.set(n,steps.get(u)+1);next.set(n,u);pq.push([nd,n]);}}}
   const mix=new Map(); // terrain still ahead on the cheapest route, per type (tells the bot what to buy)
   for(const k of cost.keys()){const m={j:0,w:0,v:0,r:0,c:0};let x=next.get(k),guard=0;
-    while(x&&guard++<200){const h=hexAt(x);if(h.type==='g'){m[h.sym]+=1;break;}if(m[h.type]!=null)m[h.type]+=h.val;x=next.get(x);}mix.set(k,m);}
-  MAP._bd={cost,steps,mix};return MAP._bd;
+    while(x&&guard++<200){const h=hexAt(gs,x);if(h.type==='g'){m[h.sym]+=1;break;}if(m[h.type]!=null)m[h.type]+=h.val;x=next.get(x);}mix.set(k,m);}
+  mapOf(gs)._bd={cost,steps,mix};return mapOf(gs)._bd;
 }
-const botCost=k=>k==='done'?0:(botDist().cost.get(k)??60);
-function botRemaining(pl){const p=S.players[pl];return p.pieces.reduce((a,k)=>a+botCost(k),0)/p.pieces.length;} // route cost still ahead
+const botCost=(gs,k)=>k==='done'?0:(botDist(gs).cost.get(k)??60);
+function botRemaining(gs,pl){const p=gs.players[pl];return p.pieces.reduce((a,k)=>a+botCost(gs,k),0)/p.pieces.length;} // route cost still ahead
 /* ---- legal atomic actions for the player to move (deduplicated by card type) ---- */
 /* every distinct subset (by card types) of `ids` with exactly k cards */
-function botCombos(ids,k){const out=[],seen=new Set(),cur=[];
-  const rec=i=>{if(cur.length===k){const sig=cur.map(typeOf).sort().join();if(!seen.has(sig)){seen.add(sig);out.push(cur.slice());}return;}
+function botCombos(gs,ids,k){const out=[],seen=new Set(),cur=[];
+  const rec=i=>{if(cur.length===k){const sig=cur.map(id=>typeOf(gs,id)).sort().join();if(!seen.has(sig)){seen.add(sig);out.push(cur.slice());}return;}
     for(let j=i;j<ids.length;j++){cur.push(ids[j]);rec(j+1);cur.pop();}};rec(0);return out;}
 /* a card that can enter El Dorado on this course (its symbol, or a joker) */
-const botFinishCard=t=>{const d=CT[t];return d.c!=='p'&&(d.s===MAP.endSym||d.s==='*');};
+const botFinishCard=(gs,t)=>{const d=CT[t];return d.c!=='p'&&(d.s===mapOf(gs).endSym||d.s==='*');};
 /* removing these cards from the game still leaves an expedition that can finish: at least 4 cards (owner: 4 can be valid,
    fewer can't), and a card that can enter El Dorado if it had one. (Without this an AI paid for base camps down to 2
    cards, none able to enter, and stood forever beside the finish, blocking the way for others: Witch's Cauldron) */
-function botCanRemove(P,out){const all=[...P.deck,...P.hand,...P.discard,...P.play],fin=id=>botFinishCard(S.cards[id]);
+function botCanRemove(gs,P,out){const all=[...P.deck,...P.hand,...P.discard,...P.play],fin=id=>botFinishCard(gs,gs.cards[id]);
   return all.length-out.length>=4&&(!all.some(fin)||all.filter(fin).length>out.filter(fin).length);}
-function botActions(){
-  const seat=S.cur,P=S.players[seat],T=S.turn,out=[];
+function botActions(gs){
+  const seat=gs.cur,P=gs.players[seat],T=gs.turn,out=[];
   // Scientist / Travel Log: remove nothing, or any distinct choice of up to `max` cards
-  if(T.pending){for(let k=0;k<=Math.min(T.pending.max,P.hand.length);k++)for(const c of botCombos(P.hand,k))out.push({t:'trash',cards:c});return out;}
-  const seen=new Set(),hand=P.hand.filter(id=>{const t=typeOf(id);if(seen.has(t))return false;seen.add(t);return true;}); // one of each type
+  if(T.pending){for(let k=0;k<=Math.min(T.pending.max,P.hand.length);k++)for(const c of botCombos(gs,P.hand,k))out.push({t:'trash',cards:c});return out;}
+  const seen=new Set(),hand=P.hand.filter(id=>{const t=typeOf(gs,id);if(seen.has(t))return false;seen.add(t);return true;}); // one of each type
   P.pieces.forEach((pk,pi)=>{if(pk==='done')return;
-    if(T.active&&T.active.pi===pi)for(const[k]of reach(seat,pi,[T.active.sym],T.active.left))out.push({t:'move',card:T.active.id,pi,to:k});
-    for(const id of hand){const d=def(id),t=typeOf(id);
-      if(t==='native'){for(const[k]of nativeTargets(seat,pi))out.push({t:'native',card:id,pi,to:k});continue;}
+    if(T.active&&T.active.pi===pi)for(const[k]of reach(gs,seat,pi,[T.active.sym],T.active.left))out.push({t:'move',card:T.active.id,pi,to:k});
+    for(const id of hand){const d=def(gs,id),t=typeOf(gs,id);
+      if(t==='native'){for(const[k]of nativeTargets(gs,seat,pi))out.push({t:'native',card:id,pi,to:k});continue;}
       if(d.c==='p')continue;
-      for(const[k]of reach(seat,pi,d.s==='*'?['j','w','v']:[d.s],d.p))out.push({t:'move',card:id,pi,to:k});}
+      for(const[k]of reach(gs,seat,pi,d.s==='*'?['j','w','v']:[d.s],d.p))out.push({t:'move',card:id,pi,to:k});}
     // rubble / base camp / rubble blockade: every distinct choice of cards to give up (a base camp removes them from the game:
     // never so many that the expedition can't finish)
-    for(const[k,tg]of payTargets(seat,pi))for(const c of botCombos(P.hand,tg.need))if(tg.kind!=='camp'||botCanRemove(P,c))out.push({t:'pay',pi,to:k,cards:c});
+    for(const[k,tg]of payTargets(gs,seat,pi))for(const c of botCombos(gs,P.hand,tg.need))if(tg.kind!=='camp'||botCanRemove(gs,P,c))out.push({t:'pay',pi,to:k,cards:c});
   });
-  for(const id of hand){const t=typeOf(id);if(['cartographer','compass','scientist','travellog'].includes(t))out.push({t:'action',card:id});}
-  const open=S.market.some(s=>s.n===0);
-  const tr=hand.find(id=>typeOf(id)==='transmitter');
-  if(tr)for(const s of[...S.market,...S.reserve])if(s.n>0)out.push({t:'transmit',card:tr,type:s.t});
+  for(const id of hand){const t=typeOf(gs,id);if(['cartographer','compass','scientist','travellog'].includes(t))out.push({t:'action',card:id});}
+  const open=gs.market.some(s=>s.n===0);
+  const tr=hand.find(id=>typeOf(gs,id)==='transmitter');
+  if(tr)for(const s of[...gs.market,...gs.reserve])if(s.n>0)out.push({t:'transmit',card:tr,type:s.t});
   if(!T.bought){
     // every minimal way to pay (no card could be left out), distinct by card types
-    const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),pays=new Map();
+    const cash=P.hand.reduce((a,id)=>a+coinVal(gs,id),0),pays=new Map();
     const payFor=cost=>{if(pays.has(cost))return pays.get(cost);const res=[];
-      for(let k=1;k<=P.hand.length&&res.length<8;k++)for(const c of botCombos(P.hand,k)){const tot=c.reduce((a,id)=>a+coinVal(id),0);if(tot>=cost&&c.every(id=>tot-coinVal(id)<cost))res.push(c);}
+      for(let k=1;k<=P.hand.length&&res.length<8;k++)for(const c of botCombos(gs,P.hand,k)){const tot=c.reduce((a,id)=>a+coinVal(gs,id),0);if(tot>=cost&&c.every(id=>tot-coinVal(gs,id)<cost))res.push(c);}
       pays.set(cost,res);return res;};
-    for(const s of open?[...S.market,...S.reserve]:S.market)if(s.n>0&&CT[s.t].cost<=cash)for(const cards of payFor(CT[s.t].cost))out.push({t:'buy',type:s.t,cards});
+    for(const s of open?[...gs.market,...gs.reserve]:gs.market)if(s.n>0&&CT[s.t].cost<=cash)for(const cards of payFor(CT[s.t].cost))out.push({t:'buy',type:s.t,cards});
   }
   // end turn keeping any distinct choice of 0–3 cards
-  for(let k=0;k<=Math.min(3,P.hand.length);k++)for(const c of botCombos(P.hand,k))out.push({t:'end',keep:c});
+  for(let k=0;k<=Math.min(3,P.hand.length);k++)for(const c of botCombos(gs,P.hand,k))out.push({t:'end',keep:c});
   return out;
 }
 /* ---- features: everything a player can see at a glance, from `me`'s point of view ----
@@ -628,65 +634,65 @@ function botActions(){
    the "steps to El Dorado" axis, so the same inputs work on any course. */
 const BOT_BINS=16,BOT_BW=3,BOT_NT=BOT_TYPES.length;
 const BOT_NF=16*9+14+BOT_NT*4+12+3*(BOT_NT*2+8)+BOT_NT*2+2+6*9+4;
-function botCounts(ids){const c=new Float32Array(BOT_NT);for(const id of ids){const k=BOT_TYPES.indexOf(S.cards[id]);if(k>=0)c[k]++;}return c;}
-function botFeatures(me,into){ // into: write the summary at the start of this (zeroed) array instead of a new one
+function botCounts(gs,ids){const c=new Float32Array(BOT_NT);for(const id of ids){const k=BOT_TYPES.indexOf(gs.cards[id]);if(k>=0)c[k]++;}return c;}
+function botFeatures(gs,me,into){ // into: write the summary at the start of this (zeroed) array instead of a new one
   const f=into||new Float32Array(BOT_NF);let i=0;const put=(v)=>{f[i++]=v;},putArr=(a,sc)=>{for(const x of a)f[i++]=x*sc;};
-  const P=S.players[me],endView=S._endView===me,myTurn=S.cur===me&&!S.over&&!endView,bd=botDist(),n=S.players.length;
+  const P=gs.players[me],endView=gs._endView===me,myTurn=gs.cur===me&&!gs.over&&!endView,bd=botDist(gs),n=gs.players.length;
   const stepsOf=k=>k==='done'?0:(bd.steps.get(k)??48);
   // 1. the map, binned by steps to El Dorado: width, terrain mix, difficulty, crowding, blockades
   // the terrain part never changes on a course: computed once per map (same order of additions, so the same values); per call
   // only the occupied spaces and the open blockades are added
-  if(!MAP._fb){const st=new Float32Array(BOT_BINS*9),binOf=new Map();
-    for(const[k,sv]of bd.steps){const h=hexAt(k);if(h.type==='g'||h.type==='s')continue;const bi=Math.min(BOT_BINS-1,Math.floor(sv/BOT_BW)),o=bi*9;binOf.set(k,bi);
+  if(!mapOf(gs)._fb){const st=new Float32Array(BOT_BINS*9),binOf=new Map();
+    for(const[k,sv]of bd.steps){const h=hexAt(gs,k);if(h.type==='g'||h.type==='s')continue;const bi=Math.min(BOT_BINS-1,Math.floor(sv/BOT_BW)),o=bi*9;binOf.set(k,bi);
       st[o]++;const t='jwvrc'.indexOf(h.type);if(t>=0)st[o+1+t]++;st[o+6]+=h.val;}
-    MAP._fb={st,binOf,b:new Float32Array(BOT_BINS*9)};}
-  const FB=MAP._fb,bins=FB.b;bins.set(FB.st);const seen=[];
-  for(const p of S.players)for(const k of p.pieces){if(k==='done'||seen.includes(k))continue;seen.push(k);const bi=FB.binOf.get(k);if(bi!=null)bins[bi*9+7]++;}
-  S.blockades.forEach(B=>{if(B.owner!==null)return;const e=MAP.conns[B.conn].edges[0];const st=Math.min(stepsOf(e[0]),stepsOf(e[1]));bins[Math.min(BOT_BINS-1,Math.floor(st/BOT_BW))*9+8]+=B.v;});
+    mapOf(gs)._fb={st,binOf,b:new Float32Array(BOT_BINS*9)};}
+  const FB=mapOf(gs)._fb,bins=FB.b;bins.set(FB.st);const seen=[];
+  for(const p of gs.players)for(const k of p.pieces){if(k==='done'||seen.includes(k))continue;seen.push(k);const bi=FB.binOf.get(k);if(bi!=null)bins[bi*9+7]++;}
+  gs.blockades.forEach(B=>{if(B.owner!==null)return;const e=mapOf(gs).conns[B.conn].edges[0];const st=Math.min(stepsOf(e[0]),stepsOf(e[1]));bins[Math.min(BOT_BINS-1,Math.floor(st/BOT_BW))*9+8]+=B.v;});
   for(let o=0;o<BOT_BINS*9;o+=9){const c=bins[o]||1;put(bins[o]/10);for(let t=1;t<=5;t++)put(bins[o+t]/c);put(bins[o+6]/c/3);put(bins[o+7]/2);put(bins[o+8]/2);}
   // 2. me: where I am and what's ahead
-  const pieceCost=p=>p.pieces.reduce((a,k)=>a+botCost(k),0)/p.pieces.length,pieceSteps=p=>p.pieces.reduce((a,k)=>a+stepsOf(k),0)/p.pieces.length;
-  const myCost=pieceCost(P);put(myCost/40);put(pieceSteps(P)/40);put(Math.min(...P.pieces.map(stepsOf))/40);put(playerDone(P)?1:0);put(blocksOf(me).length/3);
+  const pieceCost=p=>p.pieces.reduce((a,k)=>a+botCost(gs,k),0)/p.pieces.length,pieceSteps=p=>p.pieces.reduce((a,k)=>a+stepsOf(k),0)/p.pieces.length;
+  const myCost=pieceCost(P);put(myCost/40);put(pieceSteps(P)/40);put(Math.min(...P.pieces.map(stepsOf))/40);put(playerDone(P)?1:0);put(blocksOf(gs,me).length/3);
   const mix={j:0,w:0,v:0,r:0,c:0};for(const k of P.pieces){if(k==='done')continue;const m=bd.mix.get(k);if(m)for(const s in mix)mix[s]+=m[s];}
   for(const s of'jwvrc')put(mix[s]/P.pieces.length/20);
-  put(myTurn?1:0);put(me/3);put(S.turn&&S.cur===me&&S.turn.bought?1:0);put(n===2?1:0);
+  put(myTurn?1:0);put(me/3);put(gs.turn&&gs.cur===me&&gs.turn.bought?1:0);put(n===2?1:0);
   // 3. my cards: hand (only meaningful on my turn), draw pile, discard, in play
   // hand: my cards on my turn; in the end-of-turn view, the cards I kept
-  putArr(myTurn||endView?botCounts(P.hand):new Float32Array(BOT_NT),1/3);putArr(botCounts(P.deck),1/4);putArr(botCounts(P.discard),1/4);putArr(botCounts(P.play),1/3);
+  putArr(myTurn||endView?botCounts(gs,P.hand):new Float32Array(BOT_NT),1/3);putArr(botCounts(gs,P.deck),1/4);putArr(botCounts(gs,P.discard),1/4);putArr(botCounts(gs,P.play),1/3);
   // 4. this turn: leftover strength, pending removal, what the hand could still do
-  if(myTurn){const a=S.turn.active;put(a?a.left/4:0);for(const s of'jwv')put(a&&a.sym===s?1:0);put(S.turn.pending?S.turn.pending.max/2:0);
-    let coins=0;for(const id of P.hand)coins+=coinVal(id);put(coins/6);put(P.hand.length/6);put(P.hand.filter(id=>def(id).c==='p').length/2);
+  if(myTurn){const a=gs.turn.active;put(a?a.left/4:0);for(const s of'jwv')put(a&&a.sym===s?1:0);put(gs.turn.pending?gs.turn.pending.max/2:0);
+    let coins=0;for(const id of P.hand)coins+=coinVal(gs,id);put(coins/6);put(P.hand.length/6);put(P.hand.filter(id=>def(gs,id).c==='p').length/2);
     let bestRed=0,sumRed=0;
-    for(const id of P.hand){const d=def(id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(pk);for(const[k]of reach(me,pi,d.s==='*'?['j','w','v']:[d.s],d.p)){if(k[0]!=='B')r=Math.max(r,base-botCost(k));}});bestRed=Math.max(bestRed,r);sumRed+=r;}
-    if(a){const pk=P.pieces[a.pi];if(pk!=='done'){const base=botCost(pk);for(const[k]of reach(me,a.pi,[a.sym],a.left))if(k[0]!=='B'){const r=base-botCost(k);bestRed=Math.max(bestRed,r);sumRed+=r;}}}
+    for(const id of P.hand){const d=def(gs,id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(gs,pk);for(const[k]of reach(gs,me,pi,d.s==='*'?['j','w','v']:[d.s],d.p)){if(k[0]!=='B')r=Math.max(r,base-botCost(gs,k));}});bestRed=Math.max(bestRed,r);sumRed+=r;}
+    if(a){const pk=P.pieces[a.pi];if(pk!=='done'){const base=botCost(gs,pk);for(const[k]of reach(gs,me,a.pi,[a.sym],a.left))if(k[0]!=='B'){const r=base-botCost(gs,k);bestRed=Math.max(bestRed,r);sumRed+=r;}}}
     put(bestRed/8);put(sumRed/12);put(myCost>0?Math.min(1,sumRed/myCost):1);put(1);
   }else i+=12;
   // 5. opponents in turn order after me: all cards they own, their discard pile, position, blockades
-  for(let k=1;k<=3;k++){const j=(me+k)%n;const p=k<n?S.players[j]:null;if(!p){i+=BOT_NT*2+8;continue;}
-    putArr(botCounts([...p.deck,...p.hand,...p.discard,...p.play]),1/4);putArr(botCounts(p.discard),1/4);
-    put(pieceCost(p)/40);put(pieceSteps(p)/40);put(playerDone(p)?1:0);put(p.resigned?1:0);put(blocksOf(j).length/3);put(p.hand.length/6);put(j===S.cur?1:0);put((pieceCost(p)-myCost)/20);}
+  for(let k=1;k<=3;k++){const j=(me+k)%n;const p=k<n?gs.players[j]:null;if(!p){i+=BOT_NT*2+8;continue;}
+    putArr(botCounts(gs,[...p.deck,...p.hand,...p.discard,...p.play]),1/4);putArr(botCounts(gs,p.discard),1/4);
+    put(pieceCost(p)/40);put(pieceSteps(p)/40);put(playerDone(p)?1:0);put(p.resigned?1:0);put(blocksOf(gs,j).length/3);put(p.hand.length/6);put(j===gs.cur?1:0);put((pieceCost(p)-myCost)/20);}
   // 6. market and reserve (cards left of each type) + reserve open
-  const mk=new Float32Array(BOT_NT),rs=new Float32Array(BOT_NT);S.market.forEach(s=>{mk[BOT_TYPES.indexOf(s.t)]+=s.n;});S.reserve.forEach(s=>{rs[BOT_TYPES.indexOf(s.t)]+=s.n;});
-  putArr(mk,1/3);putArr(rs,1/3);put(S.market.some(s=>s.n===0)?1:0);put(S.market.filter(s=>s.n>0).length/6);
+  const mk=new Float32Array(BOT_NT),rs=new Float32Array(BOT_NT);gs.market.forEach(s=>{mk[BOT_TYPES.indexOf(s.t)]+=s.n;});gs.reserve.forEach(s=>{rs[BOT_TYPES.indexOf(s.t)]+=s.n;});
+  putArr(mk,1/3);putArr(rs,1/3);put(gs.market.some(s=>s.n===0)?1:0);put(gs.market.filter(s=>s.n>0).length/6);
   // 7. blockades #1–6: on the board / mine / someone else's, cost, where, type
-  for(let num=1;num<=6;num++){const bi=S.blockades.findIndex(B=>B.n===num);if(bi<0){i+=9;continue;}const B=S.blockades[bi];
-    const e=MAP.conns[B.conn].edges[0];put(B.owner===null?1:0);put(B.owner===me?1:0);put(B.owner!==null&&B.owner!==me?1:0);put(B.v/2);put(Math.min(stepsOf(e[0]),stepsOf(e[1]))/40);
+  for(let num=1;num<=6;num++){const bi=gs.blockades.findIndex(B=>B.n===num);if(bi<0){i+=9;continue;}const B=gs.blockades[bi];
+    const e=mapOf(gs).conns[B.conn].edges[0];put(B.owner===null?1:0);put(B.owner===me?1:0);put(B.owner!==null&&B.owner!==me?1:0);put(B.v/2);put(Math.min(stepsOf(e[0]),stepsOf(e[1]))/40);
     for(const s of'jwvr')put(B.k===s?1:0);}
   // 8. game clock
-  put(S.round/40);put((n-2)/2);put(S.endTriggered?1:0);put(S.players.filter(p=>playerDone(p)).length/3);
+  put(gs.round/40);put((n-2)/2);put(gs.endTriggered?1:0);put(gs.players.filter(p=>playerDone(p)).length/3);
   if(i!==BOT_NF)throw new Error('bot features: wrote '+i+' of '+BOT_NF);
   return f;
 }
 /* ---- values ---- */
-function botHeuristic(me){ // hand-tuned: be close to the goal, own a strong deck, use this turn's cards well
-  const P=S.players[me];if(playerDone(P))return 100-P.fin;
+function botHeuristic(gs,me){ // hand-tuned: be close to the goal, own a strong deck, use this turn's cards well
+  const P=gs.players[me];if(playerDone(P))return 100-P.fin;
   const own=[...P.deck,...P.hand,...P.discard,...P.play],tot=own.length||1;let pw=0;
-  for(const id of own){const d=CT[S.cards[id]];if(d.c!=='p')pw+=d.p*(d.c==='x'?1.2:1);else pw+=1.2;}
-  let v=-P.pieces.reduce((a,k)=>a+botCost(k),0)/P.pieces.length;
-  v+=pw/tot*9-Math.max(0,tot-12)*.35+blocksOf(S.players.indexOf(P)).length*1.5;
-  if(S.cur===me&&!S.over&&S._endView!==me){let sumRed=0;
-    for(const id of P.hand){const d=def(id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(pk);for(const[k]of reach(me,pi,d.s==='*'?['j','w','v']:[d.s],d.p))if(k[0]!=='B')r=Math.max(r,base-botCost(k));});sumRed+=r;}
-    const a=S.turn.active;if(a&&P.pieces[a.pi]!=='done'){const base=botCost(P.pieces[a.pi]);let r=0;for(const[k]of reach(me,a.pi,[a.sym],a.left))if(k[0]!=='B')r=Math.max(r,base-botCost(k));sumRed+=r;}
+  for(const id of own){const d=CT[gs.cards[id]];if(d.c!=='p')pw+=d.p*(d.c==='x'?1.2:1);else pw+=1.2;}
+  let v=-P.pieces.reduce((a,k)=>a+botCost(gs,k),0)/P.pieces.length;
+  v+=pw/tot*9-Math.max(0,tot-12)*.35+blocksOf(gs,gs.players.indexOf(P)).length*1.5;
+  if(gs.cur===me&&!gs.over&&gs._endView!==me){let sumRed=0;
+    for(const id of P.hand){const d=def(gs,id);if(d.c==='p')continue;let r=0;P.pieces.forEach((pk,pi)=>{if(pk==='done')return;const base=botCost(gs,pk);for(const[k]of reach(gs,me,pi,d.s==='*'?['j','w','v']:[d.s],d.p))if(k[0]!=='B')r=Math.max(r,base-botCost(gs,k));});sumRed+=r;}
+    const a=gs.turn.active;if(a&&P.pieces[a.pi]!=='done'){const base=botCost(gs,P.pieces[a.pi]);let r=0;for(const[k]of reach(gs,me,a.pi,[a.sym],a.left))if(k[0]!=='B')r=Math.max(r,base-botCost(gs,k));sumRed+=r;}
     v+=sumRed*.95;}
   return v;
 }
@@ -698,9 +704,9 @@ function botHeuristic(me){ // hand-tuned: be close to the goal, own a strong dec
 const BOT_STARTER={explorer:1,traveler:1,sailor:1};
 /* buying: only while more than 7 of route is left, only a card worth more than 2 (botCardWorth, plus 8% per coin of cost) */
 const BOT_BUY={stop:7,min:2,costW:.08};
-function botPlanMoves(me){
-  const root=S,memo=new Map();let best=null,nodes=0;
-  const score=st=>{const P=st.players[me];const c=P.pieces.reduce((a,k)=>a+(k==='done'?-5:botCost(k)),0);const coin=P.hand.reduce((a,id)=>a+coinVal(id),0);
+function botPlanMoves(gs,me){
+  const root=gs,memo=new Map();let best=null,nodes=0;
+  const score=st=>{const P=st.players[me];const c=P.pieces.reduce((a,k)=>a+(k==='done'?-5:botCost(gs,k)),0);const coin=P.hand.reduce((a,id)=>a+coinVal(gs,id),0);
     return -c*10+coin;};
   const dfs=(st,path,depth)=>{
     if(++nodes>4000)return;
@@ -708,50 +714,50 @@ function botPlanMoves(me){
     if(depth>=9||st.over||st.cur!==me)return;
     const P=st.players[me],key=P.pieces.join('|')+'#'+P.hand.map(id=>st.cards[id]).sort().join()+'#'+(st.turn.active?st.turn.active.id+st.turn.active.left:'');
     if(memo.has(key)&&memo.get(key)<=depth)return;memo.set(key,depth);
-    S=st;const acts=botActions().filter(a=>a.t==='move'||a.t==='native'||a.t==='pay');S=root;
+    gs=st;const acts=botActions(gs).filter(a=>a.t==='move'||a.t==='native'||a.t==='pay');gs=root;
     // per card and explorer keep the 3 targets that get closest (the search stays small)
     const groups=new Map();for(const a of acts){const g=a.t+(a.card||'')+a.pi;if(!groups.has(g))groups.set(g,[]);groups.get(g).push(a);}
     for(const[,list]of groups){
-      const ranked=list.map(a=>({a,c:a.to[0]==='B'?-1:botCost(a.to)})).sort((x,y)=>x.c-y.c).slice(0,3);
-      for(const{a}of ranked){S=botClone(st);const r=applyAction(me,a);const nx=S;S=root;if(!r.ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
+      const ranked=list.map(a=>({a,c:a.to[0]==='B'?-1:botCost(gs,a.to)})).sort((x,y)=>x.c-y.c).slice(0,3);
+      for(const{a}of ranked){gs=botClone(st);const r=applyAction(gs,me,a);const nx=gs;gs=root;if(!r.ok)continue;path.push(a);dfs(nx,path,depth+1);path.pop();}
     }
   };
-  dfs(botClone(root),[],0);S=root;return best?best.path:[];
+  dfs(botClone(root),[],0);gs=root;return best?best.path:[];
 }
-function botCardWorth(t,me){ // how useful a new card is for the rest of the route
-  const P=S.players[me],bd=botDist(),live=P.pieces.filter(k=>k!=='done');const m={j:0,w:0,v:0,r:0,c:0};
+function botCardWorth(gs,t,me){ // how useful a new card is for the rest of the route
+  const P=gs.players[me],bd=botDist(gs),live=P.pieces.filter(k=>k!=='done');const m={j:0,w:0,v:0,r:0,c:0};
   for(const k of live){const x=bd.mix.get(k);if(x)for(const s in m)m[s]+=x[s]/live.length;}
   const mt=m.j+m.w+m.v+1,d=CT[t];
   if(d.c==='p')return {cartographer:2.6,native:2.2,compass:2.3,scientist:2.2,travellog:2.2,transmitter:1.5}[t]||1;
   const fit=d.s==='*'?1:(m[d.s]||0)/mt;return d.p*(0.35+fit)+(d.c==='y'?0.6:0);
 }
-function botPlanChoose(me){
-  const P=S.players[me],T=S.turn;
-  if(T.pending)return{t:'trash',cards:P.hand.filter(id=>BOT_STARTER[typeOf(id)]).slice(0,T.pending.max)}; // the weak starting cards
-  const draw=P.hand.find(id=>BOT_DRAW[typeOf(id)]);if(draw)return{t:'action',card:draw};
-  const moves=botPlanMoves(me);if(moves.length)return moves[0];
+function botPlanChoose(gs,me){
+  const P=gs.players[me],T=gs.turn;
+  if(T.pending)return{t:'trash',cards:P.hand.filter(id=>BOT_STARTER[typeOf(gs,id)]).slice(0,T.pending.max)}; // the weak starting cards
+  const draw=P.hand.find(id=>BOT_DRAW[typeOf(gs,id)]);if(draw)return{t:'action',card:draw};
+  const moves=botPlanMoves(gs,me);if(moves.length)return moves[0];
   // buy with what's left
-  const left=botRemaining(me);
+  const left=botRemaining(gs,me);
   if(!T.bought&&left>BOT_BUY.stop){
-    const cash=P.hand.reduce((a,id)=>a+coinVal(id),0),open=S.market.some(s=>s.n===0);let pick=null;
-    for(const s of open?[...S.market,...S.reserve]:S.market){if(s.n<=0||CT[s.t].cost>cash)continue;const w=botCardWorth(s.t,me)*(1+CT[s.t].cost*BOT_BUY.costW);if(!pick||w>pick.w)pick={w,t:s.t};}
-    if(pick&&pick.w>BOT_BUY.min){const buys=botActions().filter(a=>a.t==='buy'&&a.type===pick.t);
+    const cash=P.hand.reduce((a,id)=>a+coinVal(gs,id),0),open=gs.market.some(s=>s.n===0);let pick=null;
+    for(const s of open?[...gs.market,...gs.reserve]:gs.market){if(s.n<=0||CT[s.t].cost>cash)continue;const w=botCardWorth(gs,s.t,me)*(1+CT[s.t].cost*BOT_BUY.costW);if(!pick||w>pick.w)pick={w,t:s.t};}
+    if(pick&&pick.w>BOT_BUY.min){const buys=botActions(gs).filter(a=>a.t==='buy'&&a.type===pick.t);
       if(buys.length){buys.sort((a,b)=>a.cards.length-b.cards.length);return buys[0];}}
   }
-  const tr=P.hand.find(id=>typeOf(id)==='transmitter');
-  if(tr&&left>BOT_BUY.stop){let pick=null;for(const s of[...S.market,...S.reserve]){if(s.n<=0)continue;const w=botCardWorth(s.t,me)+CT[s.t].cost*.3;if(!pick||w>pick.w)pick={w,t:s.t};}if(pick)return{t:'transmit',card:tr,type:pick.t};}
+  const tr=P.hand.find(id=>typeOf(gs,id)==='transmitter');
+  if(tr&&left>BOT_BUY.stop){let pick=null;for(const s of[...gs.market,...gs.reserve]){if(s.n<=0)continue;const w=botCardWorth(gs,s.t,me)+CT[s.t].cost*.3;if(!pick||w>pick.w)pick={w,t:s.t};}if(pick)return{t:'transmit',card:tr,type:pick.t};}
   return{t:'end',keep:[]};
 }
 /* ---- per-map network input: the summary above + every space on this course + every tile connection ----
    Each space gets 4 slots (my explorer here / opponent 1, 2, 3 here, in turn order after me);
    each connection between tiles gets 8 (which blockade type was dealt there, its cost, owned by nobody / me / an opponent).
    The terrain itself never changes on a given course, so the network learns it per slot. */
-function botMapOrder(){if(MAP._bo)return MAP._bo;const keys=[...MAP.hexes.keys()].filter(k=>MAP.hexes.get(k).type!=='m').sort();const idx=new Map(keys.map((k,i)=>[k,i]));MAP._bo={keys,idx};return MAP._bo;}
+function botMapOrder(gs){if(mapOf(gs)._bo)return mapOf(gs)._bo;const keys=[...mapOf(gs).hexes.keys()].filter(k=>mapOf(gs).hexes.get(k).type!=='m').sort();const idx=new Map(keys.map((k,i)=>[k,i]));mapOf(gs)._bo={keys,idx};return mapOf(gs)._bo;}
 /* multi-course networks (net.courses = [course ids]): input = the summary (BOT_NF) + BOT_FLAGS rule switches + one board block per
    course in that order; only the current course's block is filled. Single-course networks (net.course) keep the old layout. */
 const BOT_FLAGS=4,BOT_BLOCK={};
-function botBlockSize(id){if(BOT_BLOCK[id]!=null)return BOT_BLOCK[id];const C=courseById(id);if(!C)return BOT_BLOCK[id]=0;
-  const m=MAP&&MAP.course===id?MAP:buildCourse(C,1),keys=[...m.hexes.keys()].filter(k=>m.hexes.get(k).type!=='m');return BOT_BLOCK[id]=keys.length*4+m.conns.length*8;}
+function botBlockSize(gs,id){if(BOT_BLOCK[id]!=null)return BOT_BLOCK[id];const C=courseById(id);if(!C)return BOT_BLOCK[id]=0;
+  const m=mapOf(gs)&&mapOf(gs).course===id?mapOf(gs):buildCourse(C,1),keys=[...m.hexes.keys()].filter(k=>m.hexes.get(k).type!=='m');return BOT_BLOCK[id]=keys.length*4+m.conns.length*8;}
 const botMulti=()=>!!(BOT_NET&&BOT_NET.courses);
 // net.onehot: one input per course (1 = the current course) right after the rule switches, so the network can shift its whole evaluation per map
 /* optional extra input groups (net.extra = ['cards', 'patch']), appended after everything above in that order:
@@ -759,43 +765,43 @@ const botMulti=()=>!!(BOT_NET&&BOT_NET.courses);
           card's value can be inferred from what it is, not only from its name; patch: the 37 spaces within 3 steps of my
           explorer (terrain, strength, occupied, closer to / farther from El Dorado), the same on every course */
 const BOT_XF={cards:9*12,patch:37*12},botExtra=()=>(BOT_NET&&BOT_NET.extra)||[],botExtraNF=()=>botExtra().reduce((a,g)=>a+BOT_XF[g],0);
-function botNetNF(){if(botMulti())return BOT_NF+BOT_FLAGS+(BOT_NET.onehot?BOT_NET.courses.length:0)+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(id),0)+botExtraNF();return BOT_NF+botMapOrder().keys.length*4+MAP.conns.length*8+botExtraNF();}
+function botNetNF(gs){if(botMulti())return BOT_NF+BOT_FLAGS+(BOT_NET.onehot?BOT_NET.courses.length:0)+BOT_NET.courses.reduce((a,id)=>a+botBlockSize(gs,id),0)+botExtraNF();return BOT_NF+botMapOrder(gs).keys.length*4+mapOf(gs).conns.length*8+botExtraNF();}
 const BOT_CP={},BOT_CPS=[1/10,1/20,1/10,1/10,1/10,1/10,1/10,1/5,1/5,1/5,1/5];
 // per card type, the 11 properties already scaled (count, cost, green, blue, yellow, joker strength, coins, draws, removals, single-use, action)
 function botCardProps(t){if(BOT_CP[t])return BOT_CP[t];const d=CT[t]||{},col=d.c;
   const v=[1,d.cost||0,col==='g'?d.p:0,col==='b'?d.p:0,col==='y'?d.p:0,col==='x'?d.p:0,col==='y'||col==='x'?d.p:.5,
     ({cartographer:2,compass:3,scientist:1,travellog:2})[t]||0,({scientist:1,travellog:2})[t]||0,d.once?1:0,col==='p'?1:0];
   return BOT_CP[t]=Float64Array.from(v,(x,i)=>x*BOT_CPS[i]);}
-function botAddIds(f,o,ids){for(let n=0;n<ids.length;n++){const c=botCardProps(S.cards[ids[n]]);for(let i=0;i<11;i++)f[o+i]+=c[i];}}
+function botAddIds(gs,f,o,ids){for(let n=0;n<ids.length;n++){const c=botCardProps(gs.cards[ids[n]]);for(let i=0;i<11;i++)f[o+i]+=c[i];}}
 function botMeanCost(f,o){f[o+11]=f[o]?f[o+1]*10/f[o]/5*0.5:0;} // mean cost per card /5 (count is /10, cost /20)
 // per map: for every space, its 37 neighbours within 3 steps (fixed order) with their static values precomputed
-function botPatchOf(k){const m=MAP._pt||(MAP._pt=new Map());let r=m.get(k);if(r)return r;const h0=hexAt(k);r=[];
-  for(let dq=-3;dq<=3;dq++)for(let dr=-3;dr<=3;dr++){if(Math.abs(dq+dr)>3)continue;const K=key(h0.q+dq,h0.r+dr),h=MAP.hexes.get(K);r.push(h?{K,t:'mjwvrcgs'.indexOf(h.type),v:(h.val||0)/4}:null);}
+function botPatchOf(gs,k){const m=mapOf(gs)._pt||(mapOf(gs)._pt=new Map());let r=m.get(k);if(r)return r;const h0=hexAt(gs,k);r=[];
+  for(let dq=-3;dq<=3;dq++)for(let dr=-3;dr<=3;dr++){if(Math.abs(dq+dr)>3)continue;const K=key(h0.q+dq,h0.r+dr),h=mapOf(gs).hexes.get(K);r.push(h?{K,t:'mjwvrcgs'.indexOf(h.type),v:(h.val||0)/4}:null);}
   m.set(k,r);return r;}
-function botExtraFeatures(me,f,o){const P=S.players[me],n=S.players.length;
+function botExtraFeatures(gs,me,f,o){const P=gs.players[me],n=gs.players.length;
   for(const g of botExtra()){
-    if(g==='cards'){const endView=S._endView===me,myTurn=S.cur===me&&!S.over&&!endView;
-      botAddIds(f,o,P.deck);botAddIds(f,o,P.hand);botAddIds(f,o,P.discard);botAddIds(f,o,P.play);botMeanCost(f,o);
-      if(myTurn||endView){botAddIds(f,o+12,P.hand);botMeanCost(f,o+12);}
-      botAddIds(f,o+24,P.deck);botMeanCost(f,o+24);botAddIds(f,o+36,P.discard);botMeanCost(f,o+36);
-      for(let k=1;k<=3;k++){const p=k<n?S.players[(me+k)%n]:null;if(!p)continue;const b=o+36+12*k;botAddIds(f,b,p.deck);botAddIds(f,b,p.hand);botAddIds(f,b,p.discard);botAddIds(f,b,p.play);botMeanCost(f,b);}
-      for(const[L,b]of[[S.market,o+84],[S.reserve,o+96]]){for(const x of L){if(x.n<=0)continue;const c=botCardProps(x.t);for(let i=0;i<11;i++)f[b+i]+=c[i]*x.n;}botMeanCost(f,b);}}
+    if(g==='cards'){const endView=gs._endView===me,myTurn=gs.cur===me&&!gs.over&&!endView;
+      botAddIds(gs,f,o,P.deck);botAddIds(gs,f,o,P.hand);botAddIds(gs,f,o,P.discard);botAddIds(gs,f,o,P.play);botMeanCost(f,o);
+      if(myTurn||endView){botAddIds(gs,f,o+12,P.hand);botMeanCost(f,o+12);}
+      botAddIds(gs,f,o+24,P.deck);botMeanCost(f,o+24);botAddIds(gs,f,o+36,P.discard);botMeanCost(f,o+36);
+      for(let k=1;k<=3;k++){const p=k<n?gs.players[(me+k)%n]:null;if(!p)continue;const b=o+36+12*k;botAddIds(gs,f,b,p.deck);botAddIds(gs,f,b,p.hand);botAddIds(gs,f,b,p.discard);botAddIds(gs,f,b,p.play);botMeanCost(f,b);}
+      for(const[L,b]of[[gs.market,o+84],[gs.reserve,o+96]]){for(const x of L){if(x.n<=0)continue;const c=botCardProps(x.t);for(let i=0;i<11;i++)f[b+i]+=c[i]*x.n;}botMeanCost(f,b);}}
     else if(g==='patch'){const k0=P.pieces.find(k=>k!=='done');
-      if(k0){const bd=botDist(),s0=bd.steps.get(k0)??48,nb=botPatchOf(k0);
+      if(k0){const bd=botDist(gs),s0=bd.steps.get(k0)??48,nb=botPatchOf(gs,k0);
         for(let i=0;i<nb.length;i++){const c=nb[i];if(!c)continue;const b=o+i*12;if(c.t>=0)f[b+1+c.t]=1;f[b+9]=c.v; // slot b+0 unused (terrain implies the space exists)
           const st=bd.steps.get(c.K);f[b+11]=st==null?1:Math.max(-1,Math.min(1,(st-s0)/6));}
-        S.players.forEach((p,j)=>{if(j===me)return;for(const k of p.pieces){if(k==='done')continue;const x=nb.findIndex(c=>c&&c.K===k);if(x>=0)f[o+x*12+10]=1;}});}}
+        gs.players.forEach((p,j)=>{if(j===me)return;for(const k of p.pieces){if(k==='done')continue;const x=nb.findIndex(c=>c&&c.K===k);if(x>=0)f[o+x*12+10]=1;}});}}
     o+=BOT_XF[g];}}
 let BOT_FBUF=null;
-function botNetFeatures(me,scratch){ // scratch: reuse one buffer (only for values used at once, never for stored training samples)
-  const{keys,idx}=botMapOrder(),n=S.players.length,nf=botNetNF();let f;
+function botNetFeatures(gs,me,scratch){ // scratch: reuse one buffer (only for values used at once, never for stored training samples)
+  const{keys,idx}=botMapOrder(gs),n=gs.players.length,nf=botNetNF(gs);let f;
   if(scratch){if(!BOT_FBUF||BOT_FBUF.length!==nf)BOT_FBUF=new Float32Array(nf);else BOT_FBUF.fill(0);f=BOT_FBUF;}else f=new Float32Array(nf);
-  botFeatures(me,f);let o=BOT_NF;
-  if(botMulti()){o+=BOT_FLAGS;if(BOT_NET.onehot){f[o+BOT_NET.courses.indexOf(MAP.course)]=1;o+=BOT_NET.courses.length;}for(const id of BOT_NET.courses){if(id===MAP.course)break;o+=botBlockSize(id);}}
-  S.players.forEach((p,j)=>{const rel=(j-me+n)%n;if(rel>3)return;for(const k of p.pieces){if(k==='done')continue;const x=idx.get(k);if(x!=null)f[o+x*4+rel]=1;}});
+  botFeatures(gs,me,f);let o=BOT_NF;
+  if(botMulti()){o+=BOT_FLAGS;if(BOT_NET.onehot){f[o+BOT_NET.courses.indexOf(mapOf(gs).course)]=1;o+=BOT_NET.courses.length;}for(const id of BOT_NET.courses){if(id===mapOf(gs).course)break;o+=botBlockSize(gs,id);}}
+  gs.players.forEach((p,j)=>{const rel=(j-me+n)%n;if(rel>3)return;for(const k of p.pieces){if(k==='done')continue;const x=idx.get(k);if(x!=null)f[o+x*4+rel]=1;}});
   o+=keys.length*4;
-  S.blockades.forEach(B=>{const c=o+B.conn*8;const t='jwvr'.indexOf(B.k);if(t>=0)f[c+t]=1;f[c+4]=B.v/2;f[c+5]=B.owner===null?1:0;f[c+6]=B.owner===me?1:0;f[c+7]=B.owner!==null&&B.owner!==me?1:0;});
-  if(botExtra().length)botExtraFeatures(me,f,nf-botExtraNF());
+  gs.blockades.forEach(B=>{const c=o+B.conn*8;const t='jwvr'.indexOf(B.k);if(t>=0)f[c+t]=1;f[c+4]=B.v/2;f[c+5]=B.owner===null?1:0;f[c+6]=B.owner===me?1:0;f[c+7]=B.owner!==null&&B.owner!==me?1:0;});
+  if(botExtra().length)botExtraFeatures(gs,me,f,nf-botExtraNF());
   return f;
 }
 /* network: {course, nf, w1T (input-major, nf×h1), b1, w2 (h2×h1), b2, w3 (h2), b3, leak}; leaky-ReLU (negative slope `leak`,
@@ -811,26 +817,26 @@ function botNetValue(f){BOT_EVALS++;const N=BOT_NET,P=botNetPrep(N),H1=P.b1.leng
   for(let j=0;j<H1;j++)if(h1[j]<0)h1[j]*=lk;
   let s=N.b3[0];for(let j=0;j<H2;j++){let a=b2[j];const r=j*H1;for(let k=0;k<H1;k++)a+=w2[r+k]*h1[k];s+=w3[j]*(a>0?a:lk*a);}
   return 1/(1+Math.exp(-s));}
-const botNetReady=()=>!!(BOT_NET&&MAP&&(botMulti()?BOT_NET.courses.includes(MAP.course):BOT_NET.course===MAP.course)&&BOT_NET.nf===botNetNF());
+const botNetReady=(gs)=>!!(BOT_NET&&mapOf(gs)&&(botMulti()?BOT_NET.courses.includes(mapOf(gs).course):BOT_NET.course===mapOf(gs).course)&&BOT_NET.nf===botNetNF(gs));
 /* what a finishing place is worth: 1st = 1, 2nd = 1/BOT_FIRST_RATIO, each further place half the one above, last = 0
    (3 players: 1, ¼, 0 · 4 players: 1, ¼, ⅛, 0). Training targets use the same values (tools/ai/gen.mjs). */
 const BOT_FIRST_RATIO=4;
 function botPlaceValue(pl,n){return pl>=n?0:pl<=1?1:1/BOT_FIRST_RATIO/2**(pl-2);}
 // my place is final once no one still racing moves after me in this round (every round starts with player 0)
-function botPlaceSettled(me){const n=S.players.length;for(let i=(me+1)%n;i!==0;i=(i+1)%n)if(isActive(S.players[i]))return false;return true;}
-function botValue(me,mode){
-  if(S.over){const pl=S.places[me],n=S.players.length;return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
-  const P=S.players[me];
+function botPlaceSettled(gs,me){const n=gs.players.length;for(let i=(me+1)%n;i!==0;i=(i+1)%n)if(isActive(gs.players[i]))return false;return true;}
+function botValue(gs,me,mode){
+  if(gs.over){const pl=gs.places[me],n=gs.players.length;return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
+  const P=gs.players[me];
   if(playerDone(P)){
     // arrived, but players still to move this round can arrive in the same round and beat me on the tie-break
     // (more blockades, then the biggest blockade): until the round is over my place is a chance, which the network estimates
     // once it has been trained on such positions (net.unsettled); older networks get the place as if settled (optimistic)
-    if(mode==='net'&&botNetReady()&&BOT_NET.unsettled&&!botPlaceSettled(me))return botNetValue(botNetFeatures(me,true));
+    if(mode==='net'&&botNetReady(gs)&&BOT_NET.unsettled&&!botPlaceSettled(gs,me))return botNetValue(botNetFeatures(gs,me,true));
     // settled: only players who arrived earlier, or in the same round with a better tie-break, are ahead of me (as endGame ranks)
-    const n=S.players.length,bk=p=>blocksOf(S.players.indexOf(p)),mb=p=>Math.max(0,...bk(p).map(b=>S.blockades[b].n));
-    const pl=1+S.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&(bk(q).length>bk(P).length||bk(q).length===bk(P).length&&mb(q)>mb(P)))).length;
+    const n=gs.players.length,bk=p=>blocksOf(gs,gs.players.indexOf(p)),mb=p=>Math.max(0,...bk(p).map(b=>gs.blockades[b].n));
+    const pl=1+gs.players.filter(q=>q!==P&&playerDone(q)&&(q.fin<P.fin||q.fin===P.fin&&(bk(q).length>bk(P).length||bk(q).length===bk(P).length&&mb(q)>mb(P)))).length;
     return mode==='net'?botPlaceValue(pl,n):1e3-pl*100;}
-  return mode==='net'&&botNetReady()?botNetValue(botNetFeatures(me,true)):botHeuristic(me);
+  return mode==='net'&&botNetReady(gs)?botNetValue(botNetFeatures(gs,me,true)):botHeuristic(gs,me);
 }
 /* ---- choose and play ---- */
 /* fast structural copy of the game state (everything applyAction can change gets its own copy) */
@@ -846,10 +852,10 @@ function botClone(st){
 }
 /* "My turn is over, next hand not drawn yet": played and unkept cards go to the discard pile.
    Scoring "end turn" here (instead of after the real draw) values it as an expectation over the draw, without peeking. */
-function botEndView(me,keep){const P=S.players[me];keep=(keep||[]).filter(id=>P.hand.includes(id));
+function botEndView(gs,me,keep){const P=gs.players[me];keep=(keep||[]).filter(id=>P.hand.includes(id));
   P.discard.push(...P.play,...P.hand.filter(id=>!keep.includes(id)));P.play=[];P.hand=keep.slice();
-  S.turn={bought:false,active:null,pending:null};S._endView=me;}
-function botEndFeatures(me,keep){const root=S;S=botClone(root);botEndView(me,keep);const f=botNetFeatures(me);S=root;return f;}
+  gs.turn={bought:false,active:null,pending:null};gs._endView=me;}
+function botEndFeatures(gs,me,keep){const root=gs;gs=botClone(root);botEndView(gs,me,keep);const f=botNetFeatures(gs,me);gs=root;return f;}
 const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
 /* Pick an action. Each option is scored by the value network's estimate of my chance of finishing ahead
    from the position right after it (TD-Gammon / AlphaZero style; mid-turn positions include the cards still in hand).
@@ -858,16 +864,16 @@ const BOT_DRAW={cartographer:1,compass:1,scientist:1,travellog:1};
    Training exploration: eps = uniformly random action; temp = softmax over scores; turnState.noBuy = a turn without gaining a card. */
 /* value of one legal action for `me`: copy the state, reshuffle my own draw pile (hidden order), apply it and score the
    position (for "end turn": after discarding, before drawing); actions that draw cards: mean over K reshuffles */
-function botActionValue(me,a,mode,rnd,K){const root=S;K=K||4;
-  const one=()=>{S=botClone(root);shuffle(S.players[me].deck,rnd);let v;
-    if(a.t==='end'){botEndView(me,a.keep);v=botValue(me,mode);}
-    else{const r=applyAction(me,a,rnd);v=r.ok?botValue(me,mode):-Infinity;}
-    S=root;return v;};
-  return a.t==='action'&&BOT_DRAW[typeOf(a.card)]?[...Array(K)].reduce(x=>x+one(),0)/K:one();}
-function botChoose(opts){
+function botActionValue(gs,me,a,mode,rnd,K){const root=gs;K=K||4;
+  const one=()=>{gs=botClone(root);shuffle(gs.players[me].deck,rnd);let v;
+    if(a.t==='end'){botEndView(gs,me,a.keep);v=botValue(gs,me,mode);}
+    else{const r=applyAction(gs,me,a,rnd);v=r.ok?botValue(gs,me,mode):-Infinity;}
+    gs=root;return v;};
+  return a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)]?[...Array(K)].reduce(x=>x+one(),0)/K:one();}
+function botChoose(gs,opts){
   opts=opts||{};let mode=opts.mode||(BOT_NET?'net':'heur');const eps=opts.eps||0,rnd=opts.rnd||Math.random;
-  if(mode==='plan')return{a:botPlanChoose(S.cur)};
-  const me=S.cur,root=S;let acts=botActions();if(mode==='net'&&!botNetReady())mode='heur';
+  if(mode==='plan')return{a:botPlanChoose(gs,gs.cur)};
+  const me=gs.cur,root=gs;let acts=botActions(gs);if(mode==='net'&&!botNetReady(gs))mode='heur';
   if(opts.turnState&&opts.turnState.noBuy){const f=acts.filter(a=>a.t!=='buy'&&a.t!=='transmit');if(f.length)acts=f;} // exploration: a turn without gaining a card
   if(eps&&rnd()<eps)return{a:acts[Math.floor(rnd()*acts.length)],why:'random'};
   // typed exploration: a random KIND of decision (buy / remove / keep / pay rubble / play a draw card / …), then a random option of it,
@@ -877,10 +883,10 @@ function botChoose(opts){
   if(ts&&ts.forceTransmit){const tr=acts.filter(a=>a.t==='transmit');if(tr.length){ts.forceTransmit=false; // a random card, reserve included, weighted toward expensive ones (cost²)
     const w=tr.map(a=>CT[a.type].cost**2);let r=rnd()*w.reduce((x,y)=>x+y,0);for(let i=0;i<tr.length;i++){r-=w[i];if(r<=0)return{a:tr[i],why:'forceTransmit'};}return{a:tr[tr.length-1],why:'forceTransmit'};}}
   // the whole-turn planner (after exploration, so random / typed moves and no-buy turns still happen in training)
-  if(opts.search&&mode==='net')return botPlanTurnChoose(opts);
+  if(opts.search&&mode==='net')return botPlanTurnChoose(gs,opts);
   const vals=[];let best=null,bv=-Infinity;const K=opts.draws||4;
   for(const a of acts){
-    let v=botActionValue(me,a,mode,rnd,K);
+    let v=botActionValue(gs,me,a,mode,rnd,K);
     if(opts.noise&&v>-Infinity)v+=(rnd()-.5)*opts.noise;
     vals.push(v);if(v>bv){bv=v;best=a;}
   }
@@ -900,45 +906,45 @@ function botChoose(opts){
    `draws` imagined draws and ends that line (the real draw reveals new cards, so the plan is redone after it). The same
    position reached in a different order is expanded once. The plan is made once per turn and followed; it is redone after
    a draw card, or if the next step is no longer legal. Cost ≈ beam × the plain bot's (measured with BOT_EVALS). */
-function botTurnKey(me){const P=S.players[me],T=S.turn,ty=ids=>ids.map(typeOf).sort().join(',');
-  return[P.pieces.join('|'),ty(P.hand),ty(P.play),P.discard.length,ty(P.discard),T.bought?1:0,T.active?typeOf(T.active.id)+T.active.pi+T.active.sym+T.active.left:'',T.pending?T.pending.max:'',
-    S.market.map(x=>x.n).join(''),S.reserve.map(x=>x.n).join(''),S.blockades.map(b=>b.owner??'-').join(''),S.trash.length].join('#');}
-function botPlanTurn(me,B,rnd,K,noBuy,top){ // top: optional array that receives every complete line {v,line}
-  const root=S,seen=new Set(),start=botClone(root);S=start;shuffle(S.players[me].deck,rnd);S=root; // my deck order stays hidden
+function botTurnKey(gs,me){const P=gs.players[me],T=gs.turn,ty=ids=>ids.map(id=>typeOf(gs,id)).sort().join(',');
+  return[P.pieces.join('|'),ty(P.hand),ty(P.play),P.discard.length,ty(P.discard),T.bought?1:0,T.active?typeOf(gs,T.active.id)+T.active.pi+T.active.sym+T.active.left:'',T.pending?T.pending.max:'',
+    gs.market.map(x=>x.n).join(''),gs.reserve.map(x=>x.n).join(''),gs.blockades.map(b=>b.owner??'-').join(''),gs.trash.length].join('#');}
+function botPlanTurn(gs,me,B,rnd,K,noBuy,top){ // top: optional array that receives every complete line {v,line}
+  const root=gs,seen=new Set(),start=botClone(root);gs=start;shuffle(gs.players[me].deck,rnd);gs=root; // my deck order stays hidden
   let beam=[{st:start,line:[]}],best={v:-Infinity,line:null};
   for(let depth=0;depth<14&&beam.length;depth++){
     const next=[];
     for(const node of beam){
-      S=node.st;const acts=botActions();S=root;
+      gs=node.st;const acts=botActions(gs);gs=root;
       for(const a of acts){
         if(noBuy&&(a.t==='buy'||a.t==='transmit'))continue; // exploration: a turn without gaining a card
         const line=[...node.line,a];
-        if(a.t==='end'){S=botClone(node.st);botEndView(me,a.keep);const v=botValue(me,'net');S=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}
-        if(a.t==='action'&&BOT_DRAW[typeOf(a.card)]){let v=0;for(let k=0;k<K;k++){S=botClone(node.st);shuffle(S.players[me].deck,rnd);const r=applyAction(me,a,rnd);v+=r.ok?botValue(me,'net'):-1;S=root;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
-        S=botClone(node.st);const r=applyAction(me,a,rnd);
-        if(!r.ok){S=root;continue;}
-        const v=botValue(me,'net');
-        if(S.over||S.cur!==me){S=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
-        const key=botTurnKey(me);if(seen.has(key)){S=root;continue;}seen.add(key);
-        next.push({st:S,line,v});S=root;
+        if(a.t==='end'){gs=botClone(node.st);botEndView(gs,me,a.keep);const v=botValue(gs,me,'net');gs=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}
+        if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)]){let v=0;for(let k=0;k<K;k++){gs=botClone(node.st);shuffle(gs.players[me].deck,rnd);const r=applyAction(gs,me,a,rnd);v+=r.ok?botValue(gs,me,'net'):-1;gs=root;}v/=K;if(top)top.push({v,line});if(v>best.v)best={v,line,draw:true};continue;}
+        gs=botClone(node.st);const r=applyAction(gs,me,a,rnd);
+        if(!r.ok){gs=root;continue;}
+        const v=botValue(gs,me,'net');
+        if(gs.over||gs.cur!==me){gs=root;if(top)top.push({v,line});if(v>best.v)best={v,line};continue;}          // the action ended my turn / the game
+        const key=botTurnKey(gs,me);if(seen.has(key)){gs=root;continue;}seen.add(key);
+        next.push({st:gs,line,v});gs=root;
       }
     }
     next.sort((x,y)=>y.v-x.v);beam=next.slice(0,B);
   }
-  S=root;return best;
+  gs=root;return best;
 }
 let BOT_PLAN_CACHE=null;
-function botPlanTurnChoose(opts){
-  const me=S.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
+function botPlanTurnChoose(gs,opts){
+  const me=gs.cur,o=opts.search,rnd=opts.rnd||Math.random,C=BOT_PLAN_CACHE;
   // follow the current plan while it still applies (same player, same round, same position the plan expects)
-  if(C&&C.me===me&&C.round===S.round&&C.i<C.line.length&&C.key===botTurnKey(me)){
-    const a=C.line[C.i];const root=S;S=botClone(root);const ok=applyAction(me,a,rnd).ok;const nk=ok&&!S.over&&S.cur===me?botTurnKey(me):null;S=root;
-    if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(a.card)])BOT_PLAN_CACHE=null;return{a,v:C.v,why:'plan'};}
+  if(C&&C.me===me&&C.round===gs.round&&C.i<C.line.length&&C.key===botTurnKey(gs,me)){
+    const a=C.line[C.i];const root=gs;gs=botClone(root);const ok=applyAction(gs,me,a,rnd).ok;const nk=ok&&!gs.over&&gs.cur===me?botTurnKey(gs,me):null;gs=root;
+    if(ok){C.i++;C.key=nk;if(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])BOT_PLAN_CACHE=null;return{a,v:C.v,why:'plan'};}
   }
-  const best=botPlanTurn(me,o.beam||3,rnd,opts.draws||4,!!(opts.turnState&&opts.turnState.noBuy));
+  const best=botPlanTurn(gs,me,o.beam||3,rnd,opts.draws||4,!!(opts.turnState&&opts.turnState.noBuy));
   if(!best.line||!best.line.length){BOT_PLAN_CACHE=null;return{a:{t:'end',keep:[]},why:'plan'};}
-  const a=best.line[0];const root=S;S=botClone(root);applyAction(me,a,rnd);const nk=!S.over&&S.cur===me?botTurnKey(me):null;S=root;
-  BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(a.card)])?{me,round:S.round,line:best.line,i:1,key:nk,v:best.v}:null;
+  const a=best.line[0];const root=gs;gs=botClone(root);applyAction(gs,me,a,rnd);const nk=!gs.over&&gs.cur===me?botTurnKey(gs,me):null;gs=root;
+  BOT_PLAN_CACHE=best.line.length>1&&!(a.t==='action'&&BOT_DRAW[typeOf(gs,a.card)])?{me,round:gs.round,line:best.line,i:1,key:nk,v:best.v}:null;
   return{a,v:best.v,why:'plan'};
 }
 /* ---- random courses for training (so the bot learns to play, not to memorise one map) ----
@@ -1004,78 +1010,77 @@ function aiNetDecode(bin){
   return N;
 }
 function aiSetNet(n){BOT_NET=n;}
-/* one decision for the AI in seat S.cur. mem: per-game object ({}) that keeps the turn planner's cache between calls.
+/* one decision for the AI in seat gs.cur. mem: per-game object ({}) that keeps the turn planner's cache between calls.
    Returns a legal action. */
-function aiChoose(id,mem){
+function aiChoose(gs,id,mem){
   const A=aiById(id);assert(A,'aiChoose: a named AI');
-  let opts=A.opts;if(opts.mode==='net'&&(!botNetReady()||S.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
-  const me=S.cur,tk=me+':'+S.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
-  if(++mem.n>60)return S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
+  let opts=A.opts;if(opts.mode==='net'&&(!botNetReady(gs)||gs.players.length===2))opts={mode:'plan'}; // network missing, trained for another course, or a 2-player game (never trained on those: it mostly failed to arrive)
+  const me=gs.cur,tk=me+':'+gs.round;if(mem.tk!==tk){mem.tk=tk;mem.n=0;}
+  if(++mem.n>60)return gs.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}; // never loop inside a turn
   BOT_PLAN_CACHE=mem.plan||null;
-  let a;try{a=botChoose(opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;}
-  return aiFinishGuard(a,mem);
+  let a;try{a=botChoose(gs,opts).a;}finally{mem.plan=BOT_PLAN_CACHE;BOT_PLAN_CACHE=null;}
+  return aiFinishGuard(gs,a,mem);
 }
 /* the whole turn this AI would play from here for the player to move ([actions]), for the replay's advice. A draw card ends
    the line (the cards it draws change the plan). null: this AI doesn't plan whole turns with the network, or it isn't loaded */
-function aiPlan(id,rnd){
-  const o=aiById(id).opts;if(o.mode!=='net'||!o.search||o.search.kind!=='plan'||!botNetReady()||S.players.length===2||S.over)return null;
-  const best=botPlanTurn(S.cur,o.search.beam||3,rnd||Math.random,o.draws||4,false);
-  return best.line&&best.line.length?best.line:[S.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}];
+function aiPlan(gs,id,rnd){
+  const o=aiById(id).opts;if(o.mode!=='net'||!o.search||o.search.kind!=='plan'||!botNetReady(gs)||gs.players.length===2||gs.over)return null;
+  const best=botPlanTurn(gs,gs.cur,o.search.beam||3,rnd||Math.random,o.draws||4,false);
+  return best.line&&best.line.length?best.line:[gs.turn.pending?{t:'trash',cards:[]}:{t:'end',keep:[]}];
 }
 /* El Dorado can only be entered with a card of its symbol (paddle on the water side, machete on the jungle side) or a joker.
    The bot sometimes trashes its last such card (or nearly its whole deck) and, near the end, stops buying, so it could wait forever next to the finish
    (seen on the newer courses). Keep one such card when trashing, and buy one before ending a turn without any. */
-function aiFinishGuard(a,mem){
-  const P=S.players[S.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>botFinishCard(S.cards[id])).length;
+function aiFinishGuard(gs,a,mem){
+  const P=gs.players[gs.cur],all=[...P.deck,...P.hand,...P.discard,...P.play],n=all.filter(id=>botFinishCard(gs,gs.cards[id])).length;
   if(a.t==='trash'){let c=a.cards;
-    if(n){const out=c.filter(id=>botFinishCard(S.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
+    if(n){const out=c.filter(id=>botFinishCard(gs,gs.cards[id]));if(out.length>=n)c=c.filter(id=>id!==out[0]);}
     // and never thin the deck below 4 cards (owner: 4 can be valid, fewer can't), nor below what a base camp that is its
     // next step takes (it keeps 4 after paying it)
-    const camp=Math.max(0,...aiNextSteps(P).filter(h=>h.type==='c').map(h=>h.val));
+    const camp=Math.max(0,...aiNextSteps(gs,P).filter(h=>h.type==='c').map(h=>h.val));
     c=c.slice(0,Math.max(0,all.length-4-camp));
     if(c.length!==a.cards.length)return{...a,cards:c};}
   // (a base camp is open to an expedition that keeps 4 cards after paying it, botCanRemove: every card bought brings it closer)
-  const steps=aiNextSteps(P),open=(t,h)=>h.type==='c'?all.length-h.val>=4:aiEnters(t,h);
-  const stuck=steps.length>0&&!all.some(id=>steps.some(h=>open(S.cards[id],h)));
+  const steps=aiNextSteps(gs,P),open=(t,h)=>h.type==='c'?all.length-h.val>=4:aiEnters(gs,t,h);
+  const stuck=steps.length>0&&!all.some(id=>steps.some(h=>open(gs.cards[id],h)));
   // once an explorer's planned way is shut to its cards, it keeps to a way they can take for the rest of the game (else the
   // plan walks it straight back): steps along that way instead of ending the turn or stepping off it
   if(stuck)mem.detour=true;
-  if(mem.detour&&!S.turn.pending&&(a.t==='end'||a.t==='move'||a.t==='native'||a.t==='pay')){
-    const cap=aiRouteFor(all.map(id=>S.cards[id]),all.length),far=k=>k==='done'?0:(cap.get(k)??Infinity);
+  if(mem.detour&&!gs.turn.pending&&(a.t==='end'||a.t==='move'||a.t==='native'||a.t==='pay')){
+    const cap=aiRouteFor(gs,all.map(id=>gs.cards[id]),all.length),far=k=>k==='done'?0:(cap.get(k)??Infinity);
     const off=a.t!=='end'&&a.to[0]!=='B'&&far(a.to)>=far(P.pieces[a.pi]);
     if(a.t==='end'||off){
-      const det=botActions().filter(b=>(b.t==='move'||b.t==='native'||b.t==='pay')&&b.to[0]!=='B'&&far(b.to)<far(P.pieces[b.pi]));
+      const det=botActions(gs).filter(b=>(b.t==='move'||b.t==='native'||b.t==='pay')&&b.to[0]!=='B'&&far(b.to)<far(P.pieces[b.pi]));
       if(det.length){det.sort((x,y)=>far(x.to)-far(y.to));return det[0];}}}
-  if(a.t==='end'&&!S.turn.bought&&!S.turn.pending){
+  if(a.t==='end'&&!gs.turn.bought&&!gs.turn.pending){
     // an expedition with no card that could take the next step (or enter El Dorado) buys one, the cheapest way
-    const want=!n?t=>botFinishCard(t):stuck?t=>steps.some(h=>h.type==='c'||aiEnters(t,h)):null;
-    const buys=want?botActions().filter(b=>b.t==='buy'&&want(b.type)):[];
+    const want=!n?t=>botFinishCard(gs,t):stuck?t=>steps.some(h=>h.type==='c'||aiEnters(gs,t,h)):null;
+    const buys=want?botActions(gs).filter(b=>b.t==='buy'&&want(b.type)):[];
     if(buys.length){buys.sort((x,y)=>x.cards.length-y.cards.length);return buys[0];}
   }
   return a;
 }
 /* the spaces the player's explorers could step to next on their way: neighbours closer to El Dorado */
-function aiNextSteps(P){const out=[];
-  for(const k of P.pieces){if(k==='done')continue;const c=botCost(k);for(const nb of neighbors(k))if(hexAt(nb).type!=='m'&&botCost(nb)<c)out.push(hexAt(nb));}
+function aiNextSteps(gs,P){const out=[];
+  for(const k of P.pieces){if(k==='done')continue;const c=botCost(gs,k);for(const nb of neighbors(gs,k))if(hexAt(gs,nb).type!=='m'&&botCost(gs,nb)<c)out.push(hexAt(gs,nb));}
   return out;}
 /* steps to El Dorado from every space over spaces cards of these types can enter (an expedition of `total` cards: base
    camps that leave it 4); Map key → steps, a space missing: no way from there */
-function aiRouteFor(types,total){const d=new Map(),q=[],ok=h=>h.type==='c'?total-h.val>=4:types.some(t=>aiEnters(t,h));
-  for(const k of MAP.goals)if(ok(hexAt(k))){d.set(k,0);q.push(k);}
-  for(let i=0;i<q.length;i++){const k=q[i];for(const nb of neighbors(k)){const h=hexAt(nb);
+function aiRouteFor(gs,types,total){const d=new Map(),q=[],ok=h=>h.type==='c'?total-h.val>=4:types.some(t=>aiEnters(gs,t,h));
+  for(const k of mapOf(gs).goals)if(ok(hexAt(gs,k))){d.set(k,0);q.push(k);}
+  for(let i=0;i<q.length;i++){const k=q[i];for(const nb of neighbors(gs,k)){const h=hexAt(gs,nb);
     if(d.has(nb)||h.type==='m'||h.type==='g'||h.type==='s'||!ok(h))continue;d.set(nb,d.get(k)+1);q.push(nb);}}
   return d;}
 /* a card of type t could enter space h: its symbol (El Dorado: the course's) and strength, a joker, the Native; rubble and base
    camps take any cards */
-function aiEnters(t,h){const d=CT[t];if(t==='native'||h.type==='r'||h.type==='c')return true;if(d.c==='p')return false;
-  const sym=h.type==='g'?MAP.endSym:h.type;return(d.s===sym||d.s==='*')&&d.p>=(h.val||1);}
+function aiEnters(gs,t,h){const d=CT[t];if(t==='native'||h.type==='r'||h.type==='c')return true;if(d.c==='p')return false;
+  const sym=h.type==='g'?mapOf(gs).endSym:h.type;return(d.s===sym||d.s==='*')&&d.p>=(h.val||1);}
 /* apply the AI's decision (recorded in rec, the game's log; may be null). Returns applyAction's result. */
-function aiStep(id,mem,rec,rnd){ // rnd: the game's shuffles when there is no record (tools)
-  const r=recApply(rec,S.cur,aiChoose(id,mem),rnd);
+function aiStep(gs,id,mem,rec,rnd){ // rnd: the game's shuffles when there is no record (tools)
+  const r=recApply(gs,rec,gs.cur,aiChoose(gs,id,mem),rnd);
   assert(r.ok,'aiStep: the AI chooses a legal action');
   return r;
 }
 
-// every name (live bindings), and setters for the game on show
-export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,MAP,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,S,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,mapFor,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,replay,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,recRng,newGame,newCard,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiRouteFor,aiStep};
-export const setS=v=>{S=v},setMAP=v=>{MAP=v};
+// every name
+export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,SQ3,R,DIRS,key,rot,pxOf,mulberry32,log,shuffle,hash,COURSES,courseById,buildCourse,mapOf,MAPS,lastMap,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,replay,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,recRng,newGame,newCard,applyAction,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,BOT_PLAN_CACHE,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiRouteFor,aiStep};

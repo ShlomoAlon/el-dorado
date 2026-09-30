@@ -10,8 +10,8 @@ const N = JSON.parse(readFileSync(inp, 'utf8')), H1 = N.b1.length, H2 = N.b2.len
 E.aiSetNet(N); const pos = [];
 for (const id of courses) for (let g = 0; g < +G; g++) {
   const n = g % 2 ? 4 : 3, rnd = E.mulberry32(g + 3);
-  playout({ seed: 61000 + g, players: seatPlayers(n), course: E.courseById(id), cap: 30, choose: () => E.botChoose({ mode: 'net', rnd, temp: .02 }).a,
-    after: () => { if (!E.S.over && rnd() < .2) for (let p = 0; p < n; p++) if (!E.S.players[p].fin) pos.push(E.botNetFeatures(p)); } });
+  const { gs } = playout({ seed: 61000 + g, players: seatPlayers(n), course: E.courseById(id), cap: 30, choose: gs => E.botChoose(gs, { mode: 'net', rnd, temp: .02 }).a,
+    after: gs => { if (!gs.over && rnd() < .2) for (let p = 0; p < n; p++) if (!gs.players[p].fin) pos.push(E.botNetFeatures(gs, p)); } });
 }
 const fwd = f => { const h1 = Float64Array.from(N.b1); for (let k = 0; k < f.length; k++) { const x = f[k]; if (!x) continue; for (let j = 0; j < H1; j++) h1[j] += N.w1T[k * H1 + j] * x; } return h1; };
 const pre1 = pos.map(fwd), a1 = pre1.map(h => h.map(x => x > 0 ? x : .01 * x));

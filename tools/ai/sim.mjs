@@ -7,10 +7,10 @@ const [,, G = '40', NP = '3', POL = '', NET = '', MAPS = 'first'] = process.argv
 if (NET) E.aiSetNet(JSON.parse(readFileSync(NET, 'utf8')));
 const pols = (POL || Array(+NP).fill('heur').join(',')).split(',');
 export function playGame(pols, seed, cap = 60, opts = {}, course = E.COURSES[0]) {
-  const { capped } = playout({ seed, course, cap, players: seatPlayers(pols.length), choose: me => {
-    if (pols[me] === 'random') { const L = E.botActions(); return L[Math.floor(Math.random() * L.length)]; }
-    return E.botChoose({ mode: pols[me] === 'net' ? 'net' : 'heur', ...opts }).a; } });
-  const S = E.S;
+  const { gs, capped } = playout({ seed, course, cap, players: seatPlayers(pols.length), choose: (gs, me) => {
+    if (pols[me] === 'random') { const L = E.botActions(gs); return L[Math.floor(Math.random() * L.length)]; }
+    return E.botChoose(gs, { mode: pols[me] === 'net' ? 'net' : 'heur', ...opts }).a; } });
+  const S = gs;
   return { places: S.places, fin: S.players.map(p => p.fin || null), rounds: S.round, capped };
 }
 if (import.meta.url === `file://${process.argv[1]}`) {

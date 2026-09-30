@@ -399,14 +399,14 @@ const PLAYER_ACTIONS = ['move', 'native', 'pay', 'action', 'trash', 'transmit', 
 
 export class Room extends DurableObject {
   constructor(ctx, env) {
-    super(ctx, env); this.d = null; this.S = null; this.MAP = null; this.rec = null;
+    super(ctx, env); this.d = null; this.S = null; this.rec = null;
     E.setAssertMode({ debug: env.DEV_AUTH === '1' });
     ctx.blockConcurrencyWhile(() => this.restore());
   }
   // storage: d (the room) and rec (the game's record: engine recNewGame). The game state S is rebuilt from rec. rec holds the
   // secret shuffle seed, so it is never sent out; once the game is over it is saved as the game's replay.
   async restore() {
-    this.d = (await this.ctx.storage.get('d')) || null; this.rec = (await this.ctx.storage.get('rec')) || null; this.S = null; this.MAP = null; this.aiMem = {};
+    this.d = (await this.ctx.storage.get('d')) || null; this.rec = (await this.ctx.storage.get('rec')) || null; this.S = null; this.aiMem = {};
     if (this.rec && E.replayCheck(this.rec)) this.rec = null; // recorded under older rules: it can't be rebuilt
     if (this.rec) this.load();
     else if (this.d && this.d.status === 'playing') this.d.status = 'closed'; // a game this version can't rebuild
@@ -429,11 +429,10 @@ export class Room extends DurableObject {
     }
   }
   // the game (S) and its board (MAP), rebuilt from the record
-  load() { ({ S: this.S, MAP: this.MAP } = E.recState(this.rec)); }
+  load() { this.S = E.recState(this.rec); }
   // who plays each seat: the room's seats, in the game's seat order (fixed once the game starts)
   get owners() { return this.d.seats.map(s => s.uid); }
   async persist() { await this.ctx.storage.put(this.rec ? { d: this.d, rec: this.rec } : { d: this.d }); }
-  engine() { E.setS(this.S); E.setMAP(this.MAP); return E; }
   async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.roomInfo()) }); } catch (e) { } }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
   // left: the player resigned; the game goes on without them, so they are no longer in this room (the lobby's /find, /match)
@@ -534,9 +533,9 @@ export class Room extends DurableObject {
       if (seat < 0) return err('You are watching this game.');
       if (!m.a || typeof m.a !== 'object') return err('Bad action.');
       if (!PLAYER_ACTIONS.includes(m.a.t)) return err('Bad action.'); // (timeout and endgame are the server's and local play's, not a player's)
-      const eng = this.engine(), prevCur = this.S.cur, r = eng.recApply(this.rec, seat, m.a);
+      const prevCur = this.S.cur, r = E.recApply(this.S, this.rec, seat, m.a);
       if (!r.ok) return err(r.err); // (a refused action changes nothing)
-      this.S = E.S; d.timeouts[seat] = 0;
+      d.timeouts[seat] = 0;
       if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn();
       await this.afterChange(r.ev); // the player's answer first: waiting on the lobby below lets an AI alarm run meanwhile
       if (m.a.t === 'resign') await this.tellLobby(); // (they are out of the room now)
@@ -552,8 +551,7 @@ export class Room extends DurableObject {
   async startGame() {
     const d = this.d;
     E.shuffle(d.seats, Math.random); // the order around the table (who moves first): new each game; seat i plays player i
-    this.rec = E.recNewGame({ course: d.opts.course === 'random' ? E.COURSES[Math.floor(Math.random() * E.COURSES.length)] : E.courseById(d.opts.course), seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true });
-    this.S = E.S; this.MAP = E.MAP;
+    ({ gs: this.S, rec: this.rec } = E.recNewGame({ course: d.opts.course === 'random' ? E.COURSES[Math.floor(Math.random() * E.COURSES.length)] : E.courseById(d.opts.course), seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true }));
     d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null;
     await this.nextTurn(); await this.persist(); this.tellLobby(); this.sendAll();
   }
@@ -583,10 +581,10 @@ export class Room extends DurableObject {
      code runs (it moves on only at I/O), so a time budget never ran out and one alarm played the rest of the game,
      holding the room (and a resigning player's answer) for seconds. */
   async aiMove() {
-    const eng = this.engine(); useNet(); const ev = []; const fast = !this.watched(); let n = 0;
+    useNet(); const ev = []; const fast = !this.watched(); let n = 0;
     do {
       const seat = this.S.cur, mem = this.aiMem[seat] || (this.aiMem[seat] = {});
-      const r = eng.aiStep(this.S.players[seat].ai, mem, this.rec); this.S = E.S; ev.push(...r.ev);
+      const r = E.aiStep(this.S, this.S.players[seat].ai, mem, this.rec); ev.push(...r.ev);
     } while (fast && this.aiToMove() && ++n < AI_BATCH);
     if (!this.S.over) { if (this.aiToMove()) await this.scheduleAI(700); else await this.startTurnTimer(); }
     await this.afterChange(ev);
@@ -596,9 +594,8 @@ export class Room extends DurableObject {
     if (this.aiToMove()) { if (d.aiAt && Date.now() < d.aiAt - 50) { await this.ctx.storage.setAlarm(d.aiAt); return; } await this.aiMove(); return; }
     if (Date.now() < d.deadline - 1000) { await this.ctx.storage.setAlarm(d.deadline); return; }
     // the clock ran out: the turn ends; the third time in a row the player forfeits
-    const eng = this.engine(), seat = this.S.cur; d.timeouts[seat] = (d.timeouts[seat] || 0) + 1;
-    const forfeit = d.timeouts[seat] >= 3, { ev } = eng.recApply(this.rec, seat, { t: forfeit ? 'resign' : 'timeout' });
-    this.S = E.S;
+    const seat = this.S.cur; d.timeouts[seat] = (d.timeouts[seat] || 0) + 1;
+    const forfeit = d.timeouts[seat] >= 3, { ev } = E.recApply(this.S, this.rec, seat, { t: forfeit ? 'resign' : 'timeout' });
     if (!this.S.over) await this.nextTurn();
     await this.afterChange(ev);
     if (forfeit) await this.tellLobby();
@@ -608,7 +605,7 @@ export class Room extends DurableObject {
   async saveReplay() {
     const d = this.d; if (d.replay !== undefined) return d.replay;
     d.replay = null;
-    const log = this.engine().recFinal(this.rec, this.S);
+    const log = E.recFinal(this.rec, this.S);
     const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
     const text = JSON.stringify(log); if (text.length > REPLAY_MAX_BYTES) return null;
     try {

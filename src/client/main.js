@@ -1,8 +1,8 @@
 /* BOOT: wires the modules together, sets the order the view parts update in, and decides what opens first (a replay
    or room link, a game in progress, the Online screen, or the start screen). */
-import { S, MAP, buildCourse, courseById, setMAP, assert } from '../engine.gen.js';
+import { buildCourse, courseById, assert } from '../engine.gen.js';
 import { $ } from './dom.js';
-import { UI, NET, G, canAct, online } from './state.js';
+import { S, MAP, setMAP, UI, NET, G, canAct, online } from './state.js';
 import { addPart, render, flush } from './frame.js';
 import { watchGeometry } from './geometry.js';
 import { GAME_READY } from './ready.js';
@@ -47,7 +47,7 @@ function boot() {
     const sync = () => { const on = !!fsOn(); fb.classList.toggle('full', on); fb.title = fb.ariaLabel = on ? 'Exit full screen' : 'Full screen'; };
     document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
   }
-  // Menu: the start screen, without ending the game in progress (it offers Back to game and Resign)
+  // Menu: the start screen, without ending the game in progress (S,it offers Back to game and Resign)
   $('#menuBtn').onclick = () => { if (G.replay) exitReplay(); else showMenu(); };
   window.addEventListener('keydown', e => {
     if (replayKeys(e)) return; if (e.target.tagName === 'INPUT') return;

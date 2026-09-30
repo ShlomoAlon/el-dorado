@@ -11,9 +11,9 @@ if (!isMainThread) {
   const { net, search, from, to } = workerData; E.aiSetNet(net); const out = [];
   for (let g = from; g < to; g++) {
     const seat = g % 3, rnd = E.mulberry32(5000 + g);
-    playout({ seed: 70000 + g, players: seatPlayers(3), cap: 30, stop: () => E.S.players[seat].fin,
-      choose: me => (me === seat ? E.botChoose({ mode: 'net', rnd, search: search ? { kind: 'plan', beam: 3 } : undefined }) : E.botChoose({ mode: 'plan', rnd })).a });
-    out.push(E.S.players[seat].fin || null);
+    const { gs } = playout({ seed: 70000 + g, players: seatPlayers(3), cap: 30, stop: gs => gs.players[seat].fin,
+      choose: (gs, me) => (me === seat ? E.botChoose(gs, { mode: 'net', rnd, search: search ? { kind: 'plan', beam: 3 } : undefined }) : E.botChoose(gs, { mode: 'plan', rnd })).a });
+    out.push(gs.players[seat].fin || null);
   }
   parentPort.postMessage(out);
 } else {

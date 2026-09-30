@@ -10,9 +10,9 @@ const pos = []; // {f, me, g}
 const outcomes = [];
 for (let g = 0; g < +G; g++) {
   const n = g % 2 ? 4 : 3, rnd = E.mulberry32(g + 9), mine = [];
-  playout({ seed: 60000 + g, players: seatPlayers(n), course: E.courseById(course), cap: 30, choose: () => E.botChoose({ mode: 'net', rnd, temp: .01 }).a,
-    after: () => { if (!E.S.over && rnd() < .25) for (let p = 0; p < n; p++) if (!E.S.players[p].fin) mine.push({ f: E.botNetFeatures(p), me: p, n }); } });
-  for (const x of mine) { const pl = E.S.places[x.me], fail = !E.S.players[x.me].fin; x.z = fail ? 0 : E.botPlaceValue(pl, x.n); pos.push(x); }
+  const { gs } = playout({ seed: 60000 + g, players: seatPlayers(n), course: E.courseById(course), cap: 30, choose: gs => E.botChoose(gs, { mode: 'net', rnd, temp: .01 }).a,
+    after: gs => { if (!gs.over && rnd() < .25) for (let p = 0; p < n; p++) if (!gs.players[p].fin) mine.push({ f: E.botNetFeatures(gs, p), me: p, n }); } });
+  for (const x of mine) { const pl = gs.places[x.me], fail = !gs.players[x.me].fin; x.z = fail ? 0 : E.botPlaceValue(pl, x.n); pos.push(x); }
 }
 // forward pass with activations (same math as botNetValue)
 const act1 = [], act2 = [], outs = [];

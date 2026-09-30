@@ -1,8 +1,8 @@
 /* The heads-up display: the top bar (round, one chip per player), the prompt (what to do now, the online turn clock)
    and the turn buttons. Each piece is rewritten only when its text changes. */
-import { S, CT, SYMNAME, def } from '../engine.gen.js';
+import { CT, SYMNAME, def } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
-import { UI, NET, G, cur, canAct, online, isAI } from './state.js';
+import { S, UI, NET, G, cur, canAct, online, isAI } from './state.js';
 import { onGeo, geo } from './geometry.js';
 import { render } from './frame.js';
 import { showGameOver, showPlayer } from './dialogs.js';
@@ -50,7 +50,7 @@ function updatePrompt(){
       if(pl.pieces.length>1&&pl.pieces.every(k=>k!=='done'))txt='<span class="m">Tap a pawn to switch.</span>';
       btns=[undoBtn,{t:'End turn',id:'bEnd',pri:1,big:1,fn:startEndTurn}];break;}
     case 'card':{
-      const d=def(UI.card);const act=S.turn.active&&S.turn.active.id===UI.card;
+      const d=def(S,UI.card);const act=S.turn.active&&S.turn.active.id===UI.card;
       if(act)txt=`<b>${esc(d.n)}</b> has <b>${S.turn.active.left}</b> ${SYMNAME[S.turn.active.sym]}${S.turn.active.left>1?'s':''} left. <span class="m">Tap a highlighted space to keep going, or anywhere else to stop.</span>`;
       if(!UI.targets.size)txt+='<span class="m">No reachable spaces with this card.</span>';
       btns=[undoBtn,{t:act?'Stop moving':'Cancel',id:'bCan',fn:cancelMode},{t:'End turn',id:'bEnd',pri:1,big:1,fn:startEndTurn}];break;}

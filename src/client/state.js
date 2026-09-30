@@ -1,7 +1,12 @@
-/* The page's own state: what the player has selected (UI), the online connection (NET), and the game record / replay
-   (G). The game itself is the engine's S and MAP. Selectors answer "who am I, whose turn, may I act". */
-import { S, isActive, recState, replayCheck, recFinal } from '../engine.gen.js';
+/* The page's own state: the game on show (S, and its board MAP), what the player has selected (UI), the online connection
+   (NET), and the game record / replay (G). Selectors answer "who am I, whose turn, may I act". */
+import { isActive, recState, replayCheck, recFinal, mapOf } from '../engine.gen.js';
 import { failed } from './boundary.js';
+/* the game on show (the engine's functions take it as their first argument) and its board */
+export let S = null, MAP = null;
+export function setS(gs) { S = gs; if (gs) MAP = mapOf(gs); }
+/* a board with no game on it (the course previews, main.js showCourse) */
+export function setMAP(m) { MAP = m; }
 export const UI = { mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), cover: false, hover: null, mktOpen: true, allOpen: false,
   buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null };
 /* nothing selected: no card, no picks, no purchase or payment under way */
@@ -27,16 +32,16 @@ export const hp = () => S.players[viewIdx()];
 export const humanRacing = () => S.players.some(p => !p.ai && isActive(p));
 export const inGame = () => !!(S && !S.over && !G.replay && !UI.preview);
 
-/* the local save is the game's record (the state is rebuilt from it): {rec, S, MAP} or null.
+/* the local save is the game's record (the state is rebuilt from it).
    (-v1 keys: games recorded under older rules, which can't be replayed; dropped) */
 const SAVE_KEY = 'eldorado-game-v2';
 try { localStorage.removeItem('eldorado-game-v1'); localStorage.removeItem('eldorado-games-v1'); } catch (e) { }
-/* the saved game rebuilt from its record, {rec, S, MAP}, or null. Storage can fail, or hold a game that this version can't
+/* the saved game rebuilt from its record, {rec, S}, or null. Storage can fail, or hold a game that this version can't
    rebuild: a bug, reported, and the page goes on without it */
 export function loadSave() {
   let rec; try { rec = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; }
   if (!rec || replayCheck(rec)) return null;
-  try { return { rec, ...recState(rec) }; } catch (e) { console.error(e); failed(e, 'rebuilding the saved game'); return null; }
+  try { return { rec, S: recState(rec) }; } catch (e) { console.error(e); failed(e, 'rebuilding the saved game'); return null; }
 }
 export function save() {
   if (online() || G.replay || UI.preview) return; // (a game not started yet is never saved)

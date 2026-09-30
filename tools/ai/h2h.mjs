@@ -15,11 +15,11 @@ if (!isMainThread) {
     const n = g % 2 ? 4 : 3, base = n === 4 ? ['hA', 'hB', 'hA', 'hB'] : (g >> 1) % 2 ? ['hA', 'hB', 'hB'] : ['hA', 'hA', 'hB'];
     const r = (g >> 2) % n, ids = base.map((_, i) => base[(i + r) % n]);
     const mem = ids.map(() => ({})), t = { hA: [0, 0, 0], hB: [0, 0, 0] }; let turnKey = '';
-    const { capped } = playout({ seed: seed0 + g, players: seatPlayers(ids.length, ids), choose: me => { // (timed: the AI's thinking)
-      const k = me + ':' + E.S.round, id = ids[me], e0 = E.BOT_EVALS, t0 = performance.now(), a = E.aiChoose(id, mem[me]);
+    const { gs, capped } = playout({ seed: seed0 + g, players: seatPlayers(ids.length, ids), choose: (gs, me) => { // (timed: the AI's thinking)
+      const k = me + ':' + gs.round, id = ids[me], e0 = E.BOT_EVALS, t0 = performance.now(), a = E.aiChoose(gs, id, mem[me]);
       t[id][0] += performance.now() - t0; t[id][1] += E.BOT_EVALS - e0; if (k !== turnKey) { t[id][2]++; turnKey = k; }
       return a; } });
-    parentPort.postMessage({ n, seats: ids.map((id, i) => ({ id, place: capped && !E.S.players[i].fin ? n : E.S.places[i] })), t });
+    parentPort.postMessage({ n, seats: ids.map((id, i) => ({ id, place: capped && !gs.players[i].fin ? n : gs.places[i] })), t });
   }
   parentPort.postMessage({ done: true });
 } else {

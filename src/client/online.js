@@ -1,7 +1,7 @@
 /* ONLINE — talks to the game server (Cloudflare Worker).
    Sign in with Google → hub (profile, rooms, leaderboard) → room lobby → game. */
-import { S, mapFor, setS, setMAP } from '../engine.gen.js';
-import { UI, NET, online, viewIdx, myId } from './state.js';
+import {  } from '../engine.gen.js';
+import { S, setS, UI, NET, online, viewIdx, myId } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, modal, closeModal } from './dialogs.js';
 import { showHub, showRoomLobby, renderRoomLobby, roomsRender, loadProfile } from './menu.js';
@@ -92,7 +92,7 @@ export function onRoomMsg(m){
 export function applyServerState(S2,ev){
   const old=S,fresh=!online();UI.preview=false; // (joining a room clears NET.S: its first state is a new game on show)
   setS(S2);NET.S=S2;
-  if(fresh){setMAP(mapFor(S));closeModal();UI.cover=false;showGame();}
+  if(fresh){closeModal();UI.cover=false;showGame();}
   const turnChanged=fresh||old.cur!==S.cur||old.round!==S.round;
   if(!fresh)playEvents(ev,viewIdx());
   afterChange(turnChanged,S.over&&(fresh||!old.over));

@@ -1,9 +1,9 @@
 /* REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
    The log holds the seeds and every action; the engine rebuilds each position (replay), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
-import { S, CT, LOG_MAX, hexAt, mapFor, setS, setMAP, replayCheck, replay, applyAction, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
+import { CT, LOG_MAX, hexAt, replayCheck, replay, applyAction, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
 import { $, esc, setHTML } from './dom.js';
-import { UI, G, online, clearSelection } from './state.js';
+import { S, setS, UI, G, online, clearSelection } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, banner, closeModal } from './dialogs.js';
 import { showGame, resumeSaved, playEvents, firstPiece } from './actions.js';
@@ -16,8 +16,8 @@ function buildReplay(log,id){
   const states=[],lines=[],evs=[];
   for(const r of replay(log)){ // each position, and the journal lines and events of the action that led to it
     if(!r.ok)throw new Error(`move ${r.i+1} doesn't fit the game (${r.err})`); // (an uploaded log can be anything)
-    lines.push(S.log.slice());evs.push(r.i<0?null:r.ev);
-    S.log=[];states.push(JSON.stringify(S)); // (the journal is kept per step, in lines)
+    lines.push(r.gs.log.slice());evs.push(r.i<0?null:r.ev);
+    r.gs.log=[];states.push(JSON.stringify(r.gs)); // (the journal is kept per step, in lines)
   }
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
   let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}
@@ -26,21 +26,19 @@ function buildReplay(log,id){
 /* ---- the evaluation: the shipped network's estimate for the position on screen, and the turn the strongest AI would play
    from it. Only where a network was trained (First Expedition, 3-4 players: aiAllowed); elsewhere the replay shows none. */
 const replayEvalOK=()=>aiAllowed(S.course.id,S.players.length)&&!AIX.failed;
-function replayNet(){if(!AIX.net)return false;aiSetNet(AIX.net);return botNetReady();}
+function replayNet(){if(!AIX.net)return false;aiSetNet(AIX.net);return botNetReady(S);}
 function replayEval(){const R=G.replay;if(R.ev[R.i])return R.ev[R.i];if(!replayNet())return null;
   // the network scores each explorer on its own (its expected result: 1st = 1, 2nd = ¼, …); shown as shares of the
   // winning chances, so they add up to 100%
-  const raw=S.players.map((p,j)=>p.resigned?0:Math.max(0,botValue(j,'net'))),tot=raw.reduce((a,x)=>a+x,0)||1;
+  const raw=S.players.map((p,j)=>p.resigned?0:Math.max(0,botValue(S,j,'net'))),tot=raw.reduce((a,x)=>a+x,0)||1;
   return R.ev[R.i]={raw,share:raw.map((x,j)=>S.players[j].resigned?null:x/tot)};}
 const ADVISOR='fawcett';
 /* the advisor's whole turn from the position on screen: [{a, html, key}] (each step described in the position it is played
    from), or null. Worked out once per position, with a random stream of its own so it is the same each visit. */
 function replayAdvice(){const R=G.replay;if(R.i in R.adv)return R.adv[R.i];if(!replayNet()||S.over)return null;
-  const root=S,g=mulberry32(R.i*7919+1);let steps=null;
-  try{const line=aiPlan(ADVISOR,g);
-    if(line){steps=[];setS(JSON.parse(R.states[R.i]));
-      for(const a of line){const st=JSON.parse(JSON.stringify(S));steps.push({a,html:describeAction(a,st),key:actionKey(a,st)});const me=S.cur;if(!applyAction(me,a,g).ok||S.over||S.cur!==me)break;}}}
-  finally{setS(root);}
+  const g=mulberry32(R.i*7919+1),line=aiPlan(S,ADVISOR,g);let steps=null;
+  if(line){steps=[];const gs=JSON.parse(R.states[R.i]); // (a copy of the position, played forward along the plan)
+    for(const a of line){const st=JSON.parse(JSON.stringify(gs));steps.push({a,html:describeAction(a,st),key:actionKey(a,st)});const me=gs.cur;if(!applyAction(gs,me,a,g).ok||gs.over||gs.cur!==me)break;}}
   return R.adv[R.i]=steps;}
 /* what the player actually did from position i to the end of their turn: [{a, html, key}] (as the advice) */
 function playedTurn(i){const R=G.replay;if(R.played[i])return R.played[i];const out=[],seat=R.log.actions[i][0];
@@ -60,7 +58,7 @@ function startReplay(log,id){
   if(online())exitOnline(); // a finished online game (the menu doesn't open replays during one in progress)
   aiReset();let R;try{R=buildReplay(log,id);}catch(e){console.error(e);toast('Could not load that replay: '+e.message,3500);showSetup();return;}
   R.from=from;closeModal();G.replay=R;UI.preview=false;
-  setS(JSON.parse(R.states[0]));setMAP(mapFor(S));showGame();replayGo(0,false);
+  setS(JSON.parse(R.states[0]));showGame();replayGo(0,false);
   banner(log.title||'Replay',`${log.players.length} players · ${log.actions.length} moves`);
   if(replayEvalOK()&&!AIX.net)aiNetLoad().then(()=>{if(G.replay===R)render();});
 }
@@ -95,7 +93,7 @@ export function exitReplay(){const from=G.replay.from;replayStop();G.replay=null
 
 /* words for one action, read against the position before it */
 function describeAction(a,st){
-  const T=id=>CT[st.cards[id]]?CT[st.cards[id]].n:'?',sp=k=>{if(!k)return'';if(k[0]==='B'){const B=st.blockades[+k.slice(1)];return`blockade #${B?B.n:'?'}`;}const h=hexAt(k);return h?`${TERR[h.type]||h.type}${h.val>1?' '+h.val:''}`:k;};
+  const T=id=>CT[st.cards[id]]?CT[st.cards[id]].n:'?',sp=k=>{if(!k)return'';if(k[0]==='B'){const B=st.blockades[+k.slice(1)];return`blockade #${B?B.n:'?'}`;}const h=hexAt(S,k);return h?`${TERR[h.type]||h.type}${h.val>1?' '+h.val:''}`:k;};
   const list=ids=>ids&&ids.length?ids.map(T).join(', '):'nothing';
   const stack=a=>CT[a.type]?CT[a.type].n:'?';
   switch(a.t){
@@ -112,7 +110,7 @@ function describeAction(a,st){
 }
 /* the next action's space and card, marked on the board and in the hand */
 export function replayDecorate(){if(G.replay.hover){UI.targets=new Map([[G.replay.hover,{kind:'move'}]]);return;}const a=replayNext();if(!a||S.over)return;const x=a[1];
-  if(x.to&&x.to[0]!=='B'&&hexAt(x.to))UI.targets=new Map([[x.to,{kind:x.t==='pay'?(hexAt(x.to).type==='c'?'camp':'rubble'):'move'}]]);}
+  if(x.to&&x.to[0]!=='B'&&hexAt(S,x.to))UI.targets=new Map([[x.to,{kind:x.t==='pay'?(hexAt(S,x.to).type==='c'?'camp':'rubble'):'move'}]]);}
 export function replayPromptHTML(){
   const R=G.replay,a=replayNext();
   if(!a)return`<b>End of the replay.</b> ${S.over?'The game is over.':'The log stops here'+(R.log.result&&R.log.result.capped?' (it hit the 25-round cap).':'.')}`;
@@ -169,7 +167,7 @@ function replayBar(){
   if(side.__h===h)return;setHTML(side,h); // (rewritten only when it changes: hovering a step redraws the board, not this list)
   // hovering a step marks its space on the board
   side.querySelectorAll('.ralt').forEach(el=>{const o=(el.dataset.p!=null?played[+el.dataset.p]:steps[+el.dataset.j]).a;
-    el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(o.to)){R.hover=o.to;render();}};
+    el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(S,o.to)){R.hover=o.to;render();}};
     el.onpointerleave=()=>{R.hover=null;render();};});
 }
 export function openReplay(log,id){

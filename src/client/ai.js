@@ -1,7 +1,7 @@
 /* Local AI seats (engine_ai.js). The AI decides with the shared engine in this page and plays through the same
    applyAction as everyone else, one action at a time with a short pause so the table can follow. */
-import { S, aiUsesNet, aiNetDecode, aiSetNet, aiChoose, assert } from '../engine.gen.js';
-import { UI, G, online, isAI, viewIdx, humanRacing } from './state.js';
+import { aiUsesNet, aiNetDecode, aiSetNet, aiChoose, assert } from '../engine.gen.js';
+import { S, UI, G, online, isAI, viewIdx, humanRacing } from './state.js';
 import { reduceMotion } from './dom.js';
 import { toast } from './dialogs.js';
 import { applyLocal } from './actions.js';
@@ -31,7 +31,7 @@ export function aiKick(){
     if(gen!==AIX.gen)return;
     if(S.over||S.cur!==seat){AIX.timer=0;return;}
     aiSetNet(AIX.net);
-    const a=aiChoose(id,AIX.mem[seat]||(AIX.mem[seat]={}));
+    const a=aiChoose(S,id,AIX.mem[seat]||(AIX.mem[seat]={}));
     AIX.timer=0; // (before applying: the change schedules the next AI move)
     assert(applyLocal(seat,a,viewIdx()).ok,'the AI chooses a legal action');
   };

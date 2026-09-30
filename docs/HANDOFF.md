@@ -145,9 +145,9 @@ test/lib.cjs              shared test helpers: static server, game server, pages
 test/frames.cjs           phone profile, CPU ÷4: restyle size and composited animations per interaction
 test/engine.test.mjs      60 random games (--quick: 12): termination, card conservation, placements, zero-sum Elo, no redaction leaks
 ```
-The browser build wraps everything in one IIFE; engine and UI share scope (`S`, `MAP`, helpers are plain globals
-inside it). The server imports the engine as `E` (`import * as E`) and calls `E.setS`/`E.setMAP` before each call (safe: DO calls are
-synchronous around the engine).
+The engine holds no game: every function that needs one takes it first (`gs`), and `mapOf(gs)` gives its board (cached).
+The page keeps the game on show in `state.js` (`S`, `MAP`, `setS`); the server imports the engine as `E` and passes each
+room's game (`this.S`).
 
 ### 6.2 Game state `S` (never stored)
 Full shape: `docs/API_SPEC.md` §1.4. `{seed, course, players[{name, color, ai?, pieces[hexKey|'done'], deck[], hand[], discard[],

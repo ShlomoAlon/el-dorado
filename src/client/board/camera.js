@@ -2,9 +2,9 @@
    only change its transform, so they never repaint the board. The layer keeps the resolution it was drawn at, so once
    zooming has stopped (no wheel events for 250 ms, no fingers down, no glide running) the scale is baked into #bscale
    and the layer's own scale goes back to 1, in the same frame: one sharp redraw at a quiet moment. */
-import { S, MAP, R, hexAt } from '../../engine.gen.js';
+import { R } from '../../engine.gen.js';
 import { $ } from '../dom.js';
-import { UI, cur } from '../state.js';
+import { S, MAP, UI, cur } from '../state.js';
 import { geo, onGeo, measure } from '../geometry.js';
 import { after } from '../frame.js';
 import { diag } from '../debug.js';

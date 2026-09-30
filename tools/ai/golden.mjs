@@ -10,14 +10,14 @@ export function golden(E, net) {
   for (let g = 0; g < 6; g++) {
     const np = 3 + (g % 2), rnd = E.mulberry32(9000 + g);
     const gr = E.mulberry32(500 + g); // the game's shuffles
-    E.newGame({ course: E.courseById('first'), seed: 1234 + g, fullRace: true, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) }, gr);
+    const gs = E.newGame({ course: E.courseById('first'), seed: 1234 + g, fullRace: true, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: '#fff' })) }, gr);
     E.aiSetNet(net);
-    for (let step = 0; step < 400 && !E.S.over; step++) {
-      if (step % 7 === 0) { const me = E.S.cur, f = E.botNetFeatures(me, true), nz = [];
+    for (let step = 0; step < 400 && !gs.over; step++) {
+      if (step % 7 === 0) { const me = gs.cur, f = E.botNetFeatures(gs, me, true), nz = [];
         for (let k = 0; k < f.length; k++) if (f[k] !== 0) nz.push([k, f[k]]);
-        out.push({ g, step, me, h: fnv(JSON.stringify(nz)), v: E.botNetValue(f), end: E.botNetValue(E.botEndFeatures(me, [])) }); }
-      const acts = E.botActions(), a = acts[Math.floor(rnd() * acts.length)];
-      if (!a || !E.applyAction(E.S.cur, a, gr).ok) E.applyAction(E.S.cur, { t: 'end', keep: [] }, gr);
+        out.push({ g, step, me, h: fnv(JSON.stringify(nz)), v: E.botNetValue(f), end: E.botNetValue(E.botEndFeatures(gs, me, [])) }); }
+      const acts = E.botActions(gs), a = acts[Math.floor(rnd() * acts.length)];
+      if (!a || !E.applyAction(gs, gs.cur, a, gr).ok) E.applyAction(gs, gs.cur, { t: 'end', keep: [] }, gr);
     }
   }
   E.aiSetNet(null);

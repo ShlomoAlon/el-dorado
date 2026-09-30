@@ -1,8 +1,8 @@
 /* Everything that opens over the game: the round banner, toasts, and one modal at a time (rules, results, a pile).
    The menu is its own dialog (menu.js); opening a modal closes it. */
-import { S, CT, SYMCOL, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
+import { CT, SYMCOL, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
 import { $, esc } from './dom.js';
-import { UI, NET, online, hp, viewIdx } from './state.js';
+import { S, UI, NET, online, hp, viewIdx } from './state.js';
 import { cardHTML } from './cards.js';
 import { MENU, menuClose, showSetup, showHub } from './menu.js';
 import { exitOnline } from './online.js';
@@ -39,7 +39,7 @@ export function showGameOver(){
   const w=S.players.map((p,i)=>i).filter(i=>S.places[i]===1),fin=S.players.map((p,i)=>i).filter(i=>playerDone(S.players[i]));
   const res=online()&&NET.room.results,ord=S.players.map((p,i)=>i).sort((a,b)=>S.places[a]-S.places[b]);
   const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
-  const rows=ord.map(i=>[S.players[i],i]).map(([p,i])=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:${w.includes(i)?'rgba(233,178,74,.14)':'#0c1512'};border:1px solid ${w.includes(i)?'var(--gold)':'var(--line)'}"><span style="display:flex;align-items:center;gap:8px"><b style="color:var(--gold2);min-width:34px">${ordn(S.places[i])}</b><i style="width:12px;height:12px;border-radius:50%;background:${p.color};display:inline-block"></i><b>${esc(p.name)}</b></span><span style="color:var(--muted);font-size:13px">${playerDone(p)?'Reached El Dorado (round '+p.fin+')':p.resigned?'Left the game':'Still in the jungle'} · ${plural(blocksOf(i).length,'blockade')}${blocksOf(i).length?' (biggest #'+Math.max(...blocksOf(i).map(b=>S.blockades[b].n))+')':''}${res&&res.deltas?` · <b style="color:${res.deltas[i]>=0?'#8fe3a8':'#ff9c8a'}">${res.deltas[i]>=0?'+':''}${res.deltas[i]}</b> → ${Math.round(res.before[i]+res.deltas[i])}`:''}</span></div>`).join('');
+  const rows=ord.map(i=>[S.players[i],i]).map(([p,i])=>`<div class="prow" style="justify-content:space-between;padding:9px 12px;border-radius:10px;background:${w.includes(i)?'rgba(233,178,74,.14)':'#0c1512'};border:1px solid ${w.includes(i)?'var(--gold)':'var(--line)'}"><span style="display:flex;align-items:center;gap:8px"><b style="color:var(--gold2);min-width:34px">${ordn(S.places[i])}</b><i style="width:12px;height:12px;border-radius:50%;background:${p.color};display:inline-block"></i><b>${esc(p.name)}</b></span><span style="color:var(--muted);font-size:13px">${playerDone(p)?'Reached El Dorado (round '+p.fin+')':p.resigned?'Left the game':'Still in the jungle'} · ${plural(blocksOf(S,i).length,'blockade')}${blocksOf(S,i).length?' (biggest #'+Math.max(...blocksOf(S,i).map(b=>S.blockades[b].n))+')':''}${res&&res.deltas?` · <b style="color:${res.deltas[i]>=0?'#8fe3a8':'#ff9c8a'}">${res.deltas[i]>=0?'+':''}${res.deltas[i]}</b> → ${Math.round(res.before[i]+res.deltas[i])}`:''}</span></div>`).join('');
   const rid=res&&res.replay||null;
   const tie=fin.length>1?'<p class="sub" style="margin:10px 0 0">Explorers arriving in the same round are split by blockades held, then the highest-numbered blockade.</p>':'';
   modal(`<h2>${w.length?w.map(i=>esc(S.players[i].name)).join(' & ')+' win'+(w.length>1?'':'s'):'Expedition over'}</h2><p class="sub">The race ended in round ${S.round}.${res&&res.deltas?' Ratings updated.':res&&res.unrated?' Unrated game: ratings unchanged.':''}</p>${rows}${tie}<div class="mrow">${rid||UI.lastReplay&&!online()?'<button class="btn" id="gRep">Watch replay</button>':''}<button class="btn" id="gClose">View board</button><button class="btn pri" id="gNew">New game</button></div>`,
@@ -50,10 +50,10 @@ export function showGameOver(){
    hand face down and draw pile as a count; cards in play and the discard pile face up (public: played or thrown face up) */
 export function showPlayer(i){
   const p=S.players[i],me=i===viewIdx()&&!UI.cover,order=Object.keys(CT);
-  const faces=ids=>ids.map(typeOf).sort((a,b)=>order.indexOf(a)-order.indexOf(b)).map(t=>`<div class="mcard">${cardHTML(t)}</div>`).join('');
+  const faces=ids=>ids.map(id=>typeOf(S,id)).sort((a,b)=>order.indexOf(a)-order.indexOf(b)).map(t=>`<div class="mcard">${cardHTML(t)}</div>`).join('');
   const backs=n=>Array.from({length:n},()=>'<div class="pback"><div class="back"></div></div>').join('');
   const part=(title,n,body)=>`<div class="ppart"><h3>${title} <span class="m">${n}</span></h3>${n?`<div class="deckgrid">${body}</div>`:''}</div>`;
-  const held=blocksOf(i).map(b=>S.blockades[b]).sort((a,b)=>b.n-a.n); // (the biggest first: most blockades, then the biggest, breaks a tie)
+  const held=blocksOf(S,i).map(b=>S.blockades[b]).sort((a,b)=>b.n-a.n); // (the biggest first: most blockades, then the biggest, breaks a tie)
   modal(`<h2><i class="pdot" style="background:${p.color}"></i>${esc(p.name)}</h2>${playerDone(p)||p.resigned?`<p class="sub">${playerDone(p)?'Reached El Dorado':'Left the game'}</p>`:''}
     ${part('Hand',p.hand.length,me?faces(p.hand):backs(p.hand.length))}${part('In play',p.play.length,faces(p.play))}
     ${part('Draw pile',p.deck.length,me?faces(p.deck):backs(Math.min(p.deck.length,1)))}${part('Discard pile',p.discard.length,faces(p.discard))}
@@ -63,7 +63,7 @@ export function showPlayer(i){
 export function showPile(which){
   if(UI.cover)return;const pl=hp();
   const ids=which==='deck'?pl.deck.slice():pl.discard.slice();
-  const order=Object.keys(CT);const sorted=ids.map(typeOf).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+  const order=Object.keys(CT);const sorted=ids.map(id=>typeOf(S,id)).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
   const all=pl.deck.length+pl.hand.length+pl.discard.length+pl.play.length;
   modal(`<h2>${which==='deck'?'Draw pile':'Discard pile'}</h2><p class="sub">${plural(ids.length,'card')}${which==='deck'?', sorted (the real order is hidden)':''}. ${all} cards in your expedition.</p><div class="deckgrid">${sorted.map(t=>`<div class="mcard">${cardHTML(t)}</div>`).join('')||'<p class="note">Empty.</p>'}</div><div class="mrow"><button class="btn pri" id="pClose">Close</button></div>`,sc=>sc.querySelector('#pClose').onclick=closeModal,true);
 }

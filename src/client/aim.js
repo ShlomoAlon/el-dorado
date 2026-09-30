@@ -1,16 +1,16 @@
 /* The aiming arrow: shown while a movement card is selected (by a tap or a drag). With a mouse it follows the pointer and
    snaps onto reachable spaces; on touch it points at the explorer that will move until you drag. Chevrons flow along the
    curve. It runs a frame loop only while it is on screen. */
-import { S, R, hexAt, typeOf, assert } from '../engine.gen.js';
+import { R, typeOf, assert } from '../engine.gen.js';
 import { $, sv } from './dom.js';
-import { UI, cur } from './state.js';
+import { S, UI, cur } from './state.js';
 import { geo } from './geometry.js';
 import { cardEls, drag } from './hand.js';
 import { targetAt, setHot, blPos } from './board/overlays.js';
 import { boardToApp } from './board/camera.js';
 import { xy } from './board/layout.js';
 const aim = { raf: 0, mx: null, my: null, touch: false, pool: null };
-function aimWanted() { return S && !S.over && !UI.cover && UI.mode === 'card' && cardEls.has(UI.card) && typeOf(UI.card) !== 'transmitter'; }
+function aimWanted() { return S && !S.over && !UI.cover && UI.mode === 'card' && cardEls.has(UI.card) && typeOf(S,UI.card) !== 'transmitter'; }
 export function startAim() { if (!aim.raf && aimWanted()) aim.raf = requestAnimationFrame(loop); }
 function stopAim() { if (aim.raf) cancelAnimationFrame(aim.raf); aim.raf = 0; setHot(null); if (aim.pool) aim.pool.root.style.display = 'none'; }
 function loop(ts) {
