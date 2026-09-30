@@ -468,7 +468,7 @@ function applyAction(seat,a,rnd=Math.random){
     case 'end':{
       const keep=a.keep;if(!distinctHand(keep))return fail('Bad cards to keep.');
       // the kept cards stay; the rest of the hand and the cards played are discarded; draw up to 4
-      const toDisc=P.hand.filter(id=>!keep.includes(id));tell(ev,{e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length}); // counts only: the hand is private
+      const toDisc=P.hand.filter(id=>!keep.includes(id));tell(ev,{e:'play',pl:seat,k:'end',kept:keep.length,disc:toDisc.length,ts:toDisc.map(typeOf)}); // kept: a count (the hand is private); discarded: face up on the pile
       for(const id of toDisc){rm(P.hand,id);P.discard.push(id);}
       P.discard.push(...P.play);P.play=[];
       drawCards(P,4-P.hand.length,rnd);reveal=true;

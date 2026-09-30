@@ -78,7 +78,9 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
   // clears the finished player's cards) or removed from the game
   let plays = 0;
   const publicEvents = ev => { for (const e of ev) { if (e.e !== 'play') continue; plays++;
-    if (e.k === 'end') { assert(!e.ts && Number.isInteger(e.kept) && Number.isInteger(e.disc), 'end event shows cards'); continue; }
+    // (the end of a turn: the cards discarded go face up on the pile, so they're named; the ones kept are only counted.
+    //  They may already be shuffled into the draw pile when it ran out, so they're not looked for on the pile)
+    if (e.k === 'end') { assert(Number.isInteger(e.kept) && e.ts.length === e.disc, 'end event: names the discarded cards, counts the kept ones'); continue; }
     const pub = {}; for (const id of [...E.S.players[e.pl].play, ...E.S.players[e.pl].discard, ...E.S.trash]) pub[E.S.cards[id]] = (pub[E.S.cards[id]] || 0) + 1;
     for (const t of e.ts) assert(pub[t]-- > 0, 'play event names a card that is not public: ' + e.k + ' ' + t); } };
   const aiGame = (course, ais, check) => {

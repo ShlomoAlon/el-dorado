@@ -32,7 +32,7 @@ export function feedEvent(e){
     const last=FEED.groups[FEED.groups.length-1];
     if(e.k==='move'&&e.more&&last&&last.k==='move'){last.n+=e.n;last.v++;last.log.push(e);return;} // leftover strength: same card, more spaces
     if(e.k==='trash'&&!e.ts.length)return;
-    if(e.k==='end'){FEED.ended=true;return;} // (not a step of its own: the turn is visibly over)
+    if(e.k==='end'){FEED.ended=true;if(!e.ts.length)return;} // (the turn is visibly over: a step only for the cards discarded)
     const g={...e,id:++FEED.seq,v:0,log:[e],paths:[]};FEED.groups.push(g);
     if(g.ts&&g.ts.length)FEED.fly.push({gid:g.id,kind:'hand',from:chipRect(e.pl)});
     if(g.got)FEED.fly.push({gid:g.id,kind:'got',from:marketRectOf(g.got)}); // the card bought or taken flies in from the market
@@ -53,6 +53,7 @@ function feedCap(g){
     case 'rubble':return'rubble';
     case 'camp':return'base camp';
     case 'trash':return'removed';
+    case 'end':return'discarded';
   }
   return'';
 }
@@ -80,7 +81,7 @@ function logLine(e){
       case 'trash':return`removes ${names(e.ts)} from the game.`;
       case 'transmit':return`uses the Transmitter to take ${CT[e.got].n}.`;
       case 'buy':return`buys ${CT[e.got].n} for ${fmt(e.paid)} coin${e.paid===1?'':'s'}, paying with ${names(e.ts)}.`;
-      case 'end':return`ends the turn${e.disc?', discarding '+e.disc:''}${e.kept?(e.disc?' and':'')+' keeping '+e.kept:''}.`;
+      case 'end':return`ends the turn${e.disc?', discarding '+names(e.ts):''}${e.kept?(e.disc?' and':'')+' keeping '+plural(e.kept,'card'):''}.`;
     }break;
     case 'block':return`tears down blockade #${e.n} and keeps it.`;
     case 'arrive':return'reaches El Dorado!';
@@ -108,7 +109,7 @@ function turnsOf(log){
     if(e.e==='play'){
       if(e.k==='move'&&e.more&&st&&st.k==='move'){st.n+=e.n;st.log.push(e);continue;} // leftover strength: the same step goes further
       if(e.k==='trash'&&!e.ts.length)continue;
-      if(e.k==='end'){t.done=true;continue;} // (not shown as a step: the next turn says it)
+      if(e.k==='end'){t.done=true;if(!e.ts.length)continue;} // (a step only for the cards discarded, face up)
       t.steps.push({...e,log:[e],paths:[]});continue;}
     if(e.e==='timeout'||e.e==='resign'||e.e==='endgame'){t.steps.push({k:e.e,log:[e],paths:[]});if(e.e==='resign')t.done=true;continue;}
     if(!st)continue; // (the journal keeps its last entries only: this step's start is gone)
