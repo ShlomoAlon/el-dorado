@@ -259,6 +259,13 @@ Playwright can't tap elements outside the viewport when `overflow: clip` is set;
   After every push, confirm the deploy landed (e.g. `curl …/api/config`), not just that the push succeeded.
 - The owner uses the Claude app (Cowork, web). Deliver files via the outputs folder / SendUserFile when needed.
 
+- **The Worker's clock stands still while code runs** (Cloudflare's timing-attack protection: `Date.now()` and
+  `performance.now()` move on only at I/O). Never limit work by elapsed time inside one handler: `aiMove` did, the limit
+  never ran out, and after a person resigned one alarm played the whole rest of the game (5 to 7 s with the network AIs),
+  holding their answer (2026-09-30, found in the owner's own browser; `wrangler dev` keeps a moving clock, so the
+  local tests can't show it). AI batches are counted (`AI_BATCH`); a player's answer is sent before any await that lets
+  an alarm in.
+
 ## 9. Known gaps / next steps (roughly by value)
 
 1. **Deploy verification**: first Workers Builds deploy relies on D1 auto-provisioning (`wrangler ≥ 4.45`, binding without

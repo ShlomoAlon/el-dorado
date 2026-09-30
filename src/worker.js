@@ -210,6 +210,7 @@ const gameRow = r => { const res = JSON.parse(r.res || '{}');
 const REPLAY_MAX_BYTES = 1.9e6, // D1 rows hold at most 2 MB
       REPLAY_KEEP = 1000, // uploaded logs
       REPLAYS_PER_PLAYER = 10; // online games: each player's latest are kept
+const AI_BATCH = 8; // AI actions per alarm when no person is watching (about the 0.3 s once meant: the network AIs take tens of ms an action)
 const MATCH_SIZE = 3; // quick-match rooms start by themselves once this many have joined,
                       // or earlier (with 2+) when everyone in the room asks to start now
 
@@ -537,8 +538,9 @@ export class Room extends DurableObject {
       if (!r.ok) return err(r.err); // (a refused action changes nothing)
       this.S = E.S; d.timeouts[seat] = 0;
       if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn();
+      await this.afterChange(r.ev); // the player's answer first: waiting on the lobby below lets an AI alarm run meanwhile
       if (m.a.t === 'resign') await this.tellLobby(); // (they are out of the room now)
-      await this.afterChange(r.ev); return;
+      return;
     }
   }
   // quick-match rooms start themselves when full, or when all of 2+ players asked to start now. Returns true if it started.
@@ -576,14 +578,16 @@ export class Room extends DurableObject {
   // someone is following the game: a person still racing with the page open. Otherwise the AIs play on without pauses.
   watched() { return this.S.players.some((p, i) => !p.ai && !p.resigned && !p.pieces.every(k => k === 'done') && this.online(this.owners[i])); }
   async scheduleAI(ms) { this.settleClock(); const d = this.d; d.deadline = null; d.aiAt = Date.now() + (this.watched() ? ms : 0); await this.ctx.storage.setAlarm(d.aiAt); }
-  /* AI seats play server-side, one action per alarm while people watch (so the table can follow),
-     or up to ~0.3 s of actions per alarm when nobody is racing with the page open */
+  /* AI seats play server-side, one action per alarm while people watch (so the table can follow), or AI_BATCH actions
+     per alarm when nobody is racing with the page open. Counted, not timed: in a Worker the clock stands still while
+     code runs (it moves on only at I/O), so a time budget never ran out and one alarm played the rest of the game,
+     holding the room (and a resigning player's answer) for seconds. */
   async aiMove() {
-    const eng = this.engine(); useNet(); const ev = []; const t0 = Date.now(); const fast = !this.watched();
+    const eng = this.engine(); useNet(); const ev = []; const fast = !this.watched(); let n = 0;
     do {
       const seat = this.S.cur, mem = this.aiMem[seat] || (this.aiMem[seat] = {});
       const r = eng.aiStep(this.S.players[seat].ai, mem, this.rec); this.S = E.S; ev.push(...r.ev);
-    } while (fast && this.aiToMove() && Date.now() - t0 < 300);
+    } while (fast && this.aiToMove() && ++n < AI_BATCH);
     if (!this.S.over) { if (this.aiToMove()) await this.scheduleAI(700); else await this.startTurnTimer(); }
     await this.afterChange(ev);
   }
@@ -596,8 +600,8 @@ export class Room extends DurableObject {
     const forfeit = d.timeouts[seat] >= 3, { ev } = eng.recApply(this.rec, seat, { t: forfeit ? 'resign' : 'timeout' });
     this.S = E.S;
     if (!this.S.over) await this.nextTurn();
-    if (forfeit) await this.tellLobby();
     await this.afterChange(ev);
+    if (forfeit) await this.tellLobby();
   }
   /* the finished game's log becomes its replay (/?replay=<id>): kept for good, listed publicly unless the room was private.
      Returns the replay's id, or null (the log is too large, or the database failed). */
