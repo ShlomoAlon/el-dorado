@@ -4,7 +4,7 @@
    and the layer's own scale goes back to 1, in the same frame: one sharp redraw at a quiet moment. */
 import { R, assert } from '../../engine.gen.js';
 import { $ } from '../dom.js';
-import { S, MAP, UI, G, cur } from '../state.js';
+import { S, MAP, UI, G, cur, canAct } from '../state.js';
 import { geo, onGeo, measure, handTop } from '../geometry.js';
 import { after } from '../frame.js';
 import { diag, diagLog, CHECKS } from '../debug.js';
@@ -76,8 +76,20 @@ function clampView() {
   if (bw <= W) view.x = Math.max(Math.min(view.x, W - bw), 0); else view.x = Math.min(W * .4, Math.max(W * .6 - bw, view.x));
   if (bh <= H) view.y = Math.max(Math.min(view.y, H - bh), 0); else view.y = Math.min(H * .4, Math.max(H * .6 - bh, view.y));
 }
+/* the follow, as a view part: the explorer about to move is glided into view when it changes (a new turn, or the hand
+   revealed after one) and, during my turn, when it arrives somewhere or another one is picked, once nothing is walking.
+   One place decides it (it was called on a new turn only, so an explorer I moved under the market stayed there). Other
+   players' explorers are followed at their turn's start only: following their moves is the owner's to decide */
+let followed = null;
+export const cameraPart = { name: 'camera', update() {
+  if (!S || !MAP || S.over || UI.cover || UI.anim || UI.preview || G.replay) return;
+  const pl = cur(), game = S.seed + '|' + S.players.length, key = game + '|' + S.round + '|' + S.cur + (canAct() ? '|' + UI.piece + '|' + pl.pieces.join() : '');
+  if (key === followed) return;
+  const same = followed && followed.startsWith(game + '|'); followed = key;
+  if (same) ensureVisible(); // (a new game on show is placed by its fit)
+}};
 /* glide the explorer about to move into view, if it isn't */
-export function ensureVisible() {
+function ensureVisible() {
   const r = safeRect(), c = focusPoint();
   // the whole board already shown (beside the market, above the hand): every explorer is visible, nothing to follow
   // (moving it would only push it off-centre, under the hand or the market). (Not the prompt's side: a recap growing a
@@ -159,9 +171,11 @@ export function setupPanZoom() {
    screen, the explorer to move is), measured on the elements themselves, not on the fit's own numbers. Twice a second,
    while the fit stands (the player hasn't panned or zoomed), nothing moves and no card is chosen */
 let fitSeen = ''; // (the last sample's finding: a wrong fit counts once it is the same on two samples in a row, the board unmoved)
-if (CHECKS) setInterval(() => {
+/* settled: judged at once (test/play.cjs, after each of its moves has settled); otherwise sampled, and a wrong fit counts
+   only once it is the same on two samples in a row */
+export function fitCheck(settled) {
   if (!S || S.over || UI.preview || cam.userZoomed || gliding || cam.pointers || UI.anim || UI.mode !== 'idle' || S.turn.pending || document.getElementById('menu').open) return; // (a removal being chosen raises the whole hand, by design)
-  const rect = e => e.getBoundingClientRect(), cards = [...document.querySelectorAll('#cards .card:not(.inplay)')];
+  const rect = e => e.getBoundingClientRect(), cards = [...document.querySelectorAll('#cards .card:not(.inplay)')].filter(c => c.style.pointerEvents !== 'none'); // (not those leaving the hand: hand.js)
   // (only when nothing finite is animating anywhere: the market sliding in, a card dealt, the board gliding)
   if (!cards.length || document.getAnimations().some(a => a.playState === 'running' && isFinite(a.effect && a.effect.getComputedTiming().endTime))) return;
   const tops = cards.map(c => rect(c).top).sort((x, y) => x - y), handTop = UI.hover != null && tops.length > 1 ? tops[1] : tops[0]; // (a card under the pointer is raised: the hand's own top is the next)
@@ -180,7 +194,8 @@ if (CHECKS) setInterval(() => {
     // (where the zoom buttons are a column beside the board; a short landscape screen puts them, and the market, in rows
     // above it: that layout is playtest 2 item A7, its own fix)
     if (z.height > z.width) { const mid = (z.right + free.r) / 2, bm = (b.left + b.right) / 2; if (Math.abs(bm - mid) > 40) bad = 'board centred at ' + Math.round(bm) + ', the free area at ' + Math.round(mid); } }
-  const seen = bad && bad + '|' + [b.left, b.top, b.right, b.bottom].map(Math.round), again = seen && seen === fitSeen; fitSeen = seen;
-  assert(!again, 'view: the fitted board is clear of the hand and the market, and centred if it shows whole (' + bad + '; explorer to move at ' + focusPoint().map(Math.round) + ', safe area now ' + JSON.stringify(safeRect()) + '; camera log: ' + diagLog().filter(l => / (fit|ensureVisible|bake)/.test(l)).slice(-4).join(' / ') + ')');
-}, 500);
+  const seen = bad && bad + '|' + [b.left, b.top, b.right, b.bottom].map(Math.round), again = seen && (settled || seen === fitSeen); fitSeen = seen;
+  assert(!again, 'view: the fitted board is clear of the hand and the market, and centred if it shows whole (' + bad + '; hand ' + cards.map(c => c.className.replace('card', '').trim() + '@' + Math.round(rect(c).top)).join(' ') + '; explorer to move at ' + focusPoint().map(Math.round) + ', view ' + [view.x, view.y, view.s * 1000].map(Math.round) + ', board ' + [layout().w, layout().h, layout().minX].map(Math.round) + ', safe area now ' + JSON.stringify(safeRect()) + '; camera log: ' + diagLog().filter(l => / (fit|ensureVisible|bake)/.test(l)).slice(-4).join(' / ') + ')');
+}
+if (CHECKS) setInterval(() => fitCheck(false), 500);
 

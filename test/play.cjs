@@ -63,6 +63,7 @@ function step() {
     try {
       for (; steps < 1500; steps++) {
         await ready(); await settle(p);
+        await p.evaluate(() => window.__ED.fitCheck(true)); // (the board check at every settled step, not only when its samples happen to see one)
         if (await p.evaluate(() => window.__ED.S.over)) break;
         const r = await p.evaluate(step); const k = r.split(':')[0]; did[k] = (did[k] || 0) + 1; if (r.startsWith('unmapped')) { unmapped.push(r); break; }
       }

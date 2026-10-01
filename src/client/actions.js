@@ -9,7 +9,7 @@ import { replayDecorate } from './replay.js';
 import { render, resetView } from './frame.js';
 import { toast, modal, closeModal, showGameOver } from './dialogs.js';
 import { buildBoard } from './board/terrain.js';
-import { fitSoon, ensureVisible } from './board/camera.js';
+import { fitSoon } from './board/camera.js';
 import { animateMove } from './board/pieces.js';
 import { pulseDiscard } from './board/overlays.js';
 import { flyToDiscard } from './hand.js';
@@ -95,7 +95,6 @@ export function afterChange(turnChanged,ended){
   if(turnChanged&&!S.over&&!online()&&G.rec.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
   render();
   if(ended)setTimeout(()=>{if(S&&S.over)showGameOver();},600); // (unless another game is on show by then)
-  else if(turnChanged&&!UI.cover&&!S.over)ensureVisible(); // (whose turn it is: the chip lights up and flashes, hud.js)
 }
 
 /* ---------- UI actions (build an action from the current selection) ---------- */
