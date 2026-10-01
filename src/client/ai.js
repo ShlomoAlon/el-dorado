@@ -4,6 +4,7 @@ import { aiUsesNet, aiNetDecode, aiSetNet, aiChoose, assert } from '../engine.ge
 import { S, UI, G, online, isAI, viewIdx, humanRacing } from './state.js';
 import { reduceMotion } from './dom.js';
 import { toast } from './dialogs.js';
+import { failed } from './boundary.js';
 import { applyLocal } from './actions.js';
 // gen: which game is on show (aiReset: showGame); a move scheduled for an earlier one is dropped
 // pace: the pauses' scale (1 in play; test/play.cjs plays whole games faster: the same moves, shorter pauses)
@@ -13,9 +14,15 @@ export function aiNetLoad(){ // the neural network (~340 KB) is only fetched onc
   if(!AIX.loading)AIX.loading=(async()=>{
     let bin;
     if(AI_NET.b64){const s=atob(AI_NET.b64);bin=new Uint8Array(s.length);for(let i=0;i<s.length;i++)bin[i]=s.charCodeAt(i);}
-    else{const r=await fetch(AI_NET.url);if(!r.ok)throw new Error('HTTP '+r.status);bin=new Uint8Array(await r.arrayBuffer());}
+    else{const r=await fetch(AI_NET.url);if(!r.ok)throw new Error('HTTP '+r.status);bin=new Uint8Array(await r.arrayBuffer());
+      // the network this page was built with (its name and its hash come from its contents, build.mjs): another one would
+      // play with weights its code doesn't expect
+      const h=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bin))].map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,10);
+      assert(h===AI_NET.hash,'ai: the network fetched is the one this page was built with ('+h+', built with '+AI_NET.hash+')');}
     AIX.net=aiNetDecode(bin);return AIX.net;
-  })().catch(e=>{AIX.failed=true;AIX.loading=null;console.warn('AI network unavailable:',e);toast('The AI network could not load; the AIs play with the route planner.',3200);return null;});
+  })().catch(e=>{AIX.failed=true;AIX.loading=null;console.warn('AI network unavailable:',e);
+    if(!(e instanceof TypeError)&&!/^HTTP /.test(e.message)){console.error(e);failed(e,'loading the AI network');} // (no connection, or no such file: expected; anything else is a bug)
+   toast('The AI network could not load; the AIs play with the route planner.',3200);return null;});
   return AIX.loading;
 }
 export function aiReset(){clearTimeout(AIX.timer);AIX.timer=0;AIX.mem={};AIX.gen++;} // a new game (or a loaded one) starts

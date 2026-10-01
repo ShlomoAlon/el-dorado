@@ -127,7 +127,7 @@ wrangler.jsonc            Worker config: assets ./public, D1 "DB", DOs ROOMS(Roo
 src/engine_data.js        CT (cards), MARKET0/RESERVE0, BLOCKADES, BOARDS, hex geometry, genMap/buildMap (seeded)
 src/engine_ai.js          named AI players (AIS: Fawcett / Humboldt / Raleigh) over engine_bot.js: aiChoose/aiStep, per-game
                           plan cache, aiNetDecode (half-float network). engine_bot.js itself is the training code's: don't change it
-src/ai/first.bin          the shipped network (tools/ai/pack.mjs from tools/ai/models/first-first1-351.json; build copies it to public/ai/)
+src/ai/first.bin          the shipped network (tools/ai/pack.mjs from tools/ai/models/first-first1-351.json; build copies it to public/ai/first.<hash>.bin, named by its contents)
 src/engine_rules.js       S/MAP globals, newGame, reach/nativeTargets/payTargets, applyAction, advance, resign,
                           endGame (placements), eloDeltas, redact
 src/client/shell.html     <title>, fonts, all CSS (design tokens in :root), SVG symbol defs, DOM skeleton

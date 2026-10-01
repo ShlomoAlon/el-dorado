@@ -37,9 +37,10 @@ const seats = ['Ana', 'Ben', 'Cleo', 'Dev'].map((nm, i) => `<div class="prow sea
 const shell = r('./src/client/shell.html').replace('<!--COURSES:course-->', courses('course')).replace('<!--COURSES:ocourse-->', courses('ocourse')).replace('<!--SEATS-->', seats)
   .replace('<!--AILIST-->', E.AIS.map(a => `<button type="button" data-addai="${a.id}"><b>${esc(a.name)} <span class="aitag">AI</span></b><span>${esc(a.tier)} · ${esc(a.desc)}</span></button>`).join(''))
   .replace('<!--ROOMCOLS-->', sw('rlcol', -1, c => c.hex));
-// the AI's neural network (tools/ai/pack.mjs): the site loads it from /ai/first.bin only when an AI needs it;
-// the artifact (no network access there) carries it inline
-const netBin = readFileSync(new URL('./src/ai/first.bin', import.meta.url));
+// the AI's neural network (tools/ai/pack.mjs): the site loads it from /ai/first.<hash>.bin only when an AI needs it, named
+// by its contents like the script (a tab open across a deploy keeps the network its code was built with); the artifact
+// (no network access there) carries it inline
+const netBin = readFileSync(new URL('./src/ai/first.bin', import.meta.url)), netHash = createHash('sha256').update(netBin).digest('hex').slice(0, 10), netFile = `first.${netHash}.bin`;
 // the page's script: the modules in src/client bundled into one minified file by esbuild (installed with wrangler)
 const bundle = net => esbuild.buildSync({ entryPoints: [new URL('./src/client/main.js', import.meta.url).pathname], bundle: true, format: 'iife',
   minify: !process.env.DEV, target: 'es2020', write: false, define: { AI_NET: JSON.stringify(net) }, logLevel: 'error' }).outputFiles[0].text;
@@ -59,14 +60,15 @@ const LATE = /<style data-late>([\s\S]*?)<\/style>/, late = shell.match(LATE)[1]
 const hashed = (ext, text) => { const n = `app.${createHash('sha256').update(text).digest('hex').slice(0, 10)}.${ext}`; writeFileSync(new URL('./public/' + n, import.meta.url), text); return n; };
 for (const f of readdirSync(new URL('./public/', import.meta.url))) if (/^app\.[0-9a-f]{10}\.(js|css)$/.test(f)) unlinkSync(new URL('./public/' + f, import.meta.url));
 const faceCss = siteFonts.replace(/<\/?style>/g, ''); // the game's fonts are declared in the game's CSS: the start screen never fetches them
-const cssFile = hashed('css', minCss(faceCss + late)), jsFile = hashed('js', bundle({ url: '/ai/first.bin' }));
+const cssFile = hashed('css', minCss(faceCss + late)), jsFile = hashed('js', bundle({ url: '/ai/' + netFile, hash: netHash }));
 const siteShell = withFonts(shell, '').replace(LATE, '').replace(/<style>([\s\S]*?)<\/style>/, (m, c) => `<style>${minCss(c)}</style>`)
   .replace('</dialog>', `</dialog>\n<link rel="stylesheet" href="${cssFile}">`);
 const body = siteShell + `\n<script src="${jsFile}" defer></script>\n`;
 mkdirSync(new URL('./public/', import.meta.url), { recursive: true });
 mkdirSync(new URL('./build/', import.meta.url), { recursive: true });
 mkdirSync(new URL('./public/ai/', import.meta.url), { recursive: true });
-writeFileSync(new URL('./public/ai/first.bin', import.meta.url), netBin);
+// (earlier networks stay: a tab built with one fetches it only when its first AI moves, maybe after a deploy)
+writeFileSync(new URL('./public/ai/' + netFile, import.meta.url), netBin);
 writeFileSync(new URL('./public/index.html', import.meta.url),
   `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="theme-color" content="#0a1310">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="El Dorado">\n</head>\n<body>\n${body}</body>\n</html>\n`);
 writeFileSync(new URL('./build/artifact.html', import.meta.url), withFonts(shell, artFonts) + '\n' + script({ b64: netBin.toString('base64') }));
