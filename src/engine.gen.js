@@ -252,8 +252,9 @@ function recSecret(){return crypto.getRandomValues(new Uint32Array(1))[0];}
 function recNewGame(o,rng){
   assert(Number.isInteger(rng)&&rng>=0&&rng<2**32,'recNewGame: the game\'s number (rng) is a 32-bit integer');
   const gs=gameStart(o,rng);
-  // (privacy: the page's pass-and-play cover, a setting of the table rather than of the game: kept in the record only)
-  return{gs,rec:{kind:'eldorado-replay',v:3,course:gs.course.id,seed:gs.seed,rng,fullRace:gs.fullRace,...(o.privacy?{privacy:true}:{}),...(o.gift?{gift:o.gift}:{}),
+  // (privacy: the page's pass-and-play cover, a setting of the table rather than of the game: kept in the record only, and
+  // always said, on or off: a record that left it out when off read as off when an older one never wrote it)
+  return{gs,rec:{kind:'eldorado-replay',v:3,course:gs.course.id,seed:gs.seed,rng,fullRace:gs.fullRace,privacy:!!o.privacy,...(o.gift?{gift:o.gift}:{}),
     players:gs.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0}};
 }
 /* the game's invariants: what must hold after every action (cheap: one pass over ~100 cards; run by recApply, so in every

@@ -57,7 +57,7 @@ export const inGame = () => !!(S && !S.over && !G.replay && !UI.preview);
    rebuild: a bug, reported, and the page goes on without it */
 export function loadSave() {
   let rec; try { rec = JSON.parse(load('save') || 'null'); } catch (e) { /* expected: a save cut short (storage full while writing) */ return null; }
-  if (!rec || replayCheck(rec)) return null; // (a game recorded by an older version: dropped, as decided 2026-09-29)
+  if (!rec || replayCheck(rec) || typeof rec.privacy !== 'boolean') return null; // (a game recorded by an older version: dropped, as decided 2026-09-29; a save that doesn't say whether hands are hidden is one)
   try { return { rec, S: recState(rec) }; } catch (e) { console.error(e); failed(e, 'rebuilding the saved game'); return null; }
 }
 export function save() {

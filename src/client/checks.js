@@ -14,6 +14,8 @@ function check() {
   if (UI.mode === 'card') assert(P.hand.includes(UI.card) || (!!S.turn.active && S.turn.active.id === UI.card), 'view: a chosen card is in hand or being played');
   if (canAct()) assert((UI.mode === 'trashPick') === !!S.turn.pending, 'view: the removal choice shows exactly when the game asks for one');
   if (UI.mode === 'pay') assert(!!UI.buy, 'view: paying is always for a chosen purchase');
+  // a local game's record says whether hands are hidden (no default: a record that didn't say once resumed with them shown)
+  if (G.rec && !online()) assert(typeof G.rec.privacy === 'boolean', "view: a local game's record says whether hands are hidden");
   // a space paid for with cards (rubble, a base camp, a rubble blockade) is taken as soon as enough cards are in, however they came in
   if (UI.mode === 'discardFor') assert(UI.picks.length < UI.pending.need, 'view: a space paid for with cards is taken once enough cards are in (' + UI.picks.length + ' of ' + UI.pending.need + ')');
   // a purchase is open only for a card the player can pay for now (the engine's buy options: the rules and the coins in hand)
