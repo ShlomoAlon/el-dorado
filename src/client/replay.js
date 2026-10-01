@@ -56,9 +56,12 @@ function actionKey(a,st){const ty=id=>st.cards[id]||id,tys=ids=>(ids||[]).map(ty
 /* the advice for the position on show, a short pause after the position last changed (stepping quickly computes none for
    the positions passed). Keyed by the position: a redraw at the same position (a hover, a check's extra frame) doesn't
    restart the wait, or a steady stream of redraws would starve it */
-let adviceT=0,adviceAt=null,waitAt=null,waitSince=0; // (waitAt/waitSince: since when the advice for the position on show is awaited)
-function adviceSoon(){const R=G.replay,at=R.i;if(adviceT&&adviceAt===at)return;clearTimeout(adviceT);adviceAt=at;
-  adviceT=setTimeout(()=>{adviceT=0;if(G.replay===R&&R.i===at&&!R.timer&&R.side){replayAdvice();render();}},250);}
+let adviceT=0,adviceFor=null,waitFor=null,waitSince=0; // (adviceFor, waitFor: the replay and position waited for, as R.adv's key: a replay of its own, and its position)
+const adviceLog=[]; // (the advice wait's last steps, for the assertion's message)
+const adviceNote=x=>{adviceLog.push(Math.round(performance.now())+' '+x);if(adviceLog.length>4)adviceLog.shift();};
+function adviceSoon(){const R=G.replay,at=R.i;if(adviceT&&adviceFor&&adviceFor.R===R&&adviceFor.at===at)return;clearTimeout(adviceT);adviceFor={R,at};adviceNote('wait '+at);
+  adviceT=setTimeout(()=>{adviceT=0;const why=G.replay!==R?'another replay':R.i!==at?'moved':R.timer?'playing':!R.side?'side closed':'';
+    adviceNote('fired '+at+(why?' (not computed: '+why+')':''));if(!why){replayAdvice();render();}},250);}
 function startReplay(log,id){
   const from=MENU.dlg.open?MENU.screen:null; // the menu screen it was opened from: exiting goes back there
   if(online())exitOnline(); // a finished online game (the menu doesn't open replays during one in progress)
@@ -161,7 +164,7 @@ function replayBar(){
     if(R.timer)h+=`<p class="m">Pause to see it.</p>`;
     else if(!(R.i in R.adv)){h+=`<p class="m">${esc(A.name)} is thinking…</p>`;adviceSoon();
       // the advice for a position arrives: still "thinking" at the same position (side open, not playing) after 5 s means its computation was starved or lost
-      if(waitAt!==R.i||R.timer){waitAt=R.i;waitSince=performance.now();}else assert(performance.now()-waitSince<5000,'view: the advice for the replay position on show arrives');}
+      if(!waitFor||waitFor.R!==R||waitFor.at!==R.i||R.timer){waitFor={R,at:R.i};waitSince=performance.now();}else{const w=performance.now()-waitSince;assert(w<5000,'view: the advice for the replay position on show arrives (waited '+Math.round(w)+' ms; timer '+(adviceT?'pending for '+adviceFor.at+(adviceFor.R===R?'':' of another replay'):'none')+', net '+(AIX.net?'loaded':'not loaded')+'; '+adviceLog.join(', ')+')');}}
     else if(!(steps=R.adv[R.i]))h+=`<p class="m">No plan for this position.</p>`;
     else{
       // compared with what the player did, step by step: m steps of the plan match theirs (✓), then what they did instead
