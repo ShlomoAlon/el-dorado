@@ -47,21 +47,29 @@ const T = report('online');
     const view = await Promise.all([A, B, C].map(p => p.evaluate(me => { const S = __ED.S, seat = __ED.NET.seat;
       return { seat, mine: S.players[seat].hand.every(id => S.cards[id]), others: S.players.every((q, i) => i === seat || q.hand.every(id => !S.cards[id])) }; }, ids[[A, B, C].indexOf(p)])));
     T.ok('each player sees their own hand and no one else\'s', view.every(v => v.seat >= 0 && v.mine && v.others) && new Set(view.map(v => v.seat)).size === 3, JSON.stringify(view));
-    const who = async () => { for (const p of [A, B, C]) if (await p.evaluate(() => __ED.canAct())) return p; return null; };
-    let P = await who();
-    // move (a card with a reachable space: a player can start without one; then they just end their turn)
-    const before = await P.evaluate(() => JSON.stringify(__ED.S.players[__ED.S.cur].pieces));
-    const moved = await P.evaluate(() => { const E = __ED, S = E.S; for (const id of S.players[S.cur].hand) { E.onHandCard(id);
-      const k = [...E.UI.targets].find(([k, t]) => k[0] !== 'B' && t.kind === 'move'); if (k) { E.doMove(k[0]); return k[0]; } E.cancelMode(); } return null; });
-    if (moved) {
-      T.ok('move: the server applies it', await wait(P, b => JSON.stringify(__ED.S.players[__ED.S.cur].pieces) !== b, before));
-      await settle(P); await P.click('#bUndo');
-      T.ok('undo: the move is taken back', await wait(P, b => JSON.stringify(__ED.S.players[__ED.S.cur].pieces) === b, before));
-    } else console.log('     (no move for the first player in this deal: move and undo not checked)');
-    // a buy: the cheapest affordable market card, paid with the whole hand
+    // whose turn it is (each page hears of it in its own time: asked again for up to 10 s)
+    const who = async () => { for (let t = 0; t < 100; t++) { for (const p of [A, B, C]) if (await p.evaluate(() => __ED.canAct())) return p; await A.waitForTimeout(100); } return null; };
+    // move and undo: a deal can start a player with no card that moves an explorer; then they end their turn and the next
+    // player tries, until someone can (a check whose setup never comes fails: it is never skipped)
+    let P = null, before = null;
+    for (let k = 0; k < 6 && !P; k++) {
+      const Q = await who(); if (!Q) break;
+      before = await Q.evaluate(() => JSON.stringify(__ED.S.players[__ED.S.cur].pieces));
+      const moved = await Q.evaluate(() => { const E = __ED, S = E.S; for (const id of S.players[S.cur].hand) { E.onHandCard(id);
+        const k = [...E.UI.targets].find(([k, t]) => k[0] !== 'B' && t.kind === 'move'); if (k) { E.doMove(k[0]); return k[0]; } E.cancelMode(); } return null; });
+      if (moved) P = Q;
+      else { const cur = await Q.evaluate(() => __ED.S.cur); await Q.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'end', keep: [] } })); await wait(Q, c => __ED.S.cur !== c, cur); }
+    }
+    T.ok('a player with a move (within 6 turns)', !!P);
+    T.ok('move: the server applies it', await wait(P, b => JSON.stringify(__ED.S.players[__ED.S.cur].pieces) !== b, before));
+    await settle(P); await P.click('#bUndo');
+    T.ok('undo: the move is taken back', await wait(P, b => JSON.stringify(__ED.S.players[__ED.S.cur].pieces) === b, before));
+    // a buy: the cheapest affordable market card, paid with the whole hand (a full hand is worth at least 2 coins: something
+    // is always affordable, so finding nothing is a failure)
     const bought = await P.evaluate(() => { const E = __ED, s = document.querySelector('#market .mslot.can'); if (!s) return false;
       E.pickFromMarket(s.dataset.src, +s.dataset.i); E.UI.picks = E.S.players[E.S.cur].hand.slice(); E.confirmBuy(); return true; });
-    if (bought) T.ok('buy: the server applies it', await wait(P, () => __ED.S.turn.bought));
+    T.ok('buy: an affordable card in the market', bought);
+    T.ok('buy: the server applies it', await wait(P, () => __ED.S.turn.bought));
     // actions only the server or local play may use are refused
     await P.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'timeout' } }));
     T.ok('a player can\'t send timeout', await wait(P, () => /Bad action/.test(document.querySelector('#toast').textContent), null, 5000));

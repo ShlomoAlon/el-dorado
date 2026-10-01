@@ -19,6 +19,10 @@ const scan = [], walkAll = d => { for (const f of readdirSync(d, { withFileTypes
   if (f.isDirectory()) { if (!/node_modules|data|models/.test(f.name)) walkAll(p); } else if (/\.(m|c)?js$/.test(f.name) && f.name !== 'engine.gen.js') scan.push(p); } };
 for (const d of ['src', 'test', 'tools']) walkAll(path.join(root, d));
 let silent = 0;
+// no test skips its own check (CLAUDE.md "No silent failures"): a test whose setup can't be reached fails; it never prints
+// a skip and passes (docs/POSTMORTEMS.md U1)
+const SKIP = /console\.log\([^)]*\b(skip|skipped|skipping|not checked|not tested)\b/i;
+for (const f of scan) if (f.includes(path.sep + 'test' + path.sep)) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (SKIP.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a test that skips its own check: make the setup it needs, or fail`); } });
 for (const f of scan) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (SILENT.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a catch that drops the error: name the failure it expects, or handle it`); } });
 if (!ESLint) { console.log('lint: ESLint is not installed (npm i -g eslint): the module check could not run'); process.exit(1); }
 const files = []; const walk = d => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) walk(p); else if (/\.js$/.test(f.name) && !/^ui_/.test(f.name)) files.push(p); } }; walk(dir);

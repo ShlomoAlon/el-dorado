@@ -63,7 +63,9 @@ const T = report('flows');
   await p.mouse.up(); await idle();
   await check('drag onto a space moves', b => JSON.stringify(window.__ED.S.players[window.__ED.S.cur].pieces) !== b, before);
   // 6. buy: tap an affordable market card, then tap cards to pay
-  if (await S(() => !!document.querySelector('#market .mslot.can'))) {
+  // (after one card played the hand is still worth at least 1.5 coins: something is always affordable, so none is a failure)
+  const canBuy = await S(() => !!document.querySelector('#market .mslot.can')); T.ok('buy: an affordable card in the market', canBuy);
+  if (canBuy) {
     const disc0 = await S(() => window.__ED.S.players[window.__ED.S.cur].discard.length);
     await p.click('#market .mslot.can');
     await check('buying: the card waits above the hand', () => window.__ED.UI.mode === 'pay' && !document.querySelector('#buySlot').hidden);
@@ -74,7 +76,7 @@ const T = report('flows');
       await until(k => window.__ED.UI.mode !== 'pay' || window.__ED.UI.picks.length > k, picks, 3000);
     }
     await check('bought: the card is in the discard pile', d => window.__ED.S.turn.bought && window.__ED.S.players[window.__ED.S.cur].discard.length === d + 1, disc0);
-  } else console.log('     (skip buy: nothing affordable)');
+  }
   // 7. end the turn (the buy nudge and the keep-cards step, if they come)
   const me = await S(() => window.__ED.S.cur);
   for (let k = 0; k < 4 && await S(m => window.__ED.S.cur === m, me); k++) { await idle(); const id = await S(() => ['bEndA', 'bEnd2', 'bEnd'].find(i => document.getElementById(i))); if (!id) break; await p.click('#' + id); await until((m, id) => window.__ED.S.cur !== m || !document.getElementById(id), [me, id], 3000); }
