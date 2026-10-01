@@ -51,5 +51,18 @@
       "Bash(gh repo delete*)",
       "Bash(gh api * DELETE*)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/commit-check.mjs\""
+          }
+        ]
+      }
+    ]
   }
 }
