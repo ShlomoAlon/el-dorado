@@ -67,10 +67,17 @@ Fix nothing before step 5: first make sure our checks would catch the bug, then 
      assertions).
    - **Not running there:** the assertion is off where the bug happened (the owner's browser). Assertions in the owner's
      browser report to the server instead of staying silent.
-4. **Close the coverage gap in general, not for this one scenario.** Extend the integration tests so they exercise that
-   kind of behaviour the way a player meets it; the point is that the assertions throughout the code get run, even where
-   a test checks no expected outcome itself. Run it on the shipped code: **it must fail.** If it passes, coverage still
-   doesn't reach the bug: back to step 3.
+   - **The gap is a design decision too** (next section): name it, say why it's a mistake in itself, and **list its
+     siblings**: the other states and assertions the same gap leaves unreached. They go on the ledger, to be covered over
+     time (2026-10-01: "Stop moving" was cut off and no test ever showed it; nor did any test reach the buy reminder,
+     keeping no cards, the removal choice, the Transmitter, base camps from the hand, or pass-and-play).
+4. **Close the coverage gap in general, not for this one scenario.** "General" means along the coverage axis (the states
+   the tests don't reach, and every assertion those states hide), not along the bug's axis (all labels like this one).
+   Extend the integration tests so they reach that kind of state the way a player meets it: a scripted test of that
+   behaviour, or whole games played through the real UI (one source of coverage, not the only one); the point is that
+   the assertions throughout the code get run, even where a test checks no expected outcome itself. A check that passes
+   without reaching the state (run at startup, over a table) may be added too, but **never counts as closing the gap**.
+   Run it on the shipped code: **it must fail.** If it passes, coverage still doesn't reach the bug: back to step 3.
 5. **Only now, find and fix the cause.**
    - **Find the design decision** (next section) and say why it was a mistake in itself. Fix the decision, not the
      instance; the right fix usually deletes code. If you can only patch the instance, say so and why (a PARTIAL).
@@ -130,6 +137,10 @@ it predicts the siblings. More examples:
   dice allow proves nothing on the runs where it doesn't, and passes anyway. Siblings: the online undo check, both buy checks.
 - *Test pages opened by hand.* "What counts as a failure" was decided in each test instead of in one place, so any test
   that forgets it is silently weaker than the rest. Siblings: layout, frames and render all ignored failed assertions.
+- *Integration tests are a few hand-written paths, and what they reach was never measured.* An assertion protects only
+  the states it is evaluated in; when nobody knows which states the runs reach, every assertion's protection is unknown
+  and a green suite says nothing about the states it never visits. Siblings: every mode no path happened to include
+  (a card with movement left, the buy reminder, keeping no cards, the removal choice, the Transmitter, pass-and-play).
 
 **How to find it:** keep asking "why was that possible?" until the answer is a choice, not a line ("the buy step moved" →
 "its line grew" → "steps have different heights" → "an empty caption takes no space": the choice). If an answer is "a
