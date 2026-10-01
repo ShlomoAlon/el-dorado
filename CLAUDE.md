@@ -42,11 +42,14 @@ Of 217 bugs, only 40 were fixed at the root and 163 fixes added nothing that wou
 - **Find the design decision before fixing.** Walk symptom → mechanism → root cause → the decision that made the bug
   possible (test: "if this had been decided differently, could this bug *and its siblings* exist?"). Fix the decision,
   not the instance; the right fix usually deletes code. If you can only patch the instance, say so and why.
-- **Every fix ships with its ratchet, and the ratchet is an assertion** (owner's preference: one integration run exercises
-  every assertion, while each new test adds run time). Assert the property the owner cares about ("a tap on a target is a
-  move", "an overlay exists only in a mode that uses it"), at the place violations start. A test only where an assertion
-  can't see it (latency, layout across runs). Assertions must stay cheap, also in debug: no allocation or layout reads in
-  per-frame checks, nothing per bot look-ahead step.
+- **Every fix ships with its ratchet, and the ratchet we prefer is an assertion** (owner's preference: one integration run
+  exercises every assertion, while each new test adds run time; assertions scale, tests get slow). For each bug, find the
+  assertion that would have fired on it, and choose it to fire on the bug's whole class too: assert the property the owner
+  cares about ("a tap on a target is a move", "an overlay exists only in a mode that uses it", "nothing moves without an
+  animation or a direct action"), not the instance ("the timer isn't at x=58"), at the place violations start. A good
+  assertion catches bugs we haven't seen yet; if one already covers the bug (it caught it), say so and that it's the
+  ratchet. A test only where an assertion can't see it (latency, layout across runs). Assertions must stay cheap, also in
+  debug: no allocation or layout reads in per-frame checks, nothing per bot look-ahead step.
 - **Before every fix, write the chain in chat** (one line: symptom → mechanism → design decision → fix), so the owner can see
   when it's skipped. A failure that shows up while finishing a fix is a new bug and gets its own chain.
 - **Tripwire: stop on a second patch.** If a fix causes a new failure, or you're about to change the same element or
