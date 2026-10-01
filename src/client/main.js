@@ -13,7 +13,7 @@ import { piecesPart } from './board/pieces.js';
 import { layout } from './board/layout.js';
 import { handPart } from './hand.js';
 import { aimPart, aimInit } from './aim.js';
-import { marketPart, buySlotPart, marketInit, openAll } from './market.js';
+import { marketPart, buySlotPart, marketInit, openAll, allShown } from './market.js';
 import { hudPart, hudInit } from './hud.js';
 import { feedPart, histInit } from './feed.js';
 import { showRules, showPile, closeModal, modalOpen } from './dialogs.js';
@@ -27,9 +27,10 @@ import { boundaryInit } from './boundary.js';
 import { cam } from './board/camera.js';
 import { targetAt, spaceAt, setHot } from './board/overlays.js';
 import { drag } from './hand.js';
+import { checksPart } from './checks.js';
 
 // the order parts update in each frame: first what the selection allows, then the view from back to front
-for (const p of [derivePart, overlaysPart, piecesPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, replayPart]) addPart(p);
+for (const p of [derivePart, overlaysPart, piecesPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, replayPart, checksPart]) addPart(p); // (checks: the page's invariants, last)
 GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); });
 
 function boot() {
@@ -51,7 +52,7 @@ function boot() {
   $('#menuBtn').onclick = () => { if (G.replay) exitReplay(); else showMenu(); };
   window.addEventListener('keydown', e => {
     if (replayKeys(e)) return; if (e.target.tagName === 'INPUT') return;
-    if (e.key === 'Escape' && UI.allOpen) { openAll(false); return; }
+    if (e.key === 'Escape' && allShown()) { openAll(false); return; }
     if (e.key === 'Escape') { const mo = modalOpen(); if (mo && S && !S.over) { closeModal(); return; } if (S && !mo && !MENU.dlg.open) cancelMode(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
   });

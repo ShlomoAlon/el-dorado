@@ -70,7 +70,7 @@ function gameStart(o,rng){const g=recRng(rng,-1),gs=newGame(o,g);
 /* a log played back one action at a time: yields {i, gs, ok, err, ev} after each (i = -1: the setup), gs being the game (one
    game, changed step by step: stop early, or snapshot it at each step) */
 function* replay(log){const gs=replayStart(log);yield{i:-1,gs,ok:true,ev:[]};
-  for(let i=0;i<log.actions.length;i++){const[seat,a]=log.actions[i];yield{i,gs,...applyAction(gs,seat,a,recRng(log.rng,i))};}}
+  for(let i=0;i<log.actions.length;i++){const[seat,a]=log.actions[i];const r=applyAction(gs,seat,a,recRng(log.rng,i));checkGame(gs);yield{i,gs,...r};}}
 /* ---- game records (log v3): a game is its setup and its list of actions; the state is rebuilt from them ----
    Each action's shuffles come from a generator of its own, seeded from the game's secret number (rec.rng) and the action's
    index (newGame's: index -1), so re-applying the log rebuilds the same game and nothing needs a generator's state between
@@ -89,9 +89,30 @@ function recNewGame(o,rng){
   return{gs,rec:{kind:'eldorado-replay',v:3,course:gs.course.id,seed:gs.seed,rng,fullRace:gs.fullRace,...(o.privacy?{privacy:true}:{}),...(o.gift?{gift:o.gift}:{}),
     players:gs.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0}};
 }
+/* the game's invariants: what must hold after every action (cheap: one pass over ~100 cards; run by recApply, so in every
+   real game, local and online, but never in the AI's look-ahead) */
+function checkGame(gs){
+  const seen=new Set(),zone=ids=>{for(const id of ids){assert(gs.cards[id]!==undefined,'game: every card in a pile exists');assert(!seen.has(id),'game: a card is in one place only');seen.add(id);}};
+  for(const p of gs.players){zone(p.deck);zone(p.hand);zone(p.discard);zone(p.play);}
+  zone(gs.trash);
+  assert(seen.size===gs.nid-1,'game: no card is created or lost');
+  for(const q of gs.market)assert(q.n>=0,'game: market stacks never go below zero');
+  for(const q of gs.reserve)assert(q.n>=0,'game: reserve stacks never go below zero');
+  const M=mapOf(gs),at=new Set();
+  for(const p of gs.players)for(const k of p.pieces){if(k==='done')continue;
+    const h=M.hexes.get(k);assert(h&&h.type!=='m','game: an explorer stands on a space that can be entered');
+    assert(!at.has(k),'game: two explorers never share a space');at.add(k);}
+  assert(Number.isInteger(gs.cur)&&gs.cur>=0&&gs.cur<gs.players.length,'game: the player to move is a seat');
+  for(const B of gs.blockades)assert(B.owner===null||(Number.isInteger(B.owner)&&B.owner>=0&&B.owner<gs.players.length),'game: a blockade is taken by a seat or no one');
+  if(gs.over){assert(Array.isArray(gs.places)&&gs.places.length===gs.players.length,'game: a finished game places every player');return;}
+  assert(!gs.players[gs.cur].resigned,'game: a resigned player never has the turn');
+  const T=gs.turn;
+  if(T.active){const P=gs.players[gs.cur];assert(P.play.includes(T.active.id)||gs.trash.includes(T.active.id),'game: the card being played is in play (or removed from the game)');}
+}
 /* every change to a game in play: applyAction, recorded in rec (the game's log; null: not recorded) */
 function recApply(gs,rec,seat,a){assert(rec&&Array.isArray(rec.actions),'recApply: the game\'s record');
   const prev=gs.cur,r=applyAction(gs,seat,a,recRng(rec.rng,rec.actions.length));
+  checkGame(gs); // (after every real action; never in the AI's look-ahead, which calls applyAction itself)
   if(r.ok){rec.actions.push([seat,a]);if(r.reveal||a.t==='resign'||gs.cur!==prev||gs.over)rec.mark=rec.actions.length;}
   return r;
 }

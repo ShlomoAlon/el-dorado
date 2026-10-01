@@ -112,8 +112,9 @@ const T = report('flows');
   // 11. a removal still to choose (Travel Log): the market stays closed until it's answered (a tap there says why, it
   //     doesn't open a purchase), Escape keeps the question up, and once answered buying works again
   //     (a Travel Log put in the hand for the test: the saved game can't be replayed after this, so it comes last)
-  await idle(); await S(() => { const E = window.__ED, S = E.S; S.cards.c900 = 'travellog'; S.players[S.cur].hand.push('c900'); E.render(); });
-  c = await cardPos(await S(() => window.__ED.S.players[window.__ED.S.cur].hand.indexOf('c900'))); await p.mouse.click(c.x, c.y);
+  // (made the way the engine makes a card, newCard: a new id from the game's counter, or the game's invariants fail)
+  await idle(); const tl = await S(() => { const E = window.__ED, S = E.S, id = 'c' + (S.nid++); S.cards[id] = 'travellog'; S.players[S.cur].hand.push(id); E.render(); return id; });
+  c = await cardPos(await S(id => window.__ED.S.players[window.__ED.S.cur].hand.indexOf(id), tl)); await p.mouse.click(c.x, c.y);
   await check('Travel Log: which cards to remove?', () => window.__ED.UI.mode === 'trashPick' && !!document.querySelector('#bOk'));
   await check('asked in front: the heading above the hand, the board stepped back', () => !document.querySelector('#choice').hidden && /Travel Log/.test(document.querySelector('#choice').textContent) && document.querySelector('#vp').classList.contains('dim'));
   await check('the market offers nothing meanwhile', () => !document.querySelector('#market .mslot.can') && !!document.querySelector('#market .mslot.no'));

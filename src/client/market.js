@@ -3,18 +3,23 @@
    updated in place; a card's artwork is drawn again only when another card takes its slot. */
 import { CT, MARKET0, stackOf, reserveOpen, cantBuy, fmt } from '../engine.gen.js';
 import { $, setText, setStyle } from './dom.js';
-import { S, UI, canAct } from './state.js';
+import { S, UI, G, canAct } from './state.js';
 import { geo, onGeo } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
 import { cam, fitSoon } from './board/camera.js';
 import { affordable, pickFromMarket, payTotal, cancelMode } from './actions.js';
 import { setT, placeAt, buySlotBox } from './hand.js';
 import { sfx } from './sound.js';
+import { render } from './frame.js';
 
 const noMkt=()=>$('#app').classList.toggle('nomkt',!UI.mktOpen||$('#mkt').classList.contains('cramped'));
 function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
   if(!cam.userZoomed)fitSoon(true);}
-export function openAll(open){UI.allOpen=open;$('#allc').hidden=!open;if(open){$('#allc').scrollTop=0;update();}}
+/* The All cards spread belongs to the turn and mode it was opened in: a new turn, mode or game, a replay or the menu
+   closes it by itself (nothing has to remember to). allFor: where it was opened; it shows while that is still where we are */
+const allKey=()=>S&&!S.over&&!G.replay&&!$('#menu').open?`${S.seed}|${S.round}|${S.cur}|${UI.mode}`:null;
+export const allShown=()=>UI.allFor!==null&&UI.allFor===allKey();
+export function openAll(open){UI.allFor=open?allKey():null;if(open)$('#allc').scrollTop=0;render();}
 /* size the market column so it always ends above the turn buttons and the discard pile: smaller cards, and more columns
    when that isn't enough (measured when the game area or the buttons change size, never while updating) */
 function sizeMarket(){
@@ -47,6 +52,7 @@ function patchSlots(box,specs,before){
     else delete el.dataset.src;});
 }
 function update(){
+  const all=allShown(),ac0=$('#allc');if(ac0.hidden===all)ac0.hidden=!all;
   if(!S)return;
   const tr=UI.mode==='transmit',openSlot=reserveOpen(S),aff=new Set(tr?[]:affordable().map(a=>a.src+a.i));
   // a slot is 'no' when the player to act can't buy it now whatever they pay (the engine's rule), 'can' when they can afford it
@@ -60,7 +66,7 @@ function update(){
   const ac=`alltile${openSlot||tr?' open':''}${resAff?' can':''}`;if(at.className!==ac)at.className=ac;
   const sm=at.querySelector('small'),st=tr?'Pick any card':openSlot?'Reserve open':'Reserve locked';if(sm.textContent!==st)sm.textContent=st;
   $('#mktBtn').classList.toggle('canbuy',aff.size>0&&!UI.mktOpen);
-  if(!UI.allOpen)return;
+  if(!all)return;
   patchSlots($('#allMarket'),S.market.map((s,i)=>spec('m',s,i)));
   patchSlots($('#reserve'),S.reserve.map((s,i)=>spec('r',s,i)));
   $('#resNote').textContent=tr?'Transmitter: take any card for free.':openSlot?'A market slot is empty, so you may buy from the reserve.':'Opens once a market slot sells out.';
@@ -79,7 +85,7 @@ export const buySlotPart = { name: 'buySlot', update(){const bs=$('#buySlot'),on
 /* where a card type's stack is on screen now, or null: an event can describe an earlier action of the same batch (the server
    sends several AI actions at once), and by now its stack may be sold out and its slot refilled from the reserve */
 export function marketRectOf(t){const s=stackOf(S,t);return s?marketRect(s.src,s.i):null;}
-function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpen?`#market [data-i="${idx}"] .mcard`:'#mktBtn'):(UI.allOpen?`#reserve [data-i="${idx}"] .mcard`:(UI.mktOpen?'#allTile':'#mktBtn')));if(!e)return null;const r=e.getBoundingClientRect();
+function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpen?`#market [data-i="${idx}"] .mcard`:'#mktBtn'):(allShown()?`#reserve [data-i="${idx}"] .mcard`:(UI.mktOpen?'#allTile':'#mktBtn')));if(!e)return null;const r=e.getBoundingClientRect();
   if(src==='r'){const cw=86;return{left:r.left+r.width/2-cw/2,top:r.top-cw*.7+r.height/2,width:cw,height:cw*1.4};}return r;}
 
 /* ---------- drag a card out of the market (strip or All cards) toward your hand to start buying it ---------- */
@@ -95,7 +101,7 @@ function marketMove(e){const d=mdrag;if(!d||e.pointerId!==d.pid)return;
     const stack=d.src==='m'?S.market[d.idx]:S.reserve[d.idx];if(!stack)return marketCancel();
     const g=document.createElement('div');g.className='card mghost free';g.innerHTML=cardHTML(stack.t);$('#cards').appendChild(g);d.ghost=g;d.t=stack.t;
     placeAt(g,d.el.querySelector('.mcard').getBoundingClientRect(),0);d.el.style.opacity=.35;
-    if(UI.allOpen)openAll(false);sfx('pick');}
+    if(allShown())openAll(false);sfx('pick');}
   const A=geo.app,cw=geo.cw,ch=cw*1.4;setT(d.ghost,e.clientX-A.left-cw/2,e.clientY-A.top-ch*.45,(e.clientX-d.x0)*.015,.72);
 }
 function marketUp(e){const d=mdrag;if(!d||e.pointerId!==d.pid)return;marketEnd();

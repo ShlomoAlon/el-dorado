@@ -7,7 +7,7 @@ export let S = null, MAP = null;
 export function setS(gs) { S = gs; if (gs) MAP = mapOf(gs); }
 /* a board with no game on it (the course previews, main.js showCourse) */
 export function setMAP(m) { MAP = m; }
-export const UI = { mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), cover: false, hover: null, mktOpen: true, allOpen: false,
+export const UI = { mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), cover: false, hover: null, mktOpen: true, allFor: null,
   buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null };
 /* nothing selected: no card, no picks, no purchase or payment under way */
 export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = []; UI.buy = null; UI.pending = null; }

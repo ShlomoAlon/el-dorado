@@ -30,7 +30,7 @@ for (let g = 0; g < (QUICK ? 12 : 60); g++) {
   const dg = k => { if (k === 'done') return -1; const h = M.hexes.get(k); return Math.min(...goals.map(q => Math.hypot(q.x - h.x, q.y - h.y))); };
   let turns = 0;
   while (!gs.over && turns < 3000) {
-    turns++; const seat = gs.cur, P = gs.players[seat];
+    turns++; E.checkGame(gs); const seat = gs.cur, P = gs.players[seat];
     if (turns > 300) { E.applyAction(gs, seat, { t: 'resign' }, Math.random); continue; }
     for (let guard = 0; guard < 20; guard++) {
       let did = false;
