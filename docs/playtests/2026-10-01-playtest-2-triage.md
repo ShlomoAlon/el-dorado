@@ -124,8 +124,21 @@ off), or regressions. Ordered by how much they hurt.
 - **A8 things that move: Add AI done** (d7d04d3: every seat has its row). Still to do: picking a card to remove shifts
   the others, paid cards leave gaps until the purchase completes, "My games" re-sorts after showing; and found on the way:
   the menu dialog shifts ~17 px when it first becomes modal.
-- **Still to do from A:** A6 (cut-off card titles, chips, the AI dropdown), A7 (controls covered or out of reach), A20
-  (re-checks).
+- **Still to do from A:** A6 (cut-off card titles, chips, the AI dropdown), A7 (controls covered or out of reach).
+- **A20 re-checks:** (a) old storage keys: real, the cleanup was never called; fixed (11d4324: it runs when the storage
+  module loads; lint now refuses an export no module imports). (b) the removal-choice assertion online: the online test
+  now plays a whole game through the UI with a 150 ms send delay, half its moves made while the last is on its way, and
+  always reaches the removal choice (session branch, WIP 3ca5e51). That assertion never fired; another one does on
+  every run: "a space paid for with cards is taken once enough cards are in", because online the paying selection
+  stays open, every card in, until the server answers (and the board's targets blink off for each move's round trip).
+  How to fix it is the owner's call (B): apply one's own moves at once (local first), clear the selection on send (the
+  cards come back to the hand for the round trip), or a "sent" state that freezes the selection.
+- **The setup-click flake:** reproduced with four layout tests and a played game at once: the replay's advice (the AI
+  weighing turns, 132 ms on one core unloaded, 400 ms at 4x slower CPU) blocks frames long enough that a click waits
+  over 5 s for its button to stop moving. Its root is B2 (AI off the main thread). Under the same load the "nothing
+  moves" check also fired when a replay opened: the market is drawn one frame with its old column count, then with the
+  new one, because its columns come from a measurement after layout (geometry should decide them before writing);
+  the 600 ms grace hides the two-step unless a frame is starved. Not fixed: a design change, logged here.
 - **Open, found by the stricter checks under load (intermittent, not yet explained):** (1) a phone game where the
   explorer to move sat under the market, 126 px right of where the camera's numbers put it (no glide in the log);
   (2) 1920x1080 replay with the market closed: the board's origin is 105 px right of the game area's left edge, which

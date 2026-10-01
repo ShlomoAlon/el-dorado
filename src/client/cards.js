@@ -2,7 +2,7 @@
 import { CT, SYMNAME, plural } from '../engine.gen.js';
 import { esc } from './dom.js';
 import { cardBg } from './art.js';
-export function icon(sym,cls){return `<svg class="${cls||''}" viewBox="-10 -10 20 20"><use href="#i-${sym==='*'?'x':sym}" x="-10" y="-10" width="20" height="20"/></svg>`;}
+function icon(sym,cls){return `<svg class="${cls||''}" viewBox="-10 -10 20 20"><use href="#i-${sym==='*'?'x':sym}" x="-10" y="-10" width="20" height="20"/></svg>`;}
 const GLYPH={
  transmitter:`<g stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"><path d="M0 -4 L-6 10 M0 -4 L6 10 M-3.6 4 H3.6 M-4.8 7 H4.8"/><path d="M-4.5 -8 Q-7 -4 -4.5 0 M4.5 -8 Q7 -4 4.5 0 M-8 -10.5 Q-12 -4 -8 2.5 M8 -10.5 Q12 -4 8 2.5"/></g><circle cy="-4" r="1.8" fill="#fff"/>`,
  cartographer:`<path d="M-10 -7 L-3.5 -9.5 L3.5 -7 L10 -9.5 V7 L3.5 9.5 L-3.5 7 L-10 9.5Z" fill="#f4e7c3" stroke="#6b4c1a" stroke-width=".8"/><path d="M-3.5 -9.5 V7 M3.5 -7 V9.5" stroke="#6b4c1a" stroke-width=".7"/><path d="M-7 3 Q-4 -3 0 0 T7 -4" stroke="#b33" stroke-width="1.1" fill="none" stroke-dasharray="1.6 1.2"/><path d="M5.5 -5.5 l2.4 2.4 M7.9 -5.5 l-2.4 2.4" stroke="#b33" stroke-width="1.1"/>`,

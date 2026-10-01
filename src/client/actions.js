@@ -174,7 +174,7 @@ export function onHandCard(id){
 }
 export function togglePick(id){const add=!UI.picks.includes(id);if(add)UI.picks.push(id);else rm(UI.picks,id);render();if(add&&UI.mode==='pay')payProgress();}
 /* after a card goes into the spending tray: finish the purchase once the coins cover it */
-export function payProgress(){const c=CT[UI.buy.t].cost;if(payTotal()<c)return;
+function payProgress(){const c=CT[UI.buy.t].cost;if(payTotal()<c)return;
   const b=UI.buy;setTimeout(()=>{if(UI.mode==='pay'&&UI.buy===b&&payTotal()>=c)confirmBuy();},300);}
 export function onPlayCard(id){
   if(S.turn.active&&S.turn.active.id===id){

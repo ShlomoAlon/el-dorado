@@ -38,6 +38,12 @@ for (const r of res) for (const m of r.messages) {
   if (m.severity === 2) errors++; else warns++;
   console.log(`${m.severity === 2 ? 'error' : 'warn '} ${path.relative(root, r.filePath)}:${m.line} ${m.message}`);
 }
+// every export is imported by another module: ESLint's unused check stops at an export, so a function written to be called
+// from elsewhere (an init, a reset) that nobody calls passed silently (storage cleanup, 2026-10-01). A name used only in
+// its own module isn't exported.
+const srcOf = Object.fromEntries(files.map(f => [f, readFileSync(f, 'utf8')]));
+const imported = new Set(Object.values(srcOf).flatMap(t => [...t.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.{1,2}\//g)].flatMap(m => m[1].split(',').map(x => x.trim().split(/\s+as\s+/)[0]))));
+for (const f of files) srcOf[f].split('\n').forEach((l, i) => { for (const m of l.matchAll(/export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([\w$]+)/g)) if (!imported.has(m[1])) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} '${m[1]}' is exported but no module imports it: call it where it's needed, or don't export it`); } });
 errors += silent;
 console.log(errors ? `lint: ${errors} errors, ${warns} warnings` : `lint ok${warns ? ` (${warns} warnings)` : ''}`);
 process.exit(errors ? 1 : 0);

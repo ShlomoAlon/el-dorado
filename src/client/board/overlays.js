@@ -80,7 +80,7 @@ function targetLabel(k, tg) {
   if (tg.kind === 'blr') return 'Blockade: discard <b>' + tg.need + '</b> card' + (tg.need > 1 ? 's' : '');
   return '';
 }
-export function showHover(k, tg) {
+function showHover(k, tg) {
   hoverShown = true; L.path.innerHTML = '';
   const from = cur().pieces[tg.pi ?? UI.piece], keys = [from, ...(tg.path || [])];
   if (keys.length > 1) {
@@ -94,7 +94,7 @@ export function showHover(k, tg) {
   tip.style.left = ((x - layout().minX) * view.s + view.x) + 'px'; tip.style.top = ((y - layout().minY) * view.s + view.y) + 'px'; tip.style.opacity = 1;
 }
 // clearing an already-empty SVG group still re-lays out the whole layer, so only clear when needed
-export function hideHover() { if (!hoverShown) return; hoverShown = false; L.path.innerHTML = ''; $('#tip').style.opacity = 0; }
+function hideHover() { if (!hoverShown) return; hoverShown = false; L.path.innerHTML = ''; $('#tip').style.opacity = 0; }
 onViewMove(hideHover);
 /* the target a card is being aimed or dragged at: lit ring, path and tip */
 export function setHot(k) {
