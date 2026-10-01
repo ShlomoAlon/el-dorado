@@ -92,6 +92,7 @@ const CHECK = () => {
       await p.mouse.move(w / 2, 1); // park the pointer away from the hand (hovered cards lift by design)
       await settle(p, 6000); // (card flights, panels, the market: whatever the step set moving)
       const bad = await p.evaluate(CHECK); checks++;
+      for (const e of errs.splice(0)) bad.push('page error: ' + e.split('\n')[0]); // (an assertion that failed during this step, named with it)
       if (bad.length) { fails++; out.push(`FAIL ${w}×${h} ${name}:\n   ` + bad.join('\n   ')); }
       if (shots) await p.screenshot({ path: `${shots}/layout_${w}x${h}_${name.replace(/[^a-z]+/g, '-')}.png` });
     }

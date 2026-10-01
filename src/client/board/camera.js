@@ -141,20 +141,28 @@ export function setupPanZoom() {
   v.addEventListener('gesturechange', e => { if (ptrs.size >= 2 || !e.scale) return; diag(`gesture zoom ${e.scale.toFixed(2)} with ${ptrs.size} pointers`); const [x, y] = local(e.clientX, e.clientY); zoomAt(x, y, g0 * e.scale / view.s); });
   document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 }
-/* checks (debug and tests): the board as fitted is clear of the hand, the market and the prompt (or, zoomed in on a small
+/* checks (debug and tests): the board as fitted is clear of the hand and the market (or, zoomed in on a small
    screen, the explorer to move is), measured on the elements themselves, not on the fit's own numbers. Twice a second,
    while the fit stands (the player hasn't panned or zoomed), nothing moves and no card is chosen */
+let fitSeen = ''; // (the last sample's finding: a wrong fit counts once it is the same on two samples in a row, the board unmoved)
 if (CHECKS) setInterval(() => {
-  if (!S || S.over || UI.preview || cam.userZoomed || gliding || cam.pointers || UI.anim || UI.mode !== 'idle' || document.getElementById('menu').open) return;
+  if (!S || S.over || UI.preview || cam.userZoomed || gliding || cam.pointers || UI.anim || UI.mode !== 'idle' || S.turn.pending || document.getElementById('menu').open) return; // (a removal being chosen raises the whole hand, by design)
   const rect = e => e.getBoundingClientRect(), cards = [...document.querySelectorAll('#cards .card:not(.inplay)')];
-  if (!cards.length || cards.some(c => c.getAnimations().length)) return;
+  // (only when nothing finite is animating anywhere: the market sliding in, a card dealt, the board gliding)
+  if (!cards.length || document.getAnimations().some(a => a.playState === 'running' && isFinite(a.effect && a.effect.getComputedTiming().endTime))) return;
   const tops = cards.map(c => rect(c).top).sort((x, y) => x - y), handTop = UI.hover != null && tops.length > 1 ? tops[1] : tops[0]; // (a card under the pointer is raised: the hand's own top is the next)
-  const app = rect($('#app')), b = rect($('#board')), pr = $('#prompt');
-  const free = { l: app.left, r: UI.mktOpen ? rect($('#mkt')).left : app.right, t: pr.offsetHeight ? rect(pr).bottom : app.top, b: handTop };
+  // (the prompt's side is left out until the owner decides what a recap growing a second line does to the board: playtest 2, B)
+  const app = rect($('#app')), b = rect($('#board'));
+  // (a resize still in flight: the page measured another size than there is now, and the refit comes with the next frame)
+  if (Math.abs(app.left - geo.app.left) > 1 || Math.abs(app.width - geo.app.width) > 1 || Math.abs(app.height - geo.app.height) > 1 || (UI.mktOpen && Math.abs($('#mkt').offsetWidth - geo.mktW) > 1)) return;
+  const free = { l: app.left, r: UI.mktOpen && $('#mkt').offsetWidth ? rect($('#mkt')).left : app.right, t: -Infinity, b: handTop }; // (a market not shown covers nothing)
   const inside = (x, y) => x >= free.l - 2 && x <= free.r + 2 && y >= free.t - 2 && y <= free.b + 2;
   const zoomed = cam.fitZoomed; // (zoomed in by the fit: only the explorer to move must be clear)
+  let bad = '';
   if (zoomed) { const el = document.querySelector('#pieces .piece.turn'); if (!el) return; const r = rect(el); // (the explorer to move: marked .turn)
-    assert(inside(r.left + r.width / 2, r.top + r.height / 2), 'view: the fitted board is clear of the hand, the market and the prompt (zoomed in: its explorer to move is)'); }
-  else assert(inside(b.left, b.top) && inside(b.right, b.bottom), 'view: the fitted board is clear of the hand, the market and the prompt (board ' + [b.left, b.top, b.right, b.bottom].map(Math.round) + ', free ' + [free.l, free.t, free.r, free.b].map(Math.round) + ')');
+    if (!inside(r.left + r.width / 2, r.top + r.height / 2)) bad = 'zoomed in: its explorer to move is'; }
+  else if (!(inside(b.left, b.top) && inside(b.right, b.bottom))) bad = 'board ' + [b.left, b.top, b.right, b.bottom].map(Math.round) + ', free ' + [free.l, free.t, free.r, free.b].map(Math.round);
+  const seen = bad && bad + '|' + [b.left, b.top, b.right, b.bottom].map(Math.round), again = seen && seen === fitSeen; fitSeen = seen;
+  assert(!again, 'view: the fitted board is clear of the hand and the market (' + bad + ')');
 }, 500);
 
