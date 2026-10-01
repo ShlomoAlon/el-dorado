@@ -22,6 +22,10 @@ let silent = 0;
 // no test skips its own check (CLAUDE.md "No silent failures"): a test whose setup can't be reached fails; it never prints
 // a skip and passes (docs/POSTMORTEMS.md U1)
 const SKIP = /console\.log\([^)]*\b(skip|skipped|skipping|not checked|not tested)\b/i;
+// every test page is opened by test/lib.cjs openPage, which counts failed assertions (the page's boundary reports them to
+// the console) as well as uncaught errors: a page opened by hand saw only the latter, so its assertions never failed a test
+const BYHAND = /\.(newPage|newContext)\(/;
+for (const f of scan) if (f.includes(path.sep + 'test' + path.sep) && !f.endsWith(path.sep + 'lib.cjs')) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (BYHAND.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a test page opened by hand: use openPage (test/lib.cjs), or its failed assertions go unseen`); } });
 for (const f of scan) if (f.includes(path.sep + 'test' + path.sep)) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (SKIP.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a test that skips its own check: make the setup it needs, or fail`); } });
 for (const f of scan) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (SILENT.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a catch that drops the error: name the failure it expects, or handle it`); } });
 if (!ESLint) { console.log('lint: ESLint is not installed (npm i -g eslint): the module check could not run'); process.exit(1); }

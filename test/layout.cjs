@@ -2,7 +2,7 @@
 // and no two controls overlap (the board may sit under things: it pans). Run after any UI change:
 //   NODE_PATH=$(npm root -g) node test/layout.cjs [--quick] [--shots dir]
 // --quick: five sizes (phone portrait and landscape, tablet, laptop, desktop). Sizes run in parallel.
-const { chromium, serveStatic, settle } = require('./lib.cjs');
+const { chromium, serveStatic, settle, openPage } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
 const ALL = [[320, 568], [390, 844], [844, 390], [768, 1024], [1024, 700], [1024, 768], [1280, 720], [1366, 768], [1440, 900], [1920, 1080], [2560, 1440]];
 const SIZES = process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1920, 1080]] : ALL;
@@ -59,8 +59,7 @@ const CHECK = () => {
   const srv = await serveStatic(), url = srv.url;
   const one = async ([w, h]) => {
     const out = [];
-    const p = await b.newPage({ viewport: { width: w, height: h } }); const errs = [];
-    p.on('pageerror', e => errs.push(e.message));
+    const p = await openPage(b, `${w}×${h}`, { viewport: { width: w, height: h } }), errs = p.errors; // (assertion failures count: openPage)
     await p.goto(url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     // normal play: start a local game from the setup screen
     await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
@@ -68,11 +67,15 @@ const CHECK = () => {
       ['history hidden', async () => { await p.click(await p.evaluate(() => getComputedStyle(document.querySelector('#lside')).position === 'fixed') ? '#lside .hx' : '#histBtn', { timeout: 5000 }); }],
       ['play, market closed', async () => { await p.click('#histBtn', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }], // (back under the prompt)
       // another player's turn as a recap under the prompt (more steps than fit on a phone), market closed and open
-      ['recap of an AI turn', async () => { await p.evaluate(() => { const E = window.__ED, S = E.S; S.players[1].ai = 'raleigh';
-        // (the recap is drawn from the game's journal, as an AI's real turn would leave it)
-        S.log.push(...[{ e: 'play', pl: 1, k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { e: 'play', pl: 1, k: 'action', ts: ['cartographer'], n: 2 },
-          { e: 'play', pl: 1, k: 'rubble', ts: ['traveler', 'sailor'] }, { e: 'play', pl: 1, k: 'buy', ts: ['traveler', 'traveler', 'explorer'], got: 'scout', paid: 2.5 },
-          { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1, ts: ['sailor'] }].map(e => ({ ...e, r: S.round }))); E.render(); }); }],
+      // another player's turn, arriving step by step as it's played (a long one: it goes on to a second line), into the
+      // game's journal as the engine writes it; between steps the page settles, so the layout-shift and churn assertions
+      // see every step join the row (nothing already shown may move)
+      ['recap of an AI turn, step by step', async () => {
+        for (const st of [{ k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { k: 'move', ts: ['scout'], n: 2, sym: 'j' }, { k: 'action', ts: ['cartographer'], n: 2 },
+          { k: 'rubble', ts: ['traveler', 'sailor'] }, { k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { k: 'buy', ts: ['traveler', 'traveler', 'explorer'], got: 'scout', paid: 2.5 },
+          { k: 'end', kept: 1, disc: 1, ts: ['sailor'] }]) {
+          // (at an AI's pace, ~0.7 s apart: well after the last click, so a jump isn't excused as following an input)
+          await p.waitForTimeout(700); await p.evaluate(st => { const E = window.__ED, S = E.S; S.log.push({ e: 'play', pl: (S.cur + 1) % S.players.length, ...st, r: S.round }); E.render(); }, st); await settle(p); } }],
       // (owner, 2026-10-01: the recap shows only where the prompt holds six cards; beside an open market on a small phone it hides)
       ['recap, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await settle(p); const r = await p.evaluate(() => { const pr = document.querySelector('#prompt'), ps = getComputedStyle(pr);
         return { n: document.querySelectorAll('#feed .fg').length, room: pr.clientWidth - parseFloat(ps.paddingLeft) - parseFloat(ps.paddingRight), six: parseFloat(ps.getPropertyValue('--six')) }; });

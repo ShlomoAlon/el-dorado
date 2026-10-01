@@ -4,7 +4,7 @@
 // test settings), each on a first visit (empty cache) and a repeat visit. The "person" reads the start screen for 1.5 s,
 // then clicks Start. Reported (medians, ms from navigation start): first paint, start screen visible, Start usable,
 // and after the click: board + hand drawn (the start screen's 160 ms fade-out runs on top of it).
-const { chromium } = require('playwright');
+const { chromium, openPage } = require('./lib.cjs');
 const URL0 = process.argv[2] || 'http://127.0.0.1:8787/', RUNS = +(process.argv[3] || 5), READ_MS = 1500;
 const PROFILES = [
   { name: 'desktop', cpu: 1, net: null, vp: { width: 1440, height: 900 } },
@@ -12,8 +12,7 @@ const PROFILES = [
 ];
 const med = a => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
 async function once(browser, P, warm) {
-  const ctx = await browser.newContext({ viewport: P.vp, deviceScaleFactor: P.name === 'phone' ? 2 : 1 });
-  const page = await ctx.newPage(), cdp = await ctx.newCDPSession(page);
+  const page = await openPage(browser, P.name, { viewport: P.vp, deviceScaleFactor: P.name === 'phone' ? 2 : 1 }), ctx = page.context(), cdp = await ctx.newCDPSession(page);
   await cdp.send('Network.enable'); if (P.cpu > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: P.cpu });
   if (P.net) await cdp.send('Network.emulateNetworkConditions', { offline: false, ...P.net });
   if (warm) { await page.goto(URL0, { waitUntil: 'load' }); await page.waitForTimeout(1500); } // fills the cache (and anything the page prefetches)

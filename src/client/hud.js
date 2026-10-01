@@ -49,7 +49,7 @@ function updatePrompt(){
   if(G.replay){btnWire(B,[]);return;} // (the prompt is hidden in a replay: its dock says each step, the one place that does)
   if(S.over){say('The expedition is over.');btnWire(B,[{t:'Results',id:'bRes',fn:showGameOver},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
   if(online()&&NET.status){say(`<span class="m">${esc(NET.status)}</span>`);btnWire(B,[]);return;} // (the connection lost: what matters now)
-  if(!canAct()){say(who+(online()&&S.cur===NET.seat?'<span class="m">Reconnecting…</span>':'is playing…'));btnWire(B,[]);return;}
+  if(!canAct()){say(online()&&S.cur===NET.seat?'<span class="m">Reconnecting…</span>':'');btnWire(B,[]);return;} // (whose turn it is shows on the chips; what they do, in the recap)
   if(UI.cover){say(who+'is up next: pass the device.');btnWire(B,[{t:'Reveal hand',id:'bRev',pri:1,big:1,fn:()=>{UI.cover=false;render();}}]);return;}
   const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};
   switch(UI.mode){

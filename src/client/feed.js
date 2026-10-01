@@ -37,6 +37,7 @@ function checkSize(F){
   const six=6*card.offsetWidth+5*12,row=F.firstElementChild.offsetWidth,box=$('#prompt').offsetWidth;
   assert(row<=six+2,'view: the recap is no wider than six cards side by side');
   assert(box<=six+32,'view: the prompt is sized to the recap (six cards), not to the screen');
+  let h=0;for(const g of F.firstElementChild.children){const gh=g.offsetHeight;if(!g.classList.contains('fend'))assert(!h||gh===h,'view: every recap step is one height (a line never grows when a step joins it)');if(!g.classList.contains('fend'))h=gh;}
 }
 /* a step's caption: only what its cards don't show (owner: the card's name and effect are on its face; wide captions pushed
    steps out of the row). Pointing at the step says everything in words. */

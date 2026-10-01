@@ -3,7 +3,7 @@
 //   2. the zoom is baked in once it settles (layer scale back to 1, #bscale carries the zoom); edge energy printed as info only
 //   3. wheel zoom responsiveness: Chrome's input-to-screen latency for wheel events (EventLatency), CPU slowed 4x
 //   NODE_PATH=$(npm root -g) node test/render.cjs [index.html] [--shots dir]
-const { chromium } = require('playwright'); const path = require('path');
+const { chromium, openPage } = require('./lib.cjs'); const path = require('path');
 const args = process.argv.slice(2), file = path.resolve(args.find(a => a.endsWith('.html')) || path.join(__dirname, '..', 'public/index.html'));
 const shots = args.includes('--shots') ? args[args.indexOf('--shots') + 1] : null;
 const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
@@ -13,7 +13,7 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
   let n = 0; for (let i = 0; i < da.length; i += 4) if (Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]) > 24) n++; return n; }, [a.toString('base64'), b.toString('base64')]);
 (async () => {
   const b = await chromium.launch(); let fails = 0; const ok = (name, pass, detail) => { if (!pass) fails++; console.log(`${pass ? 'ok  ' : 'FAIL'} ${name}: ${detail}`); };
-  const open = async () => { const p = await b.newPage({ viewport: { width: 1200, height: 800 } }); await p.goto('file://' + file); await p.waitForTimeout(700); await p.click('#sGo'); await p.waitForTimeout(1800); return p; };
+  const errs = [], open = async () => { const p = await openPage(b, 'render', { viewport: { width: 1200, height: 800 } }); errs.push(p.errors); await p.goto('file://' + file); await p.waitForTimeout(700); await p.click('#sGo'); await p.waitForTimeout(1800); return p; };
   { // 1. grab changes nothing
     const p = await open(); await p.mouse.move(500, 420); await p.waitForTimeout(400); const a = await p.screenshot();
     await p.mouse.down(); for (let i = 1; i <= 10; i++) { await p.mouse.move(500 + i * 6, 420); await p.waitForTimeout(16); } for (let i = 9; i >= 0; i--) { await p.mouse.move(500 + i * 6, 420); await p.waitForTimeout(16); }
@@ -51,5 +51,6 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     lat.sort((x, y) => x - y); const p95 = lat[Math.floor(lat.length * .95)] || 0;
     // the median is what's checked: over 24 events the slowest few swing between ~90 and ~240 ms from run to run, in old builds too
     const med = lat[lat.length >> 1] || 0; ok('wheel zoom latency (CPU ÷4)', med < 80, `median ${med.toFixed(0)} ms, p95 ${p95.toFixed(0)} ms over ${lat.length} events`); await p.close(); }
+  const all = errs.flat(); ok('no page errors (assertions included)', !all.length, all.slice(0, 3).join(' | ') || 'none');
   await b.close(); console.log(fails ? `render: ${fails} failing` : 'render ok'); process.exit(fails ? 1 : 0);
 })();

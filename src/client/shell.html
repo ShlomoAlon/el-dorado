@@ -218,7 +218,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #prompt .m{color:var(--muted)}
 /* another player's turn: their cards in a row under the prompt text (ui_view.js feedRender); newest on the right, the oldest clip */
 #feed{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px -6px 0;padding-top:8px;border-top:1px solid var(--line)}
-#feed .frow{flex:none;display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:12px;row-gap:10px;width:var(--six);padding:2px 0 0;min-height:calc(var(--fw)*1.4 + 22px);box-sizing:border-box} /* room for six cards side by side; more go on a second line (feed.js checkSize); shown only where the prompt holds it (geo.recapFits) */
+#feed .frow{flex:none;display:flex;flex-wrap:wrap;align-items:flex-end;align-content:flex-start;column-gap:12px;row-gap:10px;width:var(--six);padding:2px 0 0;min-height:calc(var(--fw)*1.4 + 22px);box-sizing:border-box} /* room for six cards side by side; more go on a second line (feed.js checkSize); shown only where the prompt holds it (geo.recapFits) */
 .fg{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
 .fg.new{animation:fgIn .32s var(--ease) backwards}
 .fg .frc{display:flex;align-items:center}
@@ -229,7 +229,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .fc.got .cface{box-shadow:0 0 0 2px var(--gold2),0 0 12px rgba(233,178,74,.45)}
 .fg .farr{font-size:20px;line-height:1;color:var(--gold2);margin:0 4px;font-weight:800}
 .f-camp .fc .cface,.f-trash .fc .cface{box-shadow:0 0 0 2px #e08a74}
-.fg .fcap{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;line-height:1.2;width:0;display:flex;justify-content:center} /* (no width of its own: centred under its step, so a caption that changes never moves the steps) */
+.fg .fcap{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;line-height:1.2;height:1.2em;width:0;display:flex;justify-content:center} /* (no width of its own: centred under its step, so a caption that changes never moves the steps; its line is kept when empty, so every step is one height and a line never grows) */
 .fg .fcap b{color:var(--text)}
 .fend{align-self:center}
 .fend .fpill{font-size:11px;font-weight:800;color:var(--text);border:1px solid var(--line2);border-radius:9px;padding:3px 9px;background:rgba(255,255,255,.04)}
