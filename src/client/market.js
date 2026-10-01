@@ -12,7 +12,7 @@ import { setT, placeAt, buySlotBox } from './hand.js';
 import { sfx } from './sound.js';
 import { render } from './frame.js';
 import { load, store } from './store.js';
-import { expectLayout } from './debug.js';
+import { expectLayout, diag } from './debug.js';
 
 const noMkt=()=>$('#app').classList.toggle('nomkt',!UI.mktOpen||$('#mkt').classList.contains('cramped'));
 function setMkt(open){expectLayout();UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);store('market',open?'1':'0');
@@ -36,6 +36,7 @@ function sizeMarket(){
   // no arrangement fits (a tiny game area): the market steps aside; the Market button then opens All cards
   if(mk.classList.contains('cramped')!==pick.mw<min*.8){mk.classList.toggle('cramped',pick.mw<min*.8);noMkt();}
   const mw=Math.max(28,Math.floor(pick.mw));
+  if(mk.__p!==pick.cols+'×'+mw){mk.__p=pick.cols+'×'+mw;diag(`market: ${mk.__p} (room ${Math.round(avail)}, area ${Math.round(W)})`);}
   setStyle(mk,'--mw',mw+'px');setStyle($('#market'),'gridTemplateColumns',`repeat(${pick.cols},var(--mw))`);
   setStyle($('#app'),'--mktW',(pick.cols*mw+(pick.cols-1)*cg)+'px'); // the market's width, for what must stay clear of it (the prompt)
 }

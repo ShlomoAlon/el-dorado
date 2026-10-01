@@ -187,6 +187,9 @@ export function fitCheck(settled) {
   const inside = (x, y) => x >= free.l - 2 && x <= free.r + 2 && y >= free.t - 2 && y <= free.b + 2;
   const zoomed = cam.fitZoomed; // (zoomed in by the fit: only the explorer to move must be clear)
   let bad = '';
+  // (zoomed in: the explorer to move is followed into view during my turn (cameraPart); whether to follow other players'
+  // moves, live or in a replay, is the owner's to decide (playtest 2 triage, B13): until then only my turn is judged)
+  if (zoomed && !canAct()) return;
   if (zoomed) { const el = document.querySelector('#pieces .piece.turn'); if (!el) return; const r = rect(el); // (the explorer to move: marked .turn)
     if (!inside(r.left + r.width / 2, r.top + r.height / 2)) bad = 'zoomed in: its explorer to move is, at ' + [r.left, r.top].map(Math.round) + ', free ' + [free.l, free.r, free.b].map(Math.round) + (G.replay ? ', replay' : ''); }
   else if (!(inside(b.left, b.top) && inside(b.right, b.bottom))) bad = 'board ' + [b.left, b.top, b.right, b.bottom].map(Math.round) + ', free ' + [free.l, free.t, free.r, free.b].map(Math.round);

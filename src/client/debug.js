@@ -33,7 +33,7 @@ export function checksInit(during) {
       const n = s.node, who = !n ? '?' : n.id ? '#' + n.id : n.nodeType === 1 ? n.tagName.toLowerCase() + (n.className && typeof n.className === 'string' ? '.' + n.className.split(' ')[0] : '') : (n.parentElement && n.parentElement.id ? '#' + n.parentElement.id + ' text' : 'text');
       const d = `${Math.round(s.currentRect.x - s.previousRect.x)},${Math.round(s.currentRect.y - s.previousRect.y)} size ${Math.round(s.currentRect.width - s.previousRect.width)}×${Math.round(s.currentRect.height - s.previousRect.height)}`;
       shifts.push({ who, d, input: e.hadRecentInput, play: playAt(e.startTime) }); diag(`shift ${who} by ${d}${e.hadRecentInput ? ' (after input)' : ''}`);
-      if (playAt(e.startTime) && !e.hadRecentInput && Math.abs(e.startTime - expectedAt) > 600) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ' by ' + d + ')'); } })
+      if (playAt(e.startTime) && !e.hadRecentInput && Math.abs(e.startTime - expectedAt) > 600) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ' by ' + d + '; ' + Math.round(e.startTime - expectedAt) + ' ms after the last expected change; log: ' + lines.filter(l => / (layout|market|fit)/.test(l)).slice(-5).join(' / ') + ')'); } })
       .observe({ type: 'layout-shift', buffered: true });
   // churn: a frame that removes an element and adds an identical new one rebuilt what hadn't changed (CLAUDE.md: a view
   // part writes only what changed). An element moved (removed and put back) is not a rebuild; identical means the same

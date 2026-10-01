@@ -72,6 +72,9 @@ off), or regressions. Ordered by how much they hurt.
 10. **Empty boxes**: the recap is an empty panel on turn 1; with History on the left the prompt is an empty pill.
 11. **Live resize** costs 99–198 ms frames and moves the board 40 px.
 12. **Replay steps** cost 50–100 ms frames; replay too slow at top speed (playtest 1 #19).
+13. **Follow other players' moves?** On a small screen (the board zoomed in), the board follows your explorer through your
+    turn; other players' explorers only at their turn's start, and in a replay not at all, so their explorer can walk under
+    the market. Follow them too (the board then moves during their turns and while stepping a replay), or leave it?
 
 ## C. Design decisions to review later
 - Nothing announces your turn in a local game (the banner was removed on purpose).
