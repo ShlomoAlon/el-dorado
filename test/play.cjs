@@ -44,7 +44,12 @@ function step() {
     case 'buy': { if (UI.mode !== 'idle') call('cancelMode'); const st = stackOf(a.type); if (!st) return 'unmapped buy: no stack of ' + a.type;
       call('pickFromMarket', st[0], st[1]); if (UI.mode !== 'pay') return 'unmapped buy: ' + a.type + ' not offered';
       for (const id of a.cards) if (UI.mode === 'pay') call('onHandCard', id); return 'buy'; } // (paid in full, it's bought after a short pause)
-    case 'end': { if (UI.mode !== 'idle') call('cancelMode'); call('startEndTurn'); let warned = false;
+    case 'end': { if (UI.mode !== 'idle') call('cancelMode');
+      // first, as a person might: a tap on a market card the rules allow but the coins in hand don't cover (it must say so,
+      // not open a purchase that can only be cancelled)
+      const poor = [...document.querySelectorAll('#market .mslot:not(.no):not(.can):not(.empty)')][0];
+      if (poor) { call('pickFromMarket', 'm', +poor.dataset.i); E.render(); seen.modes['tapped a card out of reach'] = 1; if (UI.mode !== 'idle') call('cancelMode'); }
+      call('startEndTurn'); let warned = false;
       if (UI.mode === 'buyWarn') { warned = true; call('startEndTurn'); }
       if (UI.mode === 'endTurn') { for (const id of a.keep) call('onHandCard', id); call('finishTurn'); }
       return 'end' + (warned ? ' (after the buy reminder)' : '') + (a.keep.length ? ' keeping ' + a.keep.length : ''); }

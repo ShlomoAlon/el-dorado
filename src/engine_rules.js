@@ -37,10 +37,17 @@ function cantBuy(gs,seat,t){
   if(st.src==='r'&&!reserveOpen(gs))return'The reserve opens once a market slot is empty.';
   return'';
 }
+/* why seat can't buy a card of type t now with the coins in its hand ('' if it can): the rules (cantBuy), then the price.
+   One rule for whether a purchase can happen, so the page never opens one that can only be cancelled */
+function cantPay(gs,seat,t){
+  const no=cantBuy(gs,seat,t);if(no)return no;
+  const cash=gs.players[seat].hand.reduce((a,id)=>a+coinVal(gs,id),0);
+  return CT[t].cost>cash?'Not enough coins: '+cash+' in hand, it costs '+CT[t].cost+'.':'';
+}
 /* what seat can buy now with the coins in its hand: [{src:'m'|'r', i, t}], market first */
 function buyOptions(gs,seat){
-  const P=gs.players[seat],cash=P.hand.reduce((a,id)=>a+coinVal(gs,id),0),out=[];
-  for(const[src,list]of[['m',gs.market],['r',gs.reserve]])list.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash&&!cantBuy(gs,seat,s.t))out.push({src,i,t:s.t});});
+  const out=[];
+  for(const[src,list]of[['m',gs.market],['r',gs.reserve]])list.forEach((s,i)=>{if(s.n>0&&!cantPay(gs,seat,s.t))out.push({src,i,t:s.t});});
   return out;
 }
 /* ---- game logs (replays) ----

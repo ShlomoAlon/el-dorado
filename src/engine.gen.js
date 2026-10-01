@@ -197,10 +197,17 @@ function cantBuy(gs,seat,t){
   if(st.src==='r'&&!reserveOpen(gs))return'The reserve opens once a market slot is empty.';
   return'';
 }
+/* why seat can't buy a card of type t now with the coins in its hand ('' if it can): the rules (cantBuy), then the price.
+   One rule for whether a purchase can happen, so the page never opens one that can only be cancelled */
+function cantPay(gs,seat,t){
+  const no=cantBuy(gs,seat,t);if(no)return no;
+  const cash=gs.players[seat].hand.reduce((a,id)=>a+coinVal(gs,id),0);
+  return CT[t].cost>cash?'Not enough coins: '+cash+' in hand, it costs '+CT[t].cost+'.':'';
+}
 /* what seat can buy now with the coins in its hand: [{src:'m'|'r', i, t}], market first */
 function buyOptions(gs,seat){
-  const P=gs.players[seat],cash=P.hand.reduce((a,id)=>a+coinVal(gs,id),0),out=[];
-  for(const[src,list]of[['m',gs.market],['r',gs.reserve]])list.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash&&!cantBuy(gs,seat,s.t))out.push({src,i,t:s.t});});
+  const out=[];
+  for(const[src,list]of[['m',gs.market],['r',gs.reserve]])list.forEach((s,i)=>{if(s.n>0&&!cantPay(gs,seat,s.t))out.push({src,i,t:s.t});});
   return out;
 }
 /* ---- game logs (replays) ----
@@ -1106,4 +1113,4 @@ function aiStep(gs,id,mem,rec,rnd){ // rnd: the AI's look-ahead (the game's shuf
 }
 
 // every name
-export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,SQ3,R,DIRS,key,rot,pxOf,mulberry32,shuffle,hash,COURSES,courseById,buildCourse,mapOf,MAPS,lastMap,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,stackOf,reserveOpen,cantBuy,buyOptions,coinVal,replay,log,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,gameStart,recRng,newGame,newCard,applyAction,checkGame,recSecret,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiRouteFor,aiStep};
+export {assert,AssertionError,setAssertMode,ASSERT_DEBUG,CT,MARKET0,RESERVE0,SYMNAME,SYMCOL,COLORS,BLOCKADES,BOARDS,parseTok,parseTpl,TPL,SQ3,R,DIRS,key,rot,pxOf,mulberry32,shuffle,hash,COURSES,courseById,buildCourse,mapOf,MAPS,lastMap,hexAt,typeOf,def,plural,fmt,rm,playerDone,isActive,blocksOf,stackOf,reserveOpen,cantBuy,cantPay,coinVal,buyOptions,replay,log,REPLAY_MAX_ACTIONS,replayCheck,aiById,replayStart,gameStart,recRng,newGame,newCard,applyAction,checkGame,recSecret,recNewGame,recApply,resign,recCanUndo,recState,recUndo,recFinal,drawCards,LOG_MAX,tell,occupied,blockAt,neighbors,blkLabel,reach,nativeTargets,cardTargets,payTargets,endGame,checkEnd,passTurn,advance,progress,eloDeltas,redact,BOT_TYPES,botDist,botCost,botRemaining,botCombos,botFinishCard,botCanRemove,botActions,BOT_BINS,BOT_BW,BOT_NT,BOT_NF,botCounts,botFeatures,botHeuristic,BOT_STARTER,botCardWorth,BOT_BUY,botPlanMoves,botClone,botPlanChoose,BOT_DRAW,botMapOrder,BOT_FLAGS,BOT_BLOCK,botBlockSize,botMulti,BOT_NET,BOT_XF,botExtra,botExtraNF,botNetNF,BOT_CP,BOT_CPS,botCardProps,botAddIds,botMeanCost,botPatchOf,botExtraFeatures,BOT_FBUF,botNetFeatures,BOT_EVALS,botNetPrep,botNetValue,botNetReady,BOT_FIRST_RATIO,botPlaceValue,botPlaceSettled,botValue,botEndView,botEndFeatures,botActionValue,botChoose,botPlanTurnChoose,botTurnKey,botPlanTurn,botRandomCourse,aiFinishGuard,AIS,aiUsesNet,AI_COURSES,aiCourseOK,aiAllowed,aiNetDecode,aiSetNet,aiChoose,aiPlan,aiNextSteps,aiEnters,aiRouteFor,aiStep};

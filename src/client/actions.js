@@ -1,7 +1,7 @@
 /* Turning what the player does into engine actions. Every rules change goes through act(): locally it runs the shared
    engine (and is recorded: G.rec); online it is sent to the server, which runs the same engine and sends back the new
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
-import { CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, assert } from '../engine.gen.js';
+import { CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantPay, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, assert } from '../engine.gen.js';
 import { esc } from './dom.js';
 import { S, setS, UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave, humanRacing, passing } from './state.js';
 import { showSetup, buyReminder } from './menu.js';
@@ -130,7 +130,7 @@ export function pickFromMarket(src,idx){
   const stack=src==='m'?S.market[idx]:S.reserve[idx];if(!stack||stack.n<=0)return;
   if(UI.mode==='transmit'){openAll(false);act({t:'transmit',card:UI.card,type:stack.t});return;}
   if(UI.mode==='pay'&&UI.buy.src===src&&UI.buy.idx===idx){cancelMode();return;}
-  const no=cantBuy(S,S.cur,stack.t);if(no){sfx('error');toast(no);return;}
+  const no=cantPay(S,S.cur,stack.t);if(no){sfx('error');toast(no);return;} // (the rules and the coins in hand: a purchase opens only if it can be paid)
   UI.mode='pay';UI.buy={src,idx,t:stack.t};UI.picks=[];UI.card=null;
   render();
 }
