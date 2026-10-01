@@ -84,6 +84,7 @@ function updatePrompt(){
 /* The turn buttons sit in three fixed slots: a big primary at the bottom, a cancel slot and an extra slot above it.
    A button keeps its slot in every mode and an unused slot keeps its space (invisible), so nothing moves as the mode
    changes (CLAUDE.md: fixed slots). The slot elements are made once and only their words and state change. */
+/* s3: Undo, See cards, Keep all (the right slot: Undo is the one most often alone); s2: Cancel, Back, Results (left) */
 const SLOTS=['s3','s2','p'],slotOf=b=>b.big?'p':b.id==='bCan'||b.id==='bRes'?'s2':'s3';
 function btnWire(B,btns){
   if(!B.firstChild)B.innerHTML=SLOTS.map(s=>`<button type="button" class="btn bslot ${s}${s==='p'?' pri big':''}"></button>`).join('');
