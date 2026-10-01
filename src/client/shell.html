@@ -245,7 +245,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #mkt.hid{transform:translateX(30px);opacity:0;pointer-events:none}
 #market{display:grid;grid-template-columns:repeat(2,var(--mw));gap:10px 8px}
 #mkt .mslot{filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
-#mkt .mslot{transform-origin:100% 25%}
+#mkt .mslot{transform-origin:100% 0} /* (a card under the pointer grows down and to the left, over the board: never up into the top bar) */
+#mkt.row .mslot:first-child{transform-origin:0 0} /* (a market in one row: its first card is beside the prompt, so it grows right, over the other cards) */
 #mkt .mslot:hover{transform:scale(1.9);z-index:6}
 .mslot{position:relative;cursor:pointer;width:var(--mw);height:calc(var(--mw)*1.4);box-sizing:border-box;transition:transform .2s var(--ease);transform-origin:50% 0}
 .mslot .mcard{--cw:var(--mw)}

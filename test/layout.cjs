@@ -71,6 +71,9 @@ const CHECK = () => {
     const states = [['play', null],
       // the All cards overlay over the game (from its tile; where the market is too narrow, the Market button opens it)
       ['All cards open', async () => { await p.click(await p.evaluate(() => { const t = document.querySelector('#allTile'); return t && t.offsetParent && !document.querySelector('#mkt').classList.contains('cramped') ? '#allTile' : '#mktBtn'; }), { timeout: 5000 }); await p.waitForSelector('#allc:not([hidden])', { timeout: 5000 }); }],
+      // a market card under the pointer (it grows to be read): it must not cover the top bar (playtest 2, A7)
+      ['market card under the pointer', async () => { const r = await p.evaluate(() => { const e = document.querySelector('#mkt:not(.hid):not(.cramped) #market .mslot:not(.empty)'); if (!e) return null; const q = e.getBoundingClientRect(); return { x: q.left + q.width / 2, y: q.top + q.height / 2 }; });
+        if (r) { await p.mouse.move(r.x, r.y); await p.waitForTimeout(400); } }],
       ['history on the left', async () => { await p.click('#histBtn', { timeout: 5000 }); }],
       ['history hidden', async () => { await p.click(await p.evaluate(() => getComputedStyle(document.querySelector('#lside')).position === 'fixed') ? '#lside .hx' : '#histBtn', { timeout: 5000 }); }],
       ['play, market closed', async () => { await p.click('#histBtn', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }], // (back under the prompt)
@@ -96,7 +99,7 @@ const CHECK = () => {
     for (const [name, setup] of states) {
       await p.keyboard.press('Escape'); // close any overlay a previous step opened
       try { if (setup) await setup(); } catch (e) { fails++; out.push(`FAIL ${w}×${h} ${name}: could not set up (${e.message.split('\n').filter(l => /Timeout|intercepts|not visible|not stable|waiting for|resolved/.test(l)).slice(0, 6).join(' · ')})`); continue; }
-      await p.mouse.move(w / 2, 1); // park the pointer away from the hand (hovered cards lift by design)
+      if (!/under the pointer/.test(name)) await p.mouse.move(w / 2, 1); // park the pointer away from the hand (hovered cards lift by design)
       await settle(p, 6000); // (card flights, panels, the market: whatever the step set moving)
       const bad = await p.evaluate(CHECK); checks++;
       for (const e of errs.splice(0)) bad.push('page error: ' + e.split('\n')[0]); // (an assertion that failed during this step, named with it)
