@@ -22,9 +22,10 @@ export async function api(path,opts={}){
 export const HAS_SERVER=!(location.protocol==='file:'||/claude\.ai$|claudeusercontent/.test(location.hostname));
 export async function netInit(){
   if(!HAS_SERVER)return;
-  try{NET.cfg=await api('/api/config');NET.available=true;}catch(e){NET.available=false;return;}
-  NET.token=load('token');
-  if(NET.token){try{const r=await api('/api/me');NET.user=r.user;NET.active=r.active;loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));}catch(e){if(e.status===401){NET.token=null;store('token',null);}}}
+  // (both asked at once: one round trip; who's signed in doesn't depend on the server's settings)
+  NET.token=load('token');const cfg=api('/api/config'),me=NET.token?api('/api/me'):null;
+  try{NET.cfg=await cfg;NET.available=true;}catch(e){NET.available=false;if(me)me.catch(()=>{/* expected: the server is out of reach (its config failed too) */});return;}
+  if(NET.token){try{const r=await me;NET.user=r.user;NET.active=r.active;loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));}catch(e){if(e.status===401){NET.token=null;store('token',null);}}}
 }
 export function signedIn(r,after){
   NET.token=r.token;NET.user=r.user;store('token',r.token);loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));

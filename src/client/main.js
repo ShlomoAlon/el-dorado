@@ -3,6 +3,7 @@
 import { buildCourse, courseById, assert, aiChoose } from '../engine.gen.js';
 import { $ } from './dom.js';
 import { S, MAP, setMAP, UI, NET, G, canAct, online } from './state.js';
+import { load } from './store.js';
 import { addPart, render, flush, freshInit } from './frame.js';
 import { watchGeometry, geo } from './geometry.js';
 import { GAME_READY } from './ready.js';
@@ -58,15 +59,23 @@ function boot() {
     if (e.key === 'Escape') { const mo = modalOpen(); if (mo && S && !S.over) { closeModal(); return; } if (S && !mo && !MENU.dlg.open) cancelMode(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
   });
+  // the first screen is chosen as soon as what decides it is known (CLAUDE.md: local first): a room or replay link needs
+  // the server, and so does a signed-in player (an online game of theirs may be running); anyone else's screen is decided
+  // here, from this device, at once, and the server check only adds to it
+  const q = new URLSearchParams(location.search), rid = (q.get('replay') || '').replace(/[^a-z0-9]/g, ''), room = (q.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const local = () => {
+    if (resumeSaved()) return;
+    showSetup(); if ($('#sGo').dataset.q) { delete $('#sGo').dataset.q; startLocal(); } // Start pressed before the script had loaded
+  };
+  const known = !rid && !room && !load('token') && radio('mode') !== 'online'; // (Online picked before the script had loaded: its screen needs the server)
+  if (known) local();
   netInit().then(() => {
-    const q = new URLSearchParams(location.search), rid = (q.get('replay') || '').replace(/[^a-z0-9]/g, '');
+    if (known) return;
     if (rid) { loadReplayId(rid); return; }
-    const room = (q.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (room && NET.available) { if (NET.user) { joinRoom(room); return; } NET.pendingRoom = room; showHub(); return; }
     if (NET.user && NET.active) { showHub(); return; }
-    if (resumeSaved()) return;
-    if (radio('mode') === 'online') { showHub(); return; } // picked before the script had loaded
-    showSetup(); if ($('#sGo').dataset.q) { delete $('#sGo').dataset.q; startLocal(); } // Start pressed before the script had loaded
+    if (radio('mode') === 'online') { showHub(); return; }
+    local();
   });
 }
 

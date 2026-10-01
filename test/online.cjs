@@ -35,6 +35,18 @@ const T = report('online');
       await W.evaluate(() => __ED.joinRoom('ZZZZ'));
       const said = await wait(W, () => /no room/i.test(document.querySelector('#menu').textContent) && !/[?&]room=/.test(location.search), null, 3000);
       T.ok('wrong room code: said within 3 s, and the code leaves the address', said, ((Date.now() - t0) / 1000).toFixed(1) + ' s; ' + await W.evaluate(() => (__ED.NET.status || '') + ' ' + location.search)); }
+    // ---------- 0a. coming back: the screen is chosen from what this device knows at once (the server only adds), and a signed-in
+    //      player's server check is one round trip, not two (every request here takes 1.5 s)
+    { const slow = P => P.route('**/api/**', async r => { await new Promise(res => setTimeout(res, 1500)); await r.continue().catch(e => { if (!/already handled/.test(e.message)) throw e; }); }); // (expected: the page moved on meanwhile)
+      const back = async (P, signed) => { // (a local game started and saved; then the page is opened again)
+        if (signed) await signIn(P, 'Ulla'); await P.click('label:has(input[name=mode][value=local])'); await P.waitForSelector('#sGo', { state: 'visible' });
+        await P.click('#sGo'); await P.waitForFunction(() => __ED.S && !__ED.UI.preview && !document.querySelector('#menu').open);
+        await slow(P); const t0 = Date.now(); await P.reload({ waitUntil: 'commit' });
+        await P.waitForFunction(() => window.__ED && __ED.S && !__ED.UI.preview && !document.querySelector('#menu').open && document.documentElement.classList.contains('boardready'), null, { timeout: 15000 });
+        const ms = Date.now() - t0; await P.unroute('**/api/**'); return ms; };
+      const U = await open('U'), out = await back(U, false), U2 = await open('U2'), inn = await back(U2, true);
+      T.ok('coming back, signed out: the saved game shows without waiting for the server', out < 1400, out + ' ms (requests take 1.5 s)');
+      T.ok('coming back, signed in: one round trip to the server, not two', inn < 2800, inn + ' ms (requests take 1.5 s)'); }
     // ---------- 0b. the server out of reach: each request that fails says so, in the page's words (a failed refresh keeps
     //      what was loaded before, and says that too)
     { const V = await open('V'); await signIn(V, 'Vera');
