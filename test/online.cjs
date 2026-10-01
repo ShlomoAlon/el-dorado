@@ -122,7 +122,7 @@ const T = report('online');
     T.ok('AI seats added from the room lobby', (await A.evaluate(() => __ED.NET.room.seats.map(s => s.ai || '').join())) === ',fawcett,raleigh', code2);
     T.ok('a full room: the AI list gives way to "the room is full"', await wait(A, () => document.querySelector('#rlAIList').hidden && !document.querySelector('#rlFull').hidden));
     // the game starts in a hidden tab (no frames drawn, messages still arriving) and an AI moves before anything is drawn
-    await A.evaluate(() => { window.__raf = window.requestAnimationFrame; window.__q = []; window.requestAnimationFrame = f => { window.__q.push(f); return 0; }; });
+    await A.evaluate(() => { window.__raf = window.requestAnimationFrame; window.__q = []; window.requestAnimationFrame = f => { window.__q.push(f); return window.__q.length; /* (as in a hidden tab: a frame is requested and waits; its id is real) */ }; });
     await A.click('#rlStart'); await wait(A, () => __ED.online());
     if (await A.evaluate(() => __ED.canAct())) await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'end', keep: [] } }));
     const aiMoved = await wait(A, () => __ED.S.log.some(e => e.e === 'play' && __ED.S.players[e.pl].ai), null, 30000);
