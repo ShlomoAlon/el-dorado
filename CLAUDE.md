@@ -101,15 +101,14 @@ Fix nothing before step 5: first make sure our checks would catch the bug, then 
    trusted through a pipe). **His setup is the test:** a bug he saw is fixed when it's gone in his setup (Chrome on
    Windows, 1536×639 at 125%, the live server): screenshots or a real play-through at that size, and say plainly what
    you could not verify (headless only, local only).
-8. **Commit, ship, report.** The commit says `Fix: ROOT|PARTIAL|HACK` (or `Fix: none`: not a bug fix) and, for a fix,
-   `Decision:` (the design decision, why it was a mistake, what the fix changes), `Ratchet:` (the assertions),
-   `Coverage:` (the integration test that now trips them, and that it failed before the fix); a HACK also needs
-   `Owner OK:`. **Only when an assertion or test is truly impossible** (extreme cases: say why, and tell the owner in the
-   report) may `Ratchet:` or `Coverage:` be none, acknowledged in full:
-   `Coverage: none — WARNING WARNING WARNING: <why nothing can check this>`. `.claude/hooks/commit-check.mjs` refuses a commit without them, both as a Claude Code hook
-   (`.claude/settings.json`) and as git's commit-msg hook (`.githooks/`, installed by `node build.mjs`). Push to `main`,
-   check the live site serves the new build, and tell the owner briefly: how it shipped, the assertion, the coverage gap
-   closed, the fix; then the ledger.
+8. **Commit, ship, report.** One bug per commit. The message answers the questions in `.claude/bugfix-commit.md`, each
+   question word for word with its answer under it (a non-fix commit, `Fix: none`, answers why it isn't one). The commit
+   check (`.claude/hooks/commit-check.mjs`, both a Claude Code hook in `.claude/settings.json` and git's commit-msg hook
+   in `.githooks/`, installed by `node build.mjs`) refuses a message without them, a Q2 that isn't "Yes", a quoted
+   assertion that isn't in the code, and a "none" without "WARNING WARNING WARNING:" and its reason (only when an
+   assertion or test is truly impossible: say why, and tell the owner). Work in progress goes to the session branch with
+   a title starting "WIP"; git's pre-push hook refuses it on `main`. Push to `main`, check the live site serves the new
+   build, and tell the owner briefly: how it shipped, the assertion, the coverage gap closed, the fix; then the ledger.
 
 ### What a design decision is
 Four levels; only the last is worth fixing:
@@ -202,7 +201,7 @@ Follow these in new code and fix toward them:
    changes: `--full` (all 60 engine games + AI on every course, 11 layout sizes, online, board rendering).
    (The worker bundle check matters: Cloudflare's bundler rejects some things Node accepts; a failed bundle never deploys.)
 4. UI changes: load `public/index.html` in Playwright (Chromium is preinstalled; `NODE_PATH=$(npm root -g)`), take screenshots, look at them, check for page errors.
-5. Commit (clear message with its `Fix:` lines ("Fixing bugs" step 8), which the commit check enforces, + the attribution lines your environment asks for) and `git push origin main`.
+5. Commit (one bug per commit, the message answering `.claude/bugfix-commit.md` ("Fixing bugs" step 8), which the commit check enforces, + the attribution lines your environment asks for) and `git push origin main`.
 6. Tell him in 1–3 sentences what changed and that it's deploying.
 
 ## Libraries (owner's rule)

@@ -1,0 +1,12 @@
+#!/bin/sh
+# work in progress never reaches main (CLAUDE.md "Fixing bugs", .claude/bugfix-commit.md): a push to main is refused if any
+# commit it would add has a title starting "WIP". Finished work goes to main as its own commits, one bug each.
+z=0000000000000000000000000000000000000000
+while read lref lsha rref rsha; do
+  [ "$rref" = "refs/heads/main" ] || continue
+  [ "$lsha" = "$z" ] && continue
+  if [ "$rsha" = "$z" ]; then range="$lsha"; else range="$rsha..$lsha"; fi
+  bad=$(git log --format='%h %s' "$range" | grep -E '^[0-9a-f]+ WIP')
+  if [ -n "$bad" ]; then echo "push to main refused: work-in-progress commits (finish them as proper commits first):"; echo "$bad"; exit 1; fi
+done
+exit 0

@@ -1,34 +1,44 @@
-// The commit check (CLAUDE.md "Fixing bugs"): every commit says whether it fixes a bug and, if so, what kind of fix it is.
-// The message must have:
-//   Fix: none                      not a bug fix (a feature, docs, tooling)
-//   Fix: ROOT | PARTIAL | HACK     a bug fix, with three more lines (CLAUDE.md "Fixing bugs", step 8):
-//   Decision: <the design decision that made the bug possible, why it was a mistake, what the fix changes about it>
-//   Ratchet: <the assertions that fail if it comes back>
-//   Coverage: <the integration test that now trips them, and that it failed before the fix>
-// Either may be "none" only when an assertion or test is truly impossible (extreme cases), acknowledged in full:
-//   Coverage: none — WARNING WARNING WARNING: <why nothing can check this>
-// A HACK also needs "Owner OK: <when the owner agreed>".
+// The commit check (CLAUDE.md "Fixing bugs", step 8): a commit message answers the questions in .claude/bugfix-commit.md,
+// each question word for word with its answer under it ("A: …"), one bug per commit. The questions are read from that
+// file (one source); the rules for the answers are below and listed there too.
 // One check, two triggers:
 //   - Claude Code hook (PreToolUse on Bash, .claude/settings.json): reads the tool call on stdin; exit 2 blocks the command
 //   - git commit-msg hook (.githooks/commit-msg, installed by node build.mjs): called with the message file; exit 1 refuses
-//     (works in a session started before the Claude Code hook existed, and for any commit made in this clone)
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const TPL = fs.readFileSync(path.join(ROOT, '.claude/bugfix-commit.md'), 'utf8');
+const isQ = l => /^Q\d+ \(/.test(l.trim());
+const questions = title => TPL.split(/^## /m).find(s => s.startsWith(title)).split('\n').filter(isQ);
+const FIX_QS = questions('A bug fix'), NONE_QS = questions('Not a bug fix');
+// every source file's text: a quoted assertion message must be found in it
+function sources() { const out = []; const walk = d => { for (const f of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name);
+  if (f.isDirectory()) walk(p); else if (/\.(m?js|html)$/.test(f.name) && f.name !== 'engine.gen.js') out.push(fs.readFileSync(p, 'utf8')); } }; walk(path.join(ROOT, 'src')); return out.join('\n'); }
 function problems(msg) {
-  const kind = (msg.match(/^\s*Fix: (ROOT|PARTIAL|HACK|none)\b/m) || [])[1], bad = [];
-  if (!kind) bad.push('a line "Fix: ROOT", "Fix: PARTIAL", "Fix: HACK" or "Fix: none" (not a bug fix)');
-  else if (kind !== 'none') {
-    if (!/^\s*Decision: \S.{15,}/m.test(msg)) bad.push('a line "Decision: <the design decision behind the bug, and what the fix changes about it>"');
-    for (const [name, what] of [['Ratchet', 'the assertion that fails if it comes back'], ['Coverage', 'the integration test that now trips the assertion, and that it failed before the fix']]) {
-      const v = (msg.match(new RegExp('^\\s*' + name + ': (.*)$', 'm')) || [])[1];
-      if (!v || v.trim().length < 4) bad.push(`a line "${name}: <${what}>"`);
-      else if (/^none\b/i.test(v.trim()) && !/WARNING WARNING WARNING:\s*\S.{20,}/.test(v))
-        bad.push(`"${name}: none" only when nothing can check it, acknowledged: "${name}: none — WARNING WARNING WARNING: <why nothing can check this>"`);
-    }
-    if (kind === 'HACK' && !/^\s*Owner OK: \S/m.test(msg)) bad.push('a line "Owner OK: <when the owner agreed to this hack>"');
+  const kind = (msg.match(/^\s*Fix: (ROOT|PARTIAL|HACK|none)\b/m) || [])[1];
+  if (!kind) return ['a line "Fix: ROOT", "Fix: PARTIAL" or "Fix: HACK" (a bug fix), or "Fix: none" (not a bug fix)'];
+  const lines = msg.split('\n'), bad = [], ans = {};
+  for (const q of kind === 'none' ? NONE_QS : FIX_QS) {
+    const at = lines.flatMap((l, i) => l.trim() === q ? [i] : []), id = q.split(' ')[0];
+    if (at.length !== 1) { bad.push(at.length ? `${id} once only (one bug per commit)` : `the question word for word (.claude/bugfix-commit.md):\n      ${q}`); continue; }
+    const a = []; for (let i = at[0] + 1; i < lines.length && !isQ(lines[i]); i++) a.push(lines[i]);
+    const text = a.join('\n').trim(); ans[id] = text.replace(/^A:\s*/, '');
+    if (!/^A:\s*\S/.test(text) || ans[id].length < 3) bad.push(`an answer under ${id}, starting "A:"`);
   }
+  if (kind === 'none' || bad.length) return bad;
+  if (!/^yes\b/i.test(ans.Q2)) bad.push('Q2 answered "Yes": otherwise split the commit (one bug per commit)');
+  for (const k of ['Q3', 'Q4', 'Q7', 'Q12']) if (/^none\b/i.test(ans[k]) && !/WARNING WARNING WARNING:\s*\S.{20,}/.test(ans[k]))
+    bad.push(`${k}: "none" only when nothing can check it, acknowledged: "A: none — WARNING WARNING WARNING: <why nothing can check this>"`);
+  const src = sources();
+  for (const k of ['Q3', 'Q12']) { if (/^none\b/i.test(ans[k])) continue;
+    const quoted = [...ans[k].matchAll(/"([^"]{8,})"/g)].map(m => m[1]);
+    if (!quoted.length && !(k === 'Q12' && /\bQ3\b/.test(ans[k]))) bad.push(`${k}: quote the assertion's message in double quotes`);
+    for (const m of quoted) if (!src.includes(m)) bad.push(`${k}: no assertion in src/ says "${m}"`); }
+  if (kind === 'HACK' && !/Owner OK:\s*\S/.test(ans.Q11)) bad.push('Q11 for a HACK: "Owner OK: <when the owner agreed>"');
   return bad;
 }
-const refuse = (bad, code) => { console.error('commit refused (CLAUDE.md "Fixing bugs"): the message needs\n  - ' + bad.join('\n  - ')); process.exit(code); };
+const refuse = (bad, code) => { console.error('commit refused (CLAUDE.md "Fixing bugs", .claude/bugfix-commit.md): the message needs\n  - ' + bad.join('\n  - ')); process.exit(code); };
 if (process.argv[2]) { // git: the message file (comment lines are not part of the message)
   const msg = fs.readFileSync(process.argv[2], 'utf8').split('\n').filter(l => !l.startsWith('#')).join('\n');
   if (/^(Merge|fixup!|squash!) /.test(msg)) process.exit(0);
