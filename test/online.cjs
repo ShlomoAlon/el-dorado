@@ -35,6 +35,17 @@ const T = report('online');
       await W.evaluate(() => __ED.joinRoom('ZZZZ'));
       const said = await wait(W, () => /no room/i.test(document.querySelector('#menu').textContent) && !/[?&]room=/.test(location.search), null, 3000);
       T.ok('wrong room code: said within 3 s, and the code leaves the address', said, ((Date.now() - t0) / 1000).toFixed(1) + ' s; ' + await W.evaluate(() => (__ED.NET.status || '') + ' ' + location.search)); }
+    // ---------- 0b. the server out of reach: each request that fails says so, in the page's words (a failed refresh keeps
+    //      what was loaded before, and says that too)
+    { const V = await open('V'); await signIn(V, 'Vera');
+      await V.click('label:has(input[name=otab][value=board])'); await wait(V, () => document.querySelector('#lbList .lb'));
+      await V.click('label:has(input[name=otab][value=play])'); await V.waitForTimeout(5200); // (a tab refreshes at most every 5 s)
+      await V.route('**/api/**', r => r.abort('internetdisconnected'));
+      await V.click('label:has(input[name=otab][value=board])');
+      T.ok('offline: a failed refresh says so, and keeps the list', await wait(V, () => /Could not refresh the leaderboard/.test(document.querySelector('#hErr').textContent) && document.querySelector('#lbList .lb'), null, 5000), await V.evaluate(() => document.querySelector('#hErr').textContent));
+      await V.click('label:has(input[name=otab][value=play])'); await V.click('#cGo');
+      T.ok('offline: Create room says the server is out of reach, in the page\'s words', await wait(V, () => /^Could not reach the server/.test(document.querySelector('#hErr').textContent), null, 5000), await V.evaluate(() => document.querySelector('#hErr').textContent));
+      await V.unroute('**/api/**'); }
     // ---------- 1. three people
     const A = await open('A'), B = await open('B'), C = await open('C');
     const ids = [await signIn(A, 'Alice'), await signIn(B, 'Bob'), await signIn(C, 'Cara')];

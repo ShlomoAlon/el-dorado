@@ -12,7 +12,8 @@ import { load, store } from './store.js';
 import { setQuery } from './dom.js';
 export async function api(path,opts={}){
   const headers={'content-type':'application/json'};if(NET.token)headers.authorization='Bearer '+NET.token;
-  const r=await fetch(path,{...opts,headers});
+  // (no connection: fetch's own TypeError, in the browser's words ("Failed to fetch"); said in the page's)
+  let r;try{r=await fetch(path,{...opts,headers});}catch(e){if(!(e instanceof TypeError))throw e;const x=new Error('Could not reach the server. Check your connection and try again.');x.offline=true;throw x;}
   let j={};try{j=await r.json();}catch(e){/* expected: a reply that isn't JSON (a proxy's error page): the status below says what failed */}
   if(!r.ok){const e=new Error(j.err||('Request failed ('+r.status+')'));e.status=r.status;throw e;}
   return j;
