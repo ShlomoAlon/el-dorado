@@ -2,11 +2,15 @@
 //   public/index.html   the game page (served by the Worker): the start screen, plus a hashed CSS file and a hashed script
 //   src/engine.gen.js   the rules engine as one ES module (the server, the AI tools and the page all import it)
 //   build/artifact.html the same page for publishing as a claude.ai artifact (local play only, everything inline)
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 import esbuild from 'esbuild';
 const r = f => readFileSync(new URL(f, import.meta.url), 'utf8');
+// the commit check's git trigger (.githooks/commit-msg -> .claude/hooks/commit-check.mjs), in every clone that builds
+if (existsSync(new URL('./.git', import.meta.url))) execFileSync('git', ['config', 'core.hooksPath', '.githooks'], { cwd: fileURLToPath(new URL('.', import.meta.url)) });
 const engine = r('./src/engine_data.js') + '\n' + r('./src/engine_rules.js') + '\n' + r('./src/engine_bot.js') + '\n' + r('./src/engine_ai.js');
 // every top-level name of the engine is exported by name (the page's modules import names; the server, the tools and
 // the tests import the whole engine as a namespace, E). Found by running the engine and asking

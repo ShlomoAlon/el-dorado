@@ -1,0 +1,3 @@
+#!/bin/sh
+# the commit check (one check for both triggers): .claude/hooks/commit-check.mjs
+exec node "$(git rev-parse --show-toplevel)/.claude/hooks/commit-check.mjs" "$1"
