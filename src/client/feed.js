@@ -20,6 +20,7 @@ import { rectT } from './hand.js';
 import { marketRectOf } from './market.js';
 import { setTrail } from './board/overlays.js';
 import { load, store } from './store.js';
+import { expectLayout } from './debug.js';
 const FEED={pl:-1,ended:false,groups:[],seq:0,fly:[],trail:[]};
 /* whose actions get shown: the AIs (local), everyone but me (online); never in replays, where the actor's own hand is shown */
 export function feedWatch(pl){if(G.replay||pl==null)return false;return online()?pl!==NET.seat:isAI(pl);} // (pl: none on the game's end)
@@ -122,7 +123,7 @@ function turnsOf(log){
 /* ---------- which of the three ways it shows (the History button cycles them) ---------- */
 const MODES=['center','left','off'];
 let MODE=MODES.includes(load('history'))?load('history'):'center';
-function histCycle(){MODE=MODES[(MODES.indexOf(MODE)+1)%3];store('history',MODE);HOVER=null;render();}
+function histCycle(){expectLayout();MODE=MODES[(MODES.indexOf(MODE)+1)%3];store('history',MODE);HOVER=null;render();}
 
 /* ---------- a step pointed at (or tapped): its explorer's path on the board, instead of the live trail ---------- */
 let HOVER=null; // {el, paths, color}

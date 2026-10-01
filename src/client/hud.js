@@ -1,6 +1,6 @@
 /* The heads-up display: the top bar (round, one chip per player), the prompt (what to do now, the online turn clock)
    and the turn buttons. Each piece is rewritten only when its text changes. */
-import { CT, SYMNAME, def } from '../engine.gen.js';
+import { CT, SYMNAME, def, assert } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
 import { S, UI, NET, G, cur, canAct, online, isAI } from './state.js';
 import { onGeo, geo } from './geometry.js';
@@ -18,7 +18,8 @@ function updateHeader(){
   const t=(online()&&canAct()&&!S.over?'● Your turn · ':'')+'El Dorado Expedition';if(document.title!==t)document.title=t;
   const box=$('#players');
   if(!S){setHTML(box,'');return;}
-  setText($('#roundLbl'),'Round '+S.round+(S.endTriggered&&!S.over?' · final':''));
+  // (fixed width: the number takes two digits' room, a figure space before 1–9; ' · final' is always laid out and only shown at the end)
+  setHTML($('#roundLbl'),'Round '+String(S.round).padStart(2,'\u2007')+`<span class="fl${S.endTriggered&&!S.over?'':' off'}"> · final</span>`);
   while(box.children.length>S.players.length)box.lastChild.remove();
   S.players.forEach((p,i)=>{
     let c=box.children[i];if(!c){c=document.createElement('div');c.setAttribute('role','button');c.tabIndex=0;box.appendChild(c);
@@ -28,7 +29,7 @@ function updateHeader(){
     const on=i===S.cur&&!S.over,cls='pchip glass'+(on?' on':'');
     if(c.className!==cls){c.className=cls;if(on&&!reduceMotion)c.animate([{transform:'scale(1)'},{transform:'scale(1.12)'},{transform:'scale(1)'}],{duration:520,easing:EASE});} // whose turn: the chip lights up and flashes once
     setStyle(c,'--pc',p.color);setStyle(c,'opacity',off?.55:1);c.title=off?'offline':'';
-    setHTML(c,`<span class="dot"></span><span class="nm">${esc(p.name)}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}${fin?`<span class="fin">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`:''}`);
+    setHTML(c,`<span class="dot"></span><span class="nm">${esc(p.name)}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}<span class="fin${fin?'':' off'}">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`); // (the star's room is always kept: the chip never grows when someone arrives)
   });
 }
 
@@ -73,12 +74,22 @@ function updatePrompt(){
   }
   setHTML(P,tm+txt);btnWire(B,btns);renderTimer();
 }
+/* The turn buttons sit in three fixed slots: a big primary at the bottom, a cancel slot and an extra slot above it.
+   A button keeps its slot in every mode and an unused slot keeps its space (invisible), so nothing moves as the mode
+   changes (CLAUDE.md: fixed slots). The slot elements are made once and only their words and state change. */
+const SLOTS=['s3','s2','p'],slotOf=b=>b.big?'p':b.id==='bCan'||b.id==='bRes'?'s2':'s3';
 function btnWire(B,btns){
-  const main=btns.filter(b=>b.big),rest=btns.filter(b=>!b.big);
-  const sig=btns.map(b=>b.id+(b.dis?'d':'')+b.t).join('|');
-  const h=b=>`<button class="btn${b.pri?' pri':''}${b.big?' big':''}" id="${b.id}"${b.dis?' disabled':''}>${b.t}</button>`;
-  if(B.dataset.sig!==sig){B.innerHTML=main.map(h).join('')+(rest.length?`<div class="brow">${rest.map(h).join('')}</div>`:'');B.dataset.sig=sig;}
-  btns.forEach(b=>{document.getElementById(b.id).onclick=b.fn;});
+  if(!B.firstChild)B.innerHTML=SLOTS.map(s=>`<button type="button" class="btn bslot ${s}${s==='p'?' pri big':''}"></button>`).join('');
+  const on=btns.length>0;if(B.hidden===on)B.hidden=!on;
+  for(const s of SLOTS){
+    const el=B.querySelector('.'+s),here=btns.filter(x=>slotOf(x)===s),b=here[0];
+    assert(here.length<=1,'turn buttons: one button per slot');
+    const t=b?b.t:'\u00a0';if(el.textContent!==t)el.textContent=t;
+    if(b){if(el.id!==b.id)el.id=b.id;}else if(el.id)el.removeAttribute('id');
+    const dis=!b||!!b.dis;if(el.disabled!==dis)el.disabled=dis;
+    el.classList.toggle('off',!b);if(s!=='p')el.classList.toggle('pri',!!(b&&b.pri));
+    el.onclick=b?b.fn:null;
+  }
 }
 
 /* ---------- the online turn clock (in the prompt) ---------- */

@@ -153,3 +153,19 @@ const { S } = E.recState(report.context.game.rec)   // rebuilds the exact state
 6. **`resumeSaved` and `loadSave` swallowed any exception while rebuilding a saved game** and silently started a new one. That is now reported.
 7. **The results dialog's timers could open the results for a different game.** When another game was put on show within 600 ms, the dialog opened with empty fallbacks. It now checks the game on show.
 8. **One false invariant of this pass, caught by the online test before it shipped.** `marketRectOf` asserted that every card type still has a stack. See `market.js` above: events run against the latest state.
+
+## The checks (2026-10-01)
+
+Two tiers, both reported through the boundaries above:
+- **Always on, cheap.** The engine's `checkGame(gs)` after every real action (`recApply`) and every replayed step:
+  cards conserved and in one place, market counts, explorers on enterable spaces and never sharing one, a valid
+  player to move, a finished game places everyone (about 2.5 µs; never inside the AI's look-ahead). The page's
+  `checks.js`, a view part run last every frame: the UI state is valid for the game state (All cards only in its
+  turn and mode, a chosen card is in hand, the removal choice exactly when asked, paying has a purchase, the cover
+  only in local games). Turn buttons: one per slot (`hud.js`).
+- **Debug/test tier** (`CHECKS` in `debug.js`: on with `?debug` and in every automated browser, `navigator.webdriver`;
+  never in a player's browser): **nothing moves on screen during play** unless it follows an input or code declared
+  the layout change (`expectLayout()`: the game area resized, the market or history moved, a replay's dock). Every
+  test run therefore fails on a layout jump.
+- **Lint** (`test/lint.mjs`): no catch that drops its error unless a comment names the failure it expects; no unused
+  import (a swallowed call leaves one).

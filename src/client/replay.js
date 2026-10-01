@@ -11,6 +11,7 @@ import { AIX, aiNetLoad, aiReset } from './ai.js';
 import { exitOnline } from './online.js';
 import { showSetup, showHub, showReplays, MENU } from './menu.js';
 import { load, store } from './store.js';
+import { expectLayout } from './debug.js';
 const TERR={j:'jungle',w:'water',v:'village',r:'rubble',c:'base camp',g:'El Dorado',s:'start'};
 function buildReplay(log,id){
   const err=replayCheck(log);if(err)throw new Error(err);
@@ -87,7 +88,7 @@ function replayPlay(){const R=G.replay;if(R.timer){replayStop();return;}
     R.timer=setTimeout(tick,(1300+(endTurn?900:0))/R.speed);};
   R.timer=setTimeout(tick,50);render();}
 function replayStop(){const R=G.replay;if(R.timer){clearTimeout(R.timer);R.timer=0;}render();}
-export function exitReplay(){const from=G.replay.from;replayStop();G.replay=null;$('#app').classList.remove('replaying');$('#rdock').hidden=true;$('#rside').hidden=true;$('#rdock').innerHTML='';
+export function exitReplay(){expectLayout();const from=G.replay.from;replayStop();G.replay=null;$('#app').classList.remove('replaying');$('#rdock').hidden=true;$('#rside').hidden=true;$('#rdock').innerHTML='';
   setQuery({replay:null});
   setS(null);resetView();const resumed=resumeSaved(); // the local game in progress, if any, comes back behind the menu
   if(from==='replays')showReplays();else if(from==='online')showHub();else if(from||!resumed)showSetup();}
@@ -143,7 +144,8 @@ function replayBar(){
   const tg=d.querySelector('#rbA'),ok=replayEvalOK();tg.hidden=!ok;if(!ok)side.hidden=true;
   tg.classList.toggle('on',R.side);tg.setAttribute('aria-pressed',R.side?'true':'false');
   const rr=d.querySelector('#rbR');rr.max=n;rr.value=R.i;
-  d.querySelector('#rbPos').textContent=`move ${R.i} / ${n} · round ${S.round}`;
+  const fig=(v,w)=>String(v).padStart(w,'\u2007'); // (figure spaces: the label keeps one width all through the replay)
+  d.querySelector('#rbPos').textContent=`move ${fig(R.i,String(n).length)} / ${n} · round ${fig(S.round,2)}`;
   if(!R.side||!ok)return;
   const ev=replayEval(),pc=v=>v==null?'–':Math.round(v*100)+'%';
   let h=`<div class="rwh">Evaluation</div>`;
@@ -171,7 +173,7 @@ function replayBar(){
     el.onpointerenter=()=>{if(o.to&&o.to[0]!=='B'&&hexAt(S,o.to)){R.hover=o.to;render();}};
     el.onpointerleave=()=>{R.hover=null;render();};});
 }
-export function openReplay(log,id){
+export function openReplay(log,id){expectLayout();
   setQuery({room:null,replay:id||null});
   startReplay(log,id);
 }

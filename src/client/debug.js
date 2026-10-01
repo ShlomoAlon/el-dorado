@@ -1,14 +1,37 @@
+import { assert } from '../engine.gen.js';
 /* On-device diagnostics. The page keeps a log of its last 200 notable events (fits, zoom bakes, layout changes, errors):
    a bug report carries it (boundary.js). With ?debug in the address (debug mode) the log is also shown over the game,
    with more in it (screen size changes, touches, slow frames, what changed on the page), a Mark button to tap right after
    something looks wrong and a Copy button for the log. For bugs that only a real phone shows. */
 export const DEBUG = /[?&]debug\b/.test(location.search);
+// the page's debug-tier checks (they may watch layout): on with ?debug, and in every automated test (navigator.webdriver);
+// never in a player's browser, where they would cost something and report nothing anyone reads
+export const CHECKS = DEBUG || navigator.webdriver === true;
 const lines = []; let box = null, t0 = performance.now();
 export function diag(msg) {
   lines.push(((performance.now() - t0) / 1000).toFixed(2) + ' ' + msg); if (lines.length > 200) lines.shift();
   if (box) { box.textContent = lines.slice(-22).join('\n'); }
 }
 export const diagLog = () => lines.slice();
+export const shifts = []; // (debug mode: every layout shift seen, for tests)
+/* checks: what is "in play" comes from the page (main.js), so this module stays free of the game's state */
+let inPlay = () => false, expectedAt = -1e9;
+/* code that changes the layout on purpose (the game area resized, the market or history moved, a replay's dock opened)
+   says so first: shifts in the next 600 ms are that change, not a jump */
+export function expectLayout() { expectedAt = performance.now(); }
+export function checksInit(during) {
+  if (!CHECKS) return; inPlay = during;
+  // layout shifts: an element already on screen moving because something else changed (the owner's rule: nothing moves
+  // without an animation or a direct action; animations move by transform, which never counts as a shift). Every shift
+  // is kept, including those just after an input (the browser's own score leaves those out)
+  if (window.PerformanceObserver && PerformanceObserver.supportedEntryTypes.includes('layout-shift'))
+    new PerformanceObserver(list => { for (const e of list.getEntries()) for (const s of e.sources || []) {
+      const n = s.node, who = !n ? '?' : n.id ? '#' + n.id : n.nodeType === 1 ? n.tagName.toLowerCase() + (n.className && typeof n.className === 'string' ? '.' + n.className.split(' ')[0] : '') : (n.parentElement && n.parentElement.id ? '#' + n.parentElement.id + ' text' : 'text');
+      const d = `${Math.round(s.currentRect.x - s.previousRect.x)},${Math.round(s.currentRect.y - s.previousRect.y)} size ${Math.round(s.currentRect.width - s.previousRect.width)}×${Math.round(s.currentRect.height - s.previousRect.height)}`;
+      shifts.push({ who, d, input: e.hadRecentInput }); diag(`shift ${who} by ${d}${e.hadRecentInput ? ' (after input)' : ''}`);
+      if (inPlay() && !e.hadRecentInput && Math.abs(e.startTime - expectedAt) > 600) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ')'); } })
+      .observe({ type: 'layout-shift', buffered: true });
+}
 export function debugInit() {
   if (!DEBUG) return;
   const wrap = document.createElement('div'); wrap.style.cssText = 'position:fixed;left:0;top:0;z-index:100;pointer-events:none;max-width:70vw';

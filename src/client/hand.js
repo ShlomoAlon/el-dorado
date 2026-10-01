@@ -33,7 +33,8 @@ function layoutCards() {
   if (!S) return;
   const W = geo.app.width, H = geo.app.height, cw = geo.cw, ch = cw * 1.4, phone = W < 600;
   const pl = hp(), hand = UI.cover ? [] : pl.hand, play = UI.cover ? [] : pl.play, n = hand.length;
-  const pileW = phone ? 54 : 74, avail = W - 2 * (pileW + 32) - (W > 900 ? 140 : 0);
+  // the hand is centred and keeps clear of the piles and the turn buttons (their measured width: geometry.js), on both sides alike
+  const pileW = phone ? 54 : 74, avail = W - 2 * Math.max(pileW + 32, (W > 900 ? geo.actW + 32 : 0));
   const step = n > 1 ? Math.min(cw * .86, Math.max(cw * .32, (avail - cw) / (n - 1))) : 0;
   const hi = hand.indexOf(UI.hover), paying = UI.mode === 'pay' && UI.buy && !UI.cover, choosing = UI.mode === 'trashPick' && !UI.cover;
   const lifted = id => (UI.mode === 'card' && UI.card === id) || (!paying && UI.picks.includes(id)) || (drag && drag.started && drag.id === id);

@@ -12,9 +12,10 @@ import { setT, placeAt, buySlotBox } from './hand.js';
 import { sfx } from './sound.js';
 import { render } from './frame.js';
 import { load, store } from './store.js';
+import { expectLayout } from './debug.js';
 
 const noMkt=()=>$('#app').classList.toggle('nomkt',!UI.mktOpen||$('#mkt').classList.contains('cramped'));
-function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);store('market',open?'1':'0');
+function setMkt(open){expectLayout();UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);store('market',open?'1':'0');
   if(!cam.userZoomed)fitSoon(true);}
 /* The All cards spread belongs to the turn and mode it was opened in: a new turn, mode or game, a replay or the menu
    closes it by itself (nothing has to remember to). allFor: where it was opened; it shows while that is still where we are */

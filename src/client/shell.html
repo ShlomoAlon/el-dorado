@@ -30,7 +30,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 html.resume #menu{display:none} /* a saved game or a link is about to open: no start screen first (ui_menu.js removes the class) */
 #menu[open]{display:grid;animation:fade .2s ease}
 #menu::backdrop{background:transparent} /* the tint is the dialog itself: the same before the script (open, not modal) and after */
-#menu [hidden]{display:none!important}
+[hidden]{display:none!important} /* hidden always means hidden: no display rule may override it (one rule, not one per element) */
 #menu .modal:focus{outline:none}
 /* option groups are native radio buttons, drawn as segmented buttons, cards and swatches */
 .seg input,.clist input,.sws input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
@@ -54,7 +54,7 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 /* the menu panel: one size for every menu screen, the contents scroll inside it */
 .modal.menu{width:min(620px,calc(100% - 32px));height:min(860px,calc(100% - 32px));box-sizing:border-box;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
 .modal.menu::-webkit-scrollbar{width:8px}.modal.menu::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
-.seg.modes{margin:0 0 14px;display:grid;grid-template-columns:repeat(3,1fr);text-align:center}.seg.modes[hidden]{display:none}.seg.modes label{padding-inline:4px;white-space:nowrap}
+.seg.modes{margin:0 0 14px;display:grid;grid-template-columns:repeat(3,1fr);text-align:center}.seg.modes label{padding-inline:4px;white-space:nowrap}
 .lbn{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;text-align:left}.lbn:hover{text-decoration:underline}
 .pfh{display:flex;align-items:center;gap:12px;margin:4px 0 12px}.pfh h3{margin:0;font-size:18px}
 .av.big{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(233,178,74,.18);color:var(--gold2);font-weight:800;font-size:18px;flex:none}
@@ -190,6 +190,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .pchip .bk{display:flex;gap:4px;align-items:center}.pchip .bk b{margin-left:3px;font-size:12px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
 .pchip .bk i{width:9px;height:9px;border-radius:2px;display:block;transform:rotate(45deg);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
 .pchip .fin{color:var(--gold);font-weight:800;font-size:12px}
+.pchip .fin.off,#roundLbl .fl.off{visibility:hidden}
 .hbtns{display:flex;gap:8px}
 .tbtn{border-radius:11px;padding:0 13px;height:var(--hudH);box-sizing:border-box;display:inline-flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
 .tbtn:hover{background:var(--glass2)}
@@ -209,15 +210,14 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #app.replaying #prompt{display:none}
 #app.nomkt{--mktFoot:16px} /* (a class set by market.js, not :has(): every insertion anywhere in the game area would re-check a :has() and restyle the whole board) */
 #mkt.cramped{display:none}
-#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;width:max-content;box-sizing:border-box;top:var(--row2,64px);max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot)));min-width:min(560px,calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:7px 14px;border-radius:12px;font-size:12px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
+#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;box-sizing:border-box;top:var(--row2,64px);width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:7px 14px;border-radius:12px;font-size:12px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
 #prompt b{color:var(--gold2)}
 #prompt .who{display:inline-flex;align-items:center;gap:7px;font-weight:800;margin-right:8px;color:var(--text)}
 #prompt .who i{width:11px;height:11px;border-radius:50%}
 #prompt .m{color:var(--muted)}
 /* another player's turn: their cards in a row under the prompt text (ui_view.js feedRender); newest on the right, the oldest clip */
 #feed{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px -6px 0;padding-top:8px;border-top:1px solid var(--line);--fw:52px}
-#feed[hidden]{display:none}
-#feed .frow{display:flex;flex-direction:row-reverse;flex-wrap:wrap;align-items:flex-end;justify-content:flex-start;column-gap:18px;row-gap:60px;min-width:0;overflow:hidden;padding:2px 2px 0;height:calc(var(--fw)*1.4 + 22px);box-sizing:border-box}
+#feed .frow{flex:1;display:flex;flex-direction:row-reverse;flex-wrap:wrap;align-items:flex-end;justify-content:flex-end;column-gap:18px;row-gap:60px;min-width:0;overflow:hidden;padding:2px 2px 0;height:calc(var(--fw)*1.4 + 22px);box-sizing:border-box}
 .fg{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
 .fg.new{animation:fgIn .32s var(--ease) backwards}
 .fg .frc{display:flex;align-items:center}
@@ -228,7 +228,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .fc.got .cface{box-shadow:0 0 0 2px var(--gold2),0 0 12px rgba(233,178,74,.45)}
 .fg .farr{font-size:20px;line-height:1;color:var(--gold2);margin:0 4px;font-weight:800}
 .f-camp .fc .cface,.f-trash .fc .cface{box-shadow:0 0 0 2px #e08a74}
-.fg .fcap{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;line-height:1.2}
+.fg .fcap{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;line-height:1.2;width:0;display:flex;justify-content:center} /* (no width of its own: centred under its step, so a caption that changes never moves the steps) */
 .fg .fcap b{color:var(--text)}
 .fend{align-self:center}
 .fend .fpill{font-size:11px;font-weight:800;color:var(--text);border:1px solid var(--line2);border-radius:9px;padding:3px 9px;background:rgba(255,255,255,.04)}
@@ -262,7 +262,6 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .mcard{--cw:86px;position:relative;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1)}
 .cnt{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;border-radius:11px;background:#0a1210;border:1px solid var(--line2);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;font-variant-numeric:tabular-nums;z-index:4}
 #allc{position:absolute;inset:0;z-index:40;background:rgba(4,9,7,.86);overflow-y:auto;overscroll-behavior:contain;animation:fade .2s}
-#allc[hidden]{display:none}
 .allc-in{max-width:1080px;margin:0 auto;padding:64px 20px 40px}
 .allc-sect{margin-top:18px}
 .allc-sect h3,.allc-head h2{font-family:var(--display);font-weight:400;display:flex;align-items:baseline;gap:12px;margin:0 0 14px;color:var(--gold2)}
@@ -292,9 +291,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .back.b3{transform:translate(6px,-6px);opacity:.8}
 .empty-slot{position:absolute;inset:0;border-radius:8px;border:1.5px dashed var(--line2)}
 #discStack .mcard{--cw:74px;position:absolute;inset:0}
-#actBtns{position:absolute;right:16px;bottom:calc(16px + 104px + 34px);z-index:13;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+#actBtns{position:absolute;right:16px;bottom:calc(16px + 104px + 34px);z-index:13;display:grid;grid-template-columns:repeat(2,minmax(0,var(--bslotW,104px)));grid-template-areas:'s3 s2' 'p p';gap:8px} /* fixed slots (hud.js btnWire) */
+.bslot.s3{grid-area:s3}.bslot.s2{grid-area:s2}.bslot.p{grid-area:p}.bslot{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bslot:not(.p){padding-inline:10px}.bslot.off{visibility:hidden;transition:none}
 .btn[disabled]{opacity:.35;pointer-events:none}
-.brow{display:flex;gap:8px}
 #playLbl{position:absolute;left:0;top:0;z-index:11;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);pointer-events:none;transition:opacity .2s}
 .zoomctl{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:12}
 .zoomctl button{width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:17px;font-weight:700;display:grid;place-items:center}
@@ -303,15 +302,14 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #cards{position:absolute;inset:0;pointer-events:none;z-index:25}
 /* purchase in progress: the card waits above the hand until it's paid for */
 #buySlot{position:absolute;left:0;top:0;z-index:24;--bw:92px;width:var(--bw);height:calc(var(--bw)*1.4);transform:translate3d(var(--bx,0),var(--by,0),0);transition:opacity .2s}
-#buySlot[hidden]{display:none}
 /* a removal to choose (Scientist, Travel Log): the hand comes up (hand.js), this says what's asked just above it, and the
    board steps back until it's answered */
 #choice{position:absolute;left:50%;bottom:var(--cb,300px);transform:translateX(-50%);z-index:24;pointer-events:none;text-align:center;padding:10px 20px;border-radius:14px;background:rgba(10,18,15,.94);border:1px solid var(--gold2);box-shadow:0 10px 30px rgba(0,0,0,.45);animation:bsIn .28s var(--ease);width:max-content;max-width:calc(100% - 32px)}
-#choice[hidden]{display:none}
 #choice .ct{font-size:17px;font-weight:700;color:var(--text)}#choice .ct b{color:var(--gold2)}
 #choice .cs{font-size:12.5px;color:var(--muted);margin-top:3px}#choice .cs b{color:var(--text)}
 #vp{transition:opacity .25s}#vp.dim{opacity:.32}
-@container game (max-width:600px){#ptxt{min-height:2.8em}} /* (two lines kept for the prompt's words on a phone: the box keeps its size as they change) */
+#ptxt{min-height:1.4em;display:flex;align-items:center;justify-content:center;flex-wrap:wrap} /* the prompt is a fixed slot: one width, room for its words (one line here, two on a phone), so it never changes size with what it says */
+@container game (max-width:600px){#ptxt{min-height:2.8em}#actBtns{--bslotW:84px}}
 @container game (max-width:600px){#choice{max-width:calc(100% - 128px);padding:8px 12px}#choice .ct{font-size:14px}#choice .cs{font-size:11.5px}} /* (clear of the zoom column) */
 @container game (max-height:520px){#choice{display:none}} /* (no room above the raised hand: the prompt says it) */
 #buySlot .bs-card{position:absolute;inset:0;border-radius:calc(var(--bw)*.08);outline:2px dashed var(--gold2);outline-offset:4px;animation:bsIn .28s var(--ease)}
@@ -377,7 +375,6 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #shell{display:grid;width:100%;height:100%;grid-template-areas:"hist game side" "dock dock dock";grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:minmax(0,1fr) auto}
 /* the history's column (feed.js, 'left'): every turn, newest first; the list scrolls */
 #lside{grid-area:hist;width:340px;min-height:0;overflow-y:auto;overscroll-behavior:contain;background:#0b1310;border-right:1px solid var(--line);--fw:40px}
-#lside[hidden]{display:none}
 #lside .hh{position:sticky;top:0;z-index:1;margin:0;padding:12px 14px 8px;background:#0b1310;font:400 18px var(--display);color:var(--gold2);border-bottom:1px solid var(--line)}
 #lside .hh{display:flex;align-items:baseline}
 #lside .hh span{font:800 10.5px var(--ui);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-left:8px}
@@ -397,7 +394,6 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #gamecell{grid-area:game;position:relative;min-width:0;min-height:0;container:game/size}
 #rside{grid-area:side;width:340px;min-height:0;overflow:auto;padding:14px 16px;background:#0b1310;border-left:1px solid var(--line);font-size:13px}
 #rdock{grid-area:dock;display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:#0b1310;border-top:1px solid var(--line)}
-#rdock[hidden],#rside[hidden]{display:none}
 #rdock button{height:34px;border-radius:9px;border:1px solid var(--line2);background:#0f1a16;color:var(--text);font:inherit;font-size:14px;cursor:pointer;padding:0 10px}
 #rdock button:hover{border-color:var(--gold)}
 #rdock .rgrp{display:flex;gap:4px}
@@ -406,7 +402,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #rdock .rspd{display:flex;border:1px solid var(--line2);border-radius:10px;overflow:hidden}
 #rdock .rspd button{border:0;border-radius:0;height:32px;font-size:12.5px;background:transparent;color:var(--muted)}
 #rdock .rspd button+button{border-left:1px solid var(--line2)}
-#rdock .rspd button.on{background:rgba(233,178,74,.18);color:var(--gold2);font-weight:700}
+#rdock .rspd button.on{background:rgba(233,178,74,.18);color:var(--gold2)} /* (not bold: a wider word would move its neighbours) */
 #rbR{flex:1 1 180px;min-width:120px;accent-color:var(--gold)}
 #rbTxt{flex:1 1 100%;order:-1;font-size:13.5px;line-height:1.4;color:#dbe4de;min-height:1.4em}#rbTxt b{color:var(--gold2)}#rbTxt .m{color:var(--muted)}#rbTxt .who{display:inline-flex;align-items:center;gap:6px;font-weight:800;margin-right:6px;color:var(--text)}#rbTxt .who i{width:10px;height:10px;border-radius:50%}
 #rbPos{font-size:12.5px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -417,7 +413,6 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #rside .ralt{display:flex;gap:10px;align-items:baseline;padding:5px 8px;border-radius:8px;color:#cfd8d2;line-height:1.35}
 #rside .ralt b{min-width:36px;text-align:right;color:var(--gold2)}
 #rside .ralt.on{background:rgba(233,178,74,.14);outline:1px solid rgba(233,178,74,.5)}
-#rdock button[hidden]{display:none}
 /* Google's sign-in button is a light-scheme iframe: in our dark page the browser would paint an opaque white box behind it */
 #gsiBtn{color-scheme:light;min-height:44px;display:inline-block}
 .acct b{color:var(--text)}.acct .rt{color:var(--gold2)}
@@ -486,7 +481,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* short game areas (landscape phones): the zoom column keeps fit / full screen / sound and sits clear of the piles */
 /* short game areas: the prompt (with another player's cards under it) also keeps clear of the turn buttons' column (--actFoot, set on the
    prompt itself by hud.js: a variable set on #app would restyle the whole board) */
-@container game (max-height:520px){#prompt{--mktFoot2:max(var(--mktFoot),var(--actFoot,16px));right:var(--mktFoot2);max-width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot2)));min-width:min(560px,calc(100% - var(--zoomFoot) - var(--mktFoot2)))}#feed{--fw:34px;margin-top:5px;padding-top:5px}
+@container game (max-height:520px){#prompt{--mktFoot2:max(var(--mktFoot),var(--actFoot,16px));right:var(--mktFoot2);width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot2)))}#feed{--fw:34px;margin-top:5px;padding-top:5px}
 }
 @container game (max-height:520px){#app{--zoomFoot:140px}.zoomctl{top:var(--row2,64px);transform:none;flex-direction:row}.zoomctl button:not(#fsBtn):not(#sndBtn):not(#zfit){display:none}
 }
@@ -509,7 +504,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   #rulesBtn{display:none}
   #histBtn{padding:0 9px}#histBtn span{display:none} /* phones: the icon alone leaves the player chips room */
   #app{--mw:44px;--mktR:6px;--zoomFoot:12px}
-  #feed{--fw:34px;flex-direction:column;gap:5px}#feed .frow{column-gap:12px;max-width:100%}.fg .fcap{font-size:10px}
+  #feed{--fw:34px;flex-direction:column;gap:5px}#feed .frow{column-gap:12px;max-width:100%;flex:none;width:100%}.fg .fcap{font-size:10px}
   #app{--row2:58px}
   #market{gap:7px}
   #mkt .mslot:hover{transform:none}

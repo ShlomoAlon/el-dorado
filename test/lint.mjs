@@ -25,7 +25,7 @@ const files = []; const walk = d => { for (const f of readdirSync(d, { withFileT
 const known = new Set(readFileSync(path.join(root, 'src/engine.gen.js'), 'utf8').match(/export \{([^}]*)\}/)[1].split(','));
 for (const f of files) for (const m of readFileSync(f, 'utf8').matchAll(/^(?:export\s+)?(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm)) known.add(m[1]);
 const eslint = new ESLint({ cwd: root, overrideConfigFile: true, overrideConfig: [{ files: ['**/*.js'], languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { AI_NET: 'readonly' } },
-  rules: { 'no-undef': 'error', 'no-unused-vars': ['warn', { vars: 'all', args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }], 'no-const-assign': 'error', 'no-import-assign': 'error', 'no-dupe-keys': 'error', 'no-redeclare': 'error' } }] });
+  rules: { 'no-undef': 'error', 'no-unused-vars': ['error', { vars: 'all', args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }], 'no-const-assign': 'error', 'no-import-assign': 'error', 'no-dupe-keys': 'error', 'no-redeclare': 'error' } }] });
 const res = await eslint.lintFiles(files);
 let errors = 0, warns = 0;
 for (const r of res) for (const m of r.messages) {
