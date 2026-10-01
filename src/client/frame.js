@@ -23,7 +23,7 @@ export function flush() {
 }
 export function after(f) { afterQ.push(f); render(); }
 export function resetView() { for (const p of parts) if (p.reset) safe(() => p.reset(), p.name + ' reset'); render(); }
-/* checks (debug and tests): the page is up to date. Four times a second, when no frame is due, one extra frame is drawn:
+/* checks (debug and tests): the page is up to date. Four times a second and after every input, when no frame is due, one extra frame is drawn:
    with nothing new it must change nothing. If it changes something, the state had moved on without anyone asking for a
    frame (render), and the page showed stale content until then; wherever the missed render() is, this catches it.
    during(): in play (main.js). The turn clock's text changes with time, not with the state: not counted */
@@ -33,7 +33,7 @@ export function freshInit(during) {
   const who = r => { const n = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (!n) return '?'; const c = n.getAttribute('class');
     const was = r.type === 'childList' ? '' : ': ' + String(r.oldValue).slice(0, 80) + ' -> ' + String(r.type === 'attributes' ? r.target.getAttribute(r.attributeName) : r.target.data).slice(0, 80);
     return ((n.closest('[id]') || {}).id || '?') + ' ' + n.tagName.toLowerCase() + (c ? '.' + c.split(' ')[0] : '') + (r.type === 'attributes' ? ' [' + r.attributeName + ']' : r.type === 'childList' ? ' (elements)' : ' (text)') + was; };
-  setInterval(() => {
+  const check = () => {
     if (raf || !during()) return;
     safe(frameMark, 'checks'); // (what came before this frame is judged as before)
     mo.observe(app, { subtree: true, childList: true, attributes: true, attributeOldValue: true, characterData: true, characterDataOldValue: true });
@@ -43,6 +43,11 @@ export function freshInit(during) {
       return r.type === 'childList' ? true : r.type === 'attributes' ? r.target.getAttribute(r.attributeName) !== r.oldValue : r.target.data !== r.oldValue; });
     mo.disconnect();
     if (stale.length) assert(false, 'view: the page is up to date (a frame with nothing new still changed ' + who(stale[0]) + ')');
-  }, 250);
+  };
+  setInterval(check, 250);
+  // and right after every input (once its handlers have run): a handler that changed something without asking for a frame
+  // is caught at once, not only when a sample happens to fall in the moment before the next frame
+  let soon = 0; const afterInput = () => { if (!soon) soon = setTimeout(() => { soon = 0; check(); }, 0); };
+  for (const t of ['pointerdown', 'pointerup', 'pointerover', 'pointerout', 'click', 'keydown']) addEventListener(t, afterInput, true);
 }
 

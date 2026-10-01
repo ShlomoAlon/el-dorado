@@ -9,8 +9,13 @@ export let S = null, MAP = null;
 export function setS(gs) { S = gs; if (gs) MAP = mapOf(gs); }
 /* a board with no game on it (the course previews, main.js showCourse) */
 export function setMAP(m) { MAP = m; }
-export const UI = { mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), cover: false, hover: null, mktOpen: true, allFor: null,
-  buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null };
+/* Any change to UI asks for a frame (render), as NET does below: what is selected, hovered, picked or animating is written
+   by input handlers, timers and actions, and every one of them is drawn; none has to remember to redraw (a handler that
+   forgot left the page stale until something else drew it). A value written again unchanged asks nothing; a list changed
+   in place (UI.picks.push) is drawn by the render() its caller already makes */
+export const UI = new Proxy({ mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), cover: false, hover: null, mktOpen: true, allFor: null,
+  buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null },
+  { set(t, k, v) { if (!Object.is(t[k], v)) { t[k] = v; render(); } return true; } });
 /* nothing selected: no card, no picks, no purchase or payment under way */
 export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = []; UI.buy = null; UI.pending = null; }
 /* NET.S: the online game the server last sent (the game on show is online while it is that one); NET.seat: my seat in it;

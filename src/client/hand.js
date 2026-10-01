@@ -16,7 +16,8 @@ import { sfx } from './sound.js';
 
 export const cardEls = new Map(); // card id → element
 let lastViewer = -1;
-export let drag = null; // a card being pressed / dragged
+export let drag = null; // a card being pressed / dragged (the hand's layout reads it: changed only by setDrag, which draws)
+const setDrag = d => { drag = d; render(); };
 export const buySlotBox = { x: 0, y: 0, w: 92 }; // where the purchase slot sits (game-area coordinates)
 const T = (x, y, rot, sc) => `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) rotate(${rot.toFixed(2)}deg) scale(${sc.toFixed(3)})`;
 export function setT(el, x, y, rot, sc) { el.__t = { x, y, rot, sc }; setStyle(el, 'transform', T(x, y, rot, sc)); }
@@ -46,10 +47,11 @@ function layoutCards() {
     const el = cardEls.get(id); if (!el || el.__enter || el.classList.contains('free')) return;
     const off = i - (n - 1) / 2;
     let x = W / 2 + off * step - cw / 2, y = handTop() + off * off * (phone ? 1.6 : 2.6), rot = off * (phone ? 2.4 : 3.2), sc = 1, z = 10 + i;
+    // (a card under the pointer rises, and stays risen while pressed: only a drag takes it out of the hand's look)
     if (hi >= 0 && i !== hi) x += Math.sign(i - hi) * cw * .16;
     if (paying && UI.picks.includes(id)) { const k = tk++; x = bx + bw + 18 + k * tw * .55 - (cw - tw) / 2; y = by + bw * 1.4 * .5 - ch / 2 + k * 3; rot = 4 + k * 3; sc = tsc; z = 70 + k; }
-    else if (choosing) { y = H - ch * 1.02 - 14 + off * off * 1.5; rot *= .5; if (UI.picks.includes(id)) { y -= ch * .16; z = 60 + i; } if (i === hi && !drag) { y = Math.min(y, H - ch * 1.1 - 14); rot = 0; z = 90; } } // the whole hand up; chosen cards higher
-    else { if (lifted(id)) { y = H - ch * 1.02 - 14; rot *= .4; z = 60 + i; } if (i === hi && !drag) { y = H - ch * 1.12 - 14; rot = 0; sc = 1.14; z = 90; } }
+    else if (choosing) { y = H - ch * 1.02 - 14 + off * off * 1.5; rot *= .5; if (UI.picks.includes(id)) { y -= ch * .16; z = 60 + i; } if (i === hi && !(drag && drag.started)) { y = Math.min(y, H - ch * 1.1 - 14); rot = 0; z = 90; } } // the whole hand up; chosen cards higher
+    else { if (lifted(id)) { y = H - ch * 1.02 - 14; rot *= .4; z = 60 + i; } if (i === hi && !(drag && drag.started)) { y = H - ch * 1.12 - 14; rot = 0; sc = 1.14; z = 90; } }
     setStyle(el, 'zIndex', z); setT(el, x, y, rot, sc);
   });
   // the play area: a small overlapping row left of the discard pile
@@ -129,24 +131,24 @@ export function flyToDiscard(t, from) {
 /* ---------- pressing and dragging a card ---------- */
 const pastHand = y => y < geo.app.top + geo.app.height - geo.cw * 1.4 * 1.25; // dragged up out of the hand
 function wire(el, id) {
-  el.addEventListener('pointerenter', () => { if (drag || UI.cover) return; if (hp().hand.includes(id)) { UI.hover = id; layoutCards(); } });
-  el.addEventListener('pointerleave', () => { if (UI.hover === id) { UI.hover = null; if (!drag) layoutCards(); } });
+  el.addEventListener('pointerenter', () => { if (drag || UI.cover) return; if (hp().hand.includes(id)) UI.hover = id; });
+  el.addEventListener('pointerleave', () => { if (UI.hover === id) UI.hover = null; });
   el.addEventListener('pointerdown', e => {
     if (S.over || UI.cover || UI.anim || e.button > 0 || !canAct()) return;
     const inHand = cur().hand.includes(id), isAct = S.turn.active && S.turn.active.id === id;
     if (!inHand && !isAct) return;
     e.preventDefault();
     const pickMode = ['trashPick', 'endTurn', 'transmit'].includes(UI.mode);
-    drag = { id, x0: e.clientX, y0: e.clientY, started: false, pid: e.pointerId, inHand, wasSel: UI.mode === 'card' && UI.card === id,
-      kind: pickMode ? 'none' : UI.mode === 'discardFor' || UI.mode === 'pay' ? (inHand && !UI.picks.includes(id) ? 'free' : 'none') : (isAct || isTargeted(id) ? 'aim' : 'free') };
+    setDrag({ id, x0: e.clientX, y0: e.clientY, started: false, pid: e.pointerId, inHand, wasSel: UI.mode === 'card' && UI.card === id,
+      kind: pickMode ? 'none' : UI.mode === 'discardFor' || UI.mode === 'pay' ? (inHand && !UI.picks.includes(id) ? 'free' : 'none') : (isAct || isTargeted(id) ? 'aim' : 'free') });
     try { el.setPointerCapture(e.pointerId); } catch (_) { /* expected: the pointer was already released */ }
   });
   el.addEventListener('pointermove', e => {
     if (!drag || drag.id !== id || e.pointerId !== drag.pid) return;
     const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
     if (!drag.started) {
-      if (Math.hypot(dx, dy) < 8 || drag.kind === 'none') return; drag.started = true; UI.hover = null;
-      if (drag.kind === 'aim') { if (!(UI.mode === 'card' && UI.card === id)) { UI.mode = 'card'; UI.card = id; if (S.turn.active && S.turn.active.id === id) UI.piece = S.turn.active.pi; UI.picks = []; render(); } else layoutCards(); }
+      if (Math.hypot(dx, dy) < 8 || drag.kind === 'none') return; setDrag({ ...drag, started: true }); UI.hover = null;
+      if (drag.kind === 'aim') { if (!(UI.mode === 'card' && UI.card === id)) { UI.mode = 'card'; UI.card = id; if (S.turn.active && S.turn.active.id === id) UI.piece = S.turn.active.pi; UI.picks = []; } }
       else el.classList.add('free');
     }
     if (drag.kind === 'aim') { drag.cx = e.clientX; drag.cy = e.clientY; startAim(); return; }
@@ -157,7 +159,7 @@ function wire(el, id) {
     if (UI.mode === 'pay') $('#buySlot').classList.toggle('hot', pastHand(e.clientY));
   });
   const end = e => {
-    if (!drag || drag.id !== id) return; const d = drag; d.hot = hotTarget(); drag = null;
+    if (!drag || drag.id !== id) return; const d = drag; d.hot = hotTarget(); setDrag(null);
     if (!d.started) { if (d.inHand) onHandCard(id); else onPlayCard(id); return; }
     if (d.kind === 'aim') {
       const k = d.hot;
@@ -168,9 +170,9 @@ function wire(el, id) {
     if (d.kind !== 'free') return;
     el.classList.remove('free', 'go');
     const k = targetAt(e.clientX, e.clientY), tg = k && UI.targets.get(k); setHot(null);
-    if (UI.mode === 'pay') { $('#buySlot').classList.remove('hot'); if (pastHand(e.clientY) && !UI.picks.includes(id)) { sfx('pick'); togglePick(id); } else layoutCards(); }
+    if (UI.mode === 'pay') { $('#buySlot').classList.remove('hot'); if (pastHand(e.clientY) && !UI.picks.includes(id)) { sfx('pick'); togglePick(id); } else render(); }
     else if (isDisc(tg) && !UI.anim) { if (UI.mode === 'discardFor') addDiscard(id); else startDiscard(k, id); }
-    else if (UI.mode !== 'discardFor' && pastHand(e.clientY)) playAction(id); else layoutCards();
+    else if (UI.mode !== 'discardFor' && pastHand(e.clientY)) playAction(id); else render();
   };
   el.addEventListener('pointerup', end);
   el.addEventListener('pointercancel', e => { if (drag && drag.id === id) { setHot(null); end(e); } });
