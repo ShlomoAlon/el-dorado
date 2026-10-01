@@ -196,7 +196,7 @@ Follow these in new code and fix toward them:
    The site's `index.html` must stay under ~14 KB compressed (one TCP round trip): the start screen's markup + CSS only
    (shell.html's first `<style>`); game CSS goes in the `<style data-late>` block, which becomes the cached app.css.
 3. `node test/run.mjs` → must print `all ok` (~45 s: build, import lint, engine quick tier, layout at 5 sizes, a game played
-   with real clicks and drags, the worker bundle, frame costs on a throttled phone). Server or online changes: add `--online`
+   with real clicks and drags, three whole games played through the UI by an AI (test/play.cjs: coverage for every assertion), the worker bundle, frame costs on a throttled phone). Server or online changes: add `--online`
    (online play end to end, against a local game server the test starts itself: nothing to set up). Board, layout or engine
    changes: `--full` (all 60 engine games + AI on every course, 11 layout sizes, online, board rendering).
    (The worker bundle check matters: Cloudflare's bundler rejects some things Node accepts; a failed bundle never deploys.)
