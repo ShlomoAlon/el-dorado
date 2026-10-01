@@ -2,17 +2,17 @@
    only change its transform, so they never repaint the board. The layer keeps the resolution it was drawn at, so once
    zooming has stopped (no wheel events for 250 ms, no fingers down, no glide running) the scale is baked into #bscale
    and the layer's own scale goes back to 1, in the same frame: one sharp redraw at a quiet moment. */
-import { R } from '../../engine.gen.js';
+import { R, assert } from '../../engine.gen.js';
 import { $ } from '../dom.js';
 import { S, MAP, UI, cur } from '../state.js';
-import { geo, onGeo, measure } from '../geometry.js';
+import { geo, onGeo, measure, handTop } from '../geometry.js';
 import { after } from '../frame.js';
-import { diag } from '../debug.js';
+import { diag, CHECKS } from '../debug.js';
 import { layout, xy } from './layout.js';
 export const view = { s: 1, x: 0, y: 0 };
 /* userZoomed: the player moved the board (a resize then keeps their view); dragMoved: the current press became a drag
    (its click is not a tap) */
-export const cam = { userZoomed: false, dragMoved: false, pointers: 0 };
+export const cam = { userZoomed: false, dragMoved: false, pointers: 0, fitZoomed: false }; // fitZoomed: the last fit zoomed in beyond the whole board (small screens)
 const stage = () => $('#stage');
 let viewRaf = 0, baked = 1, settleT = 0, gliding = false, drags = 0;
 const hoverHooks = [];
@@ -36,7 +36,7 @@ function safeRect() {
   const W = geo.app.width, H = geo.app.height, phone = W < 600;
   const t = Math.max(phone ? 108 : 112, geo.promptBottom ? geo.promptBottom + 10 : 0);
   const mr = UI.mktOpen && S ? geo.mktW + (phone ? 10 : 28) : 0; // the market column on the right
-  return { l: phone ? 8 : 62, t, r: W - 16 - mr, b: H - geo.cw * 1.4 * .62, W, H };
+  return { l: phone ? 8 : 62, t, r: W - 16 - mr, b: handTop() - 8, W, H }; // (above the resting hand: handTop, the hand's own)
 }
 function focusPoint() {
   const pl = cur(); const k = pl.pieces[UI.piece] && pl.pieces[UI.piece] !== 'done' ? pl.pieces[UI.piece] : pl.pieces.find(x => x !== 'done');
@@ -45,7 +45,7 @@ function focusPoint() {
 export function fit(anim) {
   if (!MAP) return; const r = safeRect(); if (!r.W) return; diag(`fit${anim ? ' (glide)' : ''} in ${Math.round(r.W)}×${Math.round(r.H)}`);
   const aw = r.r - r.l, ah = r.b - r.t;
-  let s = Math.min(aw / layout().w, ah / layout().h); view.s = s; view.x = r.l + (aw - layout().w * s) / 2; view.y = r.t + (ah - layout().h * s) / 2;
+  let s = Math.min(aw / layout().w, ah / layout().h); const whole = s; view.s = s; view.x = r.l + (aw - layout().w * s) / 2; view.y = r.t + (ah - layout().h * s) / 2;
   // too small to play (phones): zoom in on the explorer to move, or (the start screen's preview) on the starting spaces,
   // so the game starts in exactly the view the preview showed
   if (s * R < 13) {
@@ -53,6 +53,7 @@ export function fit(anim) {
     const c = S ? focusPoint() : MAP.starts.map(xy).reduce((a, h, i, A) => [a[0] + h.x / A.length, a[1] + h.y / A.length], [0, 0]);
     view.x = (r.l + r.r) / 2 - (c[0] - layout().minX) * s; view.y = r.t + (ah - layout().h * s) / 2; clampView();
   }
+  cam.fitZoomed = view.s > whole * 1.01;
   // not animated: drawn sharp at this scale right away (no blurry frame, no later redraw once it's on screen)
   if (anim) glide(); else { baked = view.s; $('#bscale').style.transform = `scale(${baked})`; }
   applyView(); cam.userZoomed = false;
@@ -140,3 +141,20 @@ export function setupPanZoom() {
   v.addEventListener('gesturechange', e => { if (ptrs.size >= 2 || !e.scale) return; diag(`gesture zoom ${e.scale.toFixed(2)} with ${ptrs.size} pointers`); const [x, y] = local(e.clientX, e.clientY); zoomAt(x, y, g0 * e.scale / view.s); });
   document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 }
+/* checks (debug and tests): the board as fitted is clear of the hand, the market and the prompt (or, zoomed in on a small
+   screen, the explorer to move is), measured on the elements themselves, not on the fit's own numbers. Twice a second,
+   while the fit stands (the player hasn't panned or zoomed), nothing moves and no card is chosen */
+if (CHECKS) setInterval(() => {
+  if (!S || S.over || UI.preview || cam.userZoomed || gliding || cam.pointers || UI.anim || UI.mode !== 'idle' || document.getElementById('menu').open) return;
+  const rect = e => e.getBoundingClientRect(), cards = [...document.querySelectorAll('#cards .card:not(.inplay)')];
+  if (!cards.length || cards.some(c => c.getAnimations().length)) return;
+  const tops = cards.map(c => rect(c).top).sort((x, y) => x - y), handTop = UI.hover != null && tops.length > 1 ? tops[1] : tops[0]; // (a card under the pointer is raised: the hand's own top is the next)
+  const app = rect($('#app')), b = rect($('#board')), pr = $('#prompt');
+  const free = { l: app.left, r: UI.mktOpen ? rect($('#mkt')).left : app.right, t: pr.offsetHeight ? rect(pr).bottom : app.top, b: handTop };
+  const inside = (x, y) => x >= free.l - 2 && x <= free.r + 2 && y >= free.t - 2 && y <= free.b + 2;
+  const zoomed = cam.fitZoomed; // (zoomed in by the fit: only the explorer to move must be clear)
+  if (zoomed) { const el = document.querySelector('#pieces .piece.turn'); if (!el) return; const r = rect(el); // (the explorer to move: marked .turn)
+    assert(inside(r.left + r.width / 2, r.top + r.height / 2), 'view: the fitted board is clear of the hand, the market and the prompt (zoomed in: its explorer to move is)'); }
+  else assert(inside(b.left, b.top) && inside(b.right, b.bottom), 'view: the fitted board is clear of the hand, the market and the prompt (board ' + [b.left, b.top, b.right, b.bottom].map(Math.round) + ', free ' + [free.l, free.t, free.r, free.b].map(Math.round) + ')');
+}, 500);
+

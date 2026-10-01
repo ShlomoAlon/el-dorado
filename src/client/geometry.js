@@ -7,6 +7,9 @@ export const geo = { app: { left: 0, top: 0, width: 0, height: 0 }, cw: 132, pro
 const subs = [];
 /* f(sized): after every measurement; sized = the game area itself changed size */
 export function onGeo(f) { subs.push(f); }
+/* where the resting hand's top edge is (its middle card; the others sit lower): the hand lays its cards from it and the
+   board's fit keeps above it. One place, so the two can't drift apart */
+export const handTop = () => geo.app.height - geo.cw * 1.4 * (geo.app.width < 600 ? .78 : .9);
 const rect = e => { const r = e.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom }; };
 /* measures everything the views need; whoever calls it (the resize observer, the camera fitting the board), a change that
    matters (the game area's size, the recap's room) asks for a redraw here, so no caller can measure it away unseen */
