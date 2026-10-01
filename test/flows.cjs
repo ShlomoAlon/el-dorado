@@ -42,7 +42,8 @@ const T = report('flows');
   const cardPos = async i => { await settle(p); return p.evaluate(i => { const els = [...document.querySelectorAll('#cards .card:not(.inplay)')];
     // the hand's cards sit left to right in hand order
     const byX = els.map(e => ({ e, r: e.getBoundingClientRect() })).sort((a, b) => a.r.left - b.r.left); if (!byX[i]) throw new Error('card ' + i + ' of ' + els.length + ': ' + els.map(e => e.className).join()); const r = byX[i].r; return { x: r.left + r.width * .5, y: r.top + r.height * .25 }; }, i); };
-  let c = await cardPos(handIdx); await p.mouse.click(c.x, c.y);
+  // (pressed as a person taps: the pointer comes to rest on the card first (it rises), then a press of 150 ms)
+  let c = await cardPos(handIdx); await p.mouse.move(c.x, c.y); await settle(p); await p.mouse.click(c.x, c.y, { delay: 150 });
   await check('click selects the card', id => window.__ED.UI.mode === 'card' && window.__ED.UI.card === id && document.querySelectorAll('#cards .card.sel').length === 1, pick.id);
   await check('targets on the board', k => !!document.querySelector(`#board2 .tgt[data-t="${k}"] polygon`), pick.ks[0]);
   // 3. click a target space: the explorer walks there

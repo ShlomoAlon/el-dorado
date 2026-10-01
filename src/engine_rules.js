@@ -37,10 +37,17 @@ function cantBuy(gs,seat,t){
   if(st.src==='r'&&!reserveOpen(gs))return'The reserve opens once a market slot is empty.';
   return'';
 }
+/* why seat can't buy a card of type t now with the coins in its hand ('' if it can): the rules (cantBuy), then the price.
+   One rule for whether a purchase can happen, so the page never opens one that can only be cancelled */
+function cantPay(gs,seat,t){
+  const no=cantBuy(gs,seat,t);if(no)return no;
+  const cash=gs.players[seat].hand.reduce((a,id)=>a+coinVal(gs,id),0);
+  return CT[t].cost>cash?'Not enough coins: '+cash+' in hand, it costs '+CT[t].cost+'.':'';
+}
 /* what seat can buy now with the coins in its hand: [{src:'m'|'r', i, t}], market first */
 function buyOptions(gs,seat){
-  const P=gs.players[seat],cash=P.hand.reduce((a,id)=>a+coinVal(gs,id),0),out=[];
-  for(const[src,list]of[['m',gs.market],['r',gs.reserve]])list.forEach((s,i)=>{if(s.n>0&&CT[s.t].cost<=cash&&!cantBuy(gs,seat,s.t))out.push({src,i,t:s.t});});
+  const out=[];
+  for(const[src,list]of[['m',gs.market],['r',gs.reserve]])list.forEach((s,i)=>{if(s.n>0&&!cantPay(gs,seat,s.t))out.push({src,i,t:s.t});});
   return out;
 }
 /* ---- game logs (replays) ----
@@ -85,8 +92,9 @@ function recSecret(){return crypto.getRandomValues(new Uint32Array(1))[0];}
 function recNewGame(o,rng){
   assert(Number.isInteger(rng)&&rng>=0&&rng<2**32,'recNewGame: the game\'s number (rng) is a 32-bit integer');
   const gs=gameStart(o,rng);
-  // (privacy: the page's pass-and-play cover, a setting of the table rather than of the game: kept in the record only)
-  return{gs,rec:{kind:'eldorado-replay',v:3,course:gs.course.id,seed:gs.seed,rng,fullRace:gs.fullRace,...(o.privacy?{privacy:true}:{}),...(o.gift?{gift:o.gift}:{}),
+  // (privacy: the page's pass-and-play cover, a setting of the table rather than of the game: kept in the record only, and
+  // always said, on or off: a record that left it out when off read as off when an older one never wrote it)
+  return{gs,rec:{kind:'eldorado-replay',v:3,course:gs.course.id,seed:gs.seed,rng,fullRace:gs.fullRace,privacy:!!o.privacy,...(o.gift?{gift:o.gift}:{}),
     players:gs.players.map(p=>p.ai?{name:p.name,color:p.color,bot:p.ai}:{name:p.name,color:p.color}),actions:[],mark:0}};
 }
 /* the game's invariants: what must hold after every action (cheap: one pass over ~100 cards; run by recApply, so in every

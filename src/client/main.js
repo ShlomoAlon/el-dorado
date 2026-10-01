@@ -7,7 +7,7 @@ import { addPart, render, flush, freshInit } from './frame.js';
 import { watchGeometry, geo } from './geometry.js';
 import { GAME_READY } from './ready.js';
 import { buildBoard, relabel, boardLayers } from './board/terrain.js';
-import { setupPanZoom, fit } from './board/camera.js';
+import { setupPanZoom, fit, fitCheck, cameraPart } from './board/camera.js';
 import { overlaysPart } from './board/overlays.js';
 import { piecesPart } from './board/pieces.js';
 import { layout } from './board/layout.js';
@@ -31,7 +31,7 @@ import { drag } from './hand.js';
 import { checksPart } from './checks.js';
 
 // the order parts update in each frame: first what the selection allows, then the view from back to front
-for (const p of [derivePart, overlaysPart, piecesPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, replayPart, checksPart]) addPart(p); // (checks: the page's invariants, last)
+for (const p of [derivePart, overlaysPart, piecesPart, cameraPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, replayPart, checksPart]) addPart(p); // (checks: the page's invariants, last)
 GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); });
 
 function boot() {
@@ -86,7 +86,7 @@ function onBoardHover(e) { if (!drag && !e.buttons && e.pointerType === 'mouse')
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
 window.__ED = { NET, UI, G, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiChoose, // (aiChoose: test/play.cjs lets an AI choose the person's moves, played through the calls below)
   render() { render(); flush(); },
-  aiPace(k) { AIX.pace = k; }, // (test/play.cjs: shorter pauses between the AIs' moves)
+  aiPace(k) { AIX.pace = k; }, fitCheck, // (test/play.cjs: the board check, judged at once on a settled page) // (test/play.cjs: shorter pauses between the AIs' moves)
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },
   ...Object.fromEntries(Object.entries({ act, playEvents, openReplay, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, onPiece, onPlayCard, startDiscard, addDiscard, confirmTrash }).map(([k, f]) => [k, now(f)])) };
 boot();

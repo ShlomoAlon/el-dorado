@@ -2,7 +2,7 @@
    and the turn buttons. Each piece is rewritten only when its text changes. */
 import { CT, SYMNAME, assert } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle, show, reduceMotion, EASE } from './dom.js';
-import { S, UI, NET, G, cur, canAct, online } from './state.js';
+import { S, UI, NET, G, cur, canAct, online, covered, turnKey } from './state.js';
 import { onGeo, geo } from './geometry.js';
 import { render, after } from './frame.js';
 import { CHECKS } from './debug.js';
@@ -56,7 +56,7 @@ function updatePrompt(){
   if(S.over){say('The expedition is over.');btnWire(B,[{...BTN.results,fn:showGameOver},{...BTN.newGame,fn:showSetup}]);return;}
   if(online()&&NET.status){say(`<span class="m">${esc(NET.status)}</span>`);btnWire(B,[]);return;} // (the connection lost: what matters now)
   if(!canAct()){say(online()&&S.cur===NET.seat?'<span class="m">Reconnecting…</span>':'');btnWire(B,[]);return;} // (whose turn it is shows on the chips; what they do, in the recap)
-  if(UI.cover){say(who+'is up next: pass the device.');btnWire(B,[{...BTN.reveal,fn:()=>{UI.cover=false;render();}}]);return;}
+  if(covered()){say(who+'is up next: pass the device.');btnWire(B,[{...BTN.reveal,fn:()=>{UI.revealed=turnKey();}}]);return;}
   const undoBtn={...BTN.undo,dis:!canUndo()||NET.busy,fn:undo};
   switch(UI.mode){
     case 'idle':{

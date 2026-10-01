@@ -33,7 +33,7 @@ export function checksInit(during) {
       const n = s.node, who = !n ? '?' : n.id ? '#' + n.id : n.nodeType === 1 ? n.tagName.toLowerCase() + (n.className && typeof n.className === 'string' ? '.' + n.className.split(' ')[0] : '') : (n.parentElement && n.parentElement.id ? '#' + n.parentElement.id + ' text' : 'text');
       const d = `${Math.round(s.currentRect.x - s.previousRect.x)},${Math.round(s.currentRect.y - s.previousRect.y)} size ${Math.round(s.currentRect.width - s.previousRect.width)}×${Math.round(s.currentRect.height - s.previousRect.height)}`;
       shifts.push({ who, d, input: e.hadRecentInput, play: playAt(e.startTime) }); diag(`shift ${who} by ${d}${e.hadRecentInput ? ' (after input)' : ''}`);
-      if (playAt(e.startTime) && !e.hadRecentInput && Math.abs(e.startTime - expectedAt) > 600) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ' by ' + d + ')'); } })
+      if (playAt(e.startTime) && !e.hadRecentInput && Math.abs(e.startTime - expectedAt) > 600) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ' by ' + d + '; ' + Math.round(e.startTime - expectedAt) + ' ms after the last expected change; log: ' + lines.filter(l => / (layout|market|fit)/.test(l)).slice(-5).join(' / ') + ')'); } })
       .observe({ type: 'layout-shift', buffered: true });
   // churn: a frame that removes an element and adds an identical new one rebuilt what hadn't changed (CLAUDE.md: a view
   // part writes only what changed). An element moved (removed and put back) is not a rebuild; identical means the same
@@ -41,14 +41,29 @@ export function checksInit(during) {
   const sig = n => n.outerHTML.replace(/ class="([^"]*)"/g, (m, c) => ' class="' + c.split(' ').filter(x => x !== 'new').join(' ') + '"').replace(/opacity: [\d.]+;\s*/g, '').replace(/ style=""/g, '');
   const judge = churnJudge = list => {
     const moved = new Set(), gone = new Map();
-    for (const m of list) for (const n of m.removedNodes) if (n.nodeType === 1) { if (n.isConnected) moved.add(n); else if (n.childElementCount) gone.set(sig(n), n); }
+    // (a rebuild puts the same thing back in the same place: an element removed from one box and an identical one added
+    // to another are two changes, e.g. one step's caption changed while a new step got the old words)
+    for (const m of list) for (const n of m.removedNodes) if (n.nodeType === 1) { if (n.isConnected) moved.add(n); else if (n.childElementCount) { const k = sig(n); (gone.get(k) || gone.set(k, new Set()).get(k)).add(m.target); } }
     if (!gone.size) return;
-    for (const m of list) for (const n of m.addedNodes) if (n.nodeType === 1 && n.isConnected && !moved.has(n) && gone.has(sig(n))) {
+    for (const m of list) for (const n of m.addedNodes) if (n.nodeType === 1 && n.isConnected && !moved.has(n) && (gone.get(sig(n)) || new Set()).has(m.target)) {
       const cls = n.getAttribute('class'), pc = n.parentNode && n.parentNode.getAttribute && n.parentNode.getAttribute('class'), who = ((n.closest('[id]') || {}).id || '?') + ' ' + (pc ? '.' + pc.split(' ')[0] + ' > ' : '') + n.tagName.toLowerCase() + (cls ? '.' + cls.split(' ')[0] : '');
       const play = inPlay(); churn.push({ who, play, html: sig(n).slice(0, 160), parent: n.parentNode && n.parentNode.outerHTML.slice(0, 80) }); diag('churn: rebuilt unchanged ' + who);
-      if (play) assert(false, 'view: a frame writes only what changed (rebuilt unchanged content in ' + who + ')');
+      if (play) assert(false, 'view: a frame writes only what changed (rebuilt unchanged content in ' + who + ': ' + sig(n).slice(0, 100) + ')');
     }
   };
+  // words never run together: text written beside an element in a flex or grid box is its own item there, and the space
+  // between them is dropped ("1space") unless a margin or a gap keeps them apart. Measured on what was written, once the
+  // frame that wrote it is drawn (a timer after it: never while the views update)
+  const wq = new Set(); let wt = 0;
+  const words = () => { wt = 0; const rg = document.createRange();
+    for (const t of wq) { const p = t.parentElement, x = t.data; if (!p || !t.isConnected || !x.trim() || !/^(inline-)?(flex|grid)$/.test(getComputedStyle(p).display)) continue;
+      rg.selectNodeContents(t); const tr = rg.getBoundingClientRect(); if (!tr.width) continue; // (not shown)
+      const touch = (n, before) => { if (!n || n.nodeType !== 1) return false; const r = n.getBoundingClientRect(); return r.width > 0 && (before ? tr.left - r.right < 2 : r.left - tr.right < 2); };
+      if ((/^\s/.test(x) && touch(t.previousSibling, true)) || (/\s$/.test(x) && touch(t.nextSibling, false))) assert(false, 'view: words never run together ("' + p.textContent.trim().slice(0, 40) + '": text beside an element in a ' + getComputedStyle(p).display + ' box)'); }
+    wq.clear(); };
+  const texts = n => { if (n.nodeType === 3) wq.add(n); else if (n.nodeType === 1) { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); for (let t = w.nextNode(); t; t = w.nextNode()) wq.add(t); } };
+  new MutationObserver(list => { for (const m of list) { if (m.type === 'characterData') wq.add(m.target); else m.addedNodes.forEach(texts); } if (wq.size && !wt) wt = setTimeout(words, 50); })
+    .observe(document.body, { subtree: true, childList: true, characterData: true });
   churnMO = new MutationObserver(judge);
   churnMO.observe(document.getElementById('app'), { subtree: true, childList: true });
 }

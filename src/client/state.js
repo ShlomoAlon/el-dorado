@@ -9,8 +9,13 @@ export let S = null, MAP = null;
 export function setS(gs) { S = gs; if (gs) MAP = mapOf(gs); }
 /* a board with no game on it (the course previews, main.js showCourse) */
 export function setMAP(m) { MAP = m; }
-export const UI = { mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), cover: false, hover: null, mktOpen: true, allFor: null,
-  buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null };
+/* Any change to UI asks for a frame (render), as NET does below: what is selected, hovered, picked or animating is written
+   by input handlers, timers and actions, and every one of them is drawn; none has to remember to redraw (a handler that
+   forgot left the page stale until something else drew it). A value written again unchanged asks nothing; a list changed
+   in place (UI.picks.push) is drawn by the render() its caller already makes */
+export const UI = new Proxy({ mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), revealed: null, hover: null, mktOpen: true, allFor: null,
+  buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null },
+  { set(t, k, v) { if (!Object.is(t[k], v)) { t[k] = v; render(); } return true; } });
 /* nothing selected: no card, no picks, no purchase or payment under way */
 export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = []; UI.buy = null; UI.pending = null; }
 /* NET.S: the online game the server last sent (the game on show is online while it is that one); NET.seat: my seat in it;
@@ -35,6 +40,15 @@ export const viewIdx = () => {
   return NET.seat < 0 ? S.cur : NET.seat; // (a watcher follows the player to move)
 };
 export const hp = () => S.players[viewIdx()];
+/* pass-and-play: a local game whose record hides hands, with two or more people at the table. There a hand shows only to
+   its owner, on their own turn, once they have taken the device (Reveal: UI.revealed holds the turn it was pressed in);
+   at every other moment (the next person's turn not yet revealed, an AI's turn) the hand is covered. One rule, derived
+   from the game: it was a flag set on some events by three different rules, and an AI's turn left the last hand face-up */
+export const turnKey = () => S.seed + '|' + S.round + '|' + S.cur;
+export const covered = () => !!S && !online() && !G.replay && !S.over && !!G.rec && !!G.rec.privacy && S.players.filter(p => !p.ai).length > 1 && UI.revealed !== turnKey();
+/* the pass-the-device screen: covered, and a person is to move (what only that screen hides: the recap, the market's
+   highlights, the follow) */
+export const passing = () => covered() && !isAI(S.cur);
 export const humanRacing = () => S.players.some(p => !p.ai && isActive(p));
 export const inGame = () => !!(S && !S.over && !G.replay && !UI.preview);
 
@@ -43,7 +57,7 @@ export const inGame = () => !!(S && !S.over && !G.replay && !UI.preview);
    rebuild: a bug, reported, and the page goes on without it */
 export function loadSave() {
   let rec; try { rec = JSON.parse(load('save') || 'null'); } catch (e) { /* expected: a save cut short (storage full while writing) */ return null; }
-  if (!rec || replayCheck(rec)) return null; // (a game recorded by an older version: dropped, as decided 2026-09-29)
+  if (!rec || replayCheck(rec) || typeof rec.privacy !== 'boolean') return null; // (a game recorded by an older version: dropped, as decided 2026-09-29; a save that doesn't say whether hands are hidden is one)
   try { return { rec, S: recState(rec) }; } catch (e) { console.error(e); failed(e, 'rebuilding the saved game'); return null; }
 }
 export function save() {

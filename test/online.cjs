@@ -19,6 +19,13 @@ const T = report('online');
       await p.waitForFunction(() => __ED.NET.user); return p.evaluate(() => __ED.NET.user.id);
     };
     const wait = (p, f, arg, ms = 30000) => p.waitForFunction(f, arg, { timeout: ms }).then(() => true, () => false);
+    // the ladder: a retired AI (one no longer in the game) has a row with the top rating; the leaderboard leaves it out, and
+    // every profile's rank is its place there (asserted by the server in debug mode; checked here too)
+    await fetch(srv.url + 'api/leaderboard'); // (the database is made on the first request)
+    srv.sql(`INSERT INTO users(id,name,rating,games,wins,bot,created) VALUES('retired-ai','Old AI',3000,5,5,'retired-ai-id',0)`);
+    { const lb = (await (await fetch(srv.url + 'api/leaderboard')).json()).players, ranks = [];
+      for (const x of lb) ranks.push((await (await fetch(srv.url + 'api/users/' + x.id)).json()).user.rank);
+      T.ok('ladder: a retired AI leaves the leaderboard, and each profile ranks its place on it', !lb.some(x => x.id === 'retired-ai') && ranks.every((r, i) => r === lb.filter(x => x.rating > lb[i].rating).length + 1), lb.map((x, i) => x.name + ' #' + ranks[i]).join(', ')); }
     const board = p => p.evaluate(async () => Object.fromEntries((await (await fetch('/api/leaderboard')).json()).players.map(x => [x.id, { r: x.rating, g: x.games }])));
     const mkRoom = (p, o) => p.evaluate(async o => { const r = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + __ED.NET.token }, body: JSON.stringify(o) });
       const j = await r.json(); __ED.joinRoom(j.code); return j.code; }, o);

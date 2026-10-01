@@ -7,7 +7,7 @@
    and nothing is sent. */
 import { AssertionError, setAssertMode } from '../engine.gen.js';
 import { DEBUG, diag, diagLog } from './debug.js';
-import { UI, NET, G, online } from './state.js';
+import { UI, NET, G, online, covered } from './state.js';
 import { resync } from './actions.js';
 import { HAS_SERVER } from './online.js';
 
@@ -28,7 +28,7 @@ function report(e, msg, where) {
       : online() ? { room: NET.code, seat: NET.seat, S: NET.S } : { rec: G.rec };
     const body = JSON.stringify({ msg, stack: String(e && e.stack || ''), build: BUILD, context: {
       where, url: location.href, ua: navigator.userAgent, time: new Date().toISOString(), game,
-      ui: { mode: UI.mode, card: UI.card, piece: UI.piece, picks: UI.picks, buy: UI.buy, pending: UI.pending, cover: UI.cover, preview: UI.preview },
+      ui: { mode: UI.mode, card: UI.card, piece: UI.piece, picks: UI.picks, buy: UI.buy, pending: UI.pending, cover: covered(), preview: UI.preview },
       net: { available: NET.available, connected: NET.connected, busy: NET.busy, status: NET.status, code: NET.code, user: NET.user && NET.user.id },
       log: diagLog() } });
     const headers = { 'content-type': 'application/json' }; if (NET.token) headers.authorization = 'Bearer ' + NET.token;

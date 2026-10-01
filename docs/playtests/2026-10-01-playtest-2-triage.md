@@ -72,6 +72,9 @@ off), or regressions. Ordered by how much they hurt.
 10. **Empty boxes**: the recap is an empty panel on turn 1; with History on the left the prompt is an empty pill.
 11. **Live resize** costs 99–198 ms frames and moves the board 40 px.
 12. **Replay steps** cost 50–100 ms frames; replay too slow at top speed (playtest 1 #19).
+13. **Follow other players' moves?** On a small screen (the board zoomed in), the board follows your explorer through your
+    turn; other players' explorers only at their turn's start, and in a replay not at all, so their explorer can walk under
+    the market. Follow them too (the board then moves during their turns and while stepping a replay), or leave it?
 
 ## C. Design decisions to review later
 - Nothing announces your turn in a local game (the banner was removed on purpose).
@@ -89,3 +92,20 @@ off), or regressions. Ordered by how much they hurt.
 
 ## Status
 (updated as items are done)
+- **A1 board fit: done** (live). Keeps above the hand (7387196); stays centred where it can't zoom in (28a74e8); doesn't
+  move at a turn change when it shows whole (7f5113d); refits when the market's width changes (b4a88f1); follows the
+  explorer you move on a phone (9291a67). Checked by the board check at every settled step of the played games (owner's
+  size, phone, tablet) and twice a second in every test.
+- **A5 board wanders: partly.** It no longer moves at turn changes (7f5113d). What the recap's second line does to the
+  board (refit, reserve room, or cover) waits on the owner; the fit, the follow and the board check leave the prompt's
+  side out until then.
+- **A2 pass-and-play leak: done** (844cf01). **A3 dead-end purchases: done** (e498a10). **A4 extra Confirm: done**
+  (04f0f9e). **A6 text: "1space" done** (c6e0eea, with a check that words never run together); cut-off titles, chips
+  and the AI dropdown still to do.
+- **Open, found by the stricter checks under load (intermittent, not yet explained):** (1) a phone game where the
+  explorer to move sat under the market, 126 px right of where the camera's numbers put it (no glide in the log);
+  (2) 1920x1080 replay with the market closed: the board's origin is 105 px right of the game area's left edge, which
+  the fit assumes are the same (A7's column assumptions); (3) render test: 3 pixels differ while holding the board;
+  (4) online: a recap caption rebuilt unchanged once. Each check message now carries the numbers needed.
+- Found on the way (not in the report): a pressed card waited for something else to redraw (b704e7e: every UI change
+  now asks for a frame; the up-to-date check runs after every input). New owner question: B13.

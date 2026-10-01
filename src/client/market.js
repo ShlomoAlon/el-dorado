@@ -3,7 +3,7 @@
    updated in place; a card's artwork is drawn again only when another card takes its slot. */
 import { CT, MARKET0, stackOf, reserveOpen, cantBuy, fmt } from '../engine.gen.js';
 import { $, setText, setStyle } from './dom.js';
-import { S, UI, G, canAct } from './state.js';
+import { S, UI, G, canAct, passing } from './state.js';
 import { geo, onGeo } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
 import { cam, fitSoon } from './board/camera.js';
@@ -12,7 +12,7 @@ import { setT, placeAt, buySlotBox } from './hand.js';
 import { sfx } from './sound.js';
 import { render } from './frame.js';
 import { load, store } from './store.js';
-import { expectLayout } from './debug.js';
+import { expectLayout, diag } from './debug.js';
 
 const noMkt=()=>$('#app').classList.toggle('nomkt',!UI.mktOpen||$('#mkt').classList.contains('cramped'));
 function setMkt(open){expectLayout();UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);store('market',open?'1':'0');
@@ -36,6 +36,7 @@ function sizeMarket(){
   // no arrangement fits (a tiny game area): the market steps aside; the Market button then opens All cards
   if(mk.classList.contains('cramped')!==pick.mw<min*.8){mk.classList.toggle('cramped',pick.mw<min*.8);noMkt();}
   const mw=Math.max(28,Math.floor(pick.mw));
+  if(mk.__p!==pick.cols+'×'+mw){mk.__p=pick.cols+'×'+mw;diag(`market: ${mk.__p} (room ${Math.round(avail)}, area ${Math.round(W)})`);}
   setStyle(mk,'--mw',mw+'px');setStyle($('#market'),'gridTemplateColumns',`repeat(${pick.cols},var(--mw))`);
   setStyle($('#app'),'--mktW',(pick.cols*mw+(pick.cols-1)*cg)+'px'); // the market's width, for what must stay clear of it (the prompt)
 }
@@ -64,7 +65,7 @@ function update(){
   const tr=UI.mode==='transmit',openSlot=reserveOpen(S),aff=new Set(tr?[]:affordable().map(a=>a.src+a.i));
   // a slot is 'no' when the player to act can't buy it now whatever they pay (the engine's rule), 'can' when they can afford it
   const spec=(src,s,i)=>{if(s.n<=0)return{src,i,n:0,cls:'mslot empty'};
-    const ok=tr||(!UI.cover&&!cantBuy(S,S.cur,s.t)),chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src===src&&UI.buy.idx===i;
+    const ok=tr||(!passing()&&!cantBuy(S,S.cur,s.t)),chosen=UI.mode==='pay'&&UI.buy&&UI.buy.src===src&&UI.buy.idx===i;
     return{src,i,t:s.t,n:s.n,cls:`mslot${ok?'':' no'}${aff.has(src+i)?' can':chosen?'':' dimc'}${chosen?' chosen':''}`};};
   const resAff=[...aff].some(k=>k[0]==='r');
   const mk=$('#market');let at=$('#allTile');
@@ -83,7 +84,7 @@ function update(){
 export const marketPart = { name: 'market', update};
 
 /* ---------- the purchase in progress: the card waits above the hand until it's paid for ---------- */
-export const buySlotPart = { name: 'buySlot', update(){const bs=$('#buySlot'),on=!!S&&UI.mode==='pay'&&!UI.cover;
+export const buySlotPart = { name: 'buySlot', update(){const bs=$('#buySlot'),on=!!S&&UI.mode==='pay'&&!passing();
   if(!on){if(!bs.hidden)bs.hidden=true;return;} // (dataset.t: the card type drawn in it; hiding keeps it drawn)
   if(bs.dataset.t!==UI.buy.t){bs.dataset.t=UI.buy.t;bs.querySelector('.bs-card').innerHTML=`<div class="mcard">${cardHTML(UI.buy.t)}</div>`;} // (keyed by what it draws, the card type: the same card bought from another stack keeps its picture)
   const c=CT[UI.buy.t].cost,t=payTotal();setText($('#bsPaid'),fmt(t));setText($('#bsCost'),c);bs.classList.toggle('paid',t>=c);bs.hidden=false;}};
@@ -98,7 +99,7 @@ function marketRect(src,idx){const e=document.querySelector(src==='m'?(UI.mktOpe
 /* ---------- drag a card out of the market (strip or All cards) toward your hand to start buying it ---------- */
 let mdrag=null,mdragJustEnded=false;
 function marketDown(e){
-  if(e.button>0||!S||S.over||UI.cover||!canAct())return;
+  if(e.button>0||!S||S.over||passing()||!canAct())return;
   const s=e.target.closest('.mslot[data-src]');if(!s||s.classList.contains('no'))return;
   mdrag={src:s.dataset.src,idx:+s.dataset.i,x0:e.clientX,y0:e.clientY,el:s,started:false,ghost:null,pid:e.pointerId};
   window.addEventListener('pointermove',marketMove);window.addEventListener('pointerup',marketUp);window.addEventListener('pointercancel',marketCancel);
@@ -126,7 +127,7 @@ function marketCancel(){const d=mdrag;marketEnd();if(d.ghost)d.ghost.remove();}
 function marketEnd(){const d=mdrag;mdrag=null;d.el.style.opacity='';window.removeEventListener('pointermove',marketMove);window.removeEventListener('pointerup',marketUp);window.removeEventListener('pointercancel',marketCancel);}
 
 export function marketInit(){
-  const pick=e=>{if(!S||UI.cover||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;
+  const pick=e=>{if(!S||passing()||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;
     const inAll=!!e.target.closest('#allc');pickFromMarket(s.dataset.src,+s.dataset.i);if(inAll&&UI.mode==='pay')openAll(false);};
   for(const c of['#market','#allMarket','#reserve']){$(c).addEventListener('click',e=>{if(mdragJustEnded){mdragJustEnded=false;return;}pick(e);});$(c).addEventListener('pointerdown',marketDown);}
   $('#bsCancel').onclick=cancelMode;

@@ -10,10 +10,14 @@ const T = report('play');
 const arg = process.argv.slice(2), GAMES = +(arg[arg.indexOf('--games') + 1] || 0) || 3;
 // the sizes the games are played at: the owner's screen, a phone, a tablet
 const SIZES = [['owner', { width: 1536, height: 639 }, 1.25], ['phone', { width: 390, height: 844 }, 2], ['tablet', { width: 768, height: 1024 }, 1]];
+// and one game passed around one device: two people (both played here) and an AI, hands hidden until each one's Reveal
+const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
 
 /* one decision for the person's seat, made in the page through the UI's own calls; returns what it did (or why it couldn't) */
 function step() {
-  const E = window.__ED, S = E.S, UI = E.UI, me = S.cur, mem = window.__mem || (window.__mem = {});
+  const E = window.__ED, S = E.S, UI = E.UI, me = S.cur, mems = window.__mem || (window.__mem = {}), mem = mems[me] || (mems[me] = {});
+  // pass-and-play: the hand is covered until the player to move takes the device (the Reveal button)
+  { const b = document.getElementById('bRev'); if (b) { b.click(); return 'reveal'; } }
   const a = E.aiChoose(S, 'raleigh', mem, Math.random);
   // every state the page passes through is noted (each call leaves the page drawn, as a frame after a tap would)
   const seen = window.__seen || (window.__seen = { modes: {}, labels: {} });
@@ -31,8 +35,10 @@ function step() {
       if (UI.mode !== 'idle') call('cancelMode');
       piece(a.pi); pick(a.cards[0]);
       const tg = UI.targets.get(a.to); if (!tg || tg.t !== 'pay') return 'unmapped pay: ' + a.to + ' is not a space paid for with cards';
-      call('startDiscard', a.to, a.cards[0]); for (const id of a.cards.slice(1)) if (UI.mode === 'discardFor') call('addDiscard', id);
-      return 'pay ' + tg.kind; }
+      // the first card dragged onto the space; the rest dragged after it, or (every other time) tapped in the hand
+      const tap = (window.__payN = (window.__payN || 0) + 1) % 2 === 0;
+      call('startDiscard', a.to, a.cards[0]); for (const id of a.cards.slice(1)) if (UI.mode === 'discardFor') call(tap ? 'onHandCard' : 'addDiscard', id);
+      return 'pay ' + tg.kind + (tap ? ' (tapped)' : ''); }
     case 'action': { if (UI.mode !== 'idle') call('cancelMode'); call('onHandCard', a.card); return 'action'; }
     case 'trash': { if (UI.mode !== 'trashPick') return 'unmapped trash: the removal choice is not showing'; for (const id of a.cards) call('onHandCard', id); call('confirmTrash'); return 'trash ' + a.cards.length; }
     case 'transmit': { if (UI.mode !== 'idle') call('cancelMode'); call('onHandCard', a.card); const st = stackOf(a.type); if (UI.mode !== 'transmit' || !st) return 'unmapped transmit';
@@ -40,7 +46,12 @@ function step() {
     case 'buy': { if (UI.mode !== 'idle') call('cancelMode'); const st = stackOf(a.type); if (!st) return 'unmapped buy: no stack of ' + a.type;
       call('pickFromMarket', st[0], st[1]); if (UI.mode !== 'pay') return 'unmapped buy: ' + a.type + ' not offered';
       for (const id of a.cards) if (UI.mode === 'pay') call('onHandCard', id); return 'buy'; } // (paid in full, it's bought after a short pause)
-    case 'end': { if (UI.mode !== 'idle') call('cancelMode'); call('startEndTurn'); let warned = false;
+    case 'end': { if (UI.mode !== 'idle') call('cancelMode');
+      // first, as a person might: a tap on a market card the rules allow but the coins in hand don't cover (it must say so,
+      // not open a purchase that can only be cancelled)
+      const poor = [...document.querySelectorAll('#market .mslot:not(.no):not(.can):not(.empty)')][0];
+      if (poor) { call('pickFromMarket', 'm', +poor.dataset.i); E.render(); seen.modes['tapped a card out of reach'] = 1; if (UI.mode !== 'idle') call('cancelMode'); }
+      call('startEndTurn'); let warned = false;
       if (UI.mode === 'buyWarn') { warned = true; call('startEndTurn'); }
       if (UI.mode === 'endTurn') { for (const id of a.keep) call('onHandCard', id); call('finishTurn'); }
       return 'end' + (warned ? ' (after the buy reminder)' : '') + (a.keep.length ? ' keeping ' + a.keep.length : ''); }
@@ -50,12 +61,13 @@ function step() {
 
 (async () => {
   const srv = await serveStatic(), b = await chromium.launch(), t0 = Date.now();
-  const games = Array.from({ length: GAMES }, (_, g) => SIZES[g % SIZES.length]);
-  const results = await Promise.all(games.map(async ([name, viewport, dpr], g) => {
+  const games = [...Array.from({ length: GAMES }, (_, g) => SIZES[g % SIZES.length]), PASS];
+  const results = await Promise.all(games.map(async ([name, viewport, dpr, pass], g) => {
     const p = await openPage(b, `game ${g + 1} (${name})`, { viewport, deviceScaleFactor: dpr });
     const cdp = await p.context().newCDPSession(p); await cdp.send('Animation.enable'); await cdp.send('Animation.setPlaybackRate', { playbackRate: 20 });
     await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-    await p.selectOption('select[name=who1]', 'raleigh'); await p.selectOption('select[name=who2]', 'raleigh');
+    await p.selectOption('select[name=who1]', pass ? '' : 'raleigh'); await p.selectOption('select[name=who2]', 'raleigh');
+    if (pass) await p.check('#sPriv');
     await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
     await p.evaluate(() => window.__ED.aiPace(.05)); // (the AIs' pauses, 20x shorter: their moves and animations unchanged)
     const did = {}, unmapped = []; let steps = 0;
@@ -63,6 +75,7 @@ function step() {
     try {
       for (; steps < 1500; steps++) {
         await ready(); await settle(p);
+        await p.evaluate(() => window.__ED.fitCheck(true)); // (the board check at every settled step, not only when its samples happen to see one)
         if (await p.evaluate(() => window.__ED.S.over)) break;
         const r = await p.evaluate(step); const k = r.split(':')[0]; did[k] = (did[k] || 0) + 1; if (r.startsWith('unmapped')) { unmapped.push(r); break; }
       }

@@ -12,7 +12,7 @@
    removed, taken) and just counts for the cards kept at the end of a turn. */
 import { CT, SYMNAME, plural, fmt, assert } from '../engine.gen.js';
 import { $, esc, setHTML, reduceMotion, EASE } from './dom.js';
-import { S, MAP, UI, NET, G, online, isAI } from './state.js';
+import { S, MAP, NET, G, online, isAI, passing } from './state.js';
 import { toast } from './dialogs.js';
 import { render, after } from './frame.js';
 import { cardHTML } from './cards.js';
@@ -41,7 +41,10 @@ function checkSize(F){
 }
 /* a step's caption: only what its cards don't show (owner: the card's name and effect are on its face; wide captions pushed
    steps out of the row). Pointing at the step says everything in words. */
-function feedCap(g){
+/* (its words in one span: the caption box is a flex box, where bare text beside an element is its own item and loses the
+   space between them: "1space") */
+const feedCap=g=>{const c=capWords(g);return c?`<span>${c}</span>`:'';};
+function capWords(g){
   const mark=g.arr?'<b>El Dorado</b>':g.bl?`blockade <b>${g.bl}</b>`:'';
   switch(g.k){
     case 'move':case 'native':return mark||(g.n?`<b>${g.n}</b> ${g.n===1?'space':'spaces'}`:'');
@@ -59,7 +62,7 @@ function stepHTML(g,attr,pl){
   const tip=` title="${esc(stepWords(g,pl))}"`;
   if(PILL[g.k])return`<div class="fg fend f-${g.k}" ${attr}${tip}><div class="fpill">${PILL[g.k]}</div><div class="fcap"></div></div>`;
   const mini=(t,got)=>`<div class="fc${got?' got':''}" data-t="${t}"><div class="mcard">${cardHTML(t)}</div></div>`;
-  return`<div class="fg f-${g.k}" ${attr}${tip}><div class="frc"><div class="fcs">${g.ts.map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap">${feedCap(g)}</div></div>`;
+  return`<div class="fg f-${g.k}" ${attr}${tip}><div class="frc"><div class="fcs">${g.ts.map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap"></div></div>`; // (the caption: written by stepsInto, its one writer)
 }
 /* what makes a drawn step out of date: a move that went further, a blockade taken, an arrival */
 const stepSig=g=>`${g.n||0}|${g.bl||''}|${g.arr?1:0}|${g.log.length}`;
@@ -70,8 +73,8 @@ function stepsInto(box,t){
   const pl=S.players[t.pl],added=[];
   for(const el of[...box.children]){const[k,i]=(el.dataset.s||'').split('|');if(k!==t.key||+i>=t.steps.length)el.remove();}
   t.steps.forEach((g,i)=>{const key=t.key+'|'+i,v=stepSig(g);let el=box.querySelector(`[data-s="${key}"]`);
-    if(!el){box.insertAdjacentHTML('beforeend',stepHTML(g,`data-s="${key}"`,pl));el=box.lastElementChild;el.dataset.v=v;added.push({el,g});}
-    else if(el.dataset.v!==v){el.dataset.v=v;el.querySelector('.fcap').innerHTML=feedCap(g);el.title=stepWords(g,pl);}});
+    if(!el){box.insertAdjacentHTML('beforeend',stepHTML(g,`data-s="${key}"`,pl));el=box.lastElementChild;el.dataset.v=v;setHTML(el.querySelector('.fcap'),feedCap(g));added.push({el,g});}
+    else if(el.dataset.v!==v){el.dataset.v=v;setHTML(el.querySelector('.fcap'),feedCap(g));el.title=stepWords(g,pl);}});
   return added;
 }
 /* ---------- a step in words: its journal entries (the play, and the blockade taken or El Dorado reached) ---------- */
@@ -185,7 +188,7 @@ function update(){
   const t=LATEST=turnsOf(S.log).filter(t=>!t.sys).pop()||null,watched=!!t&&feedWatch(t.pl);
   if(HOVER&&!HOVER.el.isConnected)HOVER=null; // (the step pointed at is gone)
   if(HOVER)setTrail(HOVER.paths,HOVER.color);else setTrail(watched&&MODE!=='off'?t.steps.flatMap(g=>g.paths):[],t?S.players[t.pl].color:'');
-  if(G.replay||UI.cover||MODE!=='center'||!geo.recapFits){hide();return;} // (no room for six cards: owner, 2026-10-01, hidden rather than squeezed)
+  if(G.replay||passing()||MODE!=='center'||!geo.recapFits){hide();return;} // (no room for six cards: owner, 2026-10-01, hidden rather than squeezed)
   if(!F.firstElementChild)F.innerHTML='<div class="frow"></div>'; // (nothing played yet: the row keeps its place, so the box doesn't change size)
   const row=F.firstElementChild;
   if(!t){for(const el of[...row.children])el.remove();}
