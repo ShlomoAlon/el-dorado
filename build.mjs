@@ -77,4 +77,9 @@ writeFileSync(new URL('./public/index.html', import.meta.url),
 writeFileSync(new URL('./build/artifact.html', import.meta.url), withFonts(shell, artFonts) + '\n' + script({ b64: netBin.toString('base64') }));
 // the live AI-training page (/train.html): a standalone page, copied as is
 writeFileSync(new URL('./public/train.html', import.meta.url), r('./src/client/train.html'));
+// the first round trip: the page (the start screen, whole) must fit in the ~14 KB a server sends before waiting for the
+// browser; gzip is the larger of the two compressions browsers get
+{ const gz = (await import('node:zlib')).gzipSync(readFileSync(new URL('./public/index.html', import.meta.url)), { level: 9 }).length;
+  if (gz > 14000) { console.error(`public/index.html is ${gz} bytes compressed: over the 14,000 of the first round trip`); process.exit(1); }
+  console.log(`index.html ${gz} bytes compressed (${14000 - gz} to spare in the first round trip)`); }
 console.log('built public/index.html, public/train.html, src/engine.gen.js, build/artifact.html');

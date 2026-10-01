@@ -25,6 +25,7 @@ const res = await Promise.all([
   ...(online ? [['online', 'node test/online.cjs']] : []),
 ].map(run));
 // the timing measurements (frame costs, wheel latency) need a quiet machine: they run once everything else has finished
+res.push(await run(['firstpaint', 'node test/firstpaint.cjs'])); // (timed: run alone) the start screen drawn within 100 ms of the HTML arriving
 res.push(await run(['frames', 'node test/frames.cjs']));
 if (full) res.push(await run(['render', 'node test/render.cjs']));
 for (const r of res) { const last = r.out.trim().split('\n').filter(l => l.trim()).pop() || ''; console.log(`${r.code ? 'FAIL' : 'ok  '} ${r.name.padEnd(7)} ${String(r.s).padStart(3)} s  ${last.slice(0, 110)}`); }
