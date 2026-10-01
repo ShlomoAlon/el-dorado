@@ -99,5 +99,13 @@ off), or regressions. Ordered by how much they hurt.
 - **A5 board wanders: partly.** It no longer moves at turn changes (7f5113d). What the recap's second line does to the
   board (refit, reserve room, or cover) waits on the owner; the fit, the follow and the board check leave the prompt's
   side out until then.
+- **A2 pass-and-play leak: done** (844cf01). **A3 dead-end purchases: done** (e498a10). **A4 extra Confirm: done**
+  (04f0f9e). **A6 text: "1space" done** (c6e0eea, with a check that words never run together); cut-off titles, chips
+  and the AI dropdown still to do.
+- **Open, found by the stricter checks under load (intermittent, not yet explained):** (1) a phone game where the
+  explorer to move sat under the market, 126 px right of where the camera's numbers put it (no glide in the log);
+  (2) 1920x1080 replay with the market closed: the board's origin is 105 px right of the game area's left edge, which
+  the fit assumes are the same (A7's column assumptions); (3) render test: 3 pixels differ while holding the board;
+  (4) online: a recap caption rebuilt unchanged once. Each check message now carries the numbers needed.
 - Found on the way (not in the report): a pressed card waited for something else to redraw (b704e7e: every UI change
   now asks for a frame; the up-to-date check runs after every input). New owner question: B13.
