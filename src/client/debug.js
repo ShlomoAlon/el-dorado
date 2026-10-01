@@ -41,9 +41,11 @@ export function checksInit(during) {
   const sig = n => n.outerHTML.replace(/ class="([^"]*)"/g, (m, c) => ' class="' + c.split(' ').filter(x => x !== 'new').join(' ') + '"').replace(/opacity: [\d.]+;\s*/g, '').replace(/ style=""/g, '');
   const judge = churnJudge = list => {
     const moved = new Set(), gone = new Map();
-    for (const m of list) for (const n of m.removedNodes) if (n.nodeType === 1) { if (n.isConnected) moved.add(n); else if (n.childElementCount) gone.set(sig(n), n); }
+    // (a rebuild puts the same thing back in the same place: an element removed from one box and an identical one added
+    // to another are two changes, e.g. one step's caption changed while a new step got the old words)
+    for (const m of list) for (const n of m.removedNodes) if (n.nodeType === 1) { if (n.isConnected) moved.add(n); else if (n.childElementCount) { const k = sig(n); (gone.get(k) || gone.set(k, new Set()).get(k)).add(m.target); } }
     if (!gone.size) return;
-    for (const m of list) for (const n of m.addedNodes) if (n.nodeType === 1 && n.isConnected && !moved.has(n) && gone.has(sig(n))) {
+    for (const m of list) for (const n of m.addedNodes) if (n.nodeType === 1 && n.isConnected && !moved.has(n) && (gone.get(sig(n)) || new Set()).has(m.target)) {
       const cls = n.getAttribute('class'), pc = n.parentNode && n.parentNode.getAttribute && n.parentNode.getAttribute('class'), who = ((n.closest('[id]') || {}).id || '?') + ' ' + (pc ? '.' + pc.split(' ')[0] + ' > ' : '') + n.tagName.toLowerCase() + (cls ? '.' + cls.split(' ')[0] : '');
       const play = inPlay(); churn.push({ who, play, html: sig(n).slice(0, 160), parent: n.parentNode && n.parentNode.outerHTML.slice(0, 80) }); diag('churn: rebuilt unchanged ' + who);
       if (play) assert(false, 'view: a frame writes only what changed (rebuilt unchanged content in ' + who + ': ' + sig(n).slice(0, 100) + ')');
