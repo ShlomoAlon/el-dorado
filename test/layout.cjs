@@ -35,6 +35,7 @@ const CHECK = () => {
   add('#rdock button, #rdock input, #rdock #rbPos', 'replay control', 'dock');
   add('#rside', 'bot view', 'side');
   add('#lside', 'history column', 'side');
+  add('#allc:not([hidden]) #allClose', 'All cards close', 'overlay'); // (an overlay's own controls sit on nothing else)
   if (!vis(document.querySelector('#histBtn'))) bad.push('history button not visible');
   // the history column (when shown): its own cell, with its turns
   const hc = document.querySelector('#lside');
@@ -46,6 +47,9 @@ const CHECK = () => {
   const hit = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
   for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
     const a = items[i], b = items[j]; if (a.group === b.group) continue;
+    // (an overlay covers the game: its own controls may lie over the game's content, but never on the top bar's controls,
+    // which stay readable through it)
+    if ((a.group === 'overlay' || b.group === 'overlay') && ![a.group, b.group].some(g => g === 'hud' || g === 'chips')) continue;
     if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
     if (hit(a.r, b.r)) bad.push(`${a.name} overlaps ${b.name}`); }
   // 3. the hand: every card at least half visible, and never under a control
@@ -64,7 +68,10 @@ const CHECK = () => {
     await p.goto(url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     // normal play: start a local game from the setup screen
     await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
-    const states = [['play', null], ['history on the left', async () => { await p.click('#histBtn', { timeout: 5000 }); }],
+    const states = [['play', null],
+      // the All cards overlay over the game (from its tile; where the market is too narrow, the Market button opens it)
+      ['All cards open', async () => { await p.click(await p.evaluate(() => { const t = document.querySelector('#allTile'); return t && t.offsetParent && !document.querySelector('#mkt').classList.contains('cramped') ? '#allTile' : '#mktBtn'; }), { timeout: 5000 }); await p.waitForSelector('#allc:not([hidden])', { timeout: 5000 }); }],
+      ['history on the left', async () => { await p.click('#histBtn', { timeout: 5000 }); }],
       ['history hidden', async () => { await p.click(await p.evaluate(() => getComputedStyle(document.querySelector('#lside')).position === 'fixed') ? '#lside .hx' : '#histBtn', { timeout: 5000 }); }],
       ['play, market closed', async () => { await p.click('#histBtn', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }], // (back under the prompt)
       // another player's turn as a recap under the prompt (more steps than fit on a phone), market closed and open

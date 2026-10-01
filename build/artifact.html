@@ -267,7 +267,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .mcard{--cw:86px;position:relative;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1)}
 .cnt{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;border-radius:11px;background:#0a1210;border:1px solid var(--line2);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;font-variant-numeric:tabular-nums;z-index:4}
 #allc{position:absolute;inset:0;z-index:40;background:rgba(4,9,7,.86);overflow-y:auto;overscroll-behavior:contain;animation:fade .2s}
-.allc-in{max-width:1080px;margin:0 auto;padding:64px 20px 40px}
+.allc-in{--allTop:64px;max-width:1080px;margin:0 auto;padding:0 20px 40px} /* (--allTop: the top bar's band, which the heading covers) */
 .allc-sect{margin-top:18px}
 .allc-sect h3,.allc-head h2{font-family:var(--display);font-weight:400;display:flex;align-items:baseline;gap:12px;margin:0 0 14px;color:var(--gold2)}
 .allc-head h2{font-size:26px}
@@ -276,7 +276,11 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .agrid{display:flex;flex-wrap:wrap;gap:22px 16px;--mw:112px}
 .agrid .mslot{filter:drop-shadow(0 8px 14px rgba(0,0,0,.5));animation:rise .3s var(--ease) backwards}
 .agrid .mslot:hover{transform:translateY(-4px)}
-#allClose{position:fixed;top:14px;right:16px;z-index:41;width:36px;height:36px;font-size:17px}
+/* the overlay's close button is in its own heading row (never over the top bar's controls), which stays in view below the
+   top bar while the lists scroll */
+.allc-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 -20px 14px;padding:calc(var(--allTop) + 6px) 20px 10px;background:rgba(4,9,7,.97)}
+.allc-head h2{margin:0}
+#allClose{flex:none;width:36px;height:36px;font-size:17px}
 .sclose{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:rgba(0,0,0,.35);cursor:pointer;display:grid;place-items:center;font-size:15px;color:var(--muted)}
 .sclose:hover{color:var(--text)}
 #menu.closing{opacity:0;transition:opacity .16s}
@@ -519,7 +523,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   .alltile small{font-size:8px}
   #mkt .cnt{min-width:15px;height:15px;font-size:8.5px;top:-5px;right:-4px;padding:0 3px}
   .agrid{--mw:98px;gap:18px 12px;justify-content:center}
-  .allc-in{padding:58px 12px 30px}
+  .allc-in{--allTop:58px;padding:0 12px 30px}
   .pstack{width:54px;height:76px}#discStack .mcard{--cw:54px}
   #actBtns{bottom:calc(16px + 76px + 34px)}
   .zoomctl{top:auto;bottom:calc(16px + 76px + 34px);transform:none;left:12px}
@@ -564,9 +568,8 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
   <div id="prompt" class="glass"><div id="ptxt"><span id="turnTimer" class="timer" hidden></span><span id="pmsg"></span></div><div id="feed" hidden aria-live="polite"></div></div>
   <div id="mkt"><div id="market"></div></div>
   <div id="allc" hidden>
-    <button class="sclose" id="allClose" aria-label="Close">✕</button>
     <div class="allc-in">
-      <div class="allc-head"><h2>All cards <span id="buyState"></span></h2></div>
+      <div class="allc-head"><h2>All cards <span id="buyState"></span></h2><button type="button" class="sclose" id="allClose" aria-label="Close">✕</button></div>
       <div class="allc-sect"><h3>Market</h3><div id="allMarket" class="agrid"></div></div>
       <div class="allc-sect"><h3>Reserve <span id="resState"></span></h3><p class="note" id="resNote" style="margin:-6px 0 14px"></p><div id="reserve" class="agrid"></div></div>
     </div>
