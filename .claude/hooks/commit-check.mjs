@@ -1,9 +1,10 @@
 // The commit check (CLAUDE.md "Fixing bugs"): every commit says whether it fixes a bug and, if so, what kind of fix it is.
 // The message must have:
 //   Fix: none                      not a bug fix (a feature, docs, tooling)
-//   Fix: ROOT | PARTIAL | HACK     a bug fix, with two more lines:
-//   Decision: <the design decision that made the bug possible, and what the fix changes about it>
-//   Ratchet: <the assertion (or test) that fails if the bug comes back, or "none" and why>
+//   Fix: ROOT | PARTIAL | HACK     a bug fix, with three more lines (CLAUDE.md "Fixing bugs", step 8):
+//   Decision: <the design decision that made the bug possible, why it was a mistake, what the fix changes about it>
+//   Ratchet: <the assertions that fail if it comes back, or "none" and why>
+//   Coverage: <the integration test that now trips them, and that it failed before the fix>
 // A HACK also needs "Owner OK: <when the owner agreed>".
 // One check, two triggers:
 //   - Claude Code hook (PreToolUse on Bash, .claude/settings.json): reads the tool call on stdin; exit 2 blocks the command
@@ -16,6 +17,7 @@ function problems(msg) {
   else if (kind !== 'none') {
     if (!/^\s*Decision: \S.{15,}/m.test(msg)) bad.push('a line "Decision: <the design decision behind the bug, and what the fix changes about it>"');
     if (!/^\s*Ratchet: \S.{3,}/m.test(msg)) bad.push('a line "Ratchet: <the assertion that fails if it comes back, or none and why>"');
+    if (!/^\s*Coverage: \S.{10,}/m.test(msg)) bad.push('a line "Coverage: <the integration test that now trips the assertion, and that it failed before the fix>"');
     if (kind === 'HACK' && !/^\s*Owner OK: \S/m.test(msg)) bad.push('a line "Owner OK: <when the owner agreed to this hack>"');
   }
   return bad;
