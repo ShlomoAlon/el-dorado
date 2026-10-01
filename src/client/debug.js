@@ -49,6 +49,19 @@ export function checksInit(during) {
       if (play) assert(false, 'view: a frame writes only what changed (rebuilt unchanged content in ' + who + ')');
     }
   };
+  // words never run together: text written beside an element in a flex or grid box is its own item there, and the space
+  // between them is dropped ("1space") unless a margin or a gap keeps them apart. Measured on what was written, once the
+  // frame that wrote it is drawn (a timer after it: never while the views update)
+  const wq = new Set(); let wt = 0;
+  const words = () => { wt = 0; const rg = document.createRange();
+    for (const t of wq) { const p = t.parentElement, x = t.data; if (!p || !t.isConnected || !x.trim() || !/^(inline-)?(flex|grid)$/.test(getComputedStyle(p).display)) continue;
+      rg.selectNodeContents(t); const tr = rg.getBoundingClientRect(); if (!tr.width) continue; // (not shown)
+      const touch = (n, before) => { if (!n || n.nodeType !== 1) return false; const r = n.getBoundingClientRect(); return r.width > 0 && (before ? tr.left - r.right < 2 : r.left - tr.right < 2); };
+      if ((/^\s/.test(x) && touch(t.previousSibling, true)) || (/\s$/.test(x) && touch(t.nextSibling, false))) assert(false, 'view: words never run together ("' + p.textContent.trim().slice(0, 40) + '": text beside an element in a ' + getComputedStyle(p).display + ' box)'); }
+    wq.clear(); };
+  const texts = n => { if (n.nodeType === 3) wq.add(n); else if (n.nodeType === 1) { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); for (let t = w.nextNode(); t; t = w.nextNode()) wq.add(t); } };
+  new MutationObserver(list => { for (const m of list) { if (m.type === 'characterData') wq.add(m.target); else m.addedNodes.forEach(texts); } if (wq.size && !wt) wt = setTimeout(words, 50); })
+    .observe(document.body, { subtree: true, childList: true, characterData: true });
   churnMO = new MutationObserver(judge);
   churnMO.observe(document.getElementById('app'), { subtree: true, childList: true });
 }
