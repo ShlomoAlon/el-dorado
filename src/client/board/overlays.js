@@ -136,6 +136,7 @@ export function pulseDiscard() {
 /* ---------- another player's moves this turn: a dotted trail in their colour (feed.js says what) ---------- */
 let trailSig = '';
 export function setTrail(paths, color) {
+  assert(L.trail, 'view: the board layers exist before anything is drawn on them');
   const sig = color + JSON.stringify(paths); if (sig === trailSig) return; trailSig = sig; L.trail.innerHTML = '';
   for (const keys of paths) {
     if (keys.length < 2) continue; const d = keys.map((k, i) => { const h = xy(k); return (i ? 'L' : 'M') + h.x.toFixed(1) + ' ' + h.y.toFixed(1); }).join(' ');
@@ -148,6 +149,7 @@ export function setTrail(paths, color) {
 let targetsSig = '';
 export const overlaysPart = { name: 'overlays', 
   update() {
+    assert(L.hl && L.trail && L.path && L.bl, 'view: the board layers exist before anything is drawn on them');
     if (!S) return; // (a game on show has its board: showGame)
     // the targets changed (another card, another explorer, a move made): the path and tip shown were for the old ones
     const tsig = [...UI.targets.keys()].join(',') + '|' + UI.card + '|' + UI.piece;
