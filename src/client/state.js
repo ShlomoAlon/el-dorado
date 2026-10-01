@@ -3,6 +3,7 @@
 import { isActive, recState, replayCheck, recFinal, mapOf } from '../engine.gen.js';
 import { failed } from './boundary.js';
 import { load, store } from './store.js';
+import { render } from './frame.js';
 /* the game on show (the engine's functions take it as their first argument) and its board */
 export let S = null, MAP = null;
 export function setS(gs) { S = gs; if (gs) MAP = mapOf(gs); }
@@ -14,8 +15,12 @@ export const UI = { mode: 'idle', card: null, piece: 0, picks: [], targets: new 
 export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = []; UI.buy = null; UI.pending = null; }
 /* NET.S: the online game the server last sent (the game on show is online while it is that one); NET.seat: my seat in it;
    NET.clockEnd: when the turn clock runs out (local time) */
-export const NET = { available: false, cfg: null, user: null, token: null, ws: null, lobbyWs: null, room: null, S: null, seat: -1, connected: false, clockEnd: null,
-  canUndo: false, busy: false, heard: 0, status: '', rooms: [], active: null, code: null, pendingRoom: null, viewUser: null, leaving: false }; // leaving: resigned, going to the Online screen once the server has it
+/* Any change to NET asks for a frame (render): its flags (busy, connected, canUndo, status, …) are written in many places
+   (messages, timers, the socket), and the page shows them; none of those places has to remember to redraw. A value written
+   again unchanged asks nothing. (The view never writes NET while drawing, so this can't loop.) */
+export const NET = new Proxy({ available: false, cfg: null, user: null, token: null, ws: null, lobbyWs: null, room: null, S: null, seat: -1, connected: false, clockEnd: null,
+  canUndo: false, busy: false, heard: 0, status: '', rooms: [], active: null, code: null, pendingRoom: null, viewUser: null, leaving: false }, // leaving: resigned, going to the Online screen once the server has it
+  { set(t, k, v) { if (!Object.is(t[k], v)) { t[k] = v; render(); } return true; } });
 /* rec: the local game's record (engine recNewGame; saved with the game, kept as a replay once it's over).
    replay: set while watching a replay (replay.js): nothing can be played then */
 export const G = { rec: null, replay: null };

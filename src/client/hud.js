@@ -97,7 +97,7 @@ let labelsChecked=false;
 onGeo(sized=>{if(sized)labelsChecked=false;});
 function checkLabels(B){
   for(const s of SLOTS){const el=B.querySelector('.'+s),keep=el.textContent;
-    for(const b of Object.values(BTN))if(b.s===s){el.textContent=b.t;assert(el.scrollWidth<=el.clientWidth+1,'view: every turn button\'s label fits its slot ('+b.t+')');}
+    for(const b of Object.values(BTN))if(b.s===s){el.textContent=b.t;assert(el.scrollWidth<=el.clientWidth+1,"view: every turn button's label fits its slot ("+b.t+")");}
     el.textContent=keep;}
 }
 function btnWire(B,btns){

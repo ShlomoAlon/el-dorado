@@ -19,6 +19,10 @@ const CHIP={j:'rgba(10,40,22,.42)',w:'rgba(8,34,64,.42)',v:'rgba(255,248,225,.5)
 
 /* board layers other modules draw into (made with the board) */
 export const L={};
+/* the overlay layers (highlights, trail, path, blockades), on #board2: made at startup and again with each board drawn, so
+   anything that draws on them (the recap's trail, the targets) never depends on a board having been drawn first */
+export function boardLayers(){const svg2=$('#board2');svg2.innerHTML='';
+  L.hl=sv('g',null,svg2);L.trail=sv('g',{'pointer-events':'none'},svg2);L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);}
 /* HTML text at a board point: size in board units, anchor start / middle / end, baseline at y (like SVG text) */
 const baseCache={};
 function baselineOf(font){if(baseCache[font]!=null)return baseCache[font];
@@ -47,12 +51,12 @@ export function buildBoard(){
   drawn=t;
   const svg=$('#board'),svg2=$('#board2'),lab=$('#blabels');
   for(const c of[...svg.children])if(c!==DEFS)c.remove(); // (the definitions never change: drawn once, kept)
-  svg2.innerHTML='';lab.innerHTML='';$('#blabels2').innerHTML='';
+  lab.innerHTML='';$('#blabels2').innerHTML=''; // (the overlay layers: boardLayers, below)
   for(const s of[svg,svg2]){s.setAttribute('width',layout().w);s.setAttribute('height',layout().h);s.setAttribute('viewBox',`${layout().minX} ${layout().minY} ${layout().w} ${layout().h}`);}
   for(const id of['#pieces','#bfx']){const e=$(id);e.style.width=layout().w+'px';e.style.height=layout().h+'px';}
   if(!DEFS)DEFS=drawDefs(svg);
   L.plates=sv('g',null,svg);L.terrain=sv('g',null,svg);L.city=sv('g',null,svg);
-  L.hl=sv('g',null,svg2);L.trail=sv('g',{'pointer-events':'none'},svg2);L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);
+  boardLayers();
   // board plates (the physical boards): drop shadow + rim
   const byTile=new Map();for(const h of MAP.hexes.values()){if(!byTile.has(h.tile))byTile.set(h.tile,[]);byTile.get(h.tile).push(h);}
   for(const[,hs]of byTile){const g=sv('g',null,L.plates);for(const h of hs){const{x,y}=xy(h.k);sv('polygon',{points:hexPts(x+2,y+6,R+2),fill:'rgba(0,0,0,.45)'},g);}}

@@ -1,7 +1,7 @@
 /* REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
    The log holds the seeds and every action; the engine rebuilds each position (replay), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
-import { CT, LOG_MAX, hexAt, replayCheck, replay, applyAction, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
+import { CT, LOG_MAX, hexAt, replayCheck, replay, applyAction, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32, assert } from '../engine.gen.js';
 import { $, esc, setHTML, setQuery } from './dom.js';
 import { S, setS, UI, G, online, clearSelection } from './state.js';
 import { render, resetView } from './frame.js';
@@ -53,8 +53,15 @@ function actionKey(a,st){const ty=id=>st.cards[id]||id,tys=ids=>(ids||[]).map(ty
     case'buy':return`buy ${a.type} ${tys(a.cards)}`;case'transmit':return`transmit ${a.type}`;case'action':return`action ${ty(a.card)}`;
     case'trash':return`trash ${tys(a.cards)}`;case'end':return`end ${tys(a.keep)}`;default:return a.t;}}
 /* the advice takes a moment (the advisor weighs many whole turns), so it is worked out once the viewer stops on a position */
-let adviceT=0;
-function adviceSoon(){clearTimeout(adviceT);const R=G.replay,i=R.i;adviceT=setTimeout(()=>{if(G.replay===R&&R.i===i&&!R.timer&&R.side){replayAdvice();render();}},250);}
+/* the advice for the position on show, a short pause after the position last changed (stepping quickly computes none for
+   the positions passed). Keyed by the position: a redraw at the same position (a hover, a check's extra frame) doesn't
+   restart the wait, or a steady stream of redraws would starve it */
+let adviceT=0,adviceFor=null,waitFor=null,waitSince=0; // (adviceFor, waitFor: the replay and position waited for, as R.adv's key: a replay of its own, and its position)
+const adviceLog=[]; // (the advice wait's last steps, for the assertion's message)
+const adviceNote=x=>{adviceLog.push(Math.round(performance.now())+' '+x);if(adviceLog.length>4)adviceLog.shift();};
+function adviceSoon(){const R=G.replay,at=R.i;if(adviceT&&adviceFor&&adviceFor.R===R&&adviceFor.at===at)return;clearTimeout(adviceT);adviceFor={R,at};adviceNote('wait '+at);
+  adviceT=setTimeout(()=>{adviceT=0;const why=G.replay!==R?'another replay':R.i!==at?'moved':R.timer?'playing':!R.side?'side closed':'';
+    adviceNote('fired '+at+(why?' (not computed: '+why+')':''));if(!why){replayAdvice();render();}},250);}
 function startReplay(log,id){
   const from=MENU.dlg.open?MENU.screen:null; // the menu screen it was opened from: exiting goes back there
   if(online())exitOnline(); // a finished online game (the menu doesn't open replays during one in progress)
@@ -155,7 +162,9 @@ function replayBar(){
   if(ev&&!S.over){
     h+=`<div class="rwh radv">${esc(A.name)}’s turn for ${who}</div>`;
     if(R.timer)h+=`<p class="m">Pause to see it.</p>`;
-    else if(!(R.i in R.adv)){h+=`<p class="m">${esc(A.name)} is thinking…</p>`;adviceSoon();}
+    else if(!(R.i in R.adv)){h+=`<p class="m">${esc(A.name)} is thinking…</p>`;adviceSoon();
+      // the advice for a position arrives: still "thinking" at the same position (side open, not playing) after 5 s means its computation was starved or lost
+      if(!waitFor||waitFor.R!==R||waitFor.at!==R.i||R.timer){waitFor={R,at:R.i};waitSince=performance.now();}else{const w=performance.now()-waitSince;assert(w<5000,'view: the advice for the replay position on show arrives (waited '+Math.round(w)+' ms; timer '+(adviceT?'pending for '+adviceFor.at+(adviceFor.R===R?'':' of another replay'):'none')+', net '+(AIX.net?'loaded':'not loaded')+'; '+adviceLog.join(', ')+')');}}
     else if(!(steps=R.adv[R.i]))h+=`<p class="m">No plan for this position.</p>`;
     else{
       // compared with what the player did, step by step: m steps of the plan match theirs (✓), then what they did instead
