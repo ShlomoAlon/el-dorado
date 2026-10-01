@@ -102,6 +102,16 @@ off), or regressions. Ordered by how much they hurt.
 - **A2 pass-and-play leak: done** (844cf01). **A3 dead-end purchases: done** (e498a10). **A4 extra Confirm: done**
   (04f0f9e). **A6 text: "1space" done** (c6e0eea, with a check that words never run together); cut-off titles, chips
   and the AI dropdown still to do.
+- **A9 wrong room code: done** (8aff8a0: said in 0.1 s, the code leaves the address). **A10: rank done** (b2dde3f, one
+  ladder definition); unrounded ratings in the API: the page rounds every rating it shows, so storing them rounded (which
+  changes the rating arithmetic) is the owner's call. **A13 network versioning: done** (595e6f1, verified live: hashed
+  name, cached for good). **A14 menu failures: done** (1d12be0). **A15 record privacy: done** (a036898).
+- **A12 red 0:00 through AI turns: not reproduced** (online test: a 5 s turn timing out before two AIs, clock hidden
+  through their turns; de65430 keeps that step). Differences from the owner's setup: the live server's alarms, 60/90 s
+  turns, the tab possibly in the background while the AIs played, rated or quick-match rooms. Needs his details.
+- **A16 Rated toggle: moved to B.** No path between the lobby's toggle and the Create form exists in the code (separate
+  radios); the Create form keeping its own last choice is the native behaviour the menu was designed around. Whether it
+  should reset each time is the owner's call.
 - **Open, found by the stricter checks under load (intermittent, not yet explained):** (1) a phone game where the
   explorer to move sat under the market, 126 px right of where the camera's numbers put it (no glide in the log);
   (2) 1920x1080 replay with the market closed: the board's origin is 105 px right of the game area's left edge, which

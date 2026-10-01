@@ -16,7 +16,7 @@ const T = report('flows');
   const check = async (name, f, a, ms) => T.ok(name, await until(f, a, ms));
   const idle = async () => { await until(() => !window.__ED.UI.anim, null, 10000); await settle(p); };
   const center = async sel => { const r = await p.evaluate(s => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, sel); if (!r) throw new Error('not found: ' + sel); return r; };
-  // seat 2 is an AI (Fawcett: the network, fetched from /ai/first.bin when it first moves) for the AI-turn step. The order
+  // seat 2 is an AI (Fawcett: the network, fetched from /ai/first.<hash>.bin when it first moves) for the AI-turn step. The order
   // around the table is dealt at random: a new page until the person moves first (the steps below start with their turn)
   for (let k = 0; ; k++) {
     await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);

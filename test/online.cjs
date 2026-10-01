@@ -30,6 +30,22 @@ const T = report('online');
     const mkRoom = (p, o) => p.evaluate(async o => { const r = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + __ED.NET.token }, body: JSON.stringify(o) });
       const j = await r.json(); __ED.joinRoom(j.code); return j.code; }, o);
 
+    // ---------- 0. a code with no room behind it: said at once (not after a minute of reconnecting), and the code leaves the address
+    { const W = await open('W'); await signIn(W, 'Walt'); const t0 = Date.now();
+      await W.evaluate(() => __ED.joinRoom('ZZZZ'));
+      const said = await wait(W, () => /no room/i.test(document.querySelector('#menu').textContent) && !/[?&]room=/.test(location.search), null, 3000);
+      T.ok('wrong room code: said within 3 s, and the code leaves the address', said, ((Date.now() - t0) / 1000).toFixed(1) + ' s; ' + await W.evaluate(() => (__ED.NET.status || '') + ' ' + location.search)); }
+    // ---------- 0b. the server out of reach: each request that fails says so, in the page's words (a failed refresh keeps
+    //      what was loaded before, and says that too)
+    { const V = await open('V'); await signIn(V, 'Vera');
+      await V.click('label:has(input[name=otab][value=board])'); await wait(V, () => document.querySelector('#lbList .lb'));
+      await V.click('label:has(input[name=otab][value=play])'); await V.waitForTimeout(5200); // (a tab refreshes at most every 5 s)
+      await V.route('**/api/**', r => r.abort('internetdisconnected'));
+      await V.click('label:has(input[name=otab][value=board])');
+      T.ok('offline: a failed refresh says so, and keeps the list', await wait(V, () => /Could not refresh the leaderboard/.test(document.querySelector('#hErr').textContent) && document.querySelector('#lbList .lb'), null, 5000), await V.evaluate(() => document.querySelector('#hErr').textContent));
+      await V.click('label:has(input[name=otab][value=play])'); await V.click('#cGo');
+      T.ok('offline: Create room says the server is out of reach, in the page\'s words', await wait(V, () => /^Could not reach the server/.test(document.querySelector('#hErr').textContent), null, 5000), await V.evaluate(() => document.querySelector('#hErr').textContent));
+      await V.unroute('**/api/**'); }
     // ---------- 1. three people
     const A = await open('A'), B = await open('B'), C = await open('C');
     const ids = [await signIn(A, 'Alice'), await signIn(B, 'Bob'), await signIn(C, 'Cara')];
@@ -151,11 +167,15 @@ const T = report('online');
 
     // ---------- 3. unrated: nothing moves
     await A.click('#gNew'); await wait(A, () => document.querySelector('#menu').open);
-    await mkRoom(A, { max: 3, turn: 60, course: 'first', rated: false });
+    await mkRoom(A, { max: 3, turn: 5, course: 'first', rated: false }); // (a 5 s clock: the person's turn runs out, then the AIs play)
     await wait(A, () => __ED.NET.room && __ED.NET.room.seats.length === 1);
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 2);
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 3);
     await A.click('#rlStart'); await wait(A, () => __ED.online());
+    // the person's turn runs out with the AIs to play next: their turns show no clock (the page asserts it every half second)
+    T.ok('timeout before AI turns: the turn passes', await wait(A, () => __ED.S.log.some(l => l.e === 'timeout') && __ED.S.players[__ED.S.cur].ai, null, 60000));
+    T.ok('timeout before AI turns: no clock while the AIs play', await wait(A, () => __ED.S.players[__ED.S.cur].ai && document.querySelector('#turnTimer').hidden, null, 3000));
+    await A.waitForTimeout(2500); // (the AIs play on: the clock's half-second checks run meanwhile)
     await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('unrated game ends as unrated', await wait(A, () => __ED.S.over && __ED.NET.room.results && __ED.NET.room.results.unrated, null, 120000));
     const lbC = await board(A);

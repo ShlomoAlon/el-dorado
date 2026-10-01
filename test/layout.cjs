@@ -56,7 +56,7 @@ const CHECK = () => {
 
 (async () => {
   const b = await chromium.launch(); let fails = 0, checks = 0;
-  // served over http (as on the site), so the page can fetch the AI network (/ai/first.bin) for the replay's evaluation
+  // served over http (as on the site), so the page can fetch the AI network (/ai/first.<hash>.bin) for the replay's evaluation
   const srv = await serveStatic(), url = srv.url;
   const one = async ([w, h, dpr = 1]) => {
     const out = [];

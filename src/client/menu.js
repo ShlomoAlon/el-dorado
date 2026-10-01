@@ -2,7 +2,7 @@
    `hidden`; choices are native form controls that keep their own state (the Online tabs are pure CSS). This file wires
    them, reads them when they're used, and fills only the boxes that hold data (seats, rooms, leaderboard, profile,
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
-import { COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, recSecret, plural, shuffle } from '../engine.gen.js';
+import { COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, recSecret, plural, shuffle, assert } from '../engine.gen.js';
 import { $, esc, setHTML, setText, setQuery } from './dom.js';
 import { S, setS, UI, NET, G, clearSelection, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
@@ -94,7 +94,7 @@ function menuChange(e){
 }
 function menuClick(e){
   const b=e.target.closest('button');if(!b||b.disabled)return;
-  const err=t=>{mq('#hErr').textContent=t;};
+  const err=t=>{hubErr(t);};
   const run=f=>Promise.resolve().then(f).catch(x=>err(x.message));
   switch(b.id){
     case'sBack':menuClose();return;
@@ -187,16 +187,22 @@ export function roomsRender(){
 }
 /* the Online tabs show by themselves (CSS); this fetches what the shown tab needs (at most every 5 s) */
 const PROFILES={},FETCHED={};
-function fetchOnce(key,url,done){const t=FETCHED[key];if(t&&(t.busy||Date.now()-t.at<5000))return;FETCHED[key]={busy:true};
-  api(url).then(r=>{FETCHED[key]={at:Date.now()};done(r);}).catch(()=>{FETCHED[key]={at:Date.now()};});}
+/* the Online screen's error line: in the page's words (a browser's own error text never reaches a player) */
+function hubErr(t){assert(!/Failed to fetch|NetworkError|Load failed/.test(t),"view: an error is said in the page's words ("+t+")");mq('#hErr').textContent=t;}
+/* a tab's data, fetched at most every 5 s. A failed refresh says so (what is shown is what was loaded before), and the
+   next good one takes the message away */
+let fetchErr=null;
+function fetchOnce(key,url,done,what){const t=FETCHED[key];if(t&&(t.busy||Date.now()-t.at<5000))return;FETCHED[key]={busy:true};
+  api(url).then(r=>{FETCHED[key]={at:Date.now()};if(fetchErr===key){fetchErr=null;hubErr('');}done(r);},
+    e=>{FETCHED[key]={at:Date.now()};fetchErr=key;hubErr('Could not refresh '+what+': '+e.message+' What is shown was loaded before.');});}
 export function loadProfile(id){return api('/api/users/'+encodeURIComponent(id)).then(r=>{PROFILES[id]=r;});}
 function onlineTab(){
   if(!NET.user)return;const t=radio('otab');
-  if(t==='board')fetchOnce('lb','/api/leaderboard',r=>setHTML(mq('#lbList'),lbHTML(r.players)));
+  if(t==='board')fetchOnce('lb','/api/leaderboard',r=>setHTML(mq('#lbList'),lbHTML(r.players)),'the leaderboard');
   if(t==='me'){const id=NET.viewUser||myId(),own=id===myId();mq('#pfBack').hidden=own;mq('#meNameBox').hidden=!own;
     if(own&&document.activeElement!==mq('#meName'))mq('#meName').value=NET.user.name;
     setHTML(mq('#pf'),PROFILES[id]?profileHTML(PROFILES[id]):'<p class="note">Loading…</p>');
-    fetchOnce('pf:'+id,'/api/users/'+encodeURIComponent(id),r=>{PROFILES[id]=r;if((NET.viewUser||myId())===id)setHTML(mq('#pf'),profileHTML(r));});}
+    fetchOnce('pf:'+id,'/api/users/'+encodeURIComponent(id),r=>{PROFILES[id]=r;if((NET.viewUser||myId())===id)setHTML(mq('#pf'),profileHTML(r));},'the profile');}
 }
 const lbHTML=players=>players.length?`<div class="lb">${players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span class="m">${i+1}</span><span class="lbp"><button type="button" class="lbn${p.id===myId()?' me':''}" data-uid="${esc(p.id)}">${esc(p.name)}</button>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span class="m">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';
 const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
