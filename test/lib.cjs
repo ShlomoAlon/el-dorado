@@ -29,9 +29,11 @@ async function startServer() {
     { cwd: ROOT, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; p.stdout.on('data', d => out += d); p.stderr.on('data', d => out += d);
   const url = `http://127.0.0.1:${port}/`, bugs = async id => (await fetch(url + 'api/bugs' + (id ? '?id=' + id : ''), { headers: { 'x-bugs-key': 'test-key' } })).json();
+  // sql(statement): run it on the server's own database (to set up a state no page can make, e.g. a retired AI's row)
+  const sql = cmd => require('child_process').execFileSync('npx', ['wrangler', 'd1', 'execute', 'DB', '--local', '--persist-to', dir, '--command', cmd], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   const stop = () => { try { process.kill(-p.pid, 'SIGTERM'); } catch (e) { /* expected: the server has already exited */ } fs.rmSync(dir, { recursive: true, force: true }); };
   for (let i = 0; i < 120; i++) {
-    try { const r = await fetch(url + 'api/config'); if (r.ok) return { url, stop, bugs }; } catch (e) { /* expected: not listening yet */ }
+    try { const r = await fetch(url + 'api/config'); if (r.ok) return { url, stop, bugs, sql }; } catch (e) { /* expected: not listening yet */ }
     if (p.exitCode !== null) break; await new Promise(r => setTimeout(r, 500));
   }
   stop(); throw new Error('wrangler dev did not start:\n' + out.slice(-2000));

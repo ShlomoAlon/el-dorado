@@ -24,6 +24,11 @@ const TURN_CHOICES = [60, 90, 120, 180, 300];
    a new instance of the worker (they start often) then costs one query. Bump SCHEMA_V when createSchema changes; the
    named AIs and their calibrated ratings are part of the stamp. */
 const SCHEMA_V = 2, SCHEMA = SCHEMA_V + ':' + E.AIS.map(A => A.id + '=' + A.rating).join(',');
+/* who is on the ladder (the leaderboard, and the rank a profile shows): players with rated games, and the named AIs still
+   playing (an AI no longer in the game, retired, leaves it). One definition for both: they once differed (the profile's
+   rank counted retired AIs the leaderboard left out) */
+E.assert(E.AIS.every(A => /^[a-z0-9_-]+$/.test(A.id)), 'AI ids are plain words (they are written into the ladder query)');
+const LADDER = `(games>0 OR bot IS NOT NULL) AND (bot IS NULL OR bot IN (${E.AIS.map(A => `'${A.id}'`).join(',')}))`;
 let schemaReady = null;
 function ensureSchema(env) {
   if (!schemaReady) schemaReady = checkSchema(env).catch(e => { schemaReady = null; throw e; });
@@ -290,14 +295,17 @@ export default {
         const u = await env.DB.prepare(`SELECT id,name,rating,games,wins,bot FROM users WHERE id=?`).bind(m0[1]).first();
         if (!u) return bad('No such player.', 404);
         const me = await authUser(req, env), own = !!me && me.id === u.id;
-        const rank = await env.DB.prepare(`SELECT COUNT(*)+1 AS r FROM users WHERE (games>0 OR bot IS NOT NULL) AND rating>?`).bind(u.rating).first();
+        const rank = await env.DB.prepare(`SELECT COUNT(*)+1 AS r FROM users WHERE ${LADDER} AND rating>?`).bind(u.rating).first();
+        if (env.DEV_AUTH === '1') { // (debug: a player on the leaderboard has the rank of their place on it, ties sharing one)
+          const top = (await env.DB.prepare(`SELECT id,rating FROM users WHERE ${LADDER} ORDER BY rating DESC LIMIT 100`).all()).results;
+          if (top.some(x => x.id === u.id)) E.assert(top.filter(x => x.rating > u.rating).length + 1 === rank.r, 'a profile\'s rank is its place on the leaderboard (' + u.name + ': rank ' + rank.r + ')'); }
         const g = await env.DB.prepare(`SELECT ${GAME_COLS},uids FROM replays WHERE game=1 AND uids LIKE ?${own ? '' : ' AND listed=1'} ORDER BY created DESC LIMIT ${REPLAYS_PER_PLAYER}`).bind('%,' + u.id + ',%').all();
         const games = g.results.map(r => ({ ...gameRow(r), seat: r.uids.split(',').filter(Boolean).indexOf(u.id) })); // seat: theirs in it
         return json({ user: { ...u, rank: rank.r }, games });
       }
       if (p === '/api/leaderboard') {
-        const r = await env.DB.prepare(`SELECT id,name,rating,games,wins,bot FROM users WHERE games>0 OR bot IS NOT NULL ORDER BY rating DESC LIMIT 100`).all();
-        return json({ players: r.results.filter(p => !p.bot || E.aiById(p.bot)) }); // retired AIs leave the list
+        const r = await env.DB.prepare(`SELECT id,name,rating,games,wins,bot FROM users WHERE ${LADDER} ORDER BY rating DESC LIMIT 100`).all();
+        return json({ players: r.results });
       }
       const user = await authUser(req, env);
       if (!user) return bad('Please sign in.', 401);
