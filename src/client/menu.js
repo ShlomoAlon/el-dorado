@@ -12,7 +12,7 @@ import { aiKick, aiNetLoad } from './ai.js';
 import { api, gsiMount, signOut, signedIn, joinRoom, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, exitOnline, resignOnline } from './online.js';
 import { loadReplayId, openReplay } from './replay.js';
 import { load, store } from './store.js';
-import { diag } from './debug.js';
+import { diag, CHECKS } from './debug.js';
 /* course list: official routes first; 'random' picks one of them */
 function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:courseById(id);}
 // (a room's course, as the server sends it: one this page doesn't know yet, from a newer version, shows as the first)
@@ -214,6 +214,16 @@ function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
 
 /* ---- the room lobby: drawn from the room the server sends; each part changes only when its data does ---- */
 export function showRoomLobby(){renderRoomLobby();menuOpen('room');}
+/* checks: the room's controls keep their place on the room screen as players join or leave (a second tap on Add AI lands
+   on the same AI). Measured as painted, in the next frame, from the top of the room screen (the menu around it is its own) */
+const roomAt={k:null,y:null,d:''};
+function roomPlace(){
+  if(!MENU.dlg.open||MENU.screen!=='room'||!NET.room){roomAt.k=null;return;}
+  const B=mq('#rlAIBox'),o=NET.room.opts,k=NET.code+'|'+(o?o.max:0),hid=B.hidden,y=B.offsetTop-B.closest('section').offsetTop,kids=[...B.closest('section').children].filter(e=>e.offsetHeight&&e.compareDocumentPosition(B)&Node.DOCUMENT_POSITION_FOLLOWING),
+    d=kids.map(e=>(e.id||e.className.split(' ')[0]||e.tagName)+'@'+e.offsetTop+':'+e.offsetHeight).join(' ');
+  if(roomAt.k===k&&!hid&&roomAt.y!=null)assert(Math.abs(y-roomAt.y)<1,"view: the room's controls keep their place as players join ("+Math.round(roomAt.y)+' -> '+Math.round(y)+'; above: '+roomAt.d+' -> '+d+')');
+  roomAt.k=k;roomAt.y=hid?null:y;roomAt.d=d;
+}
 export function renderRoomLobby(){
   const r=NET.room,o=r.opts,seats=r.seats,host=r.host===myId(),auto=!!(o&&o.auto),lobby=r.status==='lobby';
   const max=o?o.max:4,room=seats.length<max,rated=!(o&&o.rated===false),mine=seats.find(s=>s.uid===myId());
@@ -222,7 +232,9 @@ export function renderRoomLobby(){
     +(o?` ${courseName(o.course)} · ${auto?'':(o.pub===false?'private · ':'public · ')+o.max+' players max · '}${o.turn}s per turn · ${rated?'rated':'unrated'}`:'');
   mq('#lkIn').value=location.origin+location.pathname+'?room='+NET.code;
   mq('#rlCount').textContent=`Players ${seats.length}/${max}`;
-  setHTML(mq('#rlSeats'),seats.map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="seatrow"><span><i style="background:${s.color}"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note">(you)</span>':''}</span>${A?`<span class="lbp"><span class="note">${esc(A.tier)}</span>${host&&lobby?`<button type="button" class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note">${s.now?'wants to start · ':''}${s.uid===r.host&&!auto?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('')||'<p class="note">Connecting…</p>');
+  setHTML(mq('#rlSeats'),seats.map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="seatrow"><span><i style="background:${s.color}"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note">(you)</span>':''}</span>${A?`<span class="lbp"><span class="note">${esc(A.tier)}</span>${host&&lobby?`<button type="button" class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note">${s.now?'wants to start · ':''}${s.uid===r.host&&!auto?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('')
+    +(o?'<div class="seatrow open"><span class="note">Open seat</span></div>'.repeat(Math.max(0,max-seats.length)):'<p class="note">Connecting…</p>')); // (every seat the room holds has its row: a player joining fills one, and nothing below moves)
+  if(CHECKS)requestAnimationFrame(roomPlace);
   const ctl=host&&!auto&&lobby,aiOK=!!(o&&aiAllowed(o.course,o.max));
   mq('#rlAIBox').hidden=!ctl;mq('#rlAINo').hidden=aiOK;mq('#rlAIList').hidden=!aiOK||!room;mq('#rlFull').hidden=!aiOK||room;
   for(const b of mqa('[data-addai]'))b.disabled=!NET.connected; // (adding one is the server's: once it's connected)
