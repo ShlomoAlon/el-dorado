@@ -130,6 +130,12 @@ const T = report('online');
     // the turn clock: nobody acts, the turn ends by itself
     const cur1 = await A.evaluate(() => __ED.S.cur);
     T.ok('turn clock: the turn passes when time runs out', await wait(A, c => __ED.S.cur !== c && __ED.S.log.some(l => l.e === 'timeout'), cur1, 45000));
+    // a reload in the middle of the game comes straight back to it: the room's lobby is never shown on the way (the page
+    // opens no room screen before the room's first message says what it is)
+    await C.addInitScript(() => { setInterval(() => { const d = document.querySelector('#menu'), r = document.querySelector('section[data-screen=room]');
+      if (d && d.open && r && !r.hidden && getComputedStyle(d).display !== 'none') window.__lobbyShown = true; }, 5); });
+    await C.reload(); const backIn = await wait(C, () => window.__ED && __ED.online() && !document.querySelector('#menu').open, null, 15000);
+    T.ok('reload during a game: straight back to it, no lobby on the way', backIn && !(await C.evaluate(() => window.__lobbyShown)), 'back: ' + backIn);
     // two resign: the game is over for the third, rated
     // B leaves through the menu (Resign, then Leave game): the Online screen comes up as soon as the server has it
     await B.click('#menuBtn'); await B.click('#sResign'); await B.click('#rsYes');
