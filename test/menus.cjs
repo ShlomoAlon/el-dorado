@@ -14,6 +14,10 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
   const screen = s => `!document.querySelector('section[data-screen="${s}"]').hidden`;
   await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
   await check('start screen: three tabs, no Back or Replays buttons', () => document.querySelectorAll('#sMode label').length === 3 && !document.querySelector('[data-go]') && !document.querySelector('#sReplays'));
+  // keys an older version kept (playtest 2: eldorado-save-v4/-v5, -side, -rexp) are gone once the page loads; its own stay
+  await p.evaluate(() => { for (const k of ['eldorado-save-v4', 'eldorado-save-v5', 'eldorado-side', 'eldorado-rexp']) localStorage.setItem(k, '1'); localStorage.setItem('other-site', '1'); });
+  await p.reload(); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
+  await check('old keys are removed when the page loads, and only ours', () => !Object.keys(localStorage).some(k => /^eldorado-(save-v[45]|side|rexp)$/.test(k)) && localStorage.getItem('other-site') === '1');
   await p.click('#sMode label[data-v="online"]');
   await check('Online tab (this copy can\'t reach the server, and says so)', new Function(`return ${screen('online')} && !document.querySelector('#oOff').hidden`));
   // a game finished on this device is listed under Your games: its result first (all AIs here: who won), then the course

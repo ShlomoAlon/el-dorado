@@ -19,7 +19,7 @@ const hoverHooks = [];
 /* things drawn over the board in screen space (the hover tip) hide when the board moves */
 export function onViewMove(f) { hoverHooks.push(f); }
 const moved = () => { for (const f of hoverHooks) f(); };
-export function applyView() {
+function applyView() {
   if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; });
   scheduleSettle();
 }
