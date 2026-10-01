@@ -151,11 +151,15 @@ const T = report('online');
 
     // ---------- 3. unrated: nothing moves
     await A.click('#gNew'); await wait(A, () => document.querySelector('#menu').open);
-    await mkRoom(A, { max: 3, turn: 60, course: 'first', rated: false });
+    await mkRoom(A, { max: 3, turn: 5, course: 'first', rated: false }); // (a 5 s clock: the person's turn runs out, then the AIs play)
     await wait(A, () => __ED.NET.room && __ED.NET.room.seats.length === 1);
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 2);
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 3);
     await A.click('#rlStart'); await wait(A, () => __ED.online());
+    // the person's turn runs out with the AIs to play next: their turns show no clock (the page asserts it every half second)
+    T.ok('timeout before AI turns: the turn passes', await wait(A, () => __ED.S.log.some(l => l.e === 'timeout') && __ED.S.players[__ED.S.cur].ai, null, 60000));
+    T.ok('timeout before AI turns: no clock while the AIs play', await wait(A, () => __ED.S.players[__ED.S.cur].ai && document.querySelector('#turnTimer').hidden, null, 3000));
+    await A.waitForTimeout(2500); // (the AIs play on: the clock's half-second checks run meanwhile)
     await A.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('unrated game ends as unrated', await wait(A, () => __ED.S.over && __ED.NET.room.results && __ED.NET.room.results.unrated, null, 120000));
     const lbC = await board(A);
