@@ -9,6 +9,8 @@ export function addPart(p) { parts.push(p); }
 // a part that fails is a bug: logged and reported (boundary.js), and the other parts still update
 const safe = (f, what) => { try { f(); } catch (e) { console.error(what, e); failed(e, 'view ' + what); } };
 export function render() { if (!raf) raf = requestAnimationFrame(flush); }
+// a frame is due: the state has moved on and the page doesn't show it yet (checks judge the page only when it is up to date)
+export const frameDue = () => !!raf;
 import { diag, DEBUG, CHECKS, frameMark } from './debug.js';
 import { assert } from '../engine.gen.js';
 import { failed } from './boundary.js';

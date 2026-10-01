@@ -49,8 +49,10 @@ const T = report('flows');
   // 3. click a target space: the explorer walks there
   const before = await S(() => JSON.stringify(window.__ED.S.players[window.__ED.S.cur].pieces));
   await settle(p); const tgt = await center(`#board2 .tgt[data-t="${pick.ks[0]}"] polygon`);
+  // (a walk is noted when it starts: one hop is short, and a busy machine may poll only after it has ended)
+  await S(() => { const a = Element.prototype.animate; window.__walked = false; Element.prototype.animate = function (...x) { if (this.closest('#pieces')) window.__walked = true; return a.apply(this, x); }; });
   await p.mouse.move(tgt.x, tgt.y); await p.mouse.click(tgt.x, tgt.y);
-  await check('the explorer animates', () => window.__ED.UI.anim, null, 3000);
+  await check('the explorer animates', () => window.__walked, null, 3000);
   await idle();
   await check('click on a space moves', b => JSON.stringify(window.__ED.S.players[window.__ED.S.cur].pieces) !== b, before);
   await check('played card in the play area', () => document.querySelectorAll('#cards .card.inplay').length === 1);

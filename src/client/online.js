@@ -4,7 +4,7 @@ import {  } from '../engine.gen.js';
 import { S, setS, UI, NET, online, viewIdx, myId } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, modal, closeModal } from './dialogs.js';
-import { showHub, showRoomLobby, renderRoomLobby, roomsRender, loadProfile } from './menu.js';
+import { MENU, showHub, showRoomLobby, renderRoomLobby, roomsRender, loadProfile } from './menu.js';
 import { showGame, playEvents, afterChange } from './actions.js';
 import { sfx } from './sound.js';
 import { diag } from './debug.js';
@@ -22,9 +22,10 @@ export async function api(path,opts={}){
 export const HAS_SERVER=!(location.protocol==='file:'||/claude\.ai$|claudeusercontent/.test(location.hostname));
 export async function netInit(){
   if(!HAS_SERVER)return;
-  try{NET.cfg=await api('/api/config');NET.available=true;}catch(e){NET.available=false;return;}
-  NET.token=load('token');
-  if(NET.token){try{const r=await api('/api/me');NET.user=r.user;NET.active=r.active;loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));}catch(e){if(e.status===401){NET.token=null;store('token',null);}}}
+  // (both asked at once: one round trip; who's signed in doesn't depend on the server's settings)
+  NET.token=load('token');const cfg=api('/api/config'),me=NET.token?api('/api/me'):null;
+  try{NET.cfg=await cfg;NET.available=true;}catch(e){NET.available=false;if(me)me.catch(()=>{/* expected: the server is out of reach (its config failed too) */});return;}
+  if(NET.token){try{const r=await me;NET.user=r.user;NET.active=r.active;loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));}catch(e){if(e.status===401){NET.token=null;store('token',null);}}}
 }
 export function signedIn(r,after){
   NET.token=r.token;NET.user=r.user;store('token',r.token);loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));
@@ -57,8 +58,11 @@ export function joinRoom(code,mine){
   closeLobbyWs();leaveRoomSocket();
   NET.room=mine?{code,status:'lobby',host:myId(),opts:mine,seats:[]}:{code,status:'connecting',seats:[]};NET.code=code;NET.S=null;NET.retries=0;
   setQuery({room:code,replay:null});
-  connectRoom();showRoomLobby();
+  connectRoom();if(mine)showRoomLobby(); // (a room just made is a lobby; any other is shown once its first message says what it is)
 }
+/* the room's screen, once there is something to show on it: its lobby, or why it can't be reached (a game in progress
+   shows the game instead) */
+const roomScreen=()=>{if(S&&online())return;if(MENU.dlg.open&&MENU.screen==='room')renderRoomLobby();else showRoomLobby();};
 export function leaveRoomSocket(){if(NET.ws){const w=NET.ws;NET.ws=null;w.close();}clearTimeout(NET.retryT);NET.connected=false;}
 function connectRoom(){
   const code=NET.code;if(!code)return;
@@ -73,13 +77,13 @@ function connectRoom(){
 /* the server says there is no such room (a wrong code, or a room that closed): said at once, and the code leaves the address */
 function noRoom(ws){
   if(NET.ws!==ws)return;NET.ws=null;NET.connected=false;clearTimeout(NET.retryT);NET.code=null;setQuery({room:null});
-  NET.status='There is no room with this code (it may have closed).';renderRoomLobby();
+  NET.status='There is no room with this code (it may have closed).';roomScreen();
 }
 /* the connection to the room is gone (closed, silent, or not answering): unless we left, reconnect (backing off) */
 function lostConnection(ws){
   if(NET.ws!==ws)return;NET.ws=null;NET.connected=false;NET.busy=false;clearTimeout(NET.busyT);ws.close();
   if(!NET.code)return; // we left, or the room closed
-  NET.status='Connection lost. Reconnecting…';if(S)render();renderRoomLobby();
+  NET.status='Connection lost. Reconnecting…';if(S)render();if(NET.room.status==='connecting')roomScreen();else renderRoomLobby(); // (never reached yet: the room screen says so)
   NET.retries++;if(NET.retries>8&&!S){NET.status='Could not reach this room. It may have closed.';renderRoomLobby();return;}
   clearTimeout(NET.retryT);NET.retryT=setTimeout(connectRoom,Math.min(8000,800*NET.retries));
 }
@@ -93,7 +97,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState!==
   if(ws.readyState!==1)return;const t=Date.now();ws.send('ping');setTimeout(()=>{if(NET.ws===ws&&NET.heard<t)lostConnection(ws);},5000);});
 function onRoomMsg(m){
   if(m.t==='error'){diag('server: '+m.err);NET.busy=false;NET.leaving=false;clearTimeout(NET.busyT);sfx('error');toast(m.err);if(S)render();return;}
-  if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}renderRoomLobby();return;}
+  if(m.t==='room'){NET.room=m.room;if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}if(m.room.status==='lobby')roomScreen();else renderRoomLobby();return;}
   if(m.t==='state'){NET.room=m.room;NET.seat=m.seat;NET.canUndo=!!m.undo;NET.clockEnd=m.left==null?null:Date.now()+m.left;NET.busy=false;clearTimeout(NET.busyT);applyServerState(m.S,m.ev);
     if(NET.leaving&&m.S.players[m.seat].resigned){NET.leaving=false;exitOnline();showHub();}} // (left the game: to the Online screen once the server has it)
 }

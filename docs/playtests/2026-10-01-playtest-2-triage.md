@@ -112,6 +112,20 @@ off), or regressions. Ordered by how much they hurt.
 - **A16 Rated toggle: moved to B.** No path between the lobby's toggle and the Create form exists in the code (separate
   radios); the Create form keeping its own last choice is the native behaviour the menu was designed around. Whether it
   should reset each time is the owner's call.
+- **A18 boot: first half done** (71f7094: a signed-out return opens in 173 ms instead of waiting 1.7 s on the server; a
+  signed-in one makes one round trip, not two). Second half done (52cb150: a reload in a running game goes straight back to it).
+- **A19 taps during a walk: done** (de24f1f: animation no longer gates input; a cut-short walk goes on from where the
+  explorer is drawn).
+- **A11 short first turn: not reproduced** (the game shows 231 ms after Start with a full 1:00). Differences: the live
+  server, other people in other tabs (a background tab draws nothing while the server's clock runs), quick match, the
+  owner's machine loading the game screen. Needs his details.
+- **A17 hidden history: not reproduced as updating** (0 changes in the hidden column over 6 rounds); it keeps its nodes
+  while hidden, which makes showing it again instant (memory, not frames). Left as is unless the owner says otherwise.
+- **A8 things that move: Add AI done** (d7d04d3: every seat has its row). Still to do: picking a card to remove shifts
+  the others, paid cards leave gaps until the purchase completes, "My games" re-sorts after showing; and found on the way:
+  the menu dialog shifts ~17 px when it first becomes modal.
+- **Still to do from A:** A6 (cut-off card titles, chips, the AI dropdown), A7 (controls covered or out of reach), A20
+  (re-checks).
 - **Open, found by the stricter checks under load (intermittent, not yet explained):** (1) a phone game where the
   explorer to move sat under the market, 126 px right of where the camera's numbers put it (no glide in the log);
   (2) 1920x1080 replay with the market closed: the board's origin is 105 px right of the game area's left edge, which

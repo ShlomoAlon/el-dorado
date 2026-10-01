@@ -1,5 +1,5 @@
 import {  } from '../engine.gen.js';
-import { S, UI, NET, canAct, online, passing } from './state.js';
+import { S, NET, canAct, online, passing } from './state.js';
 import { STEP } from './board/pieces.js';
 import { reduceMotion } from './dom.js';
 import { load, store } from './store.js';
@@ -89,7 +89,7 @@ export function soundInit(){
     sndInit();
     const tg=e.target;
     if(tg.closest('button:not(:disabled)')){if(!tg.closest('#sndBtn'))sfx('tap');return;}
-    if(!S||S.over||passing()||UI.anim||!canAct())return;
+    if(!S||S.over||passing()||!canAct())return;
     if(tg.closest('#cards .card')||tg.closest('#market [data-src],#reserve [data-src],#allMarket [data-src]'))sfx('pick');
   };
   document.addEventListener('pointerdown',down,true);
