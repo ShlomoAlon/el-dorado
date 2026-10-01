@@ -74,7 +74,9 @@ const CHECK = () => {
       // a market card under the pointer (it grows to be read): it must not cover the top bar (playtest 2, A7)
       ['market card under the pointer', async () => { const r = await p.evaluate(() => { const e = document.querySelector('#mkt:not(.hid):not(.cramped) #market .mslot:not(.empty)'); if (!e) return null; const q = e.getBoundingClientRect(); return { x: q.left + q.width / 2, y: q.top + q.height / 2 }; });
         if (r) { await p.mouse.move(r.x, r.y); await p.waitForTimeout(400); } }],
-      ['history on the left', async () => { await p.click('#histBtn', { timeout: 5000 }); }],
+      // a hand card chosen (it rises above the hand): nothing it rises over is a control (playtest 2, A7: over End turn on a phone)
+      ['a card chosen', async () => { await p.evaluate(() => { const E = window.__ED; const h = E.S.players[E.S.cur].hand; E.onHandCard(h[h.length - 1]); E.render(); /* (the rightmost: nearest the turn buttons) */ }); await settle(p); }],
+      ['history on the left', async () => { await p.evaluate(() => window.__ED.cancelMode()); await p.click('#histBtn', { timeout: 5000 }); }],
       ['history hidden', async () => { await p.click(await p.evaluate(() => getComputedStyle(document.querySelector('#lside')).position === 'fixed') ? '#lside .hx' : '#histBtn', { timeout: 5000 }); }],
       ['play, market closed', async () => { await p.click('#histBtn', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }], // (back under the prompt)
       // another player's turn as a recap under the prompt (more steps than fit on a phone), market closed and open
