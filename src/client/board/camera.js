@@ -193,7 +193,7 @@ export function fitCheck(settled) {
   // moves, live or in a replay, is the owner's to decide (playtest 2 triage, B13): until then only my turn is judged)
   if (zoomed && !canAct()) return;
   if (zoomed) { const el = document.querySelector('#pieces .piece.turn'); if (!el) return; const r = rect(el); // (the explorer to move: marked .turn)
-    if (!inside(r.left + r.width / 2, r.top + r.height / 2)) bad = 'zoomed in: its explorer to move is, at ' + [r.left, r.top].map(Math.round) + ', free ' + [free.l, free.r, free.b].map(Math.round) + (G.replay ? ', replay' : ''); }
+    if (!inside(r.left + r.width / 2, r.top + r.height / 2)) bad = 'zoomed in: its explorer to move is, at ' + [r.left, r.top, r.width].map(Math.round) + ' (its transform ' + el.style.transform + '; stage ' + stage().style.transform + '; layer ' + $('#bscale').style.transform + ', baked ' + baked + ')' + ', free ' + [free.l, free.r, free.b].map(Math.round) + (G.replay ? ', replay' : ''); }
   else if (!(inside(b.left, b.top) && inside(b.right, b.bottom))) bad = 'board ' + [b.left, b.top, b.right, b.bottom].map(Math.round) + ', free ' + [free.l, free.t, free.r, free.b].map(Math.round);
   else { const z = rect(document.querySelector('.zoomctl')); // (not zoomed in: the whole board, centred between the zoom buttons and the market)
     // (where the zoom buttons are a column beside the board; a short landscape screen puts them, and the market, in rows
