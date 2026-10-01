@@ -161,7 +161,7 @@ export function undo(){
 export const canUndo=()=>online()?NET.canUndo:recCanUndo(G.rec);
 
 export function onHandCard(id){
-  if(S.over||passing()||UI.anim||!canAct())return;
+  if(S.over||passing()||!canAct())return; // (an explorer still walking holds nothing up: animation follows the state, never gates input)
   switch(UI.mode){
     case 'pay':case 'endTurn':{togglePick(id);return;}
     case 'discardFor':{if(UI.picks.includes(id)){rm(UI.picks,id);render();}else addDiscard(id);return;} // (in, as a drag puts it: the space is taken once enough are in)

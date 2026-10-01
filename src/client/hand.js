@@ -134,7 +134,7 @@ function wire(el, id) {
   el.addEventListener('pointerenter', () => { if (drag || covered()) return; if (hp().hand.includes(id)) UI.hover = id; });
   el.addEventListener('pointerleave', () => { if (UI.hover === id) UI.hover = null; });
   el.addEventListener('pointerdown', e => {
-    if (S.over || covered() || UI.anim || e.button > 0 || !canAct()) return;
+    if (S.over || covered() || e.button > 0 || !canAct()) return;
     const inHand = cur().hand.includes(id), isAct = S.turn.active && S.turn.active.id === id;
     if (!inHand && !isAct) return;
     e.preventDefault();
@@ -163,7 +163,7 @@ function wire(el, id) {
     if (!d.started) { if (d.inHand) onHandCard(id); else onPlayCard(id); return; }
     if (d.kind === 'aim') {
       const k = d.hot;
-      if (k && UI.targets.has(k) && !UI.anim) doMove(k);
+      if (k && UI.targets.has(k)) doMove(k);
       else if (!d.wasSel && !(S.turn.active && S.turn.active.id === id)) { UI.mode = 'idle'; UI.card = null; }
       render(); return;
     }
@@ -171,7 +171,7 @@ function wire(el, id) {
     el.classList.remove('free', 'go');
     const k = targetAt(e.clientX, e.clientY), tg = k && UI.targets.get(k); setHot(null);
     if (UI.mode === 'pay') { $('#buySlot').classList.remove('hot'); if (pastHand(e.clientY) && !UI.picks.includes(id)) { sfx('pick'); togglePick(id); } else render(); }
-    else if (isDisc(tg) && !UI.anim) { if (UI.mode === 'discardFor') addDiscard(id); else startDiscard(k, id); }
+    else if (isDisc(tg)) { if (UI.mode === 'discardFor') addDiscard(id); else startDiscard(k, id); }
     else if (UI.mode !== 'discardFor' && pastHand(e.clientY)) playAction(id); else render();
   };
   el.addEventListener('pointerup', end);

@@ -74,7 +74,7 @@ function boot() {
    is on top: a figure stands up into the space above its own). A target: move there; else your explorer there: select it;
    anywhere else puts the chosen card down (how a player stops moving with a card that has strength left) */
 function onBoardClick(e) {
-  if (!canAct() || cam.dragMoved || drag || UI.anim) return;
+  if (!canAct() || cam.dragMoved || drag) return;
   const k = targetAt(e.clientX, e.clientY); if (k) { doMove(k); return; }
   const i = S.players[S.cur].pieces.indexOf(spaceAt(e.clientX, e.clientY));
   if (i >= 0) onPiece(S.cur, i); else if (UI.mode === 'card') cancelMode();

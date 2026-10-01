@@ -60,7 +60,8 @@ export function animateMove(pl, i, keys) {
   if (!P) return; // not drawn yet (a hidden tab draws no frames, but a game's moves still arrive): update() puts it where it ends
   const pts = keys.map(k => { const p = xy(k); return [p.x, p.y]; });
   if (S.players[pl].pieces[i] === 'done') pts.push(piecePos(pl, i));
-  const T = pts.map(p => tf(...p)); stopAnims(P);
+  // (a walk cut short by the next move goes on from where the explorer is on screen, not from where the last one ended)
+  const T = pts.map(p => tf(...p)), at = moving.has(P) ? getComputedStyle(P.el).transform : null; stopAnims(P); if (at && at !== 'none') T[0] = at;
   if (reduceMotion || T.length < 2) { rest(P, T[T.length - 1]); return; }
   P.tf = T[T.length - 1]; P.el.style.transform = T[0]; // (where it rests once the walk is done; shown on its old space until then)
   P.el.style.zIndex = '3'; moving.add(P); UI.anim = true;
