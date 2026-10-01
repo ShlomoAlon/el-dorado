@@ -97,7 +97,9 @@ Fix nothing before step 5: first make sure our checks would catch the bug, then 
 8. **Commit, ship, report.** The commit says `Fix: ROOT|PARTIAL|HACK` (or `Fix: none`: not a bug fix) and, for a fix,
    `Decision:` (the design decision, why it was a mistake, what the fix changes), `Ratchet:` (the assertions),
    `Coverage:` (the integration test that now trips them, and that it failed before the fix); a HACK also needs
-   `Owner OK:`. `.claude/hooks/commit-check.mjs` refuses a commit without them, both as a Claude Code hook
+   `Owner OK:`. **Only when an assertion or test is truly impossible** (extreme cases: say why, and tell the owner in the
+   report) may `Ratchet:` or `Coverage:` be none, acknowledged in full:
+   `Coverage: none — WARNING WARNING WARNING: <why nothing can check this>`. `.claude/hooks/commit-check.mjs` refuses a commit without them, both as a Claude Code hook
    (`.claude/settings.json`) and as git's commit-msg hook (`.githooks/`, installed by `node build.mjs`). Push to `main`,
    check the live site serves the new build, and tell the owner briefly: how it shipped, the assertion, the coverage gap
    closed, the fix; then the ledger.
