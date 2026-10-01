@@ -4,8 +4,9 @@
 // --quick: five sizes (phone portrait and landscape, tablet, laptop, desktop). Sizes run in parallel.
 const { chromium, serveStatic, settle, openPage } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
-const ALL = [[320, 568], [390, 844], [844, 390], [768, 1024], [1024, 700], [1024, 768], [1280, 720], [1366, 768], [1440, 900], [1920, 1080], [2560, 1440]];
-const SIZES = process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1920, 1080]] : ALL;
+// [width, height, device scale]; [1536, 639, 1.25] is the owner's own screen (Chrome on Windows at 125%): his setup is the test
+const ALL = [[320, 568], [390, 844], [844, 390], [768, 1024], [1024, 700], [1024, 768], [1280, 720], [1366, 768], [1440, 900], [1536, 639, 1.25], [1920, 1080], [2560, 1440]];
+const SIZES = process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1536, 639, 1.25], [1920, 1080]] : ALL;
 const shots = process.argv.includes('--shots') ? process.argv[process.argv.indexOf('--shots') + 1] : null;
 const log = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/replay.json'), 'utf8'));
 
@@ -57,9 +58,9 @@ const CHECK = () => {
   const b = await chromium.launch(); let fails = 0, checks = 0;
   // served over http (as on the site), so the page can fetch the AI network (/ai/first.bin) for the replay's evaluation
   const srv = await serveStatic(), url = srv.url;
-  const one = async ([w, h]) => {
+  const one = async ([w, h, dpr = 1]) => {
     const out = [];
-    const p = await openPage(b, `${w}×${h}`, { viewport: { width: w, height: h } }), errs = p.errors; // (assertion failures count: openPage)
+    const p = await openPage(b, `${w}×${h}`, { viewport: { width: w, height: h }, deviceScaleFactor: dpr }), errs = p.errors; // (assertion failures count: openPage)
     await p.goto(url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     // normal play: start a local game from the setup screen
     await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
@@ -91,6 +92,7 @@ const CHECK = () => {
       await p.mouse.move(w / 2, 1); // park the pointer away from the hand (hovered cards lift by design)
       await settle(p, 6000); // (card flights, panels, the market: whatever the step set moving)
       const bad = await p.evaluate(CHECK); checks++;
+      for (const e of errs.splice(0)) bad.push('page error: ' + e.split('\n')[0]); // (an assertion that failed during this step, named with it)
       if (bad.length) { fails++; out.push(`FAIL ${w}×${h} ${name}:\n   ` + bad.join('\n   ')); }
       if (shots) await p.screenshot({ path: `${shots}/layout_${w}x${h}_${name.replace(/[^a-z]+/g, '-')}.png` });
     }

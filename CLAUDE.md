@@ -195,10 +195,10 @@ Follow these in new code and fix toward them:
 2. `node build.mjs` → regenerates `public/index.html`, `public/app.<hash>.js/.css`, `src/engine.gen.js`, `build/artifact.html` (all committed; never hand-edit them).
    The site's `index.html` must stay under ~14 KB compressed (one TCP round trip): the start screen's markup + CSS only
    (shell.html's first `<style>`); game CSS goes in the `<style data-late>` block, which becomes the cached app.css.
-3. `node test/run.mjs` → must print `all ok` (~45 s: build, import lint, engine quick tier, layout at 5 sizes, a game played
+3. `node test/run.mjs` → must print `all ok` (~45 s: build, import lint, engine quick tier, layout at 6 sizes (the owner's 1536×639 at 125% among them), a game played
    with real clicks and drags, three whole games played through the UI by an AI (test/play.cjs: coverage for every assertion), the worker bundle, frame costs on a throttled phone). Server or online changes: add `--online`
    (online play end to end, against a local game server the test starts itself: nothing to set up). Board, layout or engine
-   changes: `--full` (all 60 engine games + AI on every course, 11 layout sizes, online, board rendering).
+   changes: `--full` (all 60 engine games + AI on every course, 12 layout sizes, online, board rendering).
    (The worker bundle check matters: Cloudflare's bundler rejects some things Node accepts; a failed bundle never deploys.)
 4. UI changes: load `public/index.html` in Playwright (Chromium is preinstalled; `NODE_PATH=$(npm root -g)`), take screenshots, look at them, check for page errors.
 5. Commit (one bug per commit, the message answering `.claude/bugfix-commit.md` ("Fixing bugs" step 8), which the commit check enforces, + the attribution lines your environment asks for) and `git push origin main`.

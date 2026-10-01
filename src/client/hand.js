@@ -5,7 +5,7 @@
 import { CT, typeOf, plural } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
 import { S, UI, cur, hp, viewIdx, canAct, G } from './state.js';
-import { geo } from './geometry.js';
+import { geo, handTop } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
 import { render } from './frame.js';
 import { targetAt, setHot, hotTarget } from './board/overlays.js';
@@ -45,7 +45,7 @@ function layoutCards() {
   hand.forEach((id, i) => {
     const el = cardEls.get(id); if (!el || el.__enter || el.classList.contains('free')) return;
     const off = i - (n - 1) / 2;
-    let x = W / 2 + off * step - cw / 2, y = H - ch * (phone ? .78 : .9) + off * off * (phone ? 1.6 : 2.6), rot = off * (phone ? 2.4 : 3.2), sc = 1, z = 10 + i;
+    let x = W / 2 + off * step - cw / 2, y = handTop() + off * off * (phone ? 1.6 : 2.6), rot = off * (phone ? 2.4 : 3.2), sc = 1, z = 10 + i;
     if (hi >= 0 && i !== hi) x += Math.sign(i - hi) * cw * .16;
     if (paying && UI.picks.includes(id)) { const k = tk++; x = bx + bw + 18 + k * tw * .55 - (cw - tw) / 2; y = by + bw * 1.4 * .5 - ch / 2 + k * 3; rot = 4 + k * 3; sc = tsc; z = 70 + k; }
     else if (choosing) { y = H - ch * 1.02 - 14 + off * off * 1.5; rot *= .5; if (UI.picks.includes(id)) { y -= ch * .16; z = 60 + i; } if (i === hi && !drag) { y = Math.min(y, H - ch * 1.1 - 14); rot = 0; z = 90; } } // the whole hand up; chosen cards higher
