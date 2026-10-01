@@ -61,17 +61,25 @@ const hashed = (ext, text) => { const n = `app.${createHash('sha256').update(tex
 for (const f of readdirSync(new URL('./public/', import.meta.url))) if (/^app\.[0-9a-f]{10}\.(js|css)$/.test(f)) unlinkSync(new URL('./public/' + f, import.meta.url));
 const faceCss = siteFonts.replace(/<\/?style>/g, ''); // the game's fonts are declared in the game's CSS: the start screen never fetches them
 const cssFile = hashed('css', minCss(faceCss + late)), jsFile = hashed('js', bundle({ url: '/ai/' + netFile, hash: netHash }));
-const siteShell = withFonts(shell, '').replace(LATE, '').replace(/<style>([\s\S]*?)<\/style>/, (m, c) => `<style>${minCss(c)}</style>`)
-  .replace('</dialog>', `</dialog>\n<link rel="stylesheet" href="${cssFile}">`);
-const body = siteShell + `\n<script src="${jsFile}" defer></script>\n`;
+const siteShell = withFonts(shell, '').replace(LATE, '').replace(/<style>([\s\S]*?)<\/style>/, (m, c) => `<style>${minCss(c)}</style>`);
+// the start screen needs only the page itself: the game's CSS and script are fetched at once (preloaded) but applied and run
+// only once the start screen is painted (two frames: the first one drawn), so they never hold the first frame back; the
+// script runs once the CSS is in (it measures the game's layout). A Start pressed before it runs is kept (sGo's data-q)
+const head = `<link rel="preload" href="${cssFile}" as="style">\n<link rel="preload" href="${jsFile}" as="script">\n`;
+const body = siteShell + `\n<script>requestAnimationFrame(()=>requestAnimationFrame(()=>{const c=document.createElement('link'),s=()=>{const j=document.createElement('script');j.src='${jsFile}';document.body.appendChild(j)};c.rel='stylesheet';c.href='${cssFile}';c.onload=s;c.onerror=s;document.head.appendChild(c)}))</script>\n`;
 mkdirSync(new URL('./public/', import.meta.url), { recursive: true });
 mkdirSync(new URL('./build/', import.meta.url), { recursive: true });
 mkdirSync(new URL('./public/ai/', import.meta.url), { recursive: true });
 // (earlier networks stay: a tab built with one fetches it only when its first AI moves, maybe after a deploy)
 writeFileSync(new URL('./public/ai/' + netFile, import.meta.url), netBin);
 writeFileSync(new URL('./public/index.html', import.meta.url),
-  `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="theme-color" content="#0a1310">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="El Dorado">\n</head>\n<body>\n${body}</body>\n</html>\n`);
+  `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="theme-color" content="#0a1310">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="El Dorado">\n${head}</head>\n<body>\n${body}</body>\n</html>\n`);
 writeFileSync(new URL('./build/artifact.html', import.meta.url), withFonts(shell, artFonts) + '\n' + script({ b64: netBin.toString('base64') }));
 // the live AI-training page (/train.html): a standalone page, copied as is
 writeFileSync(new URL('./public/train.html', import.meta.url), r('./src/client/train.html'));
+// the first round trip: the page (the start screen, whole) must fit in the ~14 KB a server sends before waiting for the
+// browser; gzip is the larger of the two compressions browsers get
+{ const gz = (await import('node:zlib')).gzipSync(readFileSync(new URL('./public/index.html', import.meta.url)), { level: 9 }).length;
+  if (gz > 14000) { console.error(`public/index.html is ${gz} bytes compressed: over the 14,000 of the first round trip`); process.exit(1); }
+  console.log(`index.html ${gz} bytes compressed (${14000 - gz} to spare in the first round trip)`); }
 console.log('built public/index.html, public/train.html, src/engine.gen.js, build/artifact.html');
