@@ -3,7 +3,7 @@
 import { $ } from './dom.js';
 import { diag, expectLayout } from './debug.js';
 import { render } from './frame.js';
-export const geo = { app: { left: 0, top: 0, width: 0, height: 0 }, cw: 132, promptBottom: 0, recapFits: true, mktW: 0, actW: 0, deck: null, disc: null };
+export const geo = { app: { left: 0, top: 0, width: 0, height: 0 }, cw: 132, promptBottom: 0, recapFits: true, mktW: 0, actW: 0, act: null, deck: null, disc: null };
 const subs = [];
 /* f(sized): after every measurement; sized = the game area itself changed size */
 export function onGeo(f) { subs.push(f); }
@@ -22,6 +22,7 @@ export function measure() {
   // the recap (six cards wide, --six) shows only where the prompt holds it: not beside an open market on a small phone
   const ps = getComputedStyle(pr); geo.recapFits = pr.clientWidth - parseFloat(ps.paddingLeft) - parseFloat(ps.paddingRight) >= parseFloat(ps.getPropertyValue('--six')) - .5;
   geo.mktW = $('#mkt').offsetWidth; geo.actW = $('#actBtns').offsetWidth;
+  { const r = rect($('#actBtns')); geo.act = r.width ? { left: r.left - a.left, right: r.right - a.left, bottom: r.bottom - a.top } : null; } // (the turn buttons, in the game area: what a chosen card may not rise into)
   geo.deck = rect($('#deckStack')); geo.disc = rect($('#discStack'));
   if (sized) expectLayout(); // (the game area changed size: what's in it moves, on purpose)
   if (sized || geo.recapFits !== fits) render(); // (a new size, or the recap's room came or went: the views lay themselves out again)

@@ -1,6 +1,6 @@
 /* BOOT: wires the modules together, sets the order the view parts update in, and decides what opens first (a replay
    or room link, a game in progress, the Online screen, or the start screen). */
-import { buildCourse, courseById, assert, aiChoose } from '../engine.gen.js';
+import { buildCourse, courseById, assert, aiChoose, buyOptions, coinVal, CT } from '../engine.gen.js';
 import { $ } from './dom.js';
 import { S, MAP, setMAP, UI, NET, G, canAct, online } from './state.js';
 import { load } from './store.js';
@@ -94,7 +94,7 @@ function onBoardHover(e) { if (!drag && !e.buttons && e.pointerType === 'mouse')
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiChoose, // (aiChoose: test/play.cjs lets an AI choose the person's moves, played through the calls below)
+window.__ED = { NET, UI, G, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiChoose, buyOptions, coinVal, CT, // (aiChoose: test/play.cjs lets an AI choose the person's moves, played through the calls below; the rest let it choose a purchase of its own)
   render() { render(); flush(); },
   aiPace(k) { AIX.pace = k; }, fitCheck, // (test/play.cjs: the board check, judged at once on a settled page) // (test/play.cjs: shorter pauses between the AIs' moves)
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },

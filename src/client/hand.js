@@ -52,6 +52,9 @@ function layoutCards() {
     if (paying && UI.picks.includes(id)) { const k = tk++; x = bx + bw + 18 + k * tw * .55 - (cw - tw) / 2; y = by + bw * 1.4 * .5 - ch / 2 + k * 3; rot = 4 + k * 3; sc = tsc; z = 70 + k; }
     else if (choosing) { y = H - ch * 1.02 - 14 + off * off * 1.5; rot *= .5; if (UI.picks.includes(id)) { y -= ch * .16; z = 60 + i; } if (i === hi && !(drag && drag.started)) { y = Math.min(y, H - ch * 1.1 - 14); rot = 0; z = 90; } } // the whole hand up; chosen cards higher
     else { if (lifted(id)) { y = H - ch * 1.02 - 14; rot *= .4; z = 60 + i; } if (i === hi && !(drag && drag.started)) { y = H - ch * 1.12 - 14; rot = 0; sc = 1.14; z = 90; } }
+    // whatever lifts a card (chosen, under the pointer, the removal choice), it rises no further than the turn buttons
+    // above it: a card never covers End turn (the spending tray beside the buy slot is placed apart, above them)
+    const B = geo.act; if (B && !(paying && UI.picks.includes(id)) && x < B.right && x + cw > B.left) y = Math.max(y, B.bottom + 6 + ch * (sc - 1) / 2 + Math.sin(Math.abs(rot) * Math.PI / 180) * cw * sc / 2); // (its drawn box: grown about its centre, and tilted)
     setStyle(el, 'zIndex', z); setT(el, x, y, rot, sc);
   });
   // the play area: a small overlapping row left of the discard pile

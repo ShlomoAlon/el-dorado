@@ -38,6 +38,7 @@ function sizeMarket(){
   const mw=Math.max(28,Math.floor(pick.mw));
   if(mk.__p!==pick.cols+'×'+mw){mk.__p=pick.cols+'×'+mw;diag(`market: ${mk.__p} (room ${Math.round(avail)}, area ${Math.round(W)})`);}
   setStyle(mk,'--mw',mw+'px');setStyle($('#market'),'gridTemplateColumns',`repeat(${pick.cols},var(--mw))`);
+  if(mk.classList.contains('row')!==(pick.cols>=n))mk.classList.toggle('row',pick.cols>=n); // (one row: its first card grows rightward when under the pointer)
   setStyle($('#app'),'--mktW',(pick.cols*mw+(pick.cols-1)*cg)+'px'); // the market's width, for what must stay clear of it (the prompt)
 }
 const ALL_ICON='<svg viewBox="-10 -10 20 20"><rect x="-8.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".45" transform="rotate(-14)"/><rect x="-4.5" y="-7.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".7"/><rect x="-.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" transform="rotate(12)"/></svg>';
