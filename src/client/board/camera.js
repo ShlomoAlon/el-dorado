@@ -75,8 +75,12 @@ function clampView() {
 /* glide the explorer about to move into view, if it isn't */
 export function ensureVisible() {
   const r = safeRect(), c = focusPoint();
+  // the whole board already shown (beside the market, above the hand): every explorer is visible, nothing to follow
+  // (moving it would only push it off-centre, under the hand or the market). (Not the prompt's side: a recap growing a
+  // second line over the board is the owner's to decide, playtest 2 B; until then it never moves the board either)
+  if (view.x >= r.l - 1 && view.y >= 0 && view.x + layout().w * view.s <= r.r + 1 && view.y + layout().h * view.s <= r.b + 1) return;
   const sx = (c[0] - layout().minX) * view.s + view.x, sy = (c[1] - layout().minY) * view.s + view.y, m = 40;
-  if (sx > r.l + m && sx < r.r - m && sy > r.t + m && sy < r.b - m) return; diag('ensureVisible: glide');
+  if (sx > r.l + m && sx < r.r - m && sy > r.t + m && sy < r.b - m) return; diag('ensureVisible: glide to ' + c.map(Math.round));
   view.x += (r.l + r.r) / 2 - sx; view.y += (r.t + r.b) / 2 - sy; clampView(); glide(); applyView();
 }
 function zoomAt(px, py, f) { const ns = Math.max(.25, Math.min(3.2, view.s * f)); const k = ns / view.s; view.x = px - (px - view.x) * k; view.y = py - (py - view.y) * k; view.s = ns; applyView(); cam.userZoomed = true; moved(); }
