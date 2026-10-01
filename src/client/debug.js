@@ -46,7 +46,7 @@ export function checksInit(during) {
     for (const m of list) for (const n of m.addedNodes) if (n.nodeType === 1 && n.isConnected && !moved.has(n) && gone.has(sig(n))) {
       const cls = n.getAttribute('class'), pc = n.parentNode && n.parentNode.getAttribute && n.parentNode.getAttribute('class'), who = ((n.closest('[id]') || {}).id || '?') + ' ' + (pc ? '.' + pc.split(' ')[0] + ' > ' : '') + n.tagName.toLowerCase() + (cls ? '.' + cls.split(' ')[0] : '');
       const play = inPlay(); churn.push({ who, play, html: sig(n).slice(0, 160), parent: n.parentNode && n.parentNode.outerHTML.slice(0, 80) }); diag('churn: rebuilt unchanged ' + who);
-      if (play) assert(false, 'view: a frame writes only what changed (rebuilt unchanged content in ' + who + ')');
+      if (play) assert(false, 'view: a frame writes only what changed (rebuilt unchanged content in ' + who + ': ' + sig(n).slice(0, 100) + ')');
     }
   };
   // words never run together: text written beside an element in a flex or grid box is its own item there, and the space

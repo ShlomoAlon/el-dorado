@@ -178,7 +178,9 @@ export function fitCheck(settled) {
   const rect = e => e.getBoundingClientRect(), cards = [...document.querySelectorAll('#cards .card:not(.inplay)')].filter(c => c.style.pointerEvents !== 'none'); // (not those leaving the hand: hand.js)
   // (only when nothing finite is animating anywhere: the market sliding in, a card dealt, the board gliding)
   if (!cards.length || document.getAnimations().some(a => a.playState === 'running' && isFinite(a.effect && a.effect.getComputedTiming().endTime))) return;
-  const tops = cards.map(c => rect(c).top).sort((x, y) => x - y), handTop = UI.hover != null && tops.length > 1 ? tops[1] : tops[0]; // (a card under the pointer is raised: the hand's own top is the next)
+  // (a card under the pointer is raised and drawn larger, by design (hand.js): the hand's own top is the others')
+  const resting = cards.filter(c => !/scale\((?!1\))/.test(c.style.transform)); if (!resting.length) return;
+  const handTop = Math.min(...resting.map(c => rect(c).top));
   // (the prompt's side is left out until the owner decides what a recap growing a second line does to the board: playtest 2, B)
   const app = rect($('#app')), b = rect($('#board'));
   // (a resize still in flight: the page measured another size than there is now, and the refit comes with the next frame)
@@ -198,7 +200,7 @@ export function fitCheck(settled) {
     // above it: that layout is playtest 2 item A7, its own fix)
     if (z.height > z.width) { const mid = (z.right + free.r) / 2, bm = (b.left + b.right) / 2; if (Math.abs(bm - mid) > 40) bad = 'board centred at ' + Math.round(bm) + ', the free area at ' + Math.round(mid); } }
   const seen = bad && bad + '|' + [b.left, b.top, b.right, b.bottom].map(Math.round), again = seen && (settled || seen === fitSeen); fitSeen = seen;
-  assert(!again, 'view: the fitted board is clear of the hand and the market, and centred if it shows whole (' + bad + '; hand ' + cards.map(c => c.className.replace('card', '').trim() + '@' + Math.round(rect(c).top)).join(' ') + '; explorer to move at ' + focusPoint().map(Math.round) + ', view ' + [view.x, view.y, view.s * 1000].map(Math.round) + ', board ' + [layout().w, layout().h, layout().minX].map(Math.round) + ', safe area now ' + JSON.stringify(safeRect()) + '; camera log: ' + diagLog().filter(l => / (fit|ensureVisible|bake)/.test(l)).slice(-4).join(' / ') + ')');
+  assert(!again, 'view: the fitted board is clear of the hand and the market, and centred if it shows whole (' + bad + '; hand ' + cards.map(c => c.className.replace('card', '').trim() + '@' + Math.round(rect(c).top) + (resting.includes(c) ? '' : ' (raised)')).join(' ') + ', hover ' + UI.hover + '; explorer to move at ' + focusPoint().map(Math.round) + ', view ' + [view.x, view.y, view.s * 1000].map(Math.round) + ', board ' + [layout().w, layout().h, layout().minX].map(Math.round) + ', safe area now ' + JSON.stringify(safeRect()) + '; camera log: ' + diagLog().filter(l => / (fit|ensureVisible|bake)/.test(l)).slice(-4).join(' / ') + ')');
 }
 if (CHECKS) setInterval(() => fitCheck(false), 500);
 
