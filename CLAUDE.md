@@ -47,7 +47,15 @@ Of 217 bugs, only 40 were fixed at the root and 163 fixes added nothing that wou
   move", "an overlay exists only in a mode that uses it"), at the place violations start. A test only where an assertion
   can't see it (latency, layout across runs). Assertions must stay cheap, also in debug: no allocation or layout reads in
   per-frame checks, nothing per bot look-ahead step.
-- **Say what the fix is** in the commit message: ROOT, PARTIAL or HACK, and the ratchet. A HACK needs the owner's OK.
+- **Before every fix, write the chain in chat** (one line: symptom → mechanism → design decision → fix), so the owner can see
+  when it's skipped. A failure that shows up while finishing a fix is a new bug and gets its own chain.
+- **Tripwire: stop on a second patch.** If a fix causes a new failure, or you're about to change the same element or
+  function a second time for the same goal, stop: the design is wrong, not one patch short. Write the chain again from
+  the symptom and change the decision (2026-10-01: the prompt's timer, then its message, then its game-over room, each
+  patched in turn, when the real fault was one: the prompt's layout depended on the game state).
+- **Say what the fix is** in the commit message; the commit-msg hook (`.githooks/`, installed by `node build.mjs`) refuses
+  a commit without it: `Fix: ROOT|PARTIAL|HACK|none`, and for a fix `Decision:` (the design decision and what the fix
+  changes about it) and `Ratchet:` (the assertion that fails if it comes back). A HACK also needs `Owner OK:`.
 - **Never weaken a failing check** (assertion, test, budget) to get green: find out why it fails.
 - **No silent failures:** no empty `catch`, silent fallback or default, silently dropped input, or test check that skips
   itself. Catch only a named, expected failure; everything else reaches the boundary (docs/ASSERTIONS.md).
@@ -83,7 +91,7 @@ Of 217 bugs, only 40 were fixed at the root and 163 fixes added nothing that wou
    changes: `--full` (all 60 engine games + AI on every course, 11 layout sizes, online, board rendering).
    (The worker bundle check matters: Cloudflare's bundler rejects some things Node accepts; a failed bundle never deploys.)
 4. UI changes: load `public/index.html` in Playwright (Chromium is preinstalled; `NODE_PATH=$(npm root -g)`), take screenshots, look at them, check for page errors.
-5. Commit (clear message + the attribution lines your environment asks for) and `git push origin main`.
+5. Commit (clear message with its `Fix:` lines, which the hook checks, + the attribution lines your environment asks for) and `git push origin main`.
 6. Tell him in 1–3 sentences what changed and that it's deploying.
 
 ## Libraries (owner's rule)
