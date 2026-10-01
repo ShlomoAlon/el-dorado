@@ -92,3 +92,12 @@ off), or regressions. Ordered by how much they hurt.
 
 ## Status
 (updated as items are done)
+- **A1 board fit: done** (live). Keeps above the hand (7387196); stays centred where it can't zoom in (28a74e8); doesn't
+  move at a turn change when it shows whole (7f5113d); refits when the market's width changes (b4a88f1); follows the
+  explorer you move on a phone (9291a67). Checked by the board check at every settled step of the played games (owner's
+  size, phone, tablet) and twice a second in every test.
+- **A5 board wanders: partly.** It no longer moves at turn changes (7f5113d). What the recap's second line does to the
+  board (refit, reserve room, or cover) waits on the owner; the fit, the follow and the board check leave the prompt's
+  side out until then.
+- Found on the way (not in the report): a pressed card waited for something else to redraw (b704e7e: every UI change
+  now asks for a frame; the up-to-date check runs after every input). New owner question: B13.
