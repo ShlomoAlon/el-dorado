@@ -3,8 +3,10 @@
 //   Fix: none                      not a bug fix (a feature, docs, tooling)
 //   Fix: ROOT | PARTIAL | HACK     a bug fix, with three more lines (CLAUDE.md "Fixing bugs", step 8):
 //   Decision: <the design decision that made the bug possible, why it was a mistake, what the fix changes about it>
-//   Ratchet: <the assertions that fail if it comes back, or "none" and why>
+//   Ratchet: <the assertions that fail if it comes back>
 //   Coverage: <the integration test that now trips them, and that it failed before the fix>
+// Either may be "none" only when an assertion or test is truly impossible (extreme cases), acknowledged in full:
+//   Coverage: none — WARNING WARNING WARNING: <why nothing can check this>
 // A HACK also needs "Owner OK: <when the owner agreed>".
 // One check, two triggers:
 //   - Claude Code hook (PreToolUse on Bash, .claude/settings.json): reads the tool call on stdin; exit 2 blocks the command
@@ -16,8 +18,12 @@ function problems(msg) {
   if (!kind) bad.push('a line "Fix: ROOT", "Fix: PARTIAL", "Fix: HACK" or "Fix: none" (not a bug fix)');
   else if (kind !== 'none') {
     if (!/^\s*Decision: \S.{15,}/m.test(msg)) bad.push('a line "Decision: <the design decision behind the bug, and what the fix changes about it>"');
-    if (!/^\s*Ratchet: \S.{3,}/m.test(msg)) bad.push('a line "Ratchet: <the assertion that fails if it comes back, or none and why>"');
-    if (!/^\s*Coverage: \S.{10,}/m.test(msg)) bad.push('a line "Coverage: <the integration test that now trips the assertion, and that it failed before the fix>"');
+    for (const [name, what] of [['Ratchet', 'the assertion that fails if it comes back'], ['Coverage', 'the integration test that now trips the assertion, and that it failed before the fix']]) {
+      const v = (msg.match(new RegExp('^\\s*' + name + ': (.*)$', 'm')) || [])[1];
+      if (!v || v.trim().length < 4) bad.push(`a line "${name}: <${what}>"`);
+      else if (/^none\b/i.test(v.trim()) && !/WARNING WARNING WARNING:\s*\S.{20,}/.test(v))
+        bad.push(`"${name}: none" only when nothing can check it, acknowledged: "${name}: none — WARNING WARNING WARNING: <why nothing can check this>"`);
+    }
     if (kind === 'HACK' && !/^\s*Owner OK: \S/m.test(msg)) bad.push('a line "Owner OK: <when the owner agreed to this hack>"');
   }
   return bad;
