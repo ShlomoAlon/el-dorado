@@ -35,8 +35,10 @@ function step() {
       if (UI.mode !== 'idle') call('cancelMode');
       piece(a.pi); pick(a.cards[0]);
       const tg = UI.targets.get(a.to); if (!tg || tg.t !== 'pay') return 'unmapped pay: ' + a.to + ' is not a space paid for with cards';
-      call('startDiscard', a.to, a.cards[0]); for (const id of a.cards.slice(1)) if (UI.mode === 'discardFor') call('addDiscard', id);
-      return 'pay ' + tg.kind; }
+      // the first card dragged onto the space; the rest dragged after it, or (every other time) tapped in the hand
+      const tap = (window.__payN = (window.__payN || 0) + 1) % 2 === 0;
+      call('startDiscard', a.to, a.cards[0]); for (const id of a.cards.slice(1)) if (UI.mode === 'discardFor') call(tap ? 'onHandCard' : 'addDiscard', id);
+      return 'pay ' + tg.kind + (tap ? ' (tapped)' : ''); }
     case 'action': { if (UI.mode !== 'idle') call('cancelMode'); call('onHandCard', a.card); return 'action'; }
     case 'trash': { if (UI.mode !== 'trashPick') return 'unmapped trash: the removal choice is not showing'; for (const id of a.cards) call('onHandCard', id); call('confirmTrash'); return 'trash ' + a.cards.length; }
     case 'transmit': { if (UI.mode !== 'idle') call('cancelMode'); call('onHandCard', a.card); const st = stackOf(a.type); if (UI.mode !== 'transmit' || !st) return 'unmapped transmit';

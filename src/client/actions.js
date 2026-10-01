@@ -164,7 +164,7 @@ export function onHandCard(id){
   if(S.over||passing()||UI.anim||!canAct())return;
   switch(UI.mode){
     case 'pay':case 'endTurn':{togglePick(id);return;}
-    case 'discardFor':{if(UI.picks.includes(id))rm(UI.picks,id);else if(UI.picks.length<UI.pending.need)UI.picks.push(id);render();return;}
+    case 'discardFor':{if(UI.picks.includes(id)){rm(UI.picks,id);render();}else addDiscard(id);return;} // (in, as a drag puts it: the space is taken once enough are in)
     case 'trashPick':{if(UI.picks.includes(id))rm(UI.picks,id);else if(UI.picks.length<UI.max)UI.picks.push(id);render();return;}
     case 'transmit':{if(id===UI.card)cancelMode();return;}
   }
