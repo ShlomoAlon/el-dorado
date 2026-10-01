@@ -6,7 +6,7 @@ import { R, assert } from '../../engine.gen.js';
 import { $ } from '../dom.js';
 import { S, MAP, UI, G, cur, canAct, passing } from '../state.js';
 import { geo, onGeo, measure, handTop } from '../geometry.js';
-import { after } from '../frame.js';
+import { after, frameDue } from '../frame.js';
 import { diag, diagLog, CHECKS } from '../debug.js';
 import { layout, xy } from './layout.js';
 export const view = { s: 1, x: 0, y: 0 };
@@ -174,6 +174,7 @@ let fitSeen = ''; // (the last sample's finding: a wrong fit counts once it is t
 /* settled: judged at once (test/play.cjs, after each of its moves has settled); otherwise sampled, and a wrong fit counts
    only once it is the same on two samples in a row */
 export function fitCheck(settled) {
+  if (frameDue()) return; // (the state has moved on and the next frame will show it: the page is judged once it does)
   if (!S || S.over || UI.preview || cam.userZoomed || gliding || cam.pointers || UI.anim || UI.mode !== 'idle' || S.turn.pending || document.getElementById('menu').open) return; // (a removal being chosen raises the whole hand, by design)
   const rect = e => e.getBoundingClientRect(), cards = [...document.querySelectorAll('#cards .card:not(.inplay)')].filter(c => c.style.pointerEvents !== 'none'); // (not those leaving the hand: hand.js)
   // (only when nothing finite is animating anywhere: the market sliding in, a card dealt, the board gliding)

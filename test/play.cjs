@@ -68,7 +68,11 @@ function step() {
     await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     await p.selectOption('select[name=who1]', pass ? '' : 'raleigh'); await p.selectOption('select[name=who2]', 'raleigh');
     if (pass) await p.check('#sPriv');
-    await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
+    await p.click('#sGo', { timeout: 20000 }).catch(async e => { // (what the page shows when Start can't be pressed)
+      throw new Error(e.message.split('\n')[0] + ' — page: ' + await p.evaluate(() => { const d = document.querySelector('#menu'), g = document.querySelector('#sGo'), r = g && g.getBoundingClientRect(), sec = g && g.closest('section');
+        return JSON.stringify({ open: d.open, modal: d.matches(':modal'), cls: d.className, html: document.documentElement.className, screen: sec && sec.dataset.screen, secHidden: sec && sec.hidden, rect: r && [r.x, r.y, r.width, r.height].map(Math.round), disp: getComputedStyle(d).display, anim: document.getAnimations().length, S: !!window.__ED.S, preview: window.__ED.UI.preview }); }));
+    });
+    await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
     await p.evaluate(() => window.__ED.aiPace(.05)); // (the AIs' pauses, 20x shorter: their moves and animations unchanged)
     const did = {}, unmapped = []; let steps = 0;
     // (every other step goes on while an explorer is still walking, as a quick player does: animations never hold up input)
