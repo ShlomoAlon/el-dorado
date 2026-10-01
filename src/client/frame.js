@@ -31,7 +31,8 @@ export function freshInit(during) {
   if (!CHECKS) return;
   const app = document.getElementById('app'), mo = new MutationObserver(() => {});
   const who = r => { const n = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (!n) return '?'; const c = n.getAttribute('class');
-    return ((n.closest('[id]') || {}).id || '?') + ' ' + n.tagName.toLowerCase() + (c ? '.' + c.split(' ')[0] : '') + (r.type === 'attributes' ? ' [' + r.attributeName + ']' : r.type === 'childList' ? ' (elements)' : ' (text)'); };
+    const was = r.type === 'childList' ? '' : ': ' + String(r.oldValue).slice(0, 80) + ' -> ' + String(r.type === 'attributes' ? r.target.getAttribute(r.attributeName) : r.target.data).slice(0, 80);
+    return ((n.closest('[id]') || {}).id || '?') + ' ' + n.tagName.toLowerCase() + (c ? '.' + c.split(' ')[0] : '') + (r.type === 'attributes' ? ' [' + r.attributeName + ']' : r.type === 'childList' ? ' (elements)' : ' (text)') + was; };
   setInterval(() => {
     if (raf || !during()) return;
     safe(frameMark, 'checks'); // (what came before this frame is judged as before)
