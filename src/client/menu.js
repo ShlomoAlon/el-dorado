@@ -43,7 +43,7 @@ export function menuInit(){
   setupSync();
   const d=MENU.dlg;
   if(document.documentElement.classList.contains('resume'))d.close(); // a saved game or a link opens instead (boot decides)
-  else if(d.open){d.style.animation='none';d.close();d.showModal();requestAnimationFrame(()=>d.style.animation='');MENU.f.focus({preventScroll:true});}
+  else if(d.open){d.close();d.showModal();MENU.f.focus({preventScroll:true});}
 }
 const menuDismissible=()=>inGame()&&MENU.screen!=='room';
 const onlineGame=()=>inGame()&&online(); // an online game in progress: one game at a time, so the menu only offers going back to it
@@ -66,7 +66,7 @@ function menuOpen(screen){
   clearTimeout(MENU.closeT);d.classList.remove('closing');document.documentElement.classList.remove('resume');
   // the page opens the dialog as plain HTML (before any script); the first time, it becomes a modal dialog (focus, Esc),
   // looking exactly the same (no fade: it is already on screen)
-  if(d.open&&!d.matches(':modal')){d.style.animation='none';d.close();d.showModal();requestAnimationFrame(()=>d.style.animation='');MENU.f.focus({preventScroll:true});}
+  if(d.open&&!d.matches(':modal')){d.close();d.showModal();MENU.f.focus({preventScroll:true});}
   else if(!d.open){d.showModal();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});}
 }
 export function menuClose(){const d=MENU.dlg;document.documentElement.classList.remove('resume');if(!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
