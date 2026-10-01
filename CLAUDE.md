@@ -37,6 +37,35 @@ the middle of other work, and leaves only when it's done or I drop it. Anything 
 the top. When you finish a piece of work, show the ledger, one line per item: done, in progress, or
 waiting on me.
 
+## Fixing bugs (lessons from docs/POSTMORTEMS.md, 2026-10-01)
+Of 217 bugs, only 40 were fixed at the root and 163 fixes added nothing that would catch the bug coming back. So:
+- **Find the design decision before fixing.** Walk symptom → mechanism → root cause → the decision that made the bug
+  possible (test: "if this had been decided differently, could this bug *and its siblings* exist?"). Fix the decision,
+  not the instance; the right fix usually deletes code. If you can only patch the instance, say so and why.
+- **Every fix ships with its ratchet, and the ratchet is an assertion** (owner's preference: one integration run exercises
+  every assertion, while each new test adds run time). Assert the property the owner cares about ("a tap on a target is a
+  move", "an overlay exists only in a mode that uses it"), at the place violations start. A test only where an assertion
+  can't see it (latency, layout across runs). Assertions must stay cheap, also in debug: no allocation or layout reads in
+  per-frame checks, nothing per bot look-ahead step.
+- **Say what the fix is** in the commit message: ROOT, PARTIAL or HACK, and the ratchet. A HACK needs the owner's OK.
+- **Never weaken a failing check** (assertion, test, budget) to get green: find out why it fails.
+- **No silent failures:** no empty `catch`, silent fallback or default, silently dropped input, or test check that skips
+  itself. Catch only a named, expected failure; everything else reaches the boundary (docs/ASSERTIONS.md).
+- **A CLAUDE.md line is not a fix** for a code bug, and a process rule that can be checked becomes a check.
+- **His setup is the test:** a bug he saw is fixed when it's gone in his setup (Chrome on Windows, 1536×639 at 125%, the live
+  server). If you can only verify headless or locally, say exactly that.
+- **Unspecified behaviour** (a rule or UX choice nobody decided): ask, or write the decision in HANDOFF.md, before coding a guess.
+- **The UI decisions behind most UI bugs** — follow these in new code and fix toward them:
+  - One mechanism per question (what's under the pointer, which screen shows, which AI plays).
+  - UI state is derived from the game state and mode, or reset in one place; an overlay exists only in a mode that uses it.
+  - Fixed slots: controls and labels keep their place and size across states; text never moves its neighbours; a
+    confirmation never appears under the tap that asked for it.
+  - Local first: show what's known locally at once; the network only adds; a screen is chosen only once the data that
+    decides it has arrived.
+  - One source of truth; everything else derives from it.
+  - Animation follows the state and never gates input.
+- **Showing the ledger doesn't end the work.** A question waiting on the owner blocks only that item; keep going on the rest.
+
 ## Change loop (every time)
 1. Edit **sources only**:
    - rules: `src/engine_data.js` (cards, boards, map generation), `src/engine_rules.js` (state, actions, turn order, end of game, Elo, redaction), `src/engine_ai.js` (named AI players; `engine_bot.js` belongs to the AI training code)
