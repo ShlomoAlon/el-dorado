@@ -41,9 +41,9 @@ function say(html){const M=$('#pmsg');if(M.__h===html)return;setHTML(M,html);
   if(CHECKS)after(()=>assert(M.scrollWidth<=M.clientWidth+1,'view: the prompt\'s message fits on one line ('+M.textContent+')'));}
 /* every turn button: its words and its slot (s3: right, above the big one's edge; s2: left; p: the big one). Labels are
    data, so every one is checked against its slot (checkLabels), not only those a test happens to show */
-const BTN={undo:{t:'Undo',s:'s3',id:'bUndo'},cards:{t:'See cards',s:'s3',id:'bMkt'},keepAll:{t:'Keep all',s:'s3',id:'bAll'},keepNone:{t:'None',s:'s3',id:'bAll'},
+const BTN={undo:{t:'Undo',s:'s3',id:'bUndo'},cards:{t:'Cards',s:'s3',id:'bMkt'},keepAll:{t:'Keep all',s:'s3',id:'bAll'},keepNone:{t:'None',s:'s3',id:'bAll'},
   cancel:{t:'Cancel',s:'s2',id:'bCan'},stop:{t:'Stop',s:'s2',id:'bCan'},back:{t:'Back',s:'s2',id:'bCan'},results:{t:'Results',s:'s2',id:'bRes'},
-  end:{t:'End turn',s:'p',id:'bEnd'},endAnyway:{t:'End turn anyway',s:'p',id:'bEndA'},endKeep:{t:'End turn',s:'p',id:'bEnd2'},discardEnd:{t:'Discard & end turn',s:'p',id:'bEnd2'},
+  end:{t:'End turn',s:'p',id:'bEnd'},endAnyway:{t:'End anyway',s:'p',id:'bEndA'},endKeep:{t:'End turn',s:'p',id:'bEnd2'},discardEnd:{t:'Discard & end',s:'p',id:'bEnd2'},
   newGame:{t:'New game',s:'p',id:'bNew'},reveal:{t:'Reveal hand',s:'p',id:'bRev'},confirm:{t:'Confirm',s:'p',id:'bOk'},remove:{t:'Remove',s:'p',id:'bOk'},skip:{t:'Skip',s:'p',id:'bOk'}};
 function updatePrompt(){
   const T=$('#ptxt'),B=$('#actBtns'),timed=!!S&&online()&&!G.replay;
