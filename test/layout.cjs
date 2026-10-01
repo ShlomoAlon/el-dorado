@@ -69,10 +69,14 @@ const CHECK = () => {
       ['play, market closed', async () => { await p.click('#histBtn', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }], // (back under the prompt)
       // another player's turn as a recap under the prompt (more steps than fit on a phone), market closed and open
       ['recap of an AI turn', async () => { await p.evaluate(() => { const E = window.__ED, S = E.S; S.players[1].ai = 'raleigh';
-        E.playEvents([{ e: 'play', pl: 1, k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { e: 'play', pl: 1, k: 'action', ts: ['cartographer'], n: 2 },
+        // (the recap is drawn from the game's journal, as an AI's real turn would leave it)
+        S.log.push(...[{ e: 'play', pl: 1, k: 'move', ts: ['explorer'], n: 1, sym: 'j' }, { e: 'play', pl: 1, k: 'action', ts: ['cartographer'], n: 2 },
           { e: 'play', pl: 1, k: 'rubble', ts: ['traveler', 'sailor'] }, { e: 'play', pl: 1, k: 'buy', ts: ['traveler', 'traveler', 'explorer'], got: 'scout', paid: 2.5 },
-          { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1, ts: ['sailor'] }], 0); E.render(); }); }],
-      ['recap, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await settle(p); const n = await p.evaluate(() => document.querySelectorAll('#feed .fg:not(.gone)').length); if (!n) throw new Error('no recap shown'); }],
+          { e: 'play', pl: 1, k: 'end', kept: 1, disc: 1, ts: ['sailor'] }].map(e => ({ ...e, r: S.round }))); E.render(); }); }],
+      // (owner, 2026-10-01: the recap shows only where the prompt holds six cards; beside an open market on a small phone it hides)
+      ['recap, market open', async () => { await p.click('#mktBtn', { timeout: 5000 }); await settle(p); const r = await p.evaluate(() => { const pr = document.querySelector('#prompt'), ps = getComputedStyle(pr);
+        return { n: document.querySelectorAll('#feed .fg').length, room: pr.clientWidth - parseFloat(ps.paddingLeft) - parseFloat(ps.paddingRight), six: parseFloat(ps.getPropertyValue('--six')) }; });
+        if ((r.room >= r.six - .5) !== (r.n > 0)) throw new Error(`recap ${r.n ? 'shown' : 'hidden'} with room ${r.room} for ${r.six}`); }],
       ['replay, history on the left', async () => { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForFunction(() => window.__ED.G.replay); await settle(p);
         await p.evaluate(() => { const r = document.querySelector('#rbR'); r.value = Math.floor(r.max * .4); r.dispatchEvent(new Event('input')); }); await p.click('#histBtn', { timeout: 5000 }); }],
       ['replay', async () => { await p.click(await p.evaluate(() => getComputedStyle(document.querySelector('#lside')).position === 'fixed') ? '#lside .hx' : '#histBtn', { timeout: 5000 }); }], // (history hidden)

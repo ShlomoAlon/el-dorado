@@ -113,7 +113,7 @@ function describeAction(a,st){
 /* the next action's space and card, marked on the board and in the hand */
 export function replayDecorate(){if(G.replay.hover){UI.targets=new Map([[G.replay.hover,{kind:'move'}]]);return;}const a=replayNext();if(!a||S.over)return;const x=a[1];
   if(x.to&&x.to[0]!=='B'&&hexAt(S,x.to))UI.targets=new Map([[x.to,{kind:x.t==='pay'?(hexAt(S,x.to).type==='c'?'camp':'rubble'):'move'}]]);}
-export function replayPromptHTML(){
+function replayPromptHTML(){
   const R=G.replay,a=replayNext();
   if(!a)return`<b>End of the replay.</b> ${S.over?'The game is over.':'The log stops here'+(R.log.result&&R.log.result.capped?' (it hit the 25-round cap).':'.')}`;
   const pl=S.players[a[0]],st=JSON.parse(R.states[R.i]);

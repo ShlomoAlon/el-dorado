@@ -16,6 +16,10 @@ export const diagLog = () => lines.slice();
 export const shifts = [], churn = []; // (checks: every layout shift and every unchanged rebuild seen, for tests)
 /* checks: what is "in play" comes from the page (main.js), so this module stays free of the game's state */
 let inPlay = () => false, expectedAt = -1e9;
+/* when play started and stopped (frameMark notes each change, timed at the start of the frame that shows it): the browser
+   reports a layout shift later, in a batch, so a shift is judged by whether play was on at its own time, not at the report's */
+const playLog = [[-Infinity, false]];
+const playAt = t => { for (let i = playLog.length - 1; i >= 0; i--) if (playLog[i][0] <= t) return playLog[i][1]; return false; };
 /* code that changes the layout on purpose (the game area resized, the market or history moved, a replay's dock opened)
    says so first: shifts in the next 600 ms are that change, not a jump */
 export function expectLayout() { expectedAt = performance.now(); }
@@ -28,8 +32,8 @@ export function checksInit(during) {
     new PerformanceObserver(list => { for (const e of list.getEntries()) for (const s of e.sources || []) {
       const n = s.node, who = !n ? '?' : n.id ? '#' + n.id : n.nodeType === 1 ? n.tagName.toLowerCase() + (n.className && typeof n.className === 'string' ? '.' + n.className.split(' ')[0] : '') : (n.parentElement && n.parentElement.id ? '#' + n.parentElement.id + ' text' : 'text');
       const d = `${Math.round(s.currentRect.x - s.previousRect.x)},${Math.round(s.currentRect.y - s.previousRect.y)} size ${Math.round(s.currentRect.width - s.previousRect.width)}×${Math.round(s.currentRect.height - s.previousRect.height)}`;
-      shifts.push({ who, d, input: e.hadRecentInput }); diag(`shift ${who} by ${d}${e.hadRecentInput ? ' (after input)' : ''}`);
-      if (inPlay() && !e.hadRecentInput && Math.abs(e.startTime - expectedAt) > 600) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ')'); } })
+      shifts.push({ who, d, input: e.hadRecentInput, play: playAt(e.startTime) }); diag(`shift ${who} by ${d}${e.hadRecentInput ? ' (after input)' : ''}`);
+      if (playAt(e.startTime) && !e.hadRecentInput && Math.abs(e.startTime - expectedAt) > 600) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ' by ' + d + ')'); } })
       .observe({ type: 'layout-shift', buffered: true });
   // churn: a frame that removes an element and adds an identical new one rebuilt what hadn't changed (CLAUDE.md: a view
   // part writes only what changed). An element moved (removed and put back) is not a rebuild; identical means the same
@@ -48,9 +52,13 @@ export function checksInit(during) {
   churnMO = new MutationObserver(judge);
   churnMO.observe(document.getElementById('app'), { subtree: true, childList: true });
 }
-/* the frame loop marks each frame (frame.js flush): what one frame wrote is judged on its own */
+/* the frame loop marks each frame (frame.js flush): when play starts or stops, and what one frame wrote, judged on its own */
 let churnMO = null, churnJudge = null;
-export function frameMark() { if (churnMO) { const r = churnMO.takeRecords(); if (r.length) churnJudge(r); } }
+export function frameMark() {
+  if (!CHECKS) return;
+  const p = inPlay(); if (p !== playLog[playLog.length - 1][1]) { playLog.push([performance.now(), p]); if (playLog.length > 64) playLog.shift(); }
+  if (churnMO) { const r = churnMO.takeRecords(); if (r.length) churnJudge(r); }
+}
 export function debugInit() {
   if (!DEBUG) return;
   const wrap = document.createElement('div'); wrap.style.cssText = 'position:fixed;left:0;top:0;z-index:100;pointer-events:none;max-width:70vw';

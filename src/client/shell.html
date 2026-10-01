@@ -210,14 +210,15 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #app.replaying #prompt{display:none}
 #app.nomkt{--mktFoot:16px} /* (a class set by market.js, not :has(): every insertion anywhere in the game area would re-check a :has() and restyle the whole board) */
 #mkt.cramped{display:none}
-#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;box-sizing:border-box;top:var(--row2,64px);width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:7px 14px;border-radius:12px;font-size:12px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
+@property --six{syntax:'<length>';inherits:true;initial-value:0px} /* the recap's width: six cards side by side (the prompt is sized to it: + padding 14 and border 1, each side) */
+#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;box-sizing:border-box;top:var(--row2,64px);--fw:52px;--six:calc(var(--fw)*6 + 60px);width:min(calc(var(--six) + 30px),calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:7px 14px;border-radius:12px;font-size:12px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
 #prompt b{color:var(--gold2)}
 #prompt .who{display:inline-flex;align-items:center;gap:7px;font-weight:800;margin-right:8px;color:var(--text)}
 #prompt .who i{width:11px;height:11px;border-radius:50%}
 #prompt .m{color:var(--muted)}
 /* another player's turn: their cards in a row under the prompt text (ui_view.js feedRender); newest on the right, the oldest clip */
-#feed{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px -6px 0;padding-top:8px;border-top:1px solid var(--line);--fw:52px}
-#feed .frow{flex:1;display:flex;flex-direction:row-reverse;flex-wrap:wrap;align-items:flex-end;justify-content:flex-end;column-gap:18px;row-gap:60px;min-width:0;overflow:hidden;padding:2px 2px 0;height:calc(var(--fw)*1.4 + 22px);box-sizing:border-box}
+#feed{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px -6px 0;padding-top:8px;border-top:1px solid var(--line)}
+#feed .frow{flex:none;display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:12px;row-gap:10px;width:var(--six);padding:2px 0 0;min-height:calc(var(--fw)*1.4 + 22px);box-sizing:border-box} /* room for six cards side by side; more go on a second line (feed.js checkSize); shown only where the prompt holds it (geo.recapFits) */
 .fg{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
 .fg.new{animation:fgIn .32s var(--ease) backwards}
 .fg .frc{display:flex;align-items:center}
@@ -308,8 +309,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #choice .ct{font-size:17px;font-weight:700;color:var(--text)}#choice .ct b{color:var(--gold2)}
 #choice .cs{font-size:12.5px;color:var(--muted);margin-top:3px}#choice .cs b{color:var(--text)}
 #vp{transition:opacity .25s}#vp.dim{opacity:.32}
-#ptxt{min-height:1.4em;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;position:relative}#ptxt.timed{padding-inline:58px}#ptxt .timer{position:absolute;left:0;top:0;margin:0}#pmsg{flex:1 1 100%;text-align:center} /* the prompt is a fixed slot: one width, room for its words (one line here, two on a phone), so it never changes size with what it says */
-@container game (max-width:600px){#ptxt{min-height:2.8em}#actBtns{--bslotW:84px}}
+#ptxt{min-height:1.4em;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;position:relative}#ptxt.timed{padding-inline:58px}#ptxt .timer{position:absolute;left:0;top:0;margin:0}#pmsg{flex:1 1 100%;text-align:center;white-space:nowrap;min-width:0} /* one line, always (hud.js say) */ /* the prompt is a fixed slot: one width (the recap's six cards), room for its one line of words, so it never changes size with what it says */
+@container game (max-width:600px){#actBtns{--bslotW:84px}}
 @container game (max-width:600px){#choice{max-width:calc(100% - 128px);padding:8px 12px}#choice .ct{font-size:14px}#choice .cs{font-size:11.5px}} /* (clear of the zoom column) */
 @container game (max-height:520px){#choice{display:none}} /* (no room above the raised hand: the prompt says it) */
 #buySlot .bs-card{position:absolute;inset:0;border-radius:calc(var(--bw)*.08);outline:2px dashed var(--gold2);outline-offset:4px;animation:bsIn .28s var(--ease)}
@@ -481,7 +482,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* short game areas (landscape phones): the zoom column keeps fit / full screen / sound and sits clear of the piles */
 /* short game areas: the prompt (with another player's cards under it) also keeps clear of the turn buttons' column (--actFoot, set on the
    prompt itself by hud.js: a variable set on #app would restyle the whole board) */
-@container game (max-height:520px){#prompt{--mktFoot2:max(var(--mktFoot),var(--actFoot,16px));right:var(--mktFoot2);width:min(760px,calc(100% - var(--zoomFoot) - var(--mktFoot2)))}#feed{--fw:34px;margin-top:5px;padding-top:5px}
+@container game (max-height:520px){#prompt{--mktFoot2:max(var(--mktFoot),var(--actFoot,16px));right:var(--mktFoot2);--fw:34px;width:min(calc(var(--six) + 30px),calc(100% - var(--zoomFoot) - var(--mktFoot2)))}#feed{margin-top:5px;padding-top:5px}
 }
 @container game (max-height:520px){#app{--zoomFoot:140px}.zoomctl{top:var(--row2,64px);transform:none;flex-direction:row}.zoomctl button:not(#fsBtn):not(#sndBtn):not(#zfit){display:none}
 }
@@ -504,7 +505,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   #rulesBtn{display:none}
   #histBtn{padding:0 9px}#histBtn span{display:none} /* phones: the icon alone leaves the player chips room */
   #app{--mw:44px;--mktR:6px;--zoomFoot:12px}
-  #feed{--fw:34px;flex-direction:column;gap:5px}#feed .frow{column-gap:12px;max-width:100%;flex:none;width:100%}.fg .fcap{font-size:10px}
+  #prompt{--fw:34px}#feed{flex-direction:column;gap:5px}.fg .fcap{font-size:10px}
   #app{--row2:58px}
   #market{gap:7px}
   #mkt .mslot:hover{transform:none}

@@ -9,6 +9,7 @@
     "deploy": "node build.mjs && wrangler deploy"
   },
   "devDependencies": {
+    "globals": "^17.13.0",
     "wrangler": "^4.45.0"
   }
 }

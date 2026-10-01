@@ -20,7 +20,8 @@ import { rectT } from './hand.js';
 import { marketRectOf } from './market.js';
 import { setTrail } from './board/overlays.js';
 import { load, store } from './store.js';
-import { expectLayout } from './debug.js';
+import { expectLayout, CHECKS } from './debug.js';
+import { geo } from './geometry.js';
 /* whose turns are watched as they're played (their cards fly into the row, their moves leave a trail): the AIs (local),
    everyone but me (online); never in replays, where the actor's own hand is shown */
 export function feedWatch(pl){if(G.replay||pl==null)return false;return online()?pl!==NET.seat:isAI(pl);}
@@ -28,6 +29,15 @@ function chipRect(pl){const c=document.querySelectorAll('#players .pchip')[pl];r
 /* the row's state: which turn it shows (null: nothing drawn yet, so a page that opens on a turn doesn't replay its flies) */
 const ROW={key:null};
 function rowReset(){ROW.key=null;}
+/* the recap's size (owner, 2026-10-01): room for six cards side by side, which most turns don't fill; a turn with more
+   goes on to a second line below, so a card already shown never moves. The prompt is sized to this row, not to the
+   screen. Checked whenever the row changes (a measurement, so after the update) */
+function checkSize(F){
+  const card=F.querySelector('.fc');if(!card)return;
+  const six=6*card.offsetWidth+5*12,row=F.firstElementChild.offsetWidth,box=$('#prompt').offsetWidth;
+  assert(row<=six+2,'view: the recap is no wider than six cards side by side');
+  assert(box<=six+32,'view: the prompt is sized to the recap (six cards), not to the screen');
+}
 /* a step's caption: only what its cards don't show (owner: the card's name and effect are on its face; wide captions pushed
    steps out of the row). Pointing at the step says everything in words. */
 function feedCap(g){
@@ -53,13 +63,13 @@ function stepHTML(g,attr,pl){
 /* what makes a drawn step out of date: a move that went further, a blockade taken, an arrival */
 const stepSig=g=>`${g.n||0}|${g.bl||''}|${g.arr?1:0}|${g.log.length}`;
 /* the steps of turn t in box, one element per step (data-s="turn|index"), updated in place: a new step is added, a step
-   that changed gets its caption and words again, and nothing else is written (the row and the column both use this).
-   newestFirst: the row's order. Returns the elements added. */
-function stepsInto(box,t,newestFirst){
+   that changed gets its caption and words again, and nothing else is written (the row and the column both use this, in
+   the order played: a new step goes at the end, so no step already shown moves). Returns the elements added. */
+function stepsInto(box,t){
   const pl=S.players[t.pl],added=[];
   for(const el of[...box.children]){const[k,i]=(el.dataset.s||'').split('|');if(k!==t.key||+i>=t.steps.length)el.remove();}
   t.steps.forEach((g,i)=>{const key=t.key+'|'+i,v=stepSig(g);let el=box.querySelector(`[data-s="${key}"]`);
-    if(!el){box.insertAdjacentHTML(newestFirst?'afterbegin':'beforeend',stepHTML(g,`data-s="${key}"`,pl));el=newestFirst?box.firstElementChild:box.lastElementChild;el.dataset.v=v;added.push({el,g});}
+    if(!el){box.insertAdjacentHTML('beforeend',stepHTML(g,`data-s="${key}"`,pl));el=box.lastElementChild;el.dataset.v=v;added.push({el,g});}
     else if(el.dataset.v!==v){el.dataset.v=v;el.querySelector('.fcap').innerHTML=feedCap(g);el.title=stepWords(g,pl);}});
   return added;
 }
@@ -161,7 +171,7 @@ function columnUpdate(){
     const at=prev?prev.nextElementSibling:list.firstElementChild;if(at!==el)list.insertBefore(el,at);prev=el;
     if(t.sys){setHTML(el,esc(logLine(t.sys)));continue;}
     if(!el.firstElementChild)el.innerHTML='<div class="hwhead"></div><div class="hsteps"></div>';
-    setHTML(el.firstElementChild,turnHead(t));stepsInto(el.lastElementChild,t,false); // (a turn's steps are added in place as it's played)
+    setHTML(el.firstElementChild,turnHead(t));stepsInto(el.lastElementChild,t); // (a turn's steps are added in place as it's played)
   }
 }
 function update(){
@@ -174,13 +184,14 @@ function update(){
   const t=LATEST=turnsOf(S.log).filter(t=>!t.sys).pop()||null,watched=!!t&&feedWatch(t.pl);
   if(HOVER&&!HOVER.el.isConnected)HOVER=null; // (the step pointed at is gone)
   if(HOVER)setTrail(HOVER.paths,HOVER.color);else setTrail(watched&&MODE!=='off'?t.steps.flatMap(g=>g.paths):[],t?S.players[t.pl].color:'');
-  if(G.replay||UI.cover||MODE!=='center'){hide();return;}
+  if(G.replay||UI.cover||MODE!=='center'||!geo.recapFits){hide();return;} // (no room for six cards: owner, 2026-10-01, hidden rather than squeezed)
   if(!F.firstElementChild)F.innerHTML='<div class="frow"></div>'; // (nothing played yet: the row keeps its place, so the box doesn't change size)
   const row=F.firstElementChild;
   if(!t){for(const el of[...row.children])el.remove();}
-  else{const was=ROW.key,added=stepsInto(row,t,true);ROW.key=t.key;
+  else{const was=ROW.key,added=stepsInto(row,t);ROW.key=t.key;
     // a watched player's new steps fly in (out of their chip; a card bought or taken, out of the market), not a turn the page opened on
-    if(watched&&was!==null&&added.length&&!reduceMotion){for(const a of added)a.el.classList.add('new');after(()=>feedFly(added,t.pl));}}
+    const fly=watched&&was!==null&&added.length&&!reduceMotion;if(fly)for(const a of added)a.el.classList.add('new');
+    if(added.length)after(()=>{if(CHECKS)checkSize(F);if(fly)feedFly(added,t.pl);});}
   F.hidden=false;
 }
 /* the newest turn on show in the row (for pointing at its steps) */
@@ -193,7 +204,7 @@ function feedFly(added,pl){
     if(g.got)flies.push({kind:'got',from:marketRectOf(g.got)});
     for(const fl of flies){if(!gel.isConnected||!fl.from||!fl.from.width)continue;
     [...gel.querySelectorAll(fl.kind==='got'?'.fc.got':'.fcs .fc')].forEach((tEl,i)=>{
-      const to=tEl.getBoundingClientRect();if(!to.width||to.top>=gel.parentNode.getBoundingClientRect().bottom)return; // (a step that dropped out of the row: nothing to fly to)
+      const to=tEl.getBoundingClientRect();if(!to.width)return;
       const el=document.createElement('div');el.className='card fly';el.innerHTML=cardHTML(tEl.dataset.t);$('#cards').appendChild(el);
       const fr=fl.kind==='hand'?{left:fl.from.left+fl.from.width/2-to.width*.4,top:fl.from.top+fl.from.height/2-to.height*.4,width:to.width*.8,height:to.height*.8}:fl.from;
       const [x0,y0,,s0]=rectT(fr,0),[x1,y1,,s1]=rectT(to,0),T=(x,y,r,s)=>`translate3d(${x}px,${y}px,0) rotate(${r}deg) scale(${s})`;

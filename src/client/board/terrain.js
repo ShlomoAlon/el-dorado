@@ -35,31 +35,22 @@ export function label(layer,x,y,text,o){
 /* once the game's fonts have loaded: measure the baselines again (the board may have been drawn with fallback fonts) */
 export function relabel(){for(const k in baseCache)delete baseCache[k];for(let i=labels.length-1;i>=0;i--){if(!labels[i].isConnected){labels.splice(i,1);continue;}placeLabel(labels[i]);}}
 
-let drawn='';
-/* draw the board for MAP; the same course with the same blockades already drawn (the start screen's preview of this
-   deal) is kept: starting that game costs no redraw */
+let drawnMap=null,drawn='',DEFS=null;
+/* the terrain the board shows: what buildBoard draws depends on this alone (a new deal on the same terrain, with other
+   blockades, keeps the board; the blockade layer follows the deal itself) */
+const terrainOf=M=>M.course+'|'+[...M.hexes.values()].map(h=>h.k+h.type+h.val+(h.sym||'')+(h.num||'')+h.tile+(M.tiles[h.tile].end?'e':'')).join()+'|'+M.conns.map(c=>c.edges.join(';')).join();
+/* draw the board for MAP, once per terrain (starting the game shown on the start screen, or a new deal on the same
+   course, costs no redraw) */
 export function buildBoard(){
-  const sig=MAP.course+'|'+MAP.blockDefs.map(b=>b.n+':'+b.conn).join(',');
-  if(drawn===sig)return false;
-  drawn=sig;
-  const svg=$('#board'),svg2=$('#board2'),lab=$('#blabels');svg.innerHTML='';svg2.innerHTML='';lab.innerHTML='';$('#blabels2').innerHTML='';
+  if(drawnMap===MAP)return false;
+  drawnMap=MAP;const t=terrainOf(MAP);if(drawn===t)return false;
+  drawn=t;
+  const svg=$('#board'),svg2=$('#board2'),lab=$('#blabels');
+  for(const c of[...svg.children])if(c!==DEFS)c.remove(); // (the definitions never change: drawn once, kept)
+  svg2.innerHTML='';lab.innerHTML='';$('#blabels2').innerHTML='';
   for(const s of[svg,svg2]){s.setAttribute('width',layout().w);s.setAttribute('height',layout().h);s.setAttribute('viewBox',`${layout().minX} ${layout().minY} ${layout().w} ${layout().h}`);}
   for(const id of['#pieces','#bfx']){const e=$(id);e.style.width=layout().w+'px';e.style.height=layout().h+'px';}
-  const defs=sv('defs',null,svg);
-  for(const t in TFILL){const g=sv('linearGradient',{id:'gr-'+t,x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':TFILL[t][0]},g);sv('stop',{offset:1,'stop-color':TFILL[t][1]},g);}
-  for(const t in TSHADE)TSHADE[t].forEach(([a,b],i)=>{const g=sv('linearGradient',{id:'gr-'+t+(i+1),x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':a},g);sv('stop',{offset:1,'stop-color':b},g);});
-  const rg=sv('radialGradient',{id:'cityGlow'},defs);sv('stop',{offset:0,'stop-color':'#ffd66b','stop-opacity':.6},rg);sv('stop',{offset:.6,'stop-color':'#ffc94a','stop-opacity':.15},rg);sv('stop',{offset:1,'stop-color':'#ffd66b','stop-opacity':0},rg);
-  const tg=sv('radialGradient',{id:'turnGlow'},defs);sv('stop',{offset:0,'stop-color':'#fff6d6','stop-opacity':.85},tg);sv('stop',{offset:.55,'stop-color':'#ffd66b','stop-opacity':.45},tg);sv('stop',{offset:1,'stop-color':'#ffd66b','stop-opacity':0},tg);
-  const hl=sv('radialGradient',{id:'hexShine',cx:.35,cy:.25,r:.8},defs);sv('stop',{offset:0,'stop-color':'#fff','stop-opacity':.2},hl);sv('stop',{offset:.6,'stop-color':'#fff','stop-opacity':0},hl);
-  // terrain textures
-  const pat=(id,w,h,draw)=>{const p=sv('pattern',{id,patternUnits:'userSpaceOnUse',width:w,height:h},defs);draw(p);};
-  pat('p-j',26,26,p=>{for(const[x,y,a,s]of[[6,7,-30,1],[19,5,40,.8],[13,17,10,1.1],[3,21,-60,.8],[23,19,70,.9]]){
-    sv('path',{d:'M0 -5 Q3.5 0 0 5 Q-3.5 0 0 -5Z',fill:'rgba(0,30,10,.22)',transform:`translate(${x} ${y}) rotate(${a}) scale(${s})`},p);
-    sv('path',{d:'M0 -4 L0 4',stroke:'rgba(255,255,255,.08)','stroke-width':.6,transform:`translate(${x} ${y}) rotate(${a}) scale(${s})`},p);}});
-  pat('p-w',28,14,p=>{sv('path',{d:'M0 5 Q3.5 2 7 5 T14 5 T21 5 T28 5',fill:'none',stroke:'rgba(255,255,255,.18)','stroke-width':1.2},p);sv('path',{d:'M-7 12 Q-3.5 9 0 12 T7 12 T14 12 T21 12 T28 12',fill:'none',stroke:'rgba(0,20,60,.18)','stroke-width':1.1},p);});
-  pat('p-v',16,16,p=>{sv('circle',{cx:4,cy:4,r:1.1,fill:'rgba(120,70,0,.2)'},p);sv('circle',{cx:12,cy:11,r:.9,fill:'rgba(120,70,0,.16)'},p);sv('circle',{cx:13,cy:3,r:.6,fill:'rgba(255,255,255,.25)'},p);});
-  pat('p-r',20,20,p=>{for(const[x,y,s]of[[5,5,3],[14,8,2.4],[8,15,2.6],[17,17,1.8]])sv('path',{d:`M${x-s} ${y+s*.6} Q${x-s} ${y-s*.7} ${x} ${y-s*.8} Q${x+s} ${y-s*.6} ${x+s} ${y+s*.6}Z`,fill:'rgba(40,42,40,.2)',stroke:'rgba(255,255,255,.12)','stroke-width':.5},p);});
-  pat('p-c',12,12,p=>{sv('path',{d:'M0 12 L12 0',stroke:'rgba(0,0,0,.12)','stroke-width':3},p);});
+  if(!DEFS)DEFS=drawDefs(svg);
   L.plates=sv('g',null,svg);L.terrain=sv('g',null,svg);L.city=sv('g',null,svg);
   L.hl=sv('g',null,svg2);L.trail=sv('g',{'pointer-events':'none'},svg2);L.path=sv('g',{'pointer-events':'none'},svg2);L.bl=sv('g',null,svg2);
   // board plates (the physical boards): drop shadow + rim
@@ -108,6 +99,25 @@ export function buildBoard(){
   let px=-C.dy,py=C.dx;if(px<0||(Math.abs(px)<.35&&py<0)){px=-px;py=-py;}
   const side=px>.35;label(lab,C.x+(side?px*40+2:0),C.y+(side?py*40+5:44),'El Dorado',{anchor:side?'start':'middle',family:'Young Serif, Georgia, serif',size:15,color:'#f8dc97'});
   return true;
+}
+/* gradients, patterns and icons the board's shapes use: the same for every course */
+function drawDefs(svg){
+  const defs=sv('defs',null,svg);
+  for(const t in TFILL){const g=sv('linearGradient',{id:'gr-'+t,x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':TFILL[t][0]},g);sv('stop',{offset:1,'stop-color':TFILL[t][1]},g);}
+  for(const t in TSHADE)TSHADE[t].forEach(([a,b],i)=>{const g=sv('linearGradient',{id:'gr-'+t+(i+1),x1:0,y1:0,x2:.3,y2:1},defs);sv('stop',{offset:0,'stop-color':a},g);sv('stop',{offset:1,'stop-color':b},g);});
+  const rg=sv('radialGradient',{id:'cityGlow'},defs);sv('stop',{offset:0,'stop-color':'#ffd66b','stop-opacity':.6},rg);sv('stop',{offset:.6,'stop-color':'#ffc94a','stop-opacity':.15},rg);sv('stop',{offset:1,'stop-color':'#ffd66b','stop-opacity':0},rg);
+  const tg=sv('radialGradient',{id:'turnGlow'},defs);sv('stop',{offset:0,'stop-color':'#fff6d6','stop-opacity':.85},tg);sv('stop',{offset:.55,'stop-color':'#ffd66b','stop-opacity':.45},tg);sv('stop',{offset:1,'stop-color':'#ffd66b','stop-opacity':0},tg);
+  const hl=sv('radialGradient',{id:'hexShine',cx:.35,cy:.25,r:.8},defs);sv('stop',{offset:0,'stop-color':'#fff','stop-opacity':.2},hl);sv('stop',{offset:.6,'stop-color':'#fff','stop-opacity':0},hl);
+  // terrain textures
+  const pat=(id,w,h,draw)=>{const p=sv('pattern',{id,patternUnits:'userSpaceOnUse',width:w,height:h},defs);draw(p);};
+  pat('p-j',26,26,p=>{for(const[x,y,a,s]of[[6,7,-30,1],[19,5,40,.8],[13,17,10,1.1],[3,21,-60,.8],[23,19,70,.9]]){
+    sv('path',{d:'M0 -5 Q3.5 0 0 5 Q-3.5 0 0 -5Z',fill:'rgba(0,30,10,.22)',transform:`translate(${x} ${y}) rotate(${a}) scale(${s})`},p);
+    sv('path',{d:'M0 -4 L0 4',stroke:'rgba(255,255,255,.08)','stroke-width':.6,transform:`translate(${x} ${y}) rotate(${a}) scale(${s})`},p);}});
+  pat('p-w',28,14,p=>{sv('path',{d:'M0 5 Q3.5 2 7 5 T14 5 T21 5 T28 5',fill:'none',stroke:'rgba(255,255,255,.18)','stroke-width':1.2},p);sv('path',{d:'M-7 12 Q-3.5 9 0 12 T7 12 T14 12 T21 12 T28 12',fill:'none',stroke:'rgba(0,20,60,.18)','stroke-width':1.1},p);});
+  pat('p-v',16,16,p=>{sv('circle',{cx:4,cy:4,r:1.1,fill:'rgba(120,70,0,.2)'},p);sv('circle',{cx:12,cy:11,r:.9,fill:'rgba(120,70,0,.16)'},p);sv('circle',{cx:13,cy:3,r:.6,fill:'rgba(255,255,255,.25)'},p);});
+  pat('p-r',20,20,p=>{for(const[x,y,s]of[[5,5,3],[14,8,2.4],[8,15,2.6],[17,17,1.8]])sv('path',{d:`M${x-s} ${y+s*.6} Q${x-s} ${y-s*.7} ${x} ${y-s*.8} Q${x+s} ${y-s*.6} ${x+s} ${y+s*.6}Z`,fill:'rgba(40,42,40,.2)',stroke:'rgba(255,255,255,.12)','stroke-width':.5},p);});
+  pat('p-c',12,12,p=>{sv('path',{d:'M0 12 L12 0',stroke:'rgba(0,0,0,.12)','stroke-width':3},p);});
+  return defs;
 }
 function drawMountain(g,h,x,y){
   const v=hash(h.q,h.r);

@@ -1,7 +1,7 @@
 /* What is drawn over the board for the current turn: the spaces you can move to (targets), the blockades, the dotted
    path and tip while you point at a target, the cards-paid dots on a rubble space, and another player's trail.
    Each is its own layer and changes only when what it shows does. */
-import { R, SQ3, key, hexAt, def, SYMCOL, SYMNAME, blkLabel } from '../../engine.gen.js';
+import { R, SQ3, key, hexAt, def, SYMCOL, SYMNAME, blkLabel, assert } from '../../engine.gen.js';
 import { $, sv, reduceMotion } from '../dom.js';
 import { S, MAP, UI, G, cur } from '../state.js';
 import { L, hexPts, label, edgeSeg } from './terrain.js';
@@ -24,14 +24,18 @@ function updateTargets() {
 
 /* ---------- blockades: drawn when the deal is shown and when one is taken; otherwise only their target mark changes ---------- */
 export const blPos = {};
-let blDeal = ''; const blEls = new Map(); // bi -> the blockade's elements (its group on the board, its two labels)
-/* one element set per blockade, drawn once per deal; a blockade that is taken leaves the board alone (nothing else is
-   redrawn). (a new board comes with a reset: blDeal '') */
+let blLayer = null; const blEls = new Map(); // bi -> {key, els}: a blockade's elements (its group on the board, its two labels)
+/* one element set per blockade, keyed by what it draws: an open blockade not drawn is drawn (a new deal, or one an undo
+   gave back), a taken one goes, and one already drawn the same is left alone (a new deal on the same course keeps the
+   blockades it shares). A board drawn again (a new layer) draws them all. blPos (where each is) is kept here too. */
 function updateBlockades() {
-  const deal = MAP.course + '|' + S.seed;
-  if (blDeal !== deal) { blDeal = deal; L.bl.innerHTML = ''; $('#blabels2').innerHTML = ''; blEls.clear();
-    S.blockades.forEach((B, bi) => { if (B.owner === null) blEls.set(bi, drawBlockade(B, bi)); }); }
-  for (const [bi, els] of blEls) if (S.blockades[bi].owner !== null) { for (const e of els) e.remove(); blEls.delete(bi); delete blPos[bi]; }
+  if (blLayer !== L.bl) { blLayer = L.bl; blEls.clear(); for (const k in blPos) delete blPos[k]; } // (the old layer and its labels are gone with the old board)
+  let open = 0;
+  S.blockades.forEach((B, bi) => { const has = blEls.get(bi), key = B.owner === null ? `${B.n}|${B.k}|${B.v}|${B.conn}` : null;
+    if (has && has.key !== key) { for (const e of has.els) e.remove(); blEls.delete(bi); delete blPos[bi]; }
+    if (key !== null) { open++; if (!blEls.has(bi)) blEls.set(bi, { key, els: drawBlockade(B, bi) }); } });
+  for (const bi of blEls.keys()) if (bi >= S.blockades.length) { for (const e of blEls.get(bi).els) e.remove(); blEls.delete(bi); delete blPos[bi]; } // (a deal with fewer blockades)
+  assert(blEls.size === open, 'view: the board shows exactly the open blockades');
   for (const bg of L.bl.querySelectorAll('.bl-badge')) {
     const k = 'B' + bg.dataset.bi, tg = UI.targets.has(k), cls = 'bl-badge' + (tg ? ' tgt' : '') + (hot === k ? ' hot' : '');
     if (bg.getAttribute('class') !== cls) bg.setAttribute('class', cls);
@@ -150,5 +154,5 @@ export const overlaysPart = { name: 'overlays',
     if (tsig !== targetsSig) { targetsSig = tsig; setHot(null); hideHover(); }
     updateBlockades(); updateTargets(); updatePips();
   },
-  reset() { rings.clear(); blSig = ''; targetsSig = ''; trailSig = ''; hot = null; hoverShown = false; for (const k in blPos) delete blPos[k]; L.hl.innerHTML = ''; L.path.innerHTML = ''; L.trail.innerHTML = ''; const b = $('#bfx'); b.innerHTML = ''; b.__sig = ''; },
+  reset() { rings.clear(); targetsSig = ''; trailSig = ''; hot = null; hoverShown = false; L.hl.innerHTML = ''; L.path.innerHTML = ''; L.trail.innerHTML = ''; const b = $('#bfx'); b.innerHTML = ''; b.__sig = ''; },
 };
