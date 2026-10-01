@@ -6,7 +6,8 @@ import { reduceMotion } from './dom.js';
 import { toast } from './dialogs.js';
 import { applyLocal } from './actions.js';
 // gen: which game is on show (aiReset: showGame); a move scheduled for an earlier one is dropped
-export const AIX={timer:0,mem:{},net:null,loading:null,failed:false,gen:0};
+// pace: the pauses' scale (1 in play; test/play.cjs plays whole games faster: the same moves, shorter pauses)
+export const AIX={timer:0,mem:{},net:null,loading:null,failed:false,gen:0,pace:1};
 export function aiNetLoad(){ // the neural network (~340 KB) is only fetched once a network AI is about to play
   if(AIX.net)return Promise.resolve(AIX.net);
   if(!AIX.loading)AIX.loading=(async()=>{
@@ -35,5 +36,5 @@ export function aiKick(){
     AIX.timer=0; // (before applying: the change schedules the next AI move)
     assert(applyLocal(seat,a,viewIdx()).ok,'the AI chooses a legal action');
   };
-  AIX.timer=setTimeout(go,!humanRacing()?60:reduceMotion?250:first?1000:750); // paced so the table can follow each card (no one left to follow: quick)
+  AIX.timer=setTimeout(go,AIX.pace*(!humanRacing()?60:reduceMotion?250:first?1000:750)); // paced so the table can follow each card (no one left to follow: quick)
 }

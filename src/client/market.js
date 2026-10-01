@@ -84,8 +84,8 @@ export const marketPart = { name: 'market', update};
 
 /* ---------- the purchase in progress: the card waits above the hand until it's paid for ---------- */
 export const buySlotPart = { name: 'buySlot', update(){const bs=$('#buySlot'),on=!!S&&UI.mode==='pay'&&!UI.cover;
-  if(!on){if(!bs.hidden)bs.hidden=true;return;} // (dataset.t says which card is drawn in it; hiding keeps it drawn)
-  if(bs.dataset.t!==UI.buy.src+UI.buy.idx){bs.dataset.t=UI.buy.src+UI.buy.idx;bs.querySelector('.bs-card').innerHTML=`<div class="mcard">${cardHTML(UI.buy.t)}</div>`;}
+  if(!on){if(!bs.hidden)bs.hidden=true;return;} // (dataset.t: the card type drawn in it; hiding keeps it drawn)
+  if(bs.dataset.t!==UI.buy.t){bs.dataset.t=UI.buy.t;bs.querySelector('.bs-card').innerHTML=`<div class="mcard">${cardHTML(UI.buy.t)}</div>`;} // (keyed by what it draws, the card type: the same card bought from another stack keeps its picture)
   const c=CT[UI.buy.t].cost,t=payTotal();setText($('#bsPaid'),fmt(t));setText($('#bsCost'),c);bs.classList.toggle('paid',t>=c);bs.hidden=false;}};
 
 /* where a card of the market is on screen now (a bought card flies from there): its slot, or the button that opens it */

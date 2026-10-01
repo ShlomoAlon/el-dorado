@@ -1,7 +1,7 @@
 // Every check in one command. Independent checks run side by side; the timing measurements run afterwards, alone.
-//   node test/run.mjs            build, import lint, rules, engine (quick), layout (5 sizes), game flows, board taps, menus, worker bundle, frame costs  (~50 s)
+//   node test/run.mjs            build, import lint, rules, engine (quick), layout (5 sizes), game flows, board taps, played games (3), menus, worker bundle, frame costs  (~60 s)
 //   node test/run.mjs --online   also online play end to end, against a game server the test starts itself  (+~45 s)
-//   node test/run.mjs --full     everything: engine (60 games + AI on every course), layout (11 sizes), online, board rendering
+//   node test/run.mjs --full     everything: engine (60 games + AI on every course), layout (11 sizes), played games (6), online, board rendering
 import { spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -19,6 +19,7 @@ const res = await Promise.all([
   ['layout', 'node test/layout.cjs' + (full ? '' : ' --quick')],
   ['flows', 'node test/flows.cjs'],
   ['taps', 'node test/taps.cjs'],
+  ['play', 'node test/play.cjs' + (full ? ' --games 6' : '')], // whole games through the UI, every assertion on (coverage)
   ['menus', 'node test/menus.cjs'],
   ['worker', 'npx wrangler deploy --dry-run --outdir /tmp/wdry'],
   ...(online ? [['online', 'node test/online.cjs']] : []),

@@ -105,7 +105,7 @@ function update() {
   // a removal to choose (Scientist, Travel Log): the hand is up (layoutCards), this says what's asked, the board steps back
   const q = acting && UI.mode === 'trashPick' && !UI.cover && S.turn.pending, qb = $('#choice');
   if (qb.hidden !== !q) qb.hidden = !q; $('#vp').classList.toggle('dim', !!q);
-  if (q) setHTML(qb, `<div class="ct"><b>${esc(CT[q.by].n)}</b> · remove up to ${plural(q.max, 'card')}</div><div class="cs">${UI.picks.length ? `<b>${UI.picks.length}</b> of ${q.max} chosen · they leave the game` : 'Tap cards to choose · they leave the game'}</div>`);
+  if (q) { setHTML(qb.firstElementChild, `<b>${esc(CT[q.by].n)}</b> · remove up to ${plural(q.max, 'card')}`); setHTML(qb.lastElementChild, UI.picks.length ? `<b>${UI.picks.length}</b> of ${q.max} chosen · they leave the game` : 'Tap cards to choose · they leave the game'); } // (two fixed parts: a pick rewrites only the count)
   layoutCards();
   // piles
   setText($('#deckN'), pl.deck.length); setText($('#discN'), pl.discard.length);
