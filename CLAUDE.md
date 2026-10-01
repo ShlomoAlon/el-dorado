@@ -53,8 +53,8 @@ Of 217 bugs, only 40 were fixed at the root and 163 fixes added nothing that wou
   function a second time for the same goal, stop: the design is wrong, not one patch short. Write the chain again from
   the symptom and change the decision (2026-10-01: the prompt's timer, then its message, then its game-over room, each
   patched in turn, when the real fault was one: the prompt's layout depended on the game state).
-- **Say what the fix is** in the commit message; a Claude Code hook (`.claude/hooks/commit-check.mjs`, in
-  `.claude/settings.json`) blocks a `git commit` without it: `Fix: ROOT|PARTIAL|HACK|none`, and for a fix `Decision:` (the design decision and what the fix
+- **Say what the fix is** in the commit message; `.claude/hooks/commit-check.mjs` refuses a commit without it,
+  both as a Claude Code hook (`.claude/settings.json`) and as git's commit-msg hook (`.githooks/`, installed by `node build.mjs`): `Fix: ROOT|PARTIAL|HACK|none`, and for a fix `Decision:` (the design decision and what the fix
   changes about it) and `Ratchet:` (the assertion that fails if it comes back). A HACK also needs `Owner OK:`.
 - **Never weaken a failing check** (assertion, test, budget) to get green: find out why it fails.
 - **No silent failures:** no empty `catch`, silent fallback or default, silently dropped input, or test check that skips
@@ -91,7 +91,7 @@ Of 217 bugs, only 40 were fixed at the root and 163 fixes added nothing that wou
    changes: `--full` (all 60 engine games + AI on every course, 11 layout sizes, online, board rendering).
    (The worker bundle check matters: Cloudflare's bundler rejects some things Node accepts; a failed bundle never deploys.)
 4. UI changes: load `public/index.html` in Playwright (Chromium is preinstalled; `NODE_PATH=$(npm root -g)`), take screenshots, look at them, check for page errors.
-5. Commit (clear message with its `Fix:` lines, which the Claude Code hook checks, + the attribution lines your environment asks for) and `git push origin main`.
+5. Commit (clear message with its `Fix:` lines, which the commit check enforces, + the attribution lines your environment asks for) and `git push origin main`.
 6. Tell him in 1–3 sentences what changed and that it's deploying.
 
 ## Libraries (owner's rule)
