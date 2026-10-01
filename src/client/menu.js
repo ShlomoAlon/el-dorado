@@ -52,6 +52,13 @@ const MODE={setup:'local',online:'online',room:'online',replays:'replays'};
 export function showMenu(){if(online()&&S.over){exitOnline();showHub();}else if(onlineGame())showHub();else showSetup();}
 
 /* show a screen (opening the dialog if it isn't open) */
+/* checks: a menu screen's actions (its last row: Start expedition, Leave, Start game) are on screen without scrolling,
+   measured once the screen is painted */
+function menuReach(){
+  if(!MENU.dlg.open)return;const sec=MENU.f.querySelector(`section[data-screen="${MENU.screen}"]`),row=sec&&sec.querySelector(':scope > .mrow');
+  if(!row||!row.offsetHeight)return;const r=row.getBoundingClientRect(),f=MENU.f.getBoundingClientRect();
+  assert(r.top>=f.top-1&&r.bottom<=f.bottom+1,"view: a menu screen's actions are on screen without scrolling ("+MENU.screen+': '+Math.round(r.bottom-f.bottom)+' px below)');
+}
 function menuOpen(screen){
   $('#overlay').innerHTML=''; // one window at a time: the menu replaces results, rules or a pile (never left underneath it)
   const d=MENU.dlg,ig=inGame(),rs=ig?resignSeat():-1;
@@ -68,6 +75,7 @@ function menuOpen(screen){
   // looking exactly the same (no fade: it is already on screen)
   if(d.open&&!d.matches(':modal')){d.close();d.showModal();MENU.f.focus({preventScroll:true});}
   else if(!d.open){d.showModal();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});}
+  if(CHECKS)requestAnimationFrame(()=>requestAnimationFrame(menuReach));
 }
 export function menuClose(){const d=MENU.dlg;document.documentElement.classList.remove('resume');if(!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
 // after signing in or out: the account bar and whatever depends on it

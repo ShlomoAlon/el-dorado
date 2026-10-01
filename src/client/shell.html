@@ -123,6 +123,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .chk{display:flex;gap:10px;align-items:flex-start;cursor:pointer;line-height:1.4}
 .chk input{margin:3px 0 0;flex:none;accent-color:var(--gold)} /* no default side margin: its left edge lines up with the column */
 .mrow{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
+/* a menu screen's actions keep their place at the menu's bottom edge, the content scrolling above them (a short window
+   never puts Start out of reach) */
+.modal.menu>section>.mrow{position:sticky;bottom:-26px;z-index:3;margin:22px -26px -26px;padding:14px 26px 26px;background:#121d19;border-top:1px solid var(--line)}
 .routeInfo{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5}
 .routeInfo b{color:var(--text)}
 #toast{position:fixed;left:50%;top:112px;transform:translateX(-50%);padding:9px 16px;border-radius:11px;font-size:13.5px;z-index:45;pointer-events:none;opacity:0;transition:opacity .2s,transform .25s var(--ease)}
