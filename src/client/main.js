@@ -3,7 +3,7 @@
 import { buildCourse, courseById, assert, aiChoose } from '../engine.gen.js';
 import { $ } from './dom.js';
 import { S, MAP, setMAP, UI, NET, G, canAct, online } from './state.js';
-import { addPart, render, flush } from './frame.js';
+import { addPart, render, flush, freshInit } from './frame.js';
 import { watchGeometry, geo } from './geometry.js';
 import { GAME_READY } from './ready.js';
 import { buildBoard, relabel } from './board/terrain.js';
@@ -35,7 +35,7 @@ for (const p of [derivePart, overlaysPart, piecesPart, hudPart, feedPart, market
 GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); });
 
 function boot() {
-  boundaryInit(); debugInit(); checksInit(() => !!S && !UI.preview && !document.getElementById('menu').open) /* (in play: a game on show, no menu over it) */; soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
+  boundaryInit(); debugInit(); { const inPlay = () => !!S && !UI.preview && !document.getElementById('menu').open; checksInit(inPlay); freshInit(inPlay); } /* (in play: a game on show, no menu over it) */ soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
   if (!document.documentElement.classList.contains('resume')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check)
   $('#deckPile').onclick = () => showPile('deck'); $('#discPile').onclick = () => showPile('discard');
   $('#rulesBtn').onclick = showRules; histInit();
