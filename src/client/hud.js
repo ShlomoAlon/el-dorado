@@ -39,6 +39,12 @@ function updateHeader(){
 /* the message: one line (owner, 2026-10-01), so a new message never moves what's below it */
 function say(html){const M=$('#pmsg');if(M.__h===html)return;setHTML(M,html);
   if(CHECKS)after(()=>assert(M.scrollWidth<=M.clientWidth+1,'view: the prompt\'s message fits on one line ('+M.textContent+')'));}
+/* every turn button: its words and its slot (s3: right, above the big one's edge; s2: left; p: the big one). Labels are
+   data, so every one is checked against its slot (checkLabels), not only those a test happens to show */
+const BTN={undo:{t:'Undo',s:'s3',id:'bUndo'},cards:{t:'See cards',s:'s3',id:'bMkt'},keepAll:{t:'Keep all',s:'s3',id:'bAll'},keepNone:{t:'None',s:'s3',id:'bAll'},
+  cancel:{t:'Cancel',s:'s2',id:'bCan'},stop:{t:'Stop',s:'s2',id:'bCan'},back:{t:'Back',s:'s2',id:'bCan'},results:{t:'Results',s:'s2',id:'bRes'},
+  end:{t:'End turn',s:'p',id:'bEnd'},endAnyway:{t:'End turn anyway',s:'p',id:'bEndA'},endKeep:{t:'End turn',s:'p',id:'bEnd2'},discardEnd:{t:'Discard & end turn',s:'p',id:'bEnd2'},
+  newGame:{t:'New game',s:'p',id:'bNew'},reveal:{t:'Reveal hand',s:'p',id:'bRev'},confirm:{t:'Confirm',s:'p',id:'bOk'},remove:{t:'Remove',s:'p',id:'bOk'},skip:{t:'Skip',s:'p',id:'bOk'}};
 function updatePrompt(){
   const T=$('#ptxt'),B=$('#actBtns'),timed=!!S&&online()&&!G.replay;
   if(T.classList.contains('timed')!==timed)T.classList.toggle('timed',timed);renderTimer();
@@ -47,55 +53,64 @@ function updatePrompt(){
   const who=`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>`;
   let txt='',btns=[];
   if(G.replay){btnWire(B,[]);return;} // (the prompt is hidden in a replay: its dock says each step, the one place that does)
-  if(S.over){say('The expedition is over.');btnWire(B,[{t:'Results',id:'bRes',fn:showGameOver},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
+  if(S.over){say('The expedition is over.');btnWire(B,[{...BTN.results,fn:showGameOver},{...BTN.newGame,fn:showSetup}]);return;}
   if(online()&&NET.status){say(`<span class="m">${esc(NET.status)}</span>`);btnWire(B,[]);return;} // (the connection lost: what matters now)
   if(!canAct()){say(online()&&S.cur===NET.seat?'<span class="m">Reconnecting…</span>':'');btnWire(B,[]);return;} // (whose turn it is shows on the chips; what they do, in the recap)
-  if(UI.cover){say(who+'is up next: pass the device.');btnWire(B,[{t:'Reveal hand',id:'bRev',pri:1,big:1,fn:()=>{UI.cover=false;render();}}]);return;}
-  const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};
+  if(UI.cover){say(who+'is up next: pass the device.');btnWire(B,[{...BTN.reveal,fn:()=>{UI.cover=false;render();}}]);return;}
+  const undoBtn={...BTN.undo,dis:!canUndo()||NET.busy,fn:undo};
   switch(UI.mode){
     case 'idle':{
       // (no words for the obvious: whose turn it is shows on the chips, what to do on the cards)
       if(pl.pieces.length>1&&pl.pieces.every(k=>k!=='done'))txt='<span class="m">Tap a pawn to switch.</span>';
-      btns=[undoBtn,{t:'End turn',id:'bEnd',pri:1,big:1,fn:startEndTurn}];break;}
+      btns=[undoBtn,{...BTN.end,fn:startEndTurn}];break;}
     case 'card':{
       const act=S.turn.active&&S.turn.active.id===UI.card;
       if(!UI.targets.size)txt='<span class="m">No space this card reaches.</span>';
       else if(act)txt=`<b>${S.turn.active.left}</b> ${SYMNAME[S.turn.active.sym]}${S.turn.active.left>1?'s':''} left. <span class="m">Tap a space to go on.</span>`;
-      btns=[undoBtn,{t:act?'Stop moving':'Cancel',id:'bCan',fn:cancelMode},{t:'End turn',id:'bEnd',pri:1,big:1,fn:startEndTurn}];break;}
+      btns=[undoBtn,{...(act?BTN.stop:BTN.cancel),fn:cancelMode},{...BTN.end,fn:startEndTurn}];break;}
     case 'pay':{ // (the buy slot shows the card and what's paid; no Buy button: it's bought once the cards paid cover its price, payProgress)
-      btns=[{t:'Cancel',id:'bCan',fn:cancelMode}];break;}
+      btns=[{...BTN.cancel,fn:cancelMode}];break;}
     case 'discardFor':{
       const P2=UI.pending;const verb=P2.kind==='camp'?'remove':'discard';const left=P2.need-UI.picks.length;
       txt=`${P2.kind==='camp'?'Base camp':P2.kind==='blr'?'Blockade':'Rubble'}: ${verb} <b>${UI.picks.length} of ${P2.need}</b>.`+(left?' <span class="m">Drag or tap cards.</span>':'');
-      btns=[{t:'Cancel',id:'bCan',fn:cancelMode},{t:'Confirm',id:'bOk',pri:1,big:1,dis:UI.picks.length!==P2.need,fn:confirmDiscardFor}];break;}
+      btns=[{...BTN.cancel,fn:cancelMode},{...BTN.confirm,dis:UI.picks.length!==P2.need,fn:confirmDiscardFor}];break;}
     case 'trashPick':{
       txt=`Remove up to <b>${UI.max}</b> card${UI.max>1?'s':''} from the game (${UI.picks.length}/${UI.max}).`;
-      btns=[{t:UI.picks.length?'Remove':'Skip',id:'bOk',pri:1,big:1,fn:confirmTrash}];break;}
+      btns=[{...(UI.picks.length?BTN.remove:BTN.skip),fn:confirmTrash}];break;}
     case 'transmit':{txt='<b>Transmitter</b>: take any card, free.';
-      btns=[{t:'Cancel',id:'bCan',fn:cancelMode}];break;}
+      btns=[{...BTN.cancel,fn:cancelMode}];break;}
     case 'buyWarn':{const names=[...new Set(affordable().map(a=>CT[a.t].n))];
       txt=`Still affordable: <b>${esc(names[0])}</b>${names.length>1?` +${names.length-1} more`:''}.`;
-      btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:'See cards',id:'bMkt',fn:()=>{cancelMode();openAll(true);}},{t:'End turn anyway',id:'bEndA',pri:1,big:1,fn:startEndTurn}];break;}
+      btns=[{...BTN.back,fn:cancelMode},{...BTN.cards,fn:()=>{cancelMode();openAll(true);}},{...BTN.endAnyway,fn:startEndTurn}];break;}
     case 'endTurn':{const k=UI.picks.length;txt=k?`Keeping <b>${k}</b> for next turn.`:'Tap cards to keep them for next turn.';
-      btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:k===pl.hand.length?'Keep none':'Keep all',id:'bAll',fn:()=>{UI.picks=UI.picks.length===pl.hand.length?[]:pl.hand.slice();render();}},{t:k?'End turn':'Discard & end turn',id:'bEnd2',pri:1,big:1,fn:finishTurn}];break;}
+      btns=[{...BTN.back,fn:cancelMode},{...(k===pl.hand.length?BTN.keepNone:BTN.keepAll),fn:()=>{UI.picks=UI.picks.length===pl.hand.length?[]:pl.hand.slice();render();}},{...(k?BTN.endKeep:BTN.discardEnd),fn:finishTurn}];break;}
   }
   say(txt);btnWire(B,btns);
 }
 /* The turn buttons sit in three fixed slots: a big primary at the bottom, a cancel slot and an extra slot above it.
    A button keeps its slot in every mode and an unused slot keeps its space (invisible), so nothing moves as the mode
    changes (CLAUDE.md: fixed slots). The slot elements are made once and only their words and state change. */
-/* s3: Undo, See cards, Keep all (the right slot: Undo is the one most often alone); s2: Cancel, Back, Results (left) */
-const SLOTS=['s3','s2','p'],slotOf=b=>b.big?'p':b.id==='bCan'||b.id==='bRes'?'s2':'s3';
+const SLOTS=['s3','s2','p'];
+/* every label in BTN fits its slot at this size: checked (debug and tests) once the buttons first show, and again after the
+   game area resizes; each label is written into its slot and measured, then the slot's own words go back */
+let labelsChecked=false;
+onGeo(sized=>{if(sized)labelsChecked=false;});
+function checkLabels(B){
+  for(const s of SLOTS){const el=B.querySelector('.'+s),keep=el.textContent;
+    for(const b of Object.values(BTN))if(b.s===s){el.textContent=b.t;assert(el.scrollWidth<=el.clientWidth+1,"view: every turn button's label fits its slot ("+b.t+")");}
+    el.textContent=keep;}
+}
 function btnWire(B,btns){
   if(!B.firstChild)B.innerHTML=SLOTS.map(s=>`<button type="button" class="btn bslot ${s}${s==='p'?' pri big':''}"></button>`).join('');
   const on=btns.length>0;if(B.hidden===on)B.hidden=!on;
+  if(CHECKS&&on&&!labelsChecked){labelsChecked=true;after(()=>checkLabels(B));}
   for(const s of SLOTS){
-    const el=B.querySelector('.'+s),here=btns.filter(x=>slotOf(x)===s),b=here[0];
+    const el=B.querySelector('.'+s),here=btns.filter(x=>x.s===s),b=here[0];
     assert(here.length<=1,'turn buttons: one button per slot');
     const t=b?b.t:'\u00a0';if(el.textContent!==t)el.textContent=t;
     if(b){if(el.id!==b.id)el.id=b.id;}else if(el.id)el.removeAttribute('id');
     const dis=!b||!!b.dis;if(el.disabled!==dis)el.disabled=dis;
-    el.classList.toggle('off',!b);if(s!=='p')el.classList.toggle('pri',!!(b&&b.pri));
+    el.classList.toggle('off',!b);
     el.onclick=b?b.fn:null;
   }
 }
