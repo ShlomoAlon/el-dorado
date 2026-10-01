@@ -94,7 +94,7 @@ function onRoomMsg(m){
 function applyServerState(S2,ev){
   const old=S,fresh=!online();UI.preview=false; // (joining a room clears NET.S: its first state is a new game on show)
   setS(S2);NET.S=S2;
-  if(fresh){closeModal();UI.cover=false;showGame();}
+  if(fresh){closeModal();showGame();}
   const turnChanged=fresh||old.cur!==S.cur||old.round!==S.round;
   if(!fresh)playEvents(ev,viewIdx());
   afterChange(turnChanged,S.over&&(fresh||!old.over));

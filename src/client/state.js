@@ -13,7 +13,7 @@ export function setMAP(m) { MAP = m; }
    by input handlers, timers and actions, and every one of them is drawn; none has to remember to redraw (a handler that
    forgot left the page stale until something else drew it). A value written again unchanged asks nothing; a list changed
    in place (UI.picks.push) is drawn by the render() its caller already makes */
-export const UI = new Proxy({ mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), cover: false, hover: null, mktOpen: true, allFor: null,
+export const UI = new Proxy({ mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), revealed: null, hover: null, mktOpen: true, allFor: null,
   buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null },
   { set(t, k, v) { if (!Object.is(t[k], v)) { t[k] = v; render(); } return true; } });
 /* nothing selected: no card, no picks, no purchase or payment under way */
@@ -40,6 +40,15 @@ export const viewIdx = () => {
   return NET.seat < 0 ? S.cur : NET.seat; // (a watcher follows the player to move)
 };
 export const hp = () => S.players[viewIdx()];
+/* pass-and-play: a local game whose record hides hands, with two or more people at the table. There a hand shows only to
+   its owner, on their own turn, once they have taken the device (Reveal: UI.revealed holds the turn it was pressed in);
+   at every other moment (the next person's turn not yet revealed, an AI's turn) the hand is covered. One rule, derived
+   from the game: it was a flag set on some events by three different rules, and an AI's turn left the last hand face-up */
+export const turnKey = () => S.seed + '|' + S.round + '|' + S.cur;
+export const covered = () => !!S && !online() && !G.replay && !S.over && !!G.rec && !!G.rec.privacy && S.players.filter(p => !p.ai).length > 1 && UI.revealed !== turnKey();
+/* the pass-the-device screen: covered, and a person is to move (what only that screen hides: the recap, the market's
+   highlights, the follow) */
+export const passing = () => covered() && !isAI(S.cur);
 export const humanRacing = () => S.players.some(p => !p.ai && isActive(p));
 export const inGame = () => !!(S && !S.over && !G.replay && !UI.preview);
 

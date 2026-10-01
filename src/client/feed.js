@@ -12,7 +12,7 @@
    removed, taken) and just counts for the cards kept at the end of a turn. */
 import { CT, SYMNAME, plural, fmt, assert } from '../engine.gen.js';
 import { $, esc, setHTML, reduceMotion, EASE } from './dom.js';
-import { S, MAP, UI, NET, G, online, isAI } from './state.js';
+import { S, MAP, NET, G, online, isAI, passing } from './state.js';
 import { toast } from './dialogs.js';
 import { render, after } from './frame.js';
 import { cardHTML } from './cards.js';
@@ -185,7 +185,7 @@ function update(){
   const t=LATEST=turnsOf(S.log).filter(t=>!t.sys).pop()||null,watched=!!t&&feedWatch(t.pl);
   if(HOVER&&!HOVER.el.isConnected)HOVER=null; // (the step pointed at is gone)
   if(HOVER)setTrail(HOVER.paths,HOVER.color);else setTrail(watched&&MODE!=='off'?t.steps.flatMap(g=>g.paths):[],t?S.players[t.pl].color:'');
-  if(G.replay||UI.cover||MODE!=='center'||!geo.recapFits){hide();return;} // (no room for six cards: owner, 2026-10-01, hidden rather than squeezed)
+  if(G.replay||passing()||MODE!=='center'||!geo.recapFits){hide();return;} // (no room for six cards: owner, 2026-10-01, hidden rather than squeezed)
   if(!F.firstElementChild)F.innerHTML='<div class="frow"></div>'; // (nothing played yet: the row keeps its place, so the box doesn't change size)
   const row=F.firstElementChild;
   if(!t){for(const el of[...row.children])el.remove();}

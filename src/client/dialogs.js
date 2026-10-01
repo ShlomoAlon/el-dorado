@@ -2,7 +2,7 @@
    The menu is its own dialog (menu.js); opening a modal closes it. */
 import { CT, SYMCOL, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
 import { $, esc } from './dom.js';
-import { S, UI, NET, online, hp, viewIdx } from './state.js';
+import { S, UI, NET, online, hp, viewIdx, covered } from './state.js';
 import { cardHTML } from './cards.js';
 import { MENU, menuClose, showSetup, showHub } from './menu.js';
 import { exitOnline } from './online.js';
@@ -49,7 +49,7 @@ export function showGameOver(){
 /* a player's cards, as far as the viewer may see them (redact() keeps the rest from online pages anyway): another player's
    hand face down and draw pile as a count; cards in play and the discard pile face up (public: played or thrown face up) */
 export function showPlayer(i){
-  const p=S.players[i],me=i===viewIdx()&&!UI.cover,order=Object.keys(CT);
+  const p=S.players[i],me=i===viewIdx()&&!covered(),order=Object.keys(CT);
   const faces=ids=>ids.map(id=>typeOf(S,id)).sort((a,b)=>order.indexOf(a)-order.indexOf(b)).map(t=>`<div class="mcard">${cardHTML(t)}</div>`).join('');
   const backs=n=>Array.from({length:n},()=>'<div class="pback"><div class="back"></div></div>').join('');
   const part=(title,n,body)=>`<div class="ppart"><h3>${title} <span class="m">${n}</span></h3>${n?`<div class="deckgrid">${body}</div>`:''}</div>`;
@@ -61,7 +61,7 @@ export function showPlayer(i){
     <div class="mrow"><button class="btn pri" id="pClose">Close</button></div>`,sc=>{sc.querySelector('#pClose').onclick=closeModal;},true);
 }
 export function showPile(which){
-  if(UI.cover)return;const pl=hp();
+  if(covered())return;const pl=hp();
   const ids=which==='deck'?pl.deck.slice():pl.discard.slice();
   const order=Object.keys(CT);const sorted=ids.map(id=>typeOf(S,id)).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
   const all=pl.deck.length+pl.hand.length+pl.discard.length+pl.play.length;

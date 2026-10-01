@@ -4,7 +4,7 @@
    and the layer's own scale goes back to 1, in the same frame: one sharp redraw at a quiet moment. */
 import { R, assert } from '../../engine.gen.js';
 import { $ } from '../dom.js';
-import { S, MAP, UI, G, cur, canAct } from '../state.js';
+import { S, MAP, UI, G, cur, canAct, passing } from '../state.js';
 import { geo, onGeo, measure, handTop } from '../geometry.js';
 import { after } from '../frame.js';
 import { diag, diagLog, CHECKS } from '../debug.js';
@@ -82,7 +82,7 @@ function clampView() {
    players' explorers are followed at their turn's start only: following their moves is the owner's to decide */
 let followed = null;
 export const cameraPart = { name: 'camera', update() {
-  if (!S || !MAP || S.over || UI.cover || UI.anim || UI.preview || G.replay) return;
+  if (!S || !MAP || S.over || passing() || UI.anim || UI.preview || G.replay) return;
   const pl = cur(), game = S.seed + '|' + S.players.length, key = game + '|' + S.round + '|' + S.cur + (canAct() ? '|' + UI.piece + '|' + pl.pieces.join() : '');
   if (key === followed) return;
   const same = followed && followed.startsWith(game + '|'); followed = key;

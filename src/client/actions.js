@@ -3,7 +3,7 @@
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
 import { CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantBuy, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, assert } from '../engine.gen.js';
 import { esc } from './dom.js';
-import { S, setS, UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave, humanRacing } from './state.js';
+import { S, setS, UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave, humanRacing, passing } from './state.js';
 import { showSetup, buyReminder } from './menu.js';
 import { replayDecorate } from './replay.js';
 import { render, resetView } from './frame.js';
@@ -25,7 +25,7 @@ import { diag } from './debug.js';
 export function showGame(){aiReset();buildBoard();resetView();fitSoon();}
 /* continue the saved local game (first visit, or back from a replay). Returns false if there is none in progress. */
 export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
-  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);showGame();UI.mode='idle';UI.piece=firstPiece();UI.cover=!!G.rec.privacy;syncMode(false);render();aiKick();return true;}
+  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);showGame();UI.mode='idle';UI.piece=firstPiece();syncMode(false);render();aiKick();return true;}
 /* after a bug (boundary.js): the game on show again from its source, with nothing selected. Online: a new connection
    brings the server's state. A local game: rebuilt from its record (the action that failed was never recorded) */
 export function resync(){
@@ -36,7 +36,7 @@ export function resync(){
 }
 
 function computeTargets(){
-  const T=new Map();UI.targets=T;if(S.over||UI.cover||!canAct()||NET.busy||S.turn.pending)return;
+  const T=new Map();UI.targets=T;if(S.over||passing()||!canAct()||NET.busy||S.turn.pending)return;
   const src=UI.mode==='card'?cardTargets(S,S.cur,UI.piece,UI.card):UI.mode==='idle'?payTargets(S,S.cur,UI.piece):null;
   if(src)for(const[k,v]of src)T.set(k,v);
   else if(UI.mode==='discardFor')T.set(UI.pending.tk,UI.pending);
@@ -92,7 +92,6 @@ export function afterChange(turnChanged,ended){
   UI.picks=[];UI.buy=null;UI.pending=null;if(['pay','discardFor','transmit','endTurn'].includes(UI.mode)){UI.mode='idle';UI.card=null;}
   syncMode(turnChanged);
   // pass-and-play: the hand is hidden between human players only (AI turns never need it)
-  if(turnChanged&&!S.over&&!online()&&G.rec.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1)UI.cover=true;
   render();
   if(ended)setTimeout(()=>{if(S&&S.over)showGameOver();},600); // (unless another game is on show by then)
 }
@@ -143,7 +142,7 @@ export function cancelMode(){
   UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.mode=S.turn.pending?'trashPick':'idle';render();
 }
 /* what the player to act could buy right now with the cards in hand ([{src, i, t}]: the engine's rule) */
-export function affordable(){return UI.cover||!canAct()?[]:buyOptions(S,S.cur);}
+export function affordable(){return passing()||!canAct()?[]:buyOptions(S,S.cur);}
 export function startEndTurn(){
   if(!canAct())return; // (online, the turn can pass before the tap arrives)
   if(UI.mode!=='buyWarn'&&buyReminder()&&affordable().length){UI.mode='buyWarn';UI.card=null;UI.picks=[];UI.buy=null;render();return;} // nudge before skipping a purchase
@@ -162,7 +161,7 @@ export function undo(){
 export const canUndo=()=>online()?NET.canUndo:recCanUndo(G.rec);
 
 export function onHandCard(id){
-  if(S.over||UI.cover||UI.anim||!canAct())return;
+  if(S.over||passing()||UI.anim||!canAct())return;
   switch(UI.mode){
     case 'pay':case 'endTurn':{togglePick(id);return;}
     case 'discardFor':{if(UI.picks.includes(id))rm(UI.picks,id);else if(UI.picks.length<UI.pending.need)UI.picks.push(id);render();return;}

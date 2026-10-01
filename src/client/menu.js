@@ -4,7 +4,7 @@
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
 import { COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, recSecret, plural, shuffle } from '../engine.gen.js';
 import { $, esc, setHTML, setText, setQuery } from './dom.js';
-import { S, setS, UI, NET, G, clearSelection, isAI, online, myId, inGame, loadSave, save, myGames } from './state.js';
+import { S, setS, UI, NET, G, clearSelection, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
 import { toast } from './dialogs.js';
 import { showGame, resumeSaved, resignSeat, resignLocal, endLocal } from './actions.js';
@@ -157,7 +157,7 @@ export function prepareGame(force){
   if(online())exitOnline(); // a finished online game: its room is left (rejoin a running one from Online)
   const g=recNewGame(setupOpts(),recSecret());G.rec=g.rec;setS(g.gs);UI.preview=true;UI.lastReplay=null;
   clearSelection();UI.piece=0;UI.viewer=null;
-  UI.cover=!!G.rec.privacy&&!isAI(S.cur)&&S.players.filter(p=>!p.ai).length>1;showGame();
+  showGame();
 }
 export function startLocal(){
   if(!GAME_READY.done){GAME_READY.then(startLocal);return;} // the game's fonts are still on their way: start the moment they're in

@@ -10,10 +10,14 @@ const T = report('play');
 const arg = process.argv.slice(2), GAMES = +(arg[arg.indexOf('--games') + 1] || 0) || 3;
 // the sizes the games are played at: the owner's screen, a phone, a tablet
 const SIZES = [['owner', { width: 1536, height: 639 }, 1.25], ['phone', { width: 390, height: 844 }, 2], ['tablet', { width: 768, height: 1024 }, 1]];
+// and one game passed around one device: two people (both played here) and an AI, hands hidden until each one's Reveal
+const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
 
 /* one decision for the person's seat, made in the page through the UI's own calls; returns what it did (or why it couldn't) */
 function step() {
-  const E = window.__ED, S = E.S, UI = E.UI, me = S.cur, mem = window.__mem || (window.__mem = {});
+  const E = window.__ED, S = E.S, UI = E.UI, me = S.cur, mems = window.__mem || (window.__mem = {}), mem = mems[me] || (mems[me] = {});
+  // pass-and-play: the hand is covered until the player to move takes the device (the Reveal button)
+  { const b = document.getElementById('bRev'); if (b) { b.click(); return 'reveal'; } }
   const a = E.aiChoose(S, 'raleigh', mem, Math.random);
   // every state the page passes through is noted (each call leaves the page drawn, as a frame after a tap would)
   const seen = window.__seen || (window.__seen = { modes: {}, labels: {} });
@@ -50,12 +54,13 @@ function step() {
 
 (async () => {
   const srv = await serveStatic(), b = await chromium.launch(), t0 = Date.now();
-  const games = Array.from({ length: GAMES }, (_, g) => SIZES[g % SIZES.length]);
-  const results = await Promise.all(games.map(async ([name, viewport, dpr], g) => {
+  const games = [...Array.from({ length: GAMES }, (_, g) => SIZES[g % SIZES.length]), PASS];
+  const results = await Promise.all(games.map(async ([name, viewport, dpr, pass], g) => {
     const p = await openPage(b, `game ${g + 1} (${name})`, { viewport, deviceScaleFactor: dpr });
     const cdp = await p.context().newCDPSession(p); await cdp.send('Animation.enable'); await cdp.send('Animation.setPlaybackRate', { playbackRate: 20 });
     await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-    await p.selectOption('select[name=who1]', 'raleigh'); await p.selectOption('select[name=who2]', 'raleigh');
+    await p.selectOption('select[name=who1]', pass ? '' : 'raleigh'); await p.selectOption('select[name=who2]', 'raleigh');
+    if (pass) await p.check('#sPriv');
     await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
     await p.evaluate(() => window.__ED.aiPace(.05)); // (the AIs' pauses, 20x shorter: their moves and animations unchanged)
     const did = {}, unmapped = []; let steps = 0;

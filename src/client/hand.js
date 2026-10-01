@@ -4,7 +4,7 @@
    hand one frame later, so it slides in without the browser having to lay out anything in between. */
 import { CT, typeOf, plural } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
-import { S, UI, cur, hp, viewIdx, canAct, G } from './state.js';
+import { S, UI, cur, hp, viewIdx, canAct, G, covered } from './state.js';
 import { geo, handTop } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
 import { render } from './frame.js';
@@ -33,11 +33,11 @@ function newCard(S,id) {
 function layoutCards() {
   if (!S) return;
   const W = geo.app.width, H = geo.app.height, cw = geo.cw, ch = cw * 1.4, phone = W < 600;
-  const pl = hp(), hand = UI.cover ? [] : pl.hand, play = UI.cover ? [] : pl.play, n = hand.length;
+  const pl = hp(), hand = covered() ? [] : pl.hand, play = covered() ? [] : pl.play, n = hand.length;
   // the hand is centred and keeps clear of the piles and the turn buttons (their measured width: geometry.js), on both sides alike
   const pileW = phone ? 54 : 74, avail = W - 2 * Math.max(pileW + 32, (W > 900 ? geo.actW + 32 : 0));
   const step = n > 1 ? Math.min(cw * .86, Math.max(cw * .32, (avail - cw) / (n - 1))) : 0;
-  const hi = hand.indexOf(UI.hover), paying = UI.mode === 'pay' && UI.buy && !UI.cover, choosing = UI.mode === 'trashPick' && !UI.cover;
+  const hi = hand.indexOf(UI.hover), paying = UI.mode === 'pay' && UI.buy && !covered(), choosing = UI.mode === 'trashPick' && !covered();
   const lifted = id => (UI.mode === 'card' && UI.card === id) || (!paying && UI.picks.includes(id)) || (drag && drag.started && drag.id === id);
   // the purchase slot above the hand, the spending tray to its right
   const bw = Math.round(cw * (phone ? .78 : .72)), bx = W / 2 - bw / 2, by = H - ch * 1.02 - 14 - bw * 1.4 - 26, bs = $('#buySlot');
@@ -66,7 +66,7 @@ let entering = [];
 function update() {
   if (!S) { clear(); return; }
   const pl = hp(), vi = viewIdx(), switching = lastViewer !== vi; lastViewer = vi;
-  const want = UI.cover ? [] : pl.hand, wantPlay = UI.cover ? [] : pl.play, keep = new Set([...want, ...wantPlay]), A = geo.app;
+  const want = covered() ? [] : pl.hand, wantPlay = covered() ? [] : pl.play, keep = new Set([...want, ...wantPlay]), A = geo.app;
   // cards that left: to the discard pile, up and away (removed from the game), or down (another player's hand now)
   for (const [id, el] of cardEls) {
     if (keep.has(id)) continue; cardEls.delete(id); el.style.pointerEvents = 'none'; el.__enter = false;
@@ -105,7 +105,7 @@ function update() {
   // a replay marks the card the next move plays and the cards it pays with
   for (const [id, el] of cardEls) { el.classList.toggle('rnext', !!(rx && rx.card === id)); el.classList.toggle('rpay', !!(rx && (rx.cards || rx.keep || []).includes(id))); }
   // a removal to choose (Scientist, Travel Log): the hand is up (layoutCards), this says what's asked, the board steps back
-  const q = acting && UI.mode === 'trashPick' && !UI.cover && S.turn.pending, qb = $('#choice');
+  const q = acting && UI.mode === 'trashPick' && !covered() && S.turn.pending, qb = $('#choice');
   if (qb.hidden !== !q) qb.hidden = !q; $('#vp').classList.toggle('dim', !!q);
   if (q) { setHTML(qb.firstElementChild, `<b>${esc(CT[q.by].n)}</b> · remove up to ${plural(q.max, 'card')}`); setHTML(qb.lastElementChild, UI.picks.length ? `<b>${UI.picks.length}</b> of ${q.max} chosen · they leave the game` : 'Tap cards to choose · they leave the game'); } // (two fixed parts: a pick rewrites only the count)
   layoutCards();
@@ -131,10 +131,10 @@ export function flyToDiscard(t, from) {
 /* ---------- pressing and dragging a card ---------- */
 const pastHand = y => y < geo.app.top + geo.app.height - geo.cw * 1.4 * 1.25; // dragged up out of the hand
 function wire(el, id) {
-  el.addEventListener('pointerenter', () => { if (drag || UI.cover) return; if (hp().hand.includes(id)) UI.hover = id; });
+  el.addEventListener('pointerenter', () => { if (drag || covered()) return; if (hp().hand.includes(id)) UI.hover = id; });
   el.addEventListener('pointerleave', () => { if (UI.hover === id) UI.hover = null; });
   el.addEventListener('pointerdown', e => {
-    if (S.over || UI.cover || UI.anim || e.button > 0 || !canAct()) return;
+    if (S.over || covered() || UI.anim || e.button > 0 || !canAct()) return;
     const inHand = cur().hand.includes(id), isAct = S.turn.active && S.turn.active.id === id;
     if (!inHand && !isAct) return;
     e.preventDefault();
