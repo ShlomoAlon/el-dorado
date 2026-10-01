@@ -1,7 +1,7 @@
 /* The heads-up display: the top bar (round, one chip per player), the prompt (what to do now, the online turn clock)
    and the turn buttons. Each piece is rewritten only when its text changes. */
 import { CT, SYMNAME, def, assert } from '../engine.gen.js';
-import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
+import { $, esc, setText, setHTML, setStyle, show, reduceMotion, EASE } from './dom.js';
 import { S, UI, NET, G, cur, canAct, online, isAI } from './state.js';
 import { onGeo, geo } from './geometry.js';
 import { render } from './frame.js';
@@ -34,16 +34,20 @@ function updateHeader(){
 }
 
 /* ---------- the prompt and the turn buttons ---------- */
+/* the prompt is two fixed slots: the turn timer (renderTimer), at its own place whose room is kept for the whole online
+   game, and the message, written as a whole when it changes (a new message never redraws or moves the timer) */
 function updatePrompt(){
-  if(!S){setHTML($('#ptxt'),'');btnWire($('#actBtns'),[]);return;}
-  const pl=cur();const P=$('#ptxt'),B=$('#actBtns');
+  const T=$('#ptxt'),M=$('#pmsg'),B=$('#actBtns'),timed=!!S&&online()&&!G.replay;
+  if(T.classList.contains('timed')!==timed)T.classList.toggle('timed',timed);renderTimer();
+  if(!S){setHTML(M,'');btnWire(B,[]);return;}
+  const pl=cur();
   const who=`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>`;
   let txt='',btns=[];
-  if(G.replay){setHTML(P,replayPromptHTML());btnWire(B,[]);return;}
-  const tm=online()&&!S.over?'<span id="turnTimer" class="timer" hidden></span>':'';
-  if(S.over){setHTML(P,'The expedition is over.');btnWire(B,[{t:'Results',id:'bRes',fn:showGameOver},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
-  if(!canAct()){setHTML(P,tm+who+(online()&&S.cur===NET.seat?'<span class="m">Reconnecting…</span>':(isAI(S.cur)?'is playing…':'is taking their turn…'))+(NET.status?` <span class="m">${esc(NET.status)}</span>`:''));btnWire(B,[]);renderTimer();return;}
-  if(UI.cover){setHTML(P,who+'is up next. Pass the device, then reveal the hand.');btnWire(B,[{t:'Reveal hand',id:'bRev',pri:1,big:1,fn:()=>{UI.cover=false;render();}}]);return;}
+  if(G.replay){setHTML(M,replayPromptHTML());btnWire(B,[]);return;}
+  if(S.over){setHTML(M,'The expedition is over.');btnWire(B,[{t:'Results',id:'bRes',fn:showGameOver},{t:'New game',id:'bNew',pri:1,big:1,fn:showSetup}]);return;}
+  if(online()&&NET.status){setHTML(M,`<span class="m">${esc(NET.status)}</span>`);btnWire(B,[]);return;} // (the connection lost: what matters now)
+  if(!canAct()){setHTML(M,who+(online()&&S.cur===NET.seat?'<span class="m">Reconnecting…</span>':(isAI(S.cur)?'is playing…':'is taking their turn…')));btnWire(B,[]);return;}
+  if(UI.cover){setHTML(M,who+'is up next. Pass the device, then reveal the hand.');btnWire(B,[{t:'Reveal hand',id:'bRev',pri:1,big:1,fn:()=>{UI.cover=false;render();}}]);return;}
   const undoBtn={t:'Undo',id:'bUndo',dis:!canUndo()||NET.busy,fn:undo};
   switch(UI.mode){
     case 'idle':{
@@ -72,7 +76,7 @@ function updatePrompt(){
     case 'endTurn':{const k=UI.picks.length;txt=k?`Keeping <b>${k}</b> for next turn.`:'Tap cards to keep them for next turn.';
       btns=[{t:'Back',id:'bCan',fn:cancelMode},{t:k===pl.hand.length?'Keep none':'Keep all',id:'bAll',fn:()=>{UI.picks=UI.picks.length===pl.hand.length?[]:pl.hand.slice();render();}},{t:k?'End turn':'Discard & end turn',id:'bEnd2',pri:1,big:1,fn:finishTurn}];break;}
   }
-  setHTML(P,tm+txt);btnWire(B,btns);renderTimer();
+  setHTML(M,txt);btnWire(B,btns);
 }
 /* The turn buttons sit in three fixed slots: a big primary at the bottom, a cancel slot and an extra slot above it.
    A button keeps its slot in every mode and an unused slot keeps its space (invisible), so nothing moves as the mode
@@ -95,10 +99,9 @@ function btnWire(B,btns){
 /* ---------- the online turn clock (in the prompt) ---------- */
 function timeLeft(){if(!online()||NET.clockEnd==null||S.over)return null;return Math.max(0,Math.round((NET.clockEnd-Date.now())/1000));}
 function renderTimer(){
-  const el=document.getElementById('turnTimer');if(!el)return;
-  const t=timeLeft();if(t===null){el.hidden=true;return;}
+  const el=$('#turnTimer'),t=$('#ptxt').classList.contains('timed')?timeLeft():null;show(el,t!==null);if(t===null)return;
   if(t<10&&t>0&&t!==SND.lastT&&canAct())sfx('timer');SND.lastT=t;
-  el.hidden=false;setText(el,Math.floor(t/60)+':'+String(t%60).padStart(2,'0'));el.classList.toggle('low',t<=15);
+  setText(el,Math.floor(t/60)+':'+String(t%60).padStart(2,'0'));el.classList.toggle('low',t<=15);
 }
 export const hudPart = { name: 'hud', update(){updateHeader();updatePrompt();}};
 export function hudInit(){

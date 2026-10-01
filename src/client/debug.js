@@ -13,7 +13,7 @@ export function diag(msg) {
   if (box) { box.textContent = lines.slice(-22).join('\n'); }
 }
 export const diagLog = () => lines.slice();
-export const shifts = []; // (debug mode: every layout shift seen, for tests)
+export const shifts = [], churn = []; // (checks: every layout shift and every unchanged rebuild seen, for tests)
 /* checks: what is "in play" comes from the page (main.js), so this module stays free of the game's state */
 let inPlay = () => false, expectedAt = -1e9;
 /* code that changes the layout on purpose (the game area resized, the market or history moved, a replay's dock opened)
@@ -31,7 +31,26 @@ export function checksInit(during) {
       shifts.push({ who, d, input: e.hadRecentInput }); diag(`shift ${who} by ${d}${e.hadRecentInput ? ' (after input)' : ''}`);
       if (inPlay() && !e.hadRecentInput && Math.abs(e.startTime - expectedAt) > 600) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ')'); } })
       .observe({ type: 'layout-shift', buffered: true });
+  // churn: a frame that removes an element and adds an identical new one rebuilt what hadn't changed (CLAUDE.md: a view
+  // part writes only what changed). An element moved (removed and put back) is not a rebuild; identical means the same
+  // markup, keys (data-*) included, apart from what an entry animation sets (the "new" class, a fading opacity)
+  const sig = n => n.outerHTML.replace(/ class="([^"]*)"/g, (m, c) => ' class="' + c.split(' ').filter(x => x !== 'new').join(' ') + '"').replace(/opacity: [\d.]+;\s*/g, '').replace(/ style=""/g, '');
+  const judge = churnJudge = list => {
+    const moved = new Set(), gone = new Map();
+    for (const m of list) for (const n of m.removedNodes) if (n.nodeType === 1) { if (n.isConnected) moved.add(n); else if (n.childElementCount) gone.set(sig(n), n); }
+    if (!gone.size) return;
+    for (const m of list) for (const n of m.addedNodes) if (n.nodeType === 1 && n.isConnected && !moved.has(n) && gone.has(sig(n))) {
+      const cls = n.getAttribute('class'), pc = n.parentNode && n.parentNode.getAttribute && n.parentNode.getAttribute('class'), who = ((n.closest('[id]') || {}).id || '?') + ' ' + (pc ? '.' + pc.split(' ')[0] + ' > ' : '') + n.tagName.toLowerCase() + (cls ? '.' + cls.split(' ')[0] : '');
+      const play = inPlay(); churn.push({ who, play, html: sig(n).slice(0, 160), parent: n.parentNode && n.parentNode.outerHTML.slice(0, 80) }); diag('churn: rebuilt unchanged ' + who);
+      if (play) assert(false, 'view: a frame writes only what changed (rebuilt unchanged content in ' + who + ')');
+    }
+  };
+  churnMO = new MutationObserver(judge);
+  churnMO.observe(document.getElementById('app'), { subtree: true, childList: true });
 }
+/* the frame loop marks each frame (frame.js flush): what one frame wrote is judged on its own */
+let churnMO = null, churnJudge = null;
+export function frameMark() { if (churnMO) { const r = churnMO.takeRecords(); if (r.length) churnJudge(r); } }
 export function debugInit() {
   if (!DEBUG) return;
   const wrap = document.createElement('div'); wrap.style.cssText = 'position:fixed;left:0;top:0;z-index:100;pointer-events:none;max-width:70vw';

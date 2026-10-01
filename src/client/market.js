@@ -42,16 +42,21 @@ function sizeMarket(){
 const ALL_ICON='<svg viewBox="-10 -10 20 20"><rect x="-8.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".45" transform="rotate(-14)"/><rect x="-4.5" y="-7.5" width="9" height="13" rx="1.6" fill="currentColor" opacity=".7"/><rect x="-.5" y="-6.5" width="9" height="13" rx="1.6" fill="currentColor" transform="rotate(12)"/></svg>';
 /* market slots are made once and then updated in place (count, highlight, selection): a card's artwork is drawn again
    only when another card takes its slot (rebuilding every slot on each render re-drew all the art: late pop-ins) */
+/* the slots of a market row, one per stack, keyed by what they hold (a card type, or a sold-out slot by its place): a
+   slot whose stack is still there keeps its element and only moves, so a stack selling out never redraws the others */
 function patchSlots(box,specs,before){
-  const have=[...box.children].filter(e=>e.classList.contains('mslot'));
-  have.slice(specs.length).forEach(e=>e.remove());
-  specs.forEach((sp,k)=>{let el=have[k];const key=sp.n>0?'c:'+sp.t:'e:'+sp.src;
-    if(!el||el.dataset.k!==key){const n=document.createElement('div');n.dataset.k=key;
-      n.innerHTML=sp.n>0?`<div class="mcard">${cardHTML(sp.t)}</div><span class="cnt"></span>`:`Sold out${sp.src==='m'?'<br>reserve open':''}`;
-      if(el)el.replaceWith(n);else box.insertBefore(n,before||null);el=n;}
+  const have=new Map([...box.children].filter(e=>e.classList.contains('mslot')).map(e=>[e.dataset.k,e]));
+  let prev=null;
+  specs.forEach((sp,k)=>{const key=sp.n>0?'c:'+sp.t:'e:'+sp.src+k;let el=have.get(key);
+    if(el)have.delete(key);
+    else{el=document.createElement('div');el.dataset.k=key;
+      el.innerHTML=sp.n>0?`<div class="mcard">${cardHTML(sp.t)}</div><span class="cnt"></span>`:`Sold out${sp.src==='m'?'<br>reserve open':''}`;}
+    const at=prev?prev.nextSibling:box.firstChild,place=at&&at.classList&&at.classList.contains('mslot')?at:(at||before||null);
+    if(el!==place)box.insertBefore(el,place===before?before||null:place);prev=el;
     if(el.className!==sp.cls)el.className=sp.cls;if(el.dataset.i!==String(sp.i))el.dataset.i=sp.i;
     if(sp.n>0){if(el.dataset.src!==sp.src)el.dataset.src=sp.src;const t=cardTitle(sp.t);if(el.title!==t)el.title=t;const c=el.querySelector('.cnt');if(c.textContent!==String(sp.n))c.textContent=sp.n;}
     else delete el.dataset.src;});
+  for(const el of have.values())el.remove();
 }
 function update(){
   const all=allShown(),ac0=$('#allc');if(ac0.hidden===all)ac0.hidden=!all;
@@ -79,7 +84,7 @@ export const marketPart = { name: 'market', update};
 
 /* ---------- the purchase in progress: the card waits above the hand until it's paid for ---------- */
 export const buySlotPart = { name: 'buySlot', update(){const bs=$('#buySlot'),on=!!S&&UI.mode==='pay'&&!UI.cover;
-  if(!on){if(!bs.hidden){bs.hidden=true;bs.dataset.t='';}return;}
+  if(!on){if(!bs.hidden)bs.hidden=true;return;} // (dataset.t says which card is drawn in it; hiding keeps it drawn)
   if(bs.dataset.t!==UI.buy.src+UI.buy.idx){bs.dataset.t=UI.buy.src+UI.buy.idx;bs.querySelector('.bs-card').innerHTML=`<div class="mcard">${cardHTML(UI.buy.t)}</div>`;}
   const c=CT[UI.buy.t].cost,t=payTotal();setText($('#bsPaid'),fmt(t));setText($('#bsCost'),c);bs.classList.toggle('paid',t>=c);bs.hidden=false;}};
 

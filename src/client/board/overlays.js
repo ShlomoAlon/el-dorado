@@ -24,20 +24,21 @@ function updateTargets() {
 
 /* ---------- blockades: drawn when the deal is shown and when one is taken; otherwise only their target mark changes ---------- */
 export const blPos = {};
-let blSig = '';
+let blDeal = ''; const blEls = new Map(); // bi -> the blockade's elements (its group on the board, its two labels)
+/* one element set per blockade, drawn once per deal; a blockade that is taken leaves the board alone (nothing else is
+   redrawn). (a new board comes with a reset: blDeal '') */
 function updateBlockades() {
-  const sig = MAP.course + '|' + S.seed + '|' + S.blockades.map(B => B.owner).join(',');
-  if (blSig !== sig) { // (a new board comes with a reset: blSig '')
-    blSig = sig; L.bl.innerHTML = ''; $('#blabels2').innerHTML = '';
-    S.blockades.forEach((B, bi) => drawBlockade(B, bi));
-  }
+  const deal = MAP.course + '|' + S.seed;
+  if (blDeal !== deal) { blDeal = deal; L.bl.innerHTML = ''; $('#blabels2').innerHTML = ''; blEls.clear();
+    S.blockades.forEach((B, bi) => { if (B.owner === null) blEls.set(bi, drawBlockade(B, bi)); }); }
+  for (const [bi, els] of blEls) if (S.blockades[bi].owner !== null) { for (const e of els) e.remove(); blEls.delete(bi); delete blPos[bi]; }
   for (const bg of L.bl.querySelectorAll('.bl-badge')) {
     const k = 'B' + bg.dataset.bi, tg = UI.targets.has(k), cls = 'bl-badge' + (tg ? ' tgt' : '') + (hot === k ? ' hot' : '');
     if (bg.getAttribute('class') !== cls) bg.setAttribute('class', cls);
   }
 }
+/* draws an open blockade; returns its elements */
 function drawBlockade(B, bi) {
-  if (B.owner !== null) { delete blPos[bi]; return; }
   const col = SYMCOL[B.k], g = sv('g', null, L.bl), segs = MAP.conns[B.conn].edges.map(([a, b]) => edgeSeg(a, b));
   let sx = 0, sy = 0;
   for (const [x1, y1, x2, y2] of segs) { sv('line', { x1, y1, x2, y2, stroke: '#0b120f', 'stroke-width': 11, 'stroke-linecap': 'round' }, g); sx += (x1 + x2) / 2; sy += (y1 + y2) / 2; }
@@ -54,8 +55,7 @@ function drawBlockade(B, bi) {
   const nb = sv('g', { transform: 'translate(0,-25)' }, bg); sv('circle', { r: 8, fill: '#0b120f', stroke: col, 'stroke-width': 1.5 }, nb);
   sv('title', null, bg).textContent = 'Blockade #' + B.n + ': ' + blkLabel(B) + '. The first explorer to pay it keeps it (tiebreaker).';
   const lab = $('#blabels2');
-  label(lab, bx + 8, by + 6, B.v, { anchor: 'middle', size: 16, weight: 800, color: ink });
-  label(lab, bx, by - 25 + 3.6, B.n, { anchor: 'middle', size: 10, weight: 800, color: '#fff' });
+  return [g, label(lab, bx + 8, by + 6, B.v, { anchor: 'middle', size: 16, weight: 800, color: ink }), label(lab, bx, by - 25 + 3.6, B.n, { anchor: 'middle', size: 10, weight: 800, color: '#fff' })];
 }
 
 /* ---------- the path and tip for the target under the pointer (or the aimed card) ---------- */

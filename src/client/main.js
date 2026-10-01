@@ -22,7 +22,7 @@ import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, s
 import { netInit, joinRoom, netSend } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
 import { soundInit } from './sound.js';
-import { debugInit, checksInit, shifts, diag } from './debug.js';
+import { debugInit, checksInit, shifts, churn, diag } from './debug.js';
 import { boundaryInit } from './boundary.js';
 import { cam } from './board/camera.js';
 import { targetAt, spaceAt, setHot } from './board/overlays.js';
@@ -83,7 +83,7 @@ function onBoardHover(e) { if (!drag && !e.buttons && e.pointerType === 'mouse')
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts,
+window.__ED = { NET, UI, G, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn,
   render() { render(); flush(); },
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },
   ...Object.fromEntries(Object.entries({ act, playEvents, openReplay, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode }).map(([k, f]) => [k, now(f)])) };

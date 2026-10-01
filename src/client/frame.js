@@ -9,13 +9,15 @@ export function addPart(p) { parts.push(p); }
 // a part that fails is a bug: logged and reported (boundary.js), and the other parts still update
 const safe = (f, what) => { try { f(); } catch (e) { console.error(what, e); failed(e, 'view ' + what); } };
 export function render() { if (!raf) raf = requestAnimationFrame(flush); }
-import { diag, DEBUG } from './debug.js';
+import { diag, DEBUG, frameMark } from './debug.js';
 import { failed } from './boundary.js';
 export function flush() {
   if (raf) { cancelAnimationFrame(raf); raf = 0; }
   const t0 = DEBUG ? performance.now() : 0;
+  safe(frameMark, 'checks'); // (checks: what changed before this frame is judged apart from it)
   for (const p of parts) safe(() => p.update(), p.name);
   for (const f of afterQ.splice(0)) safe(f, 'after');
+  safe(frameMark, 'checks');
   if (DEBUG) { const ms = performance.now() - t0; if (ms > 8) diag(`update ${ms.toFixed(0)} ms`); }
 }
 export function after(f) { afterQ.push(f); render(); }

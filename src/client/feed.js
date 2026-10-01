@@ -21,30 +21,13 @@ import { marketRectOf } from './market.js';
 import { setTrail } from './board/overlays.js';
 import { load, store } from './store.js';
 import { expectLayout } from './debug.js';
-const FEED={pl:-1,ended:false,groups:[],seq:0,fly:[],trail:[]};
-/* whose actions get shown: the AIs (local), everyone but me (online); never in replays, where the actor's own hand is shown */
-export function feedWatch(pl){if(G.replay||pl==null)return false;return online()?pl!==NET.seat:isAI(pl);} // (pl: none on the game's end)
-function feedReset(){FEED.pl=-1;FEED.ended=false;FEED.groups=[];FEED.fly=[];FEED.trail=[];}
-export function feedClear(){if(FEED.pl<0&&!FEED.groups.length)return;feedReset();render();}
+/* whose turns are watched as they're played (their cards fly into the row, their moves leave a trail): the AIs (local),
+   everyone but me (online); never in replays, where the actor's own hand is shown */
+export function feedWatch(pl){if(G.replay||pl==null)return false;return online()?pl!==NET.seat:isAI(pl);}
 function chipRect(pl){const c=document.querySelectorAll('#players .pchip')[pl];return c?c.getBoundingClientRect():null;}
-/* one engine event of a watched player (called from playEvents, before render) */
-export function feedEvent(e){
-  if(e.e==='play'){
-    if(FEED.pl!==e.pl||FEED.ended){feedReset();FEED.pl=e.pl;}
-    const last=FEED.groups[FEED.groups.length-1];
-    if(e.k==='move'&&e.more&&last&&last.k==='move'){last.n+=e.n;last.v++;last.log.push(e);return;} // leftover strength: same card, more spaces
-    if(e.k==='trash'&&!e.ts.length)return;
-    if(e.k==='end'){FEED.ended=true;if(!e.ts.length)return;} // (the turn is visibly over: a step only for the cards discarded)
-    const g={...e,id:++FEED.seq,v:0,log:[e],paths:[]};FEED.groups.push(g);
-    if(g.ts&&g.ts.length)FEED.fly.push({gid:g.id,kind:'hand',from:chipRect(e.pl)});
-    if(g.got)FEED.fly.push({gid:g.id,kind:'got',from:marketRectOf(g.got)}); // the card bought or taken flies in from the market
-    return;}
-  if(FEED.pl!==e.pl)return;
-  const last=FEED.groups[FEED.groups.length-1];if(!last)return;
-  if(e.e==='block'){last.bl=e.n;last.v++;last.log.push(e);}
-  else if(e.e==='arrive'){last.arr=true;last.v++;last.log.push(e);}
-  else if(e.e==='move'){FEED.trail.push(e.path);last.paths.push(e.path);}
-}
+/* the row's state: which turn it shows (null: nothing drawn yet, so a page that opens on a turn doesn't replay its flies) */
+const ROW={key:null};
+function rowReset(){ROW.key=null;}
 /* a step's caption: only what its cards don't show (owner: the card's name and effect are on its face; wide captions pushed
    steps out of the row). Pointing at the step says everything in words. */
 function feedCap(g){
@@ -67,7 +50,19 @@ function stepHTML(g,attr,pl){
   const mini=(t,got)=>`<div class="fc${got?' got':''}" data-t="${t}"><div class="mcard">${cardHTML(t)}</div></div>`;
   return`<div class="fg f-${g.k}" ${attr}${tip}><div class="frc"><div class="fcs">${g.ts.map(t=>mini(t)).join('')}</div>${g.got?`<span class="farr" aria-hidden="true">›</span>${mini(g.got,1)}`:''}</div><div class="fcap">${feedCap(g)}</div></div>`;
 }
-const feedGroupHTML=g=>stepHTML(g,`data-g="${g.id}"`,S.players[g.pl]);
+/* what makes a drawn step out of date: a move that went further, a blockade taken, an arrival */
+const stepSig=g=>`${g.n||0}|${g.bl||''}|${g.arr?1:0}|${g.log.length}`;
+/* the steps of turn t in box, one element per step (data-s="turn|index"), updated in place: a new step is added, a step
+   that changed gets its caption and words again, and nothing else is written (the row and the column both use this).
+   newestFirst: the row's order. Returns the elements added. */
+function stepsInto(box,t,newestFirst){
+  const pl=S.players[t.pl],added=[];
+  for(const el of[...box.children]){const[k,i]=(el.dataset.s||'').split('|');if(k!==t.key||+i>=t.steps.length)el.remove();}
+  t.steps.forEach((g,i)=>{const key=t.key+'|'+i,v=stepSig(g);let el=box.querySelector(`[data-s="${key}"]`);
+    if(!el){box.insertAdjacentHTML(newestFirst?'afterbegin':'beforeend',stepHTML(g,`data-s="${key}"`,pl));el=newestFirst?box.firstElementChild:box.lastElementChild;el.dataset.v=v;added.push({el,g});}
+    else if(el.dataset.v!==v){el.dataset.v=v;el.querySelector('.fcap').innerHTML=feedCap(g);el.title=stepWords(g,pl);}});
+  return added;
+}
 /* ---------- a step in words: its journal entries (the play, and the blockade taken or El Dorado reached) ---------- */
 function logLine(e){
   const n=CT[e.ts?.[0]]?.n,cards=k=>plural(k,'card'),names=ts=>ts.map(t=>CT[t].n).join(', ');
@@ -128,7 +123,6 @@ function histCycle(){expectLayout();MODE=MODES[(MODES.indexOf(MODE)+1)%3];store(
 /* ---------- a step pointed at (or tapped): its explorer's path on the board, instead of the live trail ---------- */
 let HOVER=null; // {el, paths, color}
 function stepOf(el){
-  if(el.dataset.g){const g=FEED.groups.find(x=>String(x.id)===el.dataset.g);return g&&{g,pl:g.pl};}
   const[k,i]=el.dataset.s.split('|'),t=COL.turns.get(k)||(LATEST&&LATEST.key===k?LATEST:null);return t&&{g:t.steps[+i],pl:t.pl};
 }
 function point(el){
@@ -165,46 +159,39 @@ function columnUpdate(){
   for(const t of T){let el=have.get(t.key);
     if(!el){el=document.createElement('div');el.className='ht'+(t.sys?' sys':'');el.dataset.k=t.key;}
     const at=prev?prev.nextElementSibling:list.firstElementChild;if(at!==el)list.insertBefore(el,at);prev=el;
-    const pl=t.sys?null:S.players[t.pl];
-    setHTML(el,t.sys?esc(logLine(t.sys)):turnHead(t)+`<div class="hsteps">${t.steps.map((g,i)=>stepHTML(g,`data-s="${t.key}|${i}"`,pl)).join('')}</div>`);
+    if(t.sys){setHTML(el,esc(logLine(t.sys)));continue;}
+    if(!el.firstElementChild)el.innerHTML='<div class="hwhead"></div><div class="hsteps"></div>';
+    setHTML(el.firstElementChild,turnHead(t));stepsInto(el.lastElementChild,t,false); // (a turn's steps are added in place as it's played)
   }
 }
 function update(){
-  const F=$('#feed'),hide=()=>{if(!F.hidden){F.hidden=true;F.innerHTML='';F.dataset.pl='';}};
+  const F=$('#feed'),hide=()=>{if(!F.hidden){F.hidden=true;F.innerHTML='';rowReset();}};
   columnUpdate();
   const btn=$('#histBtn');if(btn.dataset.m!==MODE){btn.dataset.m=MODE;btn.className='tbtn glass m-'+MODE; // (which of the three it is now, and what a press does)
     btn.title=({center:'History: under the prompt. Press for every turn on the left',left:'History: every turn, on the left. Press to hide it',off:'History: hidden. Press to show it under the prompt'})[MODE];}
-  if(!S){hide();return;}
-  const p=S.players[FEED.pl]; // (none while nobody's turn is shown)
+  if(!S){hide();setTrail([],'');return;}
+  // the newest turn in the journal: an opponent's as they play it, kept as a recap until you act, then your own
+  const t=LATEST=turnsOf(S.log).filter(t=>!t.sys).pop()||null,watched=!!t&&feedWatch(t.pl);
   if(HOVER&&!HOVER.el.isConnected)HOVER=null; // (the step pointed at is gone)
-  if(HOVER)setTrail(HOVER.paths,HOVER.color);else setTrail(p&&!G.replay&&MODE!=='off'?FEED.trail:[],p?p.color:'');
+  if(HOVER)setTrail(HOVER.paths,HOVER.color);else setTrail(watched&&MODE!=='off'?t.steps.flatMap(g=>g.paths):[],t?S.players[t.pl].color:'');
   if(G.replay||UI.cover||MODE!=='center'){hide();return;}
-  if(!FEED.groups.length||!p){latestUpdate(F,hide);return;}
-  if(F.dataset.pl!==String(FEED.pl)){F.innerHTML='<div class="frow"></div>';F.dataset.pl=FEED.pl;} // (no name: whose turn it is shows in the chips and the prompt)
-  // newest first in the row (it runs right to left and wraps: steps that don't fit drop out whole, never half a card)
-  const row=F.querySelector('.frow'),ids=new Set(FEED.groups.map(g=>String(g.id)));
-  for(const el of[...row.children])if(!ids.has(el.dataset.g))el.remove();
-  for(const g of FEED.groups){let el=row.querySelector(`[data-g="${g.id}"]`);
-    if(!el){row.insertAdjacentHTML('afterbegin',feedGroupHTML(g));el=row.firstElementChild;if(!reduceMotion)el.classList.add('new');el.dataset.v=g.v;}
-    else if(el.dataset.v!==String(g.v)){el.dataset.v=g.v;el.querySelector('.fcap').innerHTML=feedCap(g);el.title=stepWords(g,S.players[g.pl]);}}
+  if(!F.firstElementChild)F.innerHTML='<div class="frow"></div>'; // (nothing played yet: the row keeps its place, so the box doesn't change size)
+  const row=F.firstElementChild;
+  if(!t){for(const el of[...row.children])el.remove();}
+  else{const was=ROW.key,added=stepsInto(row,t,true);ROW.key=t.key;
+    // a watched player's new steps fly in (out of their chip; a card bought or taken, out of the market), not a turn the page opened on
+    if(watched&&was!==null&&added.length&&!reduceMotion){for(const a of added)a.el.classList.add('new');after(()=>feedFly(added,t.pl));}}
   F.hidden=false;
-  if(FEED.fly.length){const list=FEED.fly;FEED.fly=[];if(!reduceMotion)after(()=>feedFly(list));}
 }
-/* no one else's turn on show (it is your turn and you have acted): the row shows the newest turn in the journal */
+/* the newest turn on show in the row (for pointing at its steps) */
 let LATEST=null;
-function latestUpdate(F,hide){
-  const t=LATEST=turnsOf(S.log).filter(t=>!t.sys).pop();
-  if(!t||!t.steps.length){if(F.dataset.pl!=='none'){F.innerHTML='<div class="frow"></div>';F.dataset.pl='none';}F.hidden=false;return;} // (nothing played yet: the row keeps its place, so the box doesn't change size)
-  const pl=S.players[t.pl],id='t'+t.key;
-  if(F.dataset.pl!==id){F.innerHTML='<div class="frow"></div>';F.dataset.pl=id;}
-  setHTML(F.querySelector('.frow'),t.steps.map((g,i)=>stepHTML(g,`data-s="${t.key}|${i}"`,pl)).reverse().join('')); // (newest first, as above)
-  F.hidden=false;
-}
-export const feedPart = { name: 'feed', update,reset:feedReset};
+export const feedPart = { name: 'feed', update,reset:rowReset};
 /* cards fly into the row: out of the player's chip (from their hand) or out of the market (a card they bought or took) */
-function feedFly(list){
-  for(const fl of list){
-    const gel=document.querySelector(`#feed [data-g="${fl.gid}"]`);if(!gel||!fl.from||!fl.from.width)continue;
+function feedFly(added,pl){
+  for(const {el:gel,g} of added){const flies=[];
+    if(g.ts&&g.ts.length)flies.push({kind:'hand',from:chipRect(pl)});
+    if(g.got)flies.push({kind:'got',from:marketRectOf(g.got)});
+    for(const fl of flies){if(!gel.isConnected||!fl.from||!fl.from.width)continue;
     [...gel.querySelectorAll(fl.kind==='got'?'.fc.got':'.fcs .fc')].forEach((tEl,i)=>{
       const to=tEl.getBoundingClientRect();if(!to.width||to.top>=gel.parentNode.getBoundingClientRect().bottom)return; // (a step that dropped out of the row: nothing to fly to)
       const el=document.createElement('div');el.className='card fly';el.innerHTML=cardHTML(tEl.dataset.t);$('#cards').appendChild(el);
@@ -214,6 +201,6 @@ function feedFly(list){
       const a=el.animate([{transform:T(x0,y0,fl.kind==='hand'?-8:0,s0),opacity:fl.kind==='hand'?0:1},{transform:T(x1,y1,0,s1),opacity:1}],
         {duration:fl.kind==='got'?550:400,delay:i*70,easing:EASE,fill:'both'});
       const done=()=>{tEl.style.opacity='';el.remove();};a.finished.then(done,done);
-    });
+    });}
   }
 }

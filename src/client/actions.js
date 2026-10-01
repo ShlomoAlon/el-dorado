@@ -14,7 +14,7 @@ import { animateMove } from './board/pieces.js';
 import { pulseDiscard } from './board/overlays.js';
 import { flyToDiscard } from './hand.js';
 import { openAll, marketRectOf } from './market.js';
-import { feedWatch, feedEvent, feedClear } from './feed.js';
+import { feedWatch } from './feed.js';
 import { sfx, sfxEvent } from './sound.js';
 import { aiKick, aiReset } from './ai.js';
 import { netAct, reconnect } from './online.js';
@@ -58,9 +58,7 @@ function syncMode(turnChanged){
 export function playEvents(ev,viewer){
   for(const e of ev){
     sfxEvent(e,viewer);
-    const watched=feedWatch(e.pl); // another player's turn: shown in the row under the prompt (ui_view.js)
-    if(e.e==='play'&&!watched)feedClear(); // I (or a pass-and-play human here) act: the last recap goes
-    if(watched)feedEvent(e);
+    const watched=feedWatch(e.pl); // another player's turn: the history row shows it as they play (feed.js)
     if(e.e==='move')animateMove(e.pl,e.pi,e.path);
     else if(e.e==='block'){if(!watched)toast(S.players[e.pl].name+' claims blockade #'+e.n);}
     else if(e.e==='arrive')toast(S.players[e.pl].name+' reaches El Dorado!',2200);
