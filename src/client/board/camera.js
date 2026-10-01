@@ -4,10 +4,10 @@
    and the layer's own scale goes back to 1, in the same frame: one sharp redraw at a quiet moment. */
 import { R, assert } from '../../engine.gen.js';
 import { $ } from '../dom.js';
-import { S, MAP, UI, cur } from '../state.js';
+import { S, MAP, UI, G, cur } from '../state.js';
 import { geo, onGeo, measure, handTop } from '../geometry.js';
 import { after } from '../frame.js';
-import { diag, CHECKS } from '../debug.js';
+import { diag, diagLog, CHECKS } from '../debug.js';
 import { layout, xy } from './layout.js';
 export const view = { s: 1, x: 0, y: 0 };
 /* userZoomed: the player moved the board (a resize then keeps their view); dragMoved: the current press became a drag
@@ -38,13 +38,17 @@ function safeRect() {
   const mr = UI.mktOpen && S ? geo.mktW + (phone ? 10 : 28) : 0; // the market column on the right
   return { l: phone ? 8 : 62, t, r: W - 16 - mr, b: handTop() - 8, W, H }; // (above the resting hand: handTop, the hand's own)
 }
+/* what a fit depends on, but the prompt's side (a recap growing a second line over the board is the owner's to decide,
+   playtest 2 B): when it changes, the board is fitted again */
+const keyOf = r => [r.l, r.r, r.b, r.W, r.H].map(Math.round).join(',');
+let fitKey = '';
 function focusPoint() {
   const pl = cur(); const k = pl.pieces[UI.piece] && pl.pieces[UI.piece] !== 'done' ? pl.pieces[UI.piece] : pl.pieces.find(x => x !== 'done');
   const p = k ? xy(k) : layout().city; return [p.x, p.y];
 }
 export function fit(anim) {
   if (!MAP) return; const r = safeRect(); if (!r.W) return; diag(`fit${anim ? ' (glide)' : ''} in ${Math.round(r.W)}×${Math.round(r.H)}`);
-  const aw = r.r - r.l, ah = r.b - r.t;
+  fitKey = keyOf(r); const aw = r.r - r.l, ah = r.b - r.t;
   let s = Math.min(aw / layout().w, ah / layout().h); const whole = s; view.s = s; view.x = r.l + (aw - layout().w * s) / 2; view.y = r.t + (ah - layout().h * s) / 2;
   // too small to play (phones): zoom in on the explorer to move, or (the start screen's preview) on the starting spaces,
   // so the game starts in exactly the view the preview showed
@@ -140,7 +144,11 @@ export function setupPanZoom() {
   // the game area resized: fit again unless the player has moved the board (a height change while a finger is down is
   // the phone's address bar: not then)
   let lastW = geo.app.width;
-  onGeo(sized => { if (!sized) return; const wc = Math.abs(geo.app.width - lastW) > 2; lastW = geo.app.width; if (!cam.userZoomed && (wc || !ptrs.size)) fit(); });
+  // the fit stands on what it read (fitKey): anything else that changes it (the market's width reflowing without the area
+  // resizing) fits again too
+  onGeo(sized => { if (cam.userZoomed) return;
+    if (sized) { const wc = Math.abs(geo.app.width - lastW) > 2; lastW = geo.app.width; if (wc || !ptrs.size) fit(); }
+    else if (MAP && fitKey && fitKey !== keyOf(safeRect())) fit(); });
   ['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
   // Safari's trackpad pinch arrives as gesture events (not ctrl+wheel); touch pinches are already handled by the pointers above
   let g0 = 1; v.addEventListener('gesturestart', () => { g0 = view.s; });
@@ -166,13 +174,13 @@ if (CHECKS) setInterval(() => {
   const zoomed = cam.fitZoomed; // (zoomed in by the fit: only the explorer to move must be clear)
   let bad = '';
   if (zoomed) { const el = document.querySelector('#pieces .piece.turn'); if (!el) return; const r = rect(el); // (the explorer to move: marked .turn)
-    if (!inside(r.left + r.width / 2, r.top + r.height / 2)) bad = 'zoomed in: its explorer to move is'; }
+    if (!inside(r.left + r.width / 2, r.top + r.height / 2)) bad = 'zoomed in: its explorer to move is, at ' + [r.left, r.top].map(Math.round) + ', free ' + [free.l, free.r, free.b].map(Math.round) + (G.replay ? ', replay' : ''); }
   else if (!(inside(b.left, b.top) && inside(b.right, b.bottom))) bad = 'board ' + [b.left, b.top, b.right, b.bottom].map(Math.round) + ', free ' + [free.l, free.t, free.r, free.b].map(Math.round);
   else { const z = rect(document.querySelector('.zoomctl')); // (not zoomed in: the whole board, centred between the zoom buttons and the market)
     // (where the zoom buttons are a column beside the board; a short landscape screen puts them, and the market, in rows
     // above it: that layout is playtest 2 item A7, its own fix)
     if (z.height > z.width) { const mid = (z.right + free.r) / 2, bm = (b.left + b.right) / 2; if (Math.abs(bm - mid) > 40) bad = 'board centred at ' + Math.round(bm) + ', the free area at ' + Math.round(mid); } }
   const seen = bad && bad + '|' + [b.left, b.top, b.right, b.bottom].map(Math.round), again = seen && seen === fitSeen; fitSeen = seen;
-  assert(!again, 'view: the fitted board is clear of the hand and the market, and centred if it shows whole (' + bad + ')');
+  assert(!again, 'view: the fitted board is clear of the hand and the market, and centred if it shows whole (' + bad + '; explorer to move at ' + focusPoint().map(Math.round) + ', safe area now ' + JSON.stringify(safeRect()) + '; camera log: ' + diagLog().filter(l => / (fit|ensureVisible|bake)/.test(l)).slice(-4).join(' / ') + ')');
 }, 500);
 
