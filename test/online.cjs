@@ -30,6 +30,11 @@ const T = report('online');
     const mkRoom = (p, o) => p.evaluate(async o => { const r = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + __ED.NET.token }, body: JSON.stringify(o) });
       const j = await r.json(); __ED.joinRoom(j.code); return j.code; }, o);
 
+    // ---------- 0. a code with no room behind it: said at once (not after a minute of reconnecting), and the code leaves the address
+    { const W = await open('W'); await signIn(W, 'Walt'); const t0 = Date.now();
+      await W.evaluate(() => __ED.joinRoom('ZZZZ'));
+      const said = await wait(W, () => /no room/i.test(document.querySelector('#menu').textContent) && !/[?&]room=/.test(location.search), null, 3000);
+      T.ok('wrong room code: said within 3 s, and the code leaves the address', said, ((Date.now() - t0) / 1000).toFixed(1) + ' s; ' + await W.evaluate(() => (__ED.NET.status || '') + ' ' + location.search)); }
     // ---------- 1. three people
     const A = await open('A'), B = await open('B'), C = await open('C');
     const ids = [await signIn(A, 'Alice'), await signIn(B, 'Bob'), await signIn(C, 'Cara')];

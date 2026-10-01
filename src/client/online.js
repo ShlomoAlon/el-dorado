@@ -64,10 +64,15 @@ function connectRoom(){
   const ws=new WebSocket(wsUrl('/api/rooms/'+code+'/ws'));NET.ws=ws;NET.heard=Date.now();
   ws.onopen=()=>{NET.connected=true;NET.retries=0;NET.status='';NET.heard=Date.now();if(S)render();};
   ws.onmessage=e=>{NET.heard=Date.now();if(e.data==='pong')return;let m;try{m=JSON.parse(e.data);}catch(_){return;}onRoomMsg(m);};
-  ws.onclose=()=>lostConnection(ws);
+  ws.onclose=e=>{if(e.code===4404)noRoom(ws);else lostConnection(ws);};
   // heartbeat: the server answers every ping, so a connection that hears nothing for 40 s is dead (a network that dropped
   // without closing it): give it up and reconnect, which brings the room's current state
   clearInterval(NET.pingT);NET.pingT=setInterval(()=>{const w=NET.ws;if(!w||w.readyState!==1)return;if(Date.now()-NET.heard>40000)lostConnection(w);else w.send('ping');},15000);
+}
+/* the server says there is no such room (a wrong code, or a room that closed): said at once, and the code leaves the address */
+function noRoom(ws){
+  if(NET.ws!==ws)return;NET.ws=null;NET.connected=false;clearTimeout(NET.retryT);NET.code=null;setQuery({room:null});
+  NET.status='There is no room with this code (it may have closed).';renderRoomLobby();
 }
 /* the connection to the room is gone (closed, silent, or not answering): unless we left, reconnect (backing off) */
 function lostConnection(ws){

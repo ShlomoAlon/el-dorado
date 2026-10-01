@@ -472,7 +472,9 @@ export class Room extends DurableObject {
       await this.persist(); return json({ ok: true });
     }
     if (url.pathname === '/ws') {
-      if (!this.d || this.d.status === 'closed') return new Response('No such room', { status: 404 });
+      // no such room: said on the socket itself (close code 4404), which the page can read; a refused handshake only
+      // shows it a closed socket, the same as a dropped network, and it went on reconnecting for half a minute
+      if (!this.d || this.d.status === 'closed') { const pair = new WebSocketPair(); pair[1].accept(); pair[1].close(4404, 'No such room'); return new Response(null, { status: 101, webSocket: pair[0] }); }
       const uid = req.headers.get('x-uid'), name = req.headers.get('x-name');
       const pair = new WebSocketPair();
       this.ctx.acceptWebSocket(pair[1], [uid]); pair[1].serializeAttachment({ uid, name });
