@@ -37,44 +37,139 @@ the middle of other work, and leaves only when it's done or I drop it. Anything 
 the top. When you finish a piece of work, show the ledger, one line per item: done, in progress, or
 waiting on me.
 
-## Fixing bugs (lessons from docs/POSTMORTEMS.md, 2026-10-01)
-Of 217 bugs, only 40 were fixed at the root and 163 fixes added nothing that would catch the bug coming back. So:
-- **Find the design decision before fixing.** Walk symptom → mechanism → root cause → the decision that made the bug
-  possible (test: "if this had been decided differently, could this bug *and its siblings* exist?"). Fix the decision,
-  not the instance; the right fix usually deletes code. If you can only patch the instance, say so and why.
-- **Every fix ships with its ratchet, and the ratchet we prefer is an assertion** (owner's preference: one integration run
-  exercises every assertion, while each new test adds run time; assertions scale, tests get slow). For each bug, find the
-  assertion that would have fired on it, and choose it to fire on the bug's whole class too: assert the property the owner
-  cares about ("a tap on a target is a move", "an overlay exists only in a mode that uses it", "nothing moves without an
-  animation or a direct action"), not the instance ("the timer isn't at x=58"), at the place violations start. A good
-  assertion catches bugs we haven't seen yet; if one already covers the bug (it caught it), say so and that it's the
-  ratchet. A test only where an assertion can't see it (latency, layout across runs). Assertions must stay cheap, also in
-  debug: no allocation or layout reads in per-frame checks, nothing per bot look-ahead step.
-- **Before every fix, write the chain in chat** (one line: symptom → mechanism → design decision → fix), so the owner can see
-  when it's skipped. A failure that shows up while finishing a fix is a new bug and gets its own chain.
-- **Tripwire: stop on a second patch.** If a fix causes a new failure, or you're about to change the same element or
-  function a second time for the same goal, stop: the design is wrong, not one patch short. Write the chain again from
-  the symptom and change the decision (2026-10-01: the prompt's timer, then its message, then its game-over room, each
-  patched in turn, when the real fault was one: the prompt's layout depended on the game state).
-- **Say what the fix is** in the commit message; `.claude/hooks/commit-check.mjs` refuses a commit without it,
-  both as a Claude Code hook (`.claude/settings.json`) and as git's commit-msg hook (`.githooks/`, installed by `node build.mjs`): `Fix: ROOT|PARTIAL|HACK|none`, and for a fix `Decision:` (the design decision and what the fix
-  changes about it) and `Ratchet:` (the assertion that fails if it comes back). A HACK also needs `Owner OK:`.
-- **Never weaken a failing check** (assertion, test, budget) to get green: find out why it fails.
-- **No silent failures:** no empty `catch`, silent fallback or default, silently dropped input, or test check that skips
-  itself. Catch only a named, expected failure; everything else reaches the boundary (docs/ASSERTIONS.md).
+## Fixing bugs (lessons from docs/POSTMORTEMS.md; process agreed with the owner, 2026-10-01)
+Of 217 bugs, only 40 were fixed at the root and 163 fixes added nothing that would catch the bug coming back. Assertions
+are the ratchet we prefer (owner: one integration run exercises every assertion, while each new test adds run time;
+assertions scale, tests get slow), and an assertion is only a ratchet if an integration test reaches it.
+
+### When a bug is reported
+Fix nothing before step 5: first make sure our checks would catch the bug, then find the cause.
+1. **Take it as true and log it.** Put it on the ledger, answer any question in the report first, never argue with it or
+   say "it works for me".
+2. **Name the assertion that should have fired, and prove it fires.**
+   - **The property:** it states what the owner cares about, at the level of the bug's whole class, not its instance
+     ("nothing moves without an animation or a direct action", "a tap on a target is a move", "an overlay exists only in
+     a mode that uses it", not "the buy step isn't 13 px lower"). Put it where violations start. A good assertion
+     catches bugs we haven't seen yet.
+   - **If none exists, write it.** It must stay cheap, also in debug: no layout reads or allocation in per-frame checks,
+     nothing per bot look-ahead step.
+   - **If the honest version is too expensive,** make it sampled: it runs on a fraction of calls or frames (e.g. 1 in 30),
+     so the cost stays small and repeated play still catches the bug. Sometimes that's the only option; a check too
+     expensive to run at all is not an option.
+   - **Prove it fires:** an integration test must reach the bug's state and fail on the shipped code. An assertion no run
+     reaches is not a ratchet. (A test instead of an assertion only where an assertion can't see it: latency, layout
+     across runs.)
+3. **Find out how it shipped, before looking for the cause.** If an assertion already covered it, why did no run trip it?
+   - **Not reached:** no integration test gets to that state, or not the way a player does (set up all at once instead
+     of step by step, another pace, screen size, deal, mode, local vs online).
+   - **Excused:** the run reached it but the assertion let it off (an input window, a declared layout change, "not in play").
+   - **Not counted:** the harness didn't see the failure (a test page opened without `openPage`, which counts failed
+     assertions).
+   - **Not running there:** the assertion is off where the bug happened (the owner's browser). Assertions in the owner's
+     browser report to the server instead of staying silent.
+4. **Close the coverage gap in general, not for this one scenario.** Extend the integration tests so they exercise that
+   kind of behaviour the way a player meets it; the point is that the assertions throughout the code get run, even where
+   a test checks no expected outcome itself. Run it on the shipped code: **it must fail.** If it passes, coverage still
+   doesn't reach the bug: back to step 3.
+5. **Only now, find and fix the cause.**
+   - **Find the design decision** (next section) and say why it was a mistake in itself. Fix the decision, not the
+     instance; the right fix usually deletes code. If you can only patch the instance, say so and why (a PARTIAL).
+   - **Write the chain in chat before editing** (one line: symptom → mechanism → design decision → fix), so the owner can
+     see when it's skipped. A failure that shows up while finishing a fix is a new bug, with its own chain and its own
+     pass through steps 2–4.
+   - **Tripwire: stop on a second patch.** If a fix causes a new failure, or you're about to change the same element or
+     function a second time for the same goal, stop: the design is wrong, not one patch short. Write the chain again from
+     the symptom (2026-10-01: the prompt's timer, then its message, then its game-over room, each patched in turn, when
+     the real fault was one: the prompt's layout depended on the game state).
+   - **Never weaken a failing check** (assertion, test, budget) to get green: find out why it fails.
+   - **No silent failures:** no empty `catch`, silent fallback or default, silently dropped input, or test check that
+     skips itself. Catch only a named, expected failure; everything else reaches the boundary (docs/ASSERTIONS.md).
+   - **Unspecified behaviour** (a rule or UX choice nobody decided): ask, or write the decision in HANDOFF.md, before
+     coding a guess.
+   - Follow the UI decisions below.
+6. **Add the assertion the root cause suggests.** Once the decision is known, what property did it violate? Often broader
+   than step 2's ("every recap step is one height" behind "nothing moves"). Add it, cheap or sampled as in step 2, with a
+   test that fires it on the code before the fix.
+7. **Prove the fix.** The coverage from steps 4 and 6 turns green and the full suite passes, every exit code checked (never
+   trusted through a pipe). **His setup is the test:** a bug he saw is fixed when it's gone in his setup (Chrome on
+   Windows, 1536×639 at 125%, the live server): screenshots or a real play-through at that size, and say plainly what
+   you could not verify (headless only, local only).
+8. **Commit, ship, report.** The commit says `Fix: ROOT|PARTIAL|HACK` (or `Fix: none`: not a bug fix) and, for a fix,
+   `Decision:` (the design decision, why it was a mistake, what the fix changes), `Ratchet:` (the assertions),
+   `Coverage:` (the integration test that now trips them, and that it failed before the fix); a HACK also needs
+   `Owner OK:`. `.claude/hooks/commit-check.mjs` refuses a commit without them, both as a Claude Code hook
+   (`.claude/settings.json`) and as git's commit-msg hook (`.githooks/`, installed by `node build.mjs`). Push to `main`,
+   check the live site serves the new build, and tell the owner briefly: how it shipped, the assertion, the coverage gap
+   closed, the fix; then the ledger.
+
+### What a design decision is
+Four levels; only the last is worth fixing:
+
+| Level | The question | Example: the recap jump (2026-10-01) |
+|---|---|---|
+| Symptom | What did the owner see? | The recap's cards jump down when a turn grows long. |
+| Mechanism | What did the code do, step by step? | A captioned step joined a line of uncaptioned ones; the line grew 13 px and the steps at its bottom moved. |
+| Root cause | Which specific condition made that happen? | An empty caption takes no height, so steps differ in height. |
+| Design decision | Which choice about structure made that condition possible? | Each step's size follows what it happens to contain at the moment (a caption or none). |
+| Why it's a mistake | What principle does it break, true even if this bug had never happened? | Content changes all through play; the frame it sits in shouldn't. When size follows content, every change of content is a change of layout, so whatever is placed relative to it moves whenever the data changes: the layout becomes a function of the game's data instead of the UI's slots. The space an element needs should be decided once, by the slot it fills (a caption line exists whether or not there's a caption), and content only fills it. The same choice explains the sold-out slot 2 px bigger than a card and the prompt's message pushing the cards down when it wrapped. |
+
+**A design decision is a choice about how the code is structured, not a line of code**: a rule somebody chose, or fell
+into by default, about things like these (for example; the list isn't complete): sizes (what decides an element's size
+or place), identity (how things are matched up and kept), ownership (where state lives, who may change it), timing (when
+things are judged), failure (what may fail silently), coverage (what the tests reach), specification (what was never decided).
+
+**Naming the decision isn't enough: say why it was a mistake in itself**, the principle it breaks, so it would be wrong
+even if this bug had never happened. "It caused the bug" is not the reason; the reason is what makes the choice bad, and
+it predicts the siblings. More examples:
+- *Blockades keyed by the deal.* A cache key should be exactly what the cached thing depends on: keyed by anything broader
+  (the deal) it throws away work whenever that changes though the content didn't; by anything narrower it shows stale
+  content. Sibling: the board keyed by its blockades instead of its terrain (redrew identical terrain).
+- *Tests take whatever the random deal gives.* A test then decides what it proves by luck: a check that runs only when the
+  dice allow proves nothing on the runs where it doesn't, and passes anyway. Siblings: the online undo check, both buy checks.
+- *Test pages opened by hand.* "What counts as a failure" was decided in each test instead of in one place, so any test
+  that forgets it is silently weaker than the rest. Siblings: layout, frames and render all ignored failed assertions.
+
+**How to find it:** keep asking "why was that possible?" until the answer is a choice, not a line ("the buy step moved" →
+"its line grew" → "steps have different heights" → "an empty caption takes no space": the choice). If an answer is "a
+typo" or "a mistake", ask why nothing caught it: the decision is then in the checks ("lint ignores undeclared names").
+**How to check you found it:** if this had been decided differently, could this bug *and its siblings* exist? Name the
+siblings (other places the same choice causes, or will cause, the same kind of bug). If you can't name one, you've
+probably found the instance, not the decision.
+
+### ROOT, PARTIAL, HACK
+Every fix is exactly one; the commit says which.
+- **ROOT: the decision itself changed, so this class of bug can't come back.** The siblings are fixed too, or made
+  impossible. It usually removes code (a special case, a second copy of the state, a redraw path, a reset someone had to
+  remember). Its ratchet asserts the class property, which any sibling would trip too ("every recap step is one height",
+  "nothing moves without an animation"). Examples: captions keep their line when empty, plus the one-height assertion;
+  blockades keyed by what each draws, so no deal change can redraw an unchanged one; lint declares the browser's globals
+  and rejects every other undeclared name, so no renamed variable can become a silent global.
+- **PARTIAL: this instance fixed properly, but the decision stands.** The fix is honest, but other instances of the same
+  choice remain and can bite later. The commit says what remains and why it wasn't changed (too big for now, needs the
+  owner, out of scope). Example: swapping the Undo and Cancel slots; Undo no longer stands alone beside a hole, but
+  Cancel now does while paying, because the grid still reserves both.
+- **HACK: the symptom hidden, the cause untouched.** The bug is still there, just not visible, or suppressed for now.
+  Telltale signs: a delay or timeout to make an ordering problem go away; `overflow: hidden` to hide something too big;
+  a special case for one id, card or screen size; a `catch` that drops the error; excusing a check (`expectLayout()` to
+  excuse a jump); loosening a budget or test until it passes; a reset someone has to remember to call. Example: the old
+  recap row clipped to one line, so a long turn's oldest steps vanished without a sign: still too small, it just stopped
+  showing it. **A HACK needs the owner's OK first** (`Owner OK:`), and goes on the list to be fixed at the root.
+- **When unsure between two, pick the lower one** (PARTIAL rather than ROOT, HACK rather than PARTIAL) and say why: calling
+  a PARTIAL a ROOT hides work that's still owed.
+
+### The UI decisions behind most UI bugs
+Follow these in new code and fix toward them:
+- One mechanism per question (what's under the pointer, which screen shows, which AI plays).
+- UI state is derived from the game state and mode, or reset in one place; an overlay exists only in a mode that uses it.
+- Fixed slots: controls and labels keep their place and size across states; text never moves its neighbours; a
+  confirmation never appears under the tap that asked for it.
+- Local first: show what's known locally at once; the network only adds; a screen is chosen only once the data that
+  decides it has arrived.
+- One source of truth; everything else derives from it.
+- Animation follows the state and never gates input.
+
+### Also
 - **A CLAUDE.md line is not a fix** for a code bug, and a process rule that can be checked becomes a check.
-- **His setup is the test:** a bug he saw is fixed when it's gone in his setup (Chrome on Windows, 1536×639 at 125%, the live
-  server). If you can only verify headless or locally, say exactly that.
-- **Unspecified behaviour** (a rule or UX choice nobody decided): ask, or write the decision in HANDOFF.md, before coding a guess.
-- **The UI decisions behind most UI bugs** — follow these in new code and fix toward them:
-  - One mechanism per question (what's under the pointer, which screen shows, which AI plays).
-  - UI state is derived from the game state and mode, or reset in one place; an overlay exists only in a mode that uses it.
-  - Fixed slots: controls and labels keep their place and size across states; text never moves its neighbours; a
-    confirmation never appears under the tap that asked for it.
-  - Local first: show what's known locally at once; the network only adds; a screen is chosen only once the data that
-    decides it has arrived.
-  - One source of truth; everything else derives from it.
-  - Animation follows the state and never gates input.
 - **Showing the ledger doesn't end the work.** A question waiting on the owner blocks only that item; keep going on the rest.
 
 ## Change loop (every time)
@@ -94,7 +189,7 @@ Of 217 bugs, only 40 were fixed at the root and 163 fixes added nothing that wou
    changes: `--full` (all 60 engine games + AI on every course, 11 layout sizes, online, board rendering).
    (The worker bundle check matters: Cloudflare's bundler rejects some things Node accepts; a failed bundle never deploys.)
 4. UI changes: load `public/index.html` in Playwright (Chromium is preinstalled; `NODE_PATH=$(npm root -g)`), take screenshots, look at them, check for page errors.
-5. Commit (clear message with its `Fix:` lines, which the commit check enforces, + the attribution lines your environment asks for) and `git push origin main`.
+5. Commit (clear message with its `Fix:` lines ("Fixing bugs" step 8), which the commit check enforces, + the attribution lines your environment asks for) and `git push origin main`.
 6. Tell him in 1–3 sentences what changed and that it's deploying.
 
 ## Libraries (owner's rule)
