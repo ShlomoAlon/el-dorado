@@ -29,8 +29,13 @@ function ensureSchema(env) {
   if (!schemaReady) schemaReady = checkSchema(env).catch(e => { schemaReady = null; throw e; });
   return schemaReady;
 }
+/* columns are only ever added; one that is already there is the failure expected */
+async function addColumn(env, table, col) {
+  try { await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${col}`).run(); }
+  catch (e) { if (!/duplicate column/i.test(errText(e))) throw e; }
+}
 async function checkSchema(env) {
-  const row = await env.DB.prepare(`SELECT v FROM settings WHERE k='schema'`).first().catch(() => null); // no table yet: a new database
+  const row = await env.DB.prepare(`SELECT v FROM settings WHERE k='schema'`).first().catch(e => { if (/no such table/i.test(errText(e))) return null; throw e; }); // (expected: no table yet, a new database)
   if (row && row.v === SCHEMA) return;
   await createSchema(env);
   await env.DB.prepare(`INSERT INTO settings(k,v) VALUES('schema',?) ON CONFLICT(k) DO UPDATE SET v = excluded.v`).bind(SCHEMA).run();
@@ -50,11 +55,11 @@ async function createSchema(env) {
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS bugs_created ON bugs(created DESC)`),
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS bugs_who ON bugs(who, created)`),
   ]);
-  try { await env.DB.prepare(`ALTER TABLE users ADD COLUMN bot TEXT`).run(); } catch (e) { } // already there
+  await addColumn(env, 'users', 'bot TEXT');
   // replays of online games (game=1) are kept for good; uids = ',uid1,uid2,' (who played); listed=0: a private room's game
   // places: finishing places in the order of uids (no longer written or read: the log's own result has them; columns stay)
   for (const c of ['game INTEGER NOT NULL DEFAULT 0', 'uids TEXT', 'listed INTEGER NOT NULL DEFAULT 1', 'places TEXT'])
-    try { await env.DB.prepare(`ALTER TABLE replays ADD COLUMN ${c}`).run(); } catch (e) { }
+    await addColumn(env, 'replays', c);
   for (const A of E.AIS) { // one rated player per named AI; if a person already has the name, the AI gets "(AI)" after it
     const id = aiUid(A.id);
     if (await env.DB.prepare(`SELECT id FROM users WHERE id=?`).bind(id).first()) continue;
@@ -86,6 +91,9 @@ async function createSchema(env) {
 const BUG_MAX_BYTES = 256e3, BUGS_PER_HOUR = 20, BUGS_KEEP = 2000;
 const newId = () => [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
 const errText = e => String(e && e.message || e);
+/* a socket that closed meanwhile can't be written to or closed again: the one failure expected here */
+function wsSend(ws, msg) { try { ws.send(msg); } catch (e) { /* expected: the socket closed meanwhile */ } }
+function wsClose(ws, code, reason) { try { ws.close(code, reason); } catch (e) { /* expected: the socket is already closed */ } }
 /* store a report ({msg, stack, build, context}); the id, or null (over the limit, or the database failed). Never throws:
    a report must not become a second failure */
 async function storeBug(env, source, who, b) {
@@ -340,7 +348,7 @@ export class Lobby extends DurableObject {
   constructor(ctx, env) { super(ctx, env); this.rooms = null; ctx.blockConcurrencyWhile(async () => { this.rooms = (await ctx.storage.get('list')) || {}; await ctx.storage.delete('rooms'); }); }
   prune() { const now = Date.now(); for (const c in this.rooms) { const r = this.rooms[c]; if (now - r.updated > (r.status === 'playing' ? 12 : 2) * 3600e3) delete this.rooms[c]; } }
   list() { return Object.values(this.rooms).filter(r => r.opts.pub && (r.status === 'lobby' || r.status === 'playing')).map(({ updated, ...r }) => r); }
-  broadcast() { const msg = JSON.stringify({ t: 'rooms', rooms: this.list() }); for (const ws of this.ctx.getWebSockets()) { try { ws.send(msg); } catch (e) { } } }
+  broadcast() { const msg = JSON.stringify({ t: 'rooms', rooms: this.list() }); for (const ws of this.ctx.getWebSockets()) wsSend(ws, msg); }
   async fetch(req) {
     const url = new URL(req.url);
     if (url.pathname === '/ws') { const pair = new WebSocketPair(); this.ctx.acceptWebSocket(pair[1]); pair[1].send(JSON.stringify({ t: 'rooms', rooms: this.list() })); return new Response(null, { status: 101, webSocket: pair[0] }); }
@@ -364,7 +372,7 @@ export class Lobby extends DurableObject {
     return bad('Not found', 404);
   }
   async webSocketMessage(ws, msg) { if (msg === 'ping') ws.send('pong'); }
-  async webSocketClose(ws, code) { try { ws.close(code); } catch (e) { } }
+  async webSocketClose(ws) { wsClose(ws, 1000, 'Bye'); } // (answer with a normal close: the code received, e.g. 1005, may not be sent back)
 }
 
 /* each player keeps their REPLAYS_PER_PLAYER latest online games: an older game's replay goes once it is past that for
@@ -415,7 +423,7 @@ export class Room extends DurableObject {
         await this.restore();
         if (ws) this.send(ws, { t: 'error', err: 'Something went wrong on the server, sorry. That was not done; the game goes on.' });
         if (this.d) { this.sendAll(); if (this.S && !this.S.over && this.d.status === 'playing') await this.ctx.storage.setAlarm(Date.now() + 10000); } // (a failed alarm: its work is tried again)
-      } catch (e2) { console.error('room: could not recover', e2); if (ws) try { ws.close(1011, 'Server error'); } catch (_) { } }
+      } catch (e2) { console.error('room: could not recover', e2); if (ws) wsClose(ws, 1011, 'Server error'); }
       return new Response('Server error', { status: 500 });
     }
   }
@@ -425,11 +433,13 @@ export class Room extends DurableObject {
   get owners() { return this.d.seats.map(s => s.uid); }
   async lobbyChanged() { await this.persist(); this.tellLobby(); this.sendAll(); } // a change the room list shows too
   async persist() { await this.ctx.storage.put(this.rec ? { d: this.d, rec: this.rec } : { d: this.d }); }
-  async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.roomInfo()) }); } catch (e) { } }
+  async tellLobby() { try { const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('main')); await lobby.fetch('https://lobby/update', { method: 'POST', body: JSON.stringify(this.roomInfo()) }); } catch (e) { await this.lost('the room list missed an update', e); } }
+  /* something the room couldn't store or tell (the game itself goes on): logged and kept as a bug report */
+  async lost(what, e) { console.error('room ' + this.d.code + ': ' + what, e); await storeBug(this.env, 'worker', 'room:' + this.d.code, { msg: what + ': ' + errText(e), stack: e && e.stack, context: { room: this.d.code } }); }
   online(uid) { return this.ctx.getWebSockets(uid).length > 0; }
   // left: the player resigned; the game goes on without them, so they are no longer in this room (the lobby's /find, /match)
   roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map((s, i) => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid), left: !!(this.S && this.S.players[i].resigned) })), results: d.results || null }; }
-  send(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (e) { } }
+  send(ws, obj) { wsSend(ws, JSON.stringify(obj)); }
   stateFor(uid, ev) {
     const seat = this.owners.indexOf(uid);
     // left: ms on the turn clock (the page counts it down from when the message arrives), null when no clock runs
@@ -482,10 +492,10 @@ export class Room extends DurableObject {
         if (d.opts.auto) { // match rooms never close on the host; the next player hosts
           d.seats = d.seats.filter(s => s.uid !== uid); if (d.host === uid && d.seats.length) d.host = d.seats[0].uid;
           if (!d.seats.length) d.status = 'closed';
-          await this.seatsChanged(); await this.lobbyChanged(); try { ws.close(1000, 'Left'); } catch (e) { } return;
+          await this.seatsChanged(); await this.lobbyChanged(); wsClose(ws, 1000, 'Left'); return;
         }
-        if (uid === d.host) { d.status = 'closed'; await this.lobbyChanged(); for (const w of this.ctx.getWebSockets()) try { w.close(1000, 'Room closed'); } catch (e) { } return; }
-        d.seats = d.seats.filter(s => s.uid !== uid); await this.lobbyChanged(); try { ws.close(1000, 'Left'); } catch (e) { }
+        if (uid === d.host) { d.status = 'closed'; await this.lobbyChanged(); for (const w of this.ctx.getWebSockets()) wsClose(w, 1000, 'Room closed'); return; }
+        d.seats = d.seats.filter(s => s.uid !== uid); await this.lobbyChanged(); wsClose(ws, 1000, 'Left');
       }
       else if (m.t === 'addAI') { // host seats a named AI (each at most once per room); it plays server-side
         if (d.opts.auto || uid !== d.host) return err('Only the host can add AI players.');
@@ -493,7 +503,7 @@ export class Room extends DurableObject {
         if (!E.aiAllowed(d.opts.course, d.opts.max)) return err(AI_RULE);
         if (d.seats.length >= d.opts.max) return err('This room is full.');
         // the same AI may take several seats (named Humboldt, Humboldt 2, …; they share its rating)
-        const row = await this.env.DB.prepare(`SELECT name FROM users WHERE id=?`).bind(aiUid(A.id)).first().catch(() => null);
+        const row = await this.env.DB.prepare(`SELECT name FROM users WHERE id=?`).bind(aiUid(A.id)).first();
         if (d.status !== 'lobby' || d.seats.length >= d.opts.max) return err('This room is full.'); // checked again: other messages ran during the await
         const used = d.seats.map(s => s.color), base = row ? row.name : A.name, k = d.seats.filter(s => s.ai === A.id).length;
         d.seats.push({ uid: aiUid(A.id), name: k ? base + ' ' + (k + 1) : base, color: PCOLORS.find(c => !used.includes(c)), ai: A.id });
@@ -598,14 +608,14 @@ export class Room extends DurableObject {
     const d = this.d; if (d.replay !== undefined) return d.replay;
     d.replay = null;
     const log = E.recFinal(this.rec, this.S);
-    const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+    const id = newId();
     const text = JSON.stringify(log); if (text.length > REPLAY_MAX_BYTES) return null;
     try {
       await this.env.DB.prepare(`INSERT INTO replays(id,created,title,players,actions,body,game,uids,listed) VALUES(?,?,?,?,?,?,1,?,?)`)
         .bind(id, Date.now(), log.title.slice(0, 120), log.players.map(x => x.name).join(', '), log.actions.length, text, ',' + this.owners.join(',') + ',', d.opts.pub ? 1 : 0).run();
       d.replay = id;
       await pruneReplays(this.env.DB, this.owners);
-    } catch (e) { }
+    } catch (e) { await this.lost('the replay was not saved', e); }
     return d.replay;
   }
   async finish() {
@@ -614,7 +624,7 @@ export class Room extends DurableObject {
     const replay = await this.saveReplay();
     if (!d.done && !d.opts.rated) { // unrated room: the result is kept, ratings don't move
       d.done = true; d.results = { places: this.S.places, unrated: true, replay };
-      try { await this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: this.owners, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), places: this.S.places, rated: false, rounds: this.S.round, replay })).run(); } catch (e) { }
+      try { await this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: this.owners, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), places: this.S.places, rated: false, rounds: this.S.round, replay })).run(); } catch (e) { await this.lost('the result was not saved', e); }
     }
     if (!d.done) {
       d.done = true;
@@ -628,12 +638,12 @@ export class Room extends DurableObject {
         stmts.push(this.env.DB.prepare(`INSERT OR IGNORE INTO matches(id,room,finished,data) VALUES(?,?,?,?)`).bind(d.code + '-' + d.created, d.code, Date.now(), JSON.stringify({ players: uids, names: this.S.players.map(p => p.name), ai: this.S.players.map(p => p.ai || null), rated: true, places: this.S.places, before: ratings, deltas, rounds: this.S.round, replay })));
         await this.env.DB.batch(stmts);
         d.results = { places: this.S.places, before: ratings, deltas, replay };
-      } catch (e) { d.results = { places: this.S.places, error: String(e && e.message || e), replay }; }
+      } catch (e) { d.results = { places: this.S.places, error: errText(e), replay }; await this.lost('the ratings were not updated', e); }
     }
     this.tellLobby();
   }
   async onClose(ws, code) {
-    try { ws.close(code); } catch (e) { }
+    wsClose(ws, 1000, 'Bye'); // (answer with a normal close: the code received, e.g. 1005 'none', may not be sent back)
     const d = this.d; if (d.status === 'closed') return;
     const { uid } = ws.deserializeAttachment();
     // someone who closes the page before a quick match starts gives up their seat, so matches never start with absent players

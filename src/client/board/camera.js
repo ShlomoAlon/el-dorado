@@ -115,7 +115,7 @@ export function setupPanZoom() {
         cam.dragMoved = true; moved();
         // the grabbing cursor: mouse only (the class change restyles every board element, a stall at the start of a touch drag)
         if (e.pointerType === 'mouse') v.classList.add('drag');
-        try { v.setPointerCapture(e.pointerId); } catch (_) { }
+        try { v.setPointerCapture(e.pointerId); } catch (_) { /* expected: the pointer was already released */ }
       }
       // follow the pointer from the first pixel (a 5 px dead zone made the board jump when the drag began); 5 px still tells a drag from a click
       view.x = start.vx + dx; view.y = start.vy + dy; applyView(); if (cam.dragMoved) cam.userZoomed = true;

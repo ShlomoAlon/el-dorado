@@ -77,7 +77,7 @@ const T = report('flows');
   } else console.log('     (skip buy: nothing affordable)');
   // 7. end the turn (the buy nudge and the keep-cards step, if they come)
   const me = await S(() => window.__ED.S.cur);
-  for (let k = 0; k < 4 && await S(m => window.__ED.S.cur === m, me); k++) { await idle(); const id = await S(() => ['bEndA', 'bEnd2', 'bEnd'].find(i => document.getElementById(i))); if (!id) break; await p.click('#' + id); await until((m, id) => window.__ED.S.cur !== m || !document.getElementById(id), [me, id], 3000).catch(() => {}); }
+  for (let k = 0; k < 4 && await S(m => window.__ED.S.cur === m, me); k++) { await idle(); const id = await S(() => ['bEndA', 'bEnd2', 'bEnd'].find(i => document.getElementById(i))); if (!id) break; await p.click('#' + id); await until((m, id) => window.__ED.S.cur !== m || !document.getElementById(id), [me, id], 3000); }
   await check('turn ended', m => window.__ED.S.cur !== m, me);
   // 8. the AI plays its turn; its steps show in a row under the prompt
   await check('the AI played its turn', () => !window.__ED.S.players[window.__ED.S.cur].ai, null, 30000);

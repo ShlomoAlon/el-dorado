@@ -31,7 +31,7 @@ const path = require('path');
     const C = await p.evaluate(([L, start]) => {
       for (let q = -12; q <= 12; q++) for (let r = -12; r <= 12; r++) {
         const C = { id: 'tile', name: 'tile', p: start ? [[L, 0, 0, 0], ['C', 7, -3, 0]] : [['B', -7, 3, 0], [L, 0, 0, 0]], e: [q, r], s: 'j' };
-        try { __ED.showCourse(C, 1); return C; } catch (e) { }
+        try { __ED.showCourse(C, 1); return C; } catch (e) { /* expected: this random layout doesn't fit: try the next */ }
       }
     }, [L, start]);
     await shoot(C, start ? 0 : 1, `${out}/game-${L}.png`);

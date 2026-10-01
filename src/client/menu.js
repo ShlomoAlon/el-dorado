@@ -3,7 +3,7 @@
    them, reads them when they're used, and fills only the boxes that hold data (seats, rooms, leaderboard, profile,
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
 import { COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, recSecret, plural, shuffle } from '../engine.gen.js';
-import { $, esc, setHTML, setText } from './dom.js';
+import { $, esc, setHTML, setText, setQuery } from './dom.js';
 import { S, setS, UI, NET, G, clearSelection, isAI, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
 import { toast } from './dialogs.js';
@@ -11,6 +11,8 @@ import { showGame, resumeSaved, resignSeat, resignLocal, endLocal } from './acti
 import { aiKick, aiNetLoad } from './ai.js';
 import { api, gsiMount, signOut, signedIn, joinRoom, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, exitOnline, resignOnline } from './online.js';
 import { loadReplayId, openReplay } from './replay.js';
+import { load, store } from './store.js';
+import { diag } from './debug.js';
 /* course list: official routes first; 'random' picks one of them */
 function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:courseById(id);}
 // (a room's course, as the server sends it: one this page doesn't know yet, from a newer version, shows as the first)
@@ -24,15 +26,14 @@ const setRadio=(n,v)=>{MENU.f.querySelector(`input[name="${n}"][value="${v}"]`).
 const newOrder=()=>shuffle([0,1,2,3],Math.random);
 const SETUP={seed:(Math.random()*1e9)|0,order:newOrder(),id:null,cur:null,map:null};
 
-const BUYWARN_KEY='eldorado-buywarn';
 /* setting: before ending a turn with a card still affordable, ask first */
 export const buyReminder=()=>mq('#sBuyWarn').checked;
 export function menuInit(){
   // (courses, seats, AI and colour choices are written into the page by build.mjs: the start screen needs no script)
   // AI seats chosen before are remembered on this device
-  let ai=[];try{ai=JSON.parse(localStorage.getItem('eldorado-seats')||'[]');}catch(e){}
+  let ai=[];try{ai=JSON.parse(load('seats')||'[]');}catch(e){/* expected: a stored value from another version */}
   mqa('#seats select').forEach((s,i)=>{if(aiById(ai[i]))s.value=ai[i];});
-  try{if(localStorage.getItem(BUYWARN_KEY)==='0')mq('#sBuyWarn').checked=false;}catch(e){} // (settings: kept on this device)
+  if(load('buywarn')==='0')mq('#sBuyWarn').checked=false; // (settings: kept on this device)
   MENU.f.addEventListener('submit',e=>e.preventDefault());
   MENU.f.addEventListener('change',menuChange);
   MENU.f.addEventListener('click',menuClick);
@@ -85,8 +86,8 @@ function menuChange(e){
   const n=e.target.name||e.target.id;
   if(n==='mode'){({local:showSetup,online:showHub,replays:showReplays})[e.target.value]();return;}
   if(n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){setupSync();prepareGame();
-    if(/^who\d$/.test(n))try{localStorage.setItem('eldorado-seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value)));}catch(_){} return;}
-  if(n==='buywarn'){try{localStorage.setItem(BUYWARN_KEY,e.target.checked?'1':'0');}catch(_){}return;}
+    if(/^who\d$/.test(n))store('seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value))); return;}
+  if(n==='buywarn'){store('buywarn',e.target.checked?'1':'0');return;}
   if(n==='otab'){onlineTab();return;}
   if(n==='rlrated'){netSend({t:'rated',v:e.target.value==='1'});return;}
   if(n==='rlcol'){netSend({t:'color',color:e.target.value});return;}
@@ -111,7 +112,7 @@ function menuClick(e){
     case'rejoinGo':joinRoom(NET.active);return;
     case'pfBack':NET.viewUser=null;setRadio('otab','board');onlineTab();return;
     case'meSave':run(async()=>{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:mq('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);acctRender();});return;
-    case'lkCopy':{const i=mq('#lkIn');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value).then(()=>toast('Link copied')).catch(()=>{});return;}
+    case'lkCopy':{const i=mq('#lkIn');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value).then(()=>toast('Link copied')).catch(()=>{/* expected: clipboard refused; the link stays selected to copy by hand */});return;}
     case'rlLeave':leaveRoom();showHub();return;
     case'rlStart':netSend({t:'start'});return;
     case'rlNow':netSend({t:'now'});return;
@@ -169,7 +170,7 @@ export function startLocal(){
 
 /* ---- Online ---- */
 /* leave the room this page is in (before its game starts: afterwards the server ignores it and the socket just closes) */
-function leaveRoom(){if(!NET.code)return;if(NET.connected)netSend({t:'leave'});NET.code=null;leaveRoomSocket();try{history.replaceState(null,'',location.pathname);}catch(_){}}
+function leaveRoom(){if(!NET.code)return;if(NET.connected)netSend({t:'leave'});NET.code=null;leaveRoomSocket();setQuery({room:null,replay:null});}
 export function showHub(){if(NET.user)openLobbyWs();onlineRender();menuOpen('online');}
 function onlineRender(){
   const u=NET.user;mq('#oOff').hidden=NET.available;mq('#oOut').hidden=!NET.available||!!u;mq('#oIn').hidden=!NET.available||!u;
@@ -244,7 +245,7 @@ export function showReplays(){
   const showMine=online=>{const items=[...loc,...online.map(g=>({t:g.created,h:gameRowHTML(`data-id="${esc(g.id)}"`,g,g.seat,'online')}))].sort((a,b)=>b.t-a.t);
     setHTML(mine,items.length?items.map(x=>x.h).join(''):'<p class="note">No finished games yet. Games you finish here are kept to watch again.</p>');};
   showMine([]);
-  if(NET.available&&NET.user)api('/api/users/'+encodeURIComponent(myId())).then(j=>showMine(j.games||[])).catch(()=>{});
+  if(NET.available&&NET.user)api('/api/users/'+encodeURIComponent(myId())).then(j=>showMine(j.games||[])).catch(e=>diag('your games: '+e.message));
   const list=mq('#rList');
   if(!NET.available)setHTML(list,'<p class="note">The shared list needs the online server.</p>');
   else fetch('/api/replays').then(r=>r.json()).then(j=>{const rs=j.replays||[];

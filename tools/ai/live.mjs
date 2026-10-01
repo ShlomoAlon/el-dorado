@@ -13,7 +13,7 @@ function status() {
   const env = readFileSync(CFG, 'utf8').trim(), run = (env.match(/RUN=(\S+)/) || [])[1];
   if (!run) return { run: 'none', env, phase: { name: 'paused' } };
   const logf = `tools/ai/data/first-${run}.log`; let lines = [];
-  try { lines = readFileSync(logf, 'utf8').split('\n').filter(Boolean); } catch (e) { }
+  try { lines = readFileSync(logf, 'utf8').split('\n').filter(Boolean); } catch (e) { if (e.code !== 'ENOENT') throw e; /* expected: no log yet */ }
   // log times are HH:MM:SS (UTC); turn them into epoch ms, counting forward across midnight
   const end = (() => { try { return statSync(logf).mtimeMs; } catch (e) { return Date.now(); } })();
   const day = new Date(end); day.setUTCHours(0, 0, 0, 0);

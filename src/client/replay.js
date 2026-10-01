@@ -2,7 +2,7 @@
    The log holds the seeds and every action; the engine rebuilds each position (replay), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
 import { CT, LOG_MAX, hexAt, replayCheck, replay, applyAction, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32 } from '../engine.gen.js';
-import { $, esc, setHTML } from './dom.js';
+import { $, esc, setHTML, setQuery } from './dom.js';
 import { S, setS, UI, G, online, clearSelection } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, banner, closeModal } from './dialogs.js';
@@ -10,6 +10,7 @@ import { showGame, resumeSaved, playEvents, firstPiece } from './actions.js';
 import { AIX, aiNetLoad, aiReset } from './ai.js';
 import { exitOnline } from './online.js';
 import { showSetup, showHub, showReplays, MENU } from './menu.js';
+import { load, store } from './store.js';
 const TERR={j:'jungle',w:'water',v:'village',r:'rubble',c:'base camp',g:'El Dorado',s:'start'};
 function buildReplay(log,id){
   const err=replayCheck(log);if(err)throw new Error(err);
@@ -20,7 +21,7 @@ function buildReplay(log,id){
     r.gs.log=[];states.push(JSON.stringify(r.gs)); // (the journal is kept per step, in lines)
   }
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
-  let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;try{sp=+(localStorage.getItem('eldorado-rspeed2')||1)||1;const v=localStorage.getItem('eldorado-rside');if(v!==null)side=v==='1';}catch(e){}
+  let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;sp=+(load('rspeed')||1)||1;const v=load('rside');if(v!==null)side=v==='1';
   return{log,id,states,lines,evs,i:0,timer:0,speed:sp,side,ev:{},adv:{},played:{}};
 }
 /* ---- the evaluation: the shipped network's estimate for the position on screen, and the turn the strongest AI would play
@@ -87,7 +88,7 @@ function replayPlay(){const R=G.replay;if(R.timer){replayStop();return;}
   R.timer=setTimeout(tick,50);render();}
 function replayStop(){const R=G.replay;if(R.timer){clearTimeout(R.timer);R.timer=0;}render();}
 export function exitReplay(){const from=G.replay.from;replayStop();G.replay=null;$('#app').classList.remove('replaying');$('#rdock').hidden=true;$('#rside').hidden=true;$('#rdock').innerHTML='';
-  try{const u=new URL(location.href);u.searchParams.delete('replay');history.replaceState(null,'',u);}catch(e){}
+  setQuery({replay:null});
   setS(null);resetView();const resumed=resumeSaved(); // the local game in progress, if any, comes back behind the menu
   if(from==='replays')showReplays();else if(from==='online')showHub();else if(from||!resumed)showSetup();}
 
@@ -133,8 +134,8 @@ function replayBar(){
     d.querySelector('#rbP').onclick=()=>go(G.replay.i-1);d.querySelector('#rbN').onclick=()=>go(G.replay.i+1,true);
     d.querySelector('#rbT0').onclick=()=>replayTurn(-1);d.querySelector('#rbT1').onclick=()=>replayTurn(1);
     d.querySelector('#rbGo').onclick=replayPlay;
-    d.querySelectorAll('.rspd button').forEach(b=>b.onclick=()=>{G.replay.speed=+b.dataset.v;try{localStorage.setItem('eldorado-rspeed2',b.dataset.v);}catch(e){}render();});
-    d.querySelector('#rbA').onclick=()=>{G.replay.side=!G.replay.side;try{localStorage.setItem('eldorado-rside',G.replay.side?'1':'0');}catch(e){}render();};
+    d.querySelectorAll('.rspd button').forEach(b=>b.onclick=()=>{G.replay.speed=+b.dataset.v;store('rspeed',b.dataset.v);render();});
+    d.querySelector('#rbA').onclick=()=>{G.replay.side=!G.replay.side;store('rside',G.replay.side?'1':'0');render();};
     const rr=d.querySelector('#rbR');rr.oninput=()=>go(+rr.value);}
   d.hidden=false;side.hidden=!R.side;$('#app').classList.add('replaying');d.querySelector('#rbTxt').innerHTML=replayPromptHTML()+`<span class="rpos"> · move ${R.i} / ${R.states.length-1} · round ${S.round}</span>`;
   const n=R.states.length-1,gb=d.querySelector('#rbGo');gb.textContent=R.timer?'❚❚':'▶';gb.setAttribute('aria-label',R.timer?'Pause':'Play');
@@ -171,7 +172,7 @@ function replayBar(){
     el.onpointerleave=()=>{R.hover=null;render();};});
 }
 export function openReplay(log,id){
-  try{const u=new URL(location.href);u.searchParams.delete('room');if(id)u.searchParams.set('replay',id);else u.searchParams.delete('replay');history.replaceState(null,'',u);}catch(e){}
+  setQuery({room:null,replay:id||null});
   startReplay(log,id);
 }
 export async function loadReplayId(id){

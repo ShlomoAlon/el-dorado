@@ -138,7 +138,7 @@ function wire(el, id) {
     const pickMode = ['trashPick', 'endTurn', 'transmit'].includes(UI.mode);
     drag = { id, x0: e.clientX, y0: e.clientY, started: false, pid: e.pointerId, inHand, wasSel: UI.mode === 'card' && UI.card === id,
       kind: pickMode ? 'none' : UI.mode === 'discardFor' || UI.mode === 'pay' ? (inHand && !UI.picks.includes(id) ? 'free' : 'none') : (isAct || isTargeted(id) ? 'aim' : 'free') };
-    try { el.setPointerCapture(e.pointerId); } catch (_) { }
+    try { el.setPointerCapture(e.pointerId); } catch (_) { /* expected: the pointer was already released */ }
   });
   el.addEventListener('pointermove', e => {
     if (!drag || drag.id !== id || e.pointerId !== drag.pid) return;

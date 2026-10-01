@@ -8,10 +8,12 @@ import { showHub, showRoomLobby, renderRoomLobby, roomsRender, loadProfile } fro
 import { showGame, playEvents, afterChange } from './actions.js';
 import { sfx } from './sound.js';
 import { diag } from './debug.js';
+import { load, store } from './store.js';
+import { setQuery } from './dom.js';
 export async function api(path,opts={}){
   const headers={'content-type':'application/json'};if(NET.token)headers.authorization='Bearer '+NET.token;
   const r=await fetch(path,{...opts,headers});
-  let j={};try{j=await r.json();}catch(e){}
+  let j={};try{j=await r.json();}catch(e){/* expected: a reply that isn't JSON (a proxy's error page): the status below says what failed */}
   if(!r.ok){const e=new Error(j.err||('Request failed ('+r.status+')'));e.status=r.status;throw e;}
   return j;
 }
@@ -20,11 +22,11 @@ export const HAS_SERVER=!(location.protocol==='file:'||/claude\.ai$|claudeuserco
 export async function netInit(){
   if(!HAS_SERVER)return;
   try{NET.cfg=await api('/api/config');NET.available=true;}catch(e){NET.available=false;return;}
-  try{NET.token=localStorage.getItem('ed-token');}catch(e){}
-  if(NET.token){try{const r=await api('/api/me');NET.user=r.user;NET.active=r.active;loadProfile(r.user.id).catch(()=>{});}catch(e){if(e.status===401){NET.token=null;try{localStorage.removeItem('ed-token');}catch(_){}}}}
+  NET.token=load('token');
+  if(NET.token){try{const r=await api('/api/me');NET.user=r.user;NET.active=r.active;loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));}catch(e){if(e.status===401){NET.token=null;store('token',null);}}}
 }
 export function signedIn(r,after){
-  NET.token=r.token;NET.user=r.user;try{localStorage.setItem('ed-token',r.token);}catch(e){}loadProfile(r.user.id).catch(()=>{});
+  NET.token=r.token;NET.user=r.user;store('token',r.token);loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));
   if(r.isNew)toast('Welcome, '+r.user.name+'! You can change your name any time.',3000);
   if(NET.pendingRoom){const c=NET.pendingRoom;NET.pendingRoom=null;joinRoom(c);return;}
   (after||showHub)();
@@ -33,7 +35,7 @@ export function signedIn(r,after){
 export function gsiMount(el,err,after,size){
   loadGsi().then(()=>{google.accounts.id.initialize({client_id:NET.cfg.google,callback:async r=>{try{signedIn(await api('/api/auth/google',{method:'POST',body:JSON.stringify({credential:r.credential})}),after);}catch(e){err(e.message);}}});
     if(el.isConnected)google.accounts.id.renderButton(el,{theme:'filled_black',size:size||'large',shape:'pill',text:'signin_with'});}).catch(()=>err('Could not load Google sign-in.'));}
-export function signOut(then){NET.token=null;NET.user=null;try{localStorage.removeItem('ed-token');}catch(e){}closeLobbyWs();(then||showHub)();}
+export function signOut(then){NET.token=null;NET.user=null;store('token',null);closeLobbyWs();(then||showHub)();}
 let gsiLoading=null;
 function loadGsi(){if(window.google&&google.accounts)return Promise.resolve();if(!gsiLoading)gsiLoading=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=res;s.onerror=rej;document.head.appendChild(s);});return gsiLoading;}
 function wsUrl(path){return(location.protocol==='https:'?'wss://':'ws://')+location.host+path+(path.includes('?')?'&':'?')+'t='+encodeURIComponent(NET.token);}
@@ -53,7 +55,7 @@ export function netSend(m){if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.str
 export function joinRoom(code,mine){
   closeLobbyWs();leaveRoomSocket();
   NET.room=mine?{code,status:'lobby',host:myId(),opts:mine,seats:[]}:{code,status:'connecting',seats:[]};NET.code=code;NET.S=null;NET.retries=0;
-  try{history.replaceState(null,'',location.pathname+'?room='+code);}catch(e){}
+  setQuery({room:code,replay:null});
   connectRoom();showRoomLobby();
 }
 export function leaveRoomSocket(){if(NET.ws){const w=NET.ws;NET.ws=null;w.close();}clearTimeout(NET.retryT);NET.connected=false;}
@@ -101,5 +103,5 @@ export function resignOnline(){
   modal(`<h2>Leave this game?</h2><p class="sub">${NET.room.opts.rated===false?'Leaving counts as finishing last among the players still racing (this game is unrated).':'Leaving a rated game counts as finishing last among the players still racing. Your rating will drop.'}</p><div class="mrow"><button class="btn" id="rsNo">Stay</button><button class="btn pri" id="rsYes">Leave game</button></div>`,sc=>{
     sc.querySelector('#rsNo').onclick=closeModal;sc.querySelector('#rsYes').onclick=()=>{NET.leaving=true;netAct({t:'act',a:{t:'resign'}});closeModal();toast('Leaving the game…',2000);};},true);
 }
-export function exitOnline(){NET.code=null;NET.S=null;leaveRoomSocket();setS(null);try{history.replaceState(null,'',location.pathname);}catch(e){}resetView();}
+export function exitOnline(){NET.code=null;NET.S=null;leaveRoomSocket();setS(null);setQuery({room:null,replay:null});resetView();}
 

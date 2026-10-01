@@ -11,9 +11,10 @@ import { affordable, pickFromMarket, payTotal, cancelMode } from './actions.js';
 import { setT, placeAt, buySlotBox } from './hand.js';
 import { sfx } from './sound.js';
 import { render } from './frame.js';
+import { load, store } from './store.js';
 
 const noMkt=()=>$('#app').classList.toggle('nomkt',!UI.mktOpen||$('#mkt').classList.contains('cramped'));
-function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);try{localStorage.setItem('eldorado-mkt',open?'1':'0');}catch(e){}
+function setMkt(open){UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);store('market',open?'1':'0');
   if(!cam.userZoomed)fitSoon(true);}
 /* The All cards spread belongs to the turn and mode it was opened in: a new turn, mode or game, a replay or the menu
    closes it by itself (nothing has to remember to). allFor: where it was opened; it shows while that is still where we are */
@@ -125,7 +126,7 @@ export function marketInit(){
   $('#bsCancel').onclick=cancelMode;
   $('#allClose').onclick=()=>openAll(false);$('#allc').addEventListener('click',e=>{if(e.target.id==='allc'||e.target.classList.contains('allc-in'))openAll(false);});
   $('#mktBtn').onclick=()=>{if($('#mkt').classList.contains('cramped')){openAll(true);return;}setMkt(!UI.mktOpen);};
-  let so=null;try{so=localStorage.getItem('eldorado-mkt');}catch(e){}
+  const so=load('market');
   UI.mktOpen=so!=='0';$('#mkt').classList.toggle('hid',!UI.mktOpen);$('#mktBtn').classList.toggle('on',UI.mktOpen);noMkt();
   onGeo(sizeMarket);
 }

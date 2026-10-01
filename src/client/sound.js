@@ -2,15 +2,16 @@ import {  } from '../engine.gen.js';
 import { S, UI, NET, canAct, online } from './state.js';
 import { STEP } from './board/pieces.js';
 import { reduceMotion } from './dom.js';
+import { load, store } from './store.js';
 /* =========================================================
    SOUND: tiny synthesized UI effects (Web Audio, no files).
    sfx(name[,n]) plays one; everything is short, soft and low-passed.
    The AudioContext is created on the first user gesture; any failure is silent.
    ========================================================= */
 export const SND={ctx:null,out:null,noise:null,muted:false,last:{},prevCur:null,moveEnd:0};
-try{SND.muted=localStorage.getItem('eldorado-sound')==='0';}catch(e){}
+SND.muted=load('sound')==='0';
 function sndInit(){
-  if(SND.ctx){if(SND.ctx.state==='suspended')SND.ctx.resume().catch(()=>{});return;}
+  if(SND.ctx){if(SND.ctx.state==='suspended')SND.ctx.resume().catch(()=>{/* expected: audio waits for the player's first tap */});return;}
   try{
     const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
     const c=new AC(),lp=c.createBiquadFilter(),g=c.createGain();
@@ -53,7 +54,6 @@ const SFX={
 const SND_TUNED={turn:1,arrive:1,win:1};
 /* sfx(name) plays a sound; for 'move' and 'draw', n is the number of steps / cards (staggered) */
 export function sfx(name,n){
-  try{
     const c=SND.ctx;if(SND.muted||!c||c.state!=='running'||!SFX[name==='move'?'step':name==='draw'?'tick':name])return;
     const now=performance.now();if(now-(SND.last[name]||0)<40)return;SND.last[name]=now;
     const t0=c.currentTime+.005,rnd=()=>1+(Math.random()*2-1)*(SND_TUNED[name]?.01:.03);
@@ -61,7 +61,6 @@ export function sfx(name,n){
       const k=reduceMotion?1:Math.min(n||1,8),st=STEP/1000;for(let i=0;i<k;i++)SFX.step(t0+(reduceMotion?0:.035+i*st+st*.85),rnd());return;} // (the walk starts two frames after the move: board/pieces.js)
     if(name==='draw'){const k=Math.min(n||1,5);for(let i=0;i<k;i++)SFX.tick(t0+i*.055,rnd());return;}
     SFX[name](t0,rnd());
-  }catch(e){}
 }
 /* engine events → sounds (called from playEvents) */
 export function sfxEvent(e,viewer){
@@ -81,7 +80,7 @@ export function sfxEvent(e,viewer){
   if(e.e==='turn')SND.prevCur=e.pl;
 }
 function setSound(on){
-  SND.muted=!on;try{localStorage.setItem('eldorado-sound',on?'1':'0');}catch(e){}
+  SND.muted=!on;store('sound',on?'1':'0');
   const b=document.getElementById('sndBtn');b.classList.toggle('off',!on);b.title=b.ariaLabel=on?'Mute sounds':'Unmute sounds';
 }
 export function soundInit(){

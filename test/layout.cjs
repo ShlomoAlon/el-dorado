@@ -79,7 +79,7 @@ const CHECK = () => {
       ['replay, bot view hidden', async () => { await p.click('#rbA', { timeout: 5000 }); }],
       ['replay, market closed', async () => { await p.click('#rbA', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }]];
     for (const [name, setup] of states) {
-      await p.keyboard.press('Escape').catch(() => {}); // close any overlay a previous step opened
+      await p.keyboard.press('Escape'); // close any overlay a previous step opened
       try { if (setup) await setup(); } catch (e) { fails++; out.push(`FAIL ${w}×${h} ${name}: could not set up (${e.message.split('\n')[0]})`); continue; }
       await p.mouse.move(w / 2, 1); // park the pointer away from the hand (hovered cards lift by design)
       await settle(p, 6000); // (card flights, panels, the market: whatever the step set moving)

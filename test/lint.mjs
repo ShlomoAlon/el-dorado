@@ -8,9 +8,17 @@ import path from 'node:path';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), dir = path.join(root, 'src/client');
 let ESLint;
 for (const base of [path.join(root, 'node_modules'), execSync('npm root -g').toString().trim()]) {
-  try { ({ ESLint } = await import(pathToFileURL(path.join(base, 'eslint/lib/api.js')))); break; } catch (e) { }
+  try { ({ ESLint } = await import(pathToFileURL(path.join(base, 'eslint/lib/api.js')))); break; } catch (e) { /* expected: not installed here; try the next place */ }
 }
-if (!ESLint) { console.log('lint: skipped (ESLint not installed)'); process.exit(0); }
+// no silent failures (CLAUDE.md): an empty catch, or a promise catch that drops the error, must name the failure it
+// expects in a comment inside it (or handle it). Checked in every source, test and tool file.
+const SILENT = /catch\s*(\(\s*[\w$]*\s*\))?\s*\{\s*\}|\.catch\(\s*\(\s*[\w$]*\s*\)\s*=>\s*(\{\s*\}|null|undefined|false|0|\[\]|\{\s*\})\s*\)/;
+const scan = [], walkAll = d => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name);
+  if (f.isDirectory()) { if (!/node_modules|data|models/.test(f.name)) walkAll(p); } else if (/\.(m|c)?js$/.test(f.name) && f.name !== 'engine.gen.js') scan.push(p); } };
+for (const d of ['src', 'test', 'tools']) walkAll(path.join(root, d));
+let silent = 0;
+for (const f of scan) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (SILENT.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a catch that drops the error: name the failure it expects, or handle it`); } });
+if (!ESLint) { console.log('lint: ESLint is not installed (npm i -g eslint): the module check could not run'); process.exit(1); }
 const files = []; const walk = d => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) walk(p); else if (/\.js$/.test(f.name) && !/^ui_/.test(f.name)) files.push(p); } }; walk(dir);
 // names defined by some module (the engine's and every client module's top-level names): using one without importing it
 // is the mistake to catch (browser globals like document are not in this list, so they need no declaring)
@@ -25,5 +33,6 @@ for (const r of res) for (const m of r.messages) {
   if (m.severity === 2) errors++; else warns++;
   console.log(`${m.severity === 2 ? 'error' : 'warn '} ${path.relative(root, r.filePath)}:${m.line} ${m.message}`);
 }
+errors += silent;
 console.log(errors ? `lint: ${errors} errors, ${warns} warnings` : `lint ok${warns ? ` (${warns} warnings)` : ''}`);
 process.exit(errors ? 1 : 0);

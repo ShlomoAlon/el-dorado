@@ -175,7 +175,7 @@ if (!isMainThread) {
 // gift-card weights: 1 / (1 + times the bot bought that card in the latest self-play batch of THIS run (RUN=… from loop.sh))
 function giftWeights(course) {
   let buys = {}; try { const L = readFileSync(`tools/ai/data/${course}${process.env.RUN ? '-' + process.env.RUN : ''}.log`, 'utf8').split('\n').filter(l => l.includes('] GEN ') && l.includes('"mode":"self"'));
-    if (L.length) buys = JSON.parse(L[L.length - 1].slice(L[L.length - 1].indexOf('{'))).buysNet || {}; } catch (e) { }
+    if (L.length) buys = JSON.parse(L[L.length - 1].slice(L[L.length - 1].indexOf('{'))).buysNet || {}; } catch (e) { if (e.code !== 'ENOENT') throw e; /* expected: no log for this run yet */ }
   return Object.entries(E.CT).filter(([, d]) => d.cost).map(([t]) => [t, 1 / (1 + (buys[t] || 0))]);
 }
 if (isMainThread) {
@@ -210,7 +210,7 @@ if (isMainThread) {
   // win rate relative to a fair share (1/3 in 3-player, 1/4 in 4-player); 1.0 = as good as the heuristic
   const rel = (st.seat3 || st.seat4) ? +((st.win3 + st.win4) / (st.seat3 / 3 + st.seat4 / 4)).toFixed(3) : null;
   try { const D = 'tools/ai/data/replays/'; const old = readdirSync(D).filter(f => f.startsWith('stuck-')).map(f => [f, statSync(D + f).mtimeMs]).sort((x, y) => y[1] - x[1]).slice(60);
-    for (const [f] of old) unlinkSync(D + f); } catch (e) { } // keep the newest 60 capped-game replays
+    for (const [f] of old) unlinkSync(D + f); } catch (e) { if (e.code !== 'ENOENT') throw e; /* expected: no replays folder yet */ } // keep the newest 60 capped-game replays
   // per table size: every player's share of the wins (sums to 100% minus games nobody finished), place value, arrival round
   const tab = st.tab ? Object.fromEntries(Object.entries(st.tab).map(([n, tn]) => [n, { games: tn.games, ...Object.fromEntries(Object.entries(tn).filter(([k]) => k !== 'games').map(([k, t]) => [k, { games: t.seats, wins: t.wins, winRate: +(t.wins / t.seats).toFixed(3), placeValue: +(t.pv / t.seats).toFixed(3), arrival: t.arrN ? +(t.arrSum / t.arrN).toFixed(2) : null }])) }])) : undefined;
   const arrival = st.arrC ? Object.fromEntries(Object.entries(st.arrC).map(([k, A]) => [k, { games: A.games, mean: A.n ? +(A.sum / A.n).toFixed(2) : null, winner: A.wn ? +(A.win / A.wn).toFixed(2) : null }])) : undefined;

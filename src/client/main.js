@@ -28,6 +28,7 @@ import { cam } from './board/camera.js';
 import { targetAt, spaceAt, setHot } from './board/overlays.js';
 import { drag } from './hand.js';
 import { checksPart } from './checks.js';
+import { diag } from './debug.js';
 
 // the order parts update in each frame: first what the selection allows, then the view from back to front
 for (const p of [derivePart, overlaysPart, piecesPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, replayPart, checksPart]) addPart(p); // (checks: the page's invariants, last)
@@ -44,7 +45,8 @@ function boot() {
   if (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen) {
     const fb = $('#fsBtn'); fb.hidden = false;
     // (the browser may refuse: it throws, or rejects the promise, in older and newer versions)
-    fb.onclick = () => { try { Promise.resolve(fsOn() ? (document.exitFullscreen || document.webkitExitFullscreen).call(document) : (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl, { navigationUI: 'hide' })).catch(() => { }); } catch (e) { } };
+    fb.onclick = () => { const refused = e => diag('full screen refused: ' + (e && e.message)); // (expected: some browsers and app views refuse)
+      try { Promise.resolve(fsOn() ? (document.exitFullscreen || document.webkitExitFullscreen).call(document) : (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl, { navigationUI: 'hide' })).catch(refused); } catch (e) { refused(e); } };
     const sync = () => { const on = !!fsOn(); fb.classList.toggle('full', on); fb.title = fb.ariaLabel = on ? 'Exit full screen' : 'Full screen'; };
     document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
   }

@@ -32,8 +32,8 @@ function report(e, msg, where) {
       net: { available: NET.available, connected: NET.connected, busy: NET.busy, status: NET.status, code: NET.code, user: NET.user && NET.user.id },
       log: diagLog() } });
     const headers = { 'content-type': 'application/json' }; if (NET.token) headers.authorization = 'Bearer ' + NET.token;
-    fetch('/api/bugs', { method: 'POST', headers, body, keepalive: body.length < 60000 }).catch(() => { });
-  } catch (_) { } // (best effort: a report must never become a second failure)
+    fetch('/api/bugs', { method: 'POST', headers, body, keepalive: body.length < 60000 }).catch(() => { /* expected: offline; a report must never become a second failure */ });
+  } catch (_) { /* expected: a game that can't be serialized; a report must never become a second failure */ }
 }
 /* an exception nobody caught: after a broken invariant, the game on show comes back from its source */
 function uncaught(e, where) {

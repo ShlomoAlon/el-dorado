@@ -29,9 +29,9 @@ async function startServer() {
     { cwd: ROOT, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; p.stdout.on('data', d => out += d); p.stderr.on('data', d => out += d);
   const url = `http://127.0.0.1:${port}/`, bugs = async id => (await fetch(url + 'api/bugs' + (id ? '?id=' + id : ''), { headers: { 'x-bugs-key': 'test-key' } })).json();
-  const stop = () => { try { process.kill(-p.pid, 'SIGTERM'); } catch (e) { } fs.rmSync(dir, { recursive: true, force: true }); };
+  const stop = () => { try { process.kill(-p.pid, 'SIGTERM'); } catch (e) { /* expected: the server has already exited */ } fs.rmSync(dir, { recursive: true, force: true }); };
   for (let i = 0; i < 120; i++) {
-    try { const r = await fetch(url + 'api/config'); if (r.ok) return { url, stop, bugs }; } catch (e) { }
+    try { const r = await fetch(url + 'api/config'); if (r.ok) return { url, stop, bugs }; } catch (e) { /* expected: not listening yet */ }
     if (p.exitCode !== null) break; await new Promise(r => setTimeout(r, 500));
   }
   stop(); throw new Error('wrangler dev did not start:\n' + out.slice(-2000));
@@ -48,7 +48,7 @@ async function openPage(browser, name, opts = {}) {
 /* nothing finite is animating (card flights, explorer moves, fades); infinite effects (a low clock's pulse) don't count */
 // (two frames first: a change can start its animations a frame later, e.g. the hand after the game area was resized)
 const settle = (page, ms = 4000) => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
-  .then(() => page.waitForFunction(() => !document.getAnimations().some(a => a.playState === 'running' && a.effect && a.effect.getComputedTiming().endTime !== Infinity), null, { timeout: ms })).catch(() => {});
+  .then(() => page.waitForFunction(() => !document.getAnimations().some(a => a.playState === 'running' && a.effect && a.effect.getComputedTiming().endTime !== Infinity), null, { timeout: ms })).catch(() => { /* expected: something still animating after ms; each step's own check waits for what it needs */ });
 
 function report(title) {
   let fails = 0;

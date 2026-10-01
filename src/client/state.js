@@ -2,6 +2,7 @@
    (NET), and the game record / replay (G). Selectors answer "who am I, whose turn, may I act". */
 import { isActive, recState, replayCheck, recFinal, mapOf } from '../engine.gen.js';
 import { failed } from './boundary.js';
+import { load, store } from './store.js';
 /* the game on show (the engine's functions take it as their first argument) and its board */
 export let S = null, MAP = null;
 export function setS(gs) { S = gs; if (gs) MAP = mapOf(gs); }
@@ -33,24 +34,22 @@ export const humanRacing = () => S.players.some(p => !p.ai && isActive(p));
 export const inGame = () => !!(S && !S.over && !G.replay && !UI.preview);
 
 /* the local save is the game's record (the state is rebuilt from it) */
-const SAVE_KEY = 'eldorado-game-v2';
 /* the saved game rebuilt from its record, {rec, S}, or null. Storage can fail, or hold a game that this version can't
    rebuild: a bug, reported, and the page goes on without it */
 export function loadSave() {
-  let rec; try { rec = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return null; }
-  if (!rec || replayCheck(rec)) return null;
+  let rec; try { rec = JSON.parse(load('save') || 'null'); } catch (e) { /* expected: a save cut short (storage full while writing) */ return null; }
+  if (!rec || replayCheck(rec)) return null; // (a game recorded by an older version: dropped, as decided 2026-09-29)
   try { return { rec, S: recState(rec) }; } catch (e) { console.error(e); failed(e, 'rebuilding the saved game'); return null; }
 }
 export function save() {
   if (online() || G.replay || UI.preview) return; // (a game not started yet is never saved)
-  try { if (G.rec) localStorage.setItem(SAVE_KEY, JSON.stringify(G.rec)); else localStorage.removeItem(SAVE_KEY); } catch (e) { }
+  store('save', G.rec ? JSON.stringify(G.rec) : null);
 }
 /* finished local games are kept on this device (newest first, up to 20) to watch again from Replays */
-const MYGAMES = 'eldorado-games-v2';
-export function myGames() { try { return JSON.parse(localStorage.getItem(MYGAMES) || '[]'); } catch (e) { return []; } }
+export function myGames() { try { return JSON.parse(load('games') || '[]'); } catch (e) { /* expected: a list cut short (storage full while writing) */ return []; } }
 export function keepLocalReplay() {
   const L = recFinal(G.rec, S); G.rec = null; L.created = Date.now();
   const list = [L, ...myGames()].slice(0, 20);
-  for (; ;) { try { localStorage.setItem(MYGAMES, JSON.stringify(list)); break; } catch (e) { if (list.length <= 1) break; list.pop(); } } // storage full: drop the oldest
+  while (!store('games', JSON.stringify(list)) && list.length > 1) list.pop(); // storage full: drop the oldest
   return L;
 }

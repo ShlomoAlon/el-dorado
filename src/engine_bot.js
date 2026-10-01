@@ -412,7 +412,7 @@ function botRandomCourse(seed,nMid){
     for(let dq=-4;dq<=4;dq++)for(let dr=-4;dr<=4;dr++){const q=last[0]+dq,r=last[1]+dr,dist=(Math.abs(dq)+Math.abs(dr)+Math.abs(dq+dr))/2;if(dist!==4)continue;
       const[x,y]=pxOf(q,r),[px,py]=pxOf(prev[0],prev[1]);cand.push([q,r,Math.hypot(x-px,y-py)]);}
     cand.sort((a,b)=>b[2]-a[2]);
-    for(const[q,r]of cand.slice(0,8)){const C={id:'rnd'+seed,name:'Random '+seed,p,e:[q,r],s:rnd()<.5?'j':'w'};try{buildCourse(C,1);return C;}catch(e){}}
+    for(const[q,r]of cand.slice(0,8)){const C={id:'rnd'+seed,name:'Random '+seed,p,e:[q,r],s:rnd()<.5?'j':'w'};try{buildCourse(C,1);return C;}catch(e){if(!(e instanceof AssertionError))throw e;/* expected: this layout doesn't fit (buildCourse's checks): try the next */}}
   }
   return null;
 }
