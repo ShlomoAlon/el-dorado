@@ -48,7 +48,9 @@ export function fit(anim) {
   let s = Math.min(aw / layout().w, ah / layout().h); const whole = s; view.s = s; view.x = r.l + (aw - layout().w * s) / 2; view.y = r.t + (ah - layout().h * s) / 2;
   // too small to play (phones): zoom in on the explorer to move, or (the start screen's preview) on the starting spaces,
   // so the game starts in exactly the view the preview showed
-  if (s * R < 13) {
+  // (only when that does zoom in: where the area's height already limits the board, zooming can't make it bigger, and
+  // moving it toward the explorer would only push it off-centre, under the market)
+  if (s * R < 13 && Math.min(ah / layout().h, 13 / R * 1.6) > s * 1.01) {
     s = Math.min(ah / layout().h, 13 / R * 1.6); view.s = s;
     const c = S ? focusPoint() : MAP.starts.map(xy).reduce((a, h, i, A) => [a[0] + h.x / A.length, a[1] + h.y / A.length], [0, 0]);
     view.x = (r.l + r.r) / 2 - (c[0] - layout().minX) * s; view.y = r.t + (ah - layout().h * s) / 2; clampView();
@@ -141,7 +143,7 @@ export function setupPanZoom() {
   v.addEventListener('gesturechange', e => { if (ptrs.size >= 2 || !e.scale) return; diag(`gesture zoom ${e.scale.toFixed(2)} with ${ptrs.size} pointers`); const [x, y] = local(e.clientX, e.clientY); zoomAt(x, y, g0 * e.scale / view.s); });
   document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 }
-/* checks (debug and tests): the board as fitted is clear of the hand and the market (or, zoomed in on a small
+/* checks (debug and tests): the board as fitted is clear of the hand and the market and, shown whole, centred between them (or, zoomed in on a small
    screen, the explorer to move is), measured on the elements themselves, not on the fit's own numbers. Twice a second,
    while the fit stands (the player hasn't panned or zoomed), nothing moves and no card is chosen */
 let fitSeen = ''; // (the last sample's finding: a wrong fit counts once it is the same on two samples in a row, the board unmoved)
@@ -162,7 +164,11 @@ if (CHECKS) setInterval(() => {
   if (zoomed) { const el = document.querySelector('#pieces .piece.turn'); if (!el) return; const r = rect(el); // (the explorer to move: marked .turn)
     if (!inside(r.left + r.width / 2, r.top + r.height / 2)) bad = 'zoomed in: its explorer to move is'; }
   else if (!(inside(b.left, b.top) && inside(b.right, b.bottom))) bad = 'board ' + [b.left, b.top, b.right, b.bottom].map(Math.round) + ', free ' + [free.l, free.t, free.r, free.b].map(Math.round);
+  else { const z = rect(document.querySelector('.zoomctl')); // (not zoomed in: the whole board, centred between the zoom buttons and the market)
+    // (where the zoom buttons are a column beside the board; a short landscape screen puts them, and the market, in rows
+    // above it: that layout is playtest 2 item A7, its own fix)
+    if (z.height > z.width) { const mid = (z.right + free.r) / 2, bm = (b.left + b.right) / 2; if (Math.abs(bm - mid) > 40) bad = 'board centred at ' + Math.round(bm) + ', the free area at ' + Math.round(mid); } }
   const seen = bad && bad + '|' + [b.left, b.top, b.right, b.bottom].map(Math.round), again = seen && seen === fitSeen; fitSeen = seen;
-  assert(!again, 'view: the fitted board is clear of the hand and the market (' + bad + ')');
+  assert(!again, 'view: the fitted board is clear of the hand and the market, and centred if it shows whole (' + bad + ')');
 }, 500);
 
