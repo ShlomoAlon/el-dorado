@@ -215,7 +215,11 @@ function feedFly(added,pl){
       tEl.style.opacity=0;
       const a=el.animate([{transform:T(x0,y0,fl.kind==='hand'?-8:0,s0),opacity:fl.kind==='hand'?0:1},{transform:T(x1,y1,0,s1),opacity:1}],
         {duration:fl.kind==='got'?550:400,delay:i*70,easing:EASE,fill:'both'});
-      const done=()=>{tEl.style.opacity='';el.remove();};a.finished.then(done,done);
+      // (a card in flight becomes the card in the row: it must end exactly where that card is, or it jumps as it lands)
+      const done=()=>{let d=0;if(CHECKS&&tEl.isConnected){const g=el.getBoundingClientRect(),r=tEl.getBoundingClientRect();d=Math.max(Math.abs(g.left-r.left),Math.abs(g.top-r.top),Math.abs(g.width-r.width),Math.abs(g.height-r.height));}
+        tEl.style.opacity='';el.remove();
+        assert(d<1.5,'view: a flying card lands exactly where its card is shown ('+tEl.dataset.t+' in the recap, '+d.toFixed(1)+' px off)');};
+      a.finished.then(done,done);
     });}
   }
 }
