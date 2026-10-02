@@ -1,6 +1,6 @@
 /* BOOT: wires the modules together, sets the order the view parts update in, and decides what opens first (a replay
    or room link, a game in progress, the Online screen, or the start screen). */
-import { buildCourse, courseById, assert, aiChoose } from '../engine.gen.js';
+import { buildCourse, courseById, assert } from '../engine.gen.js';
 import { $ } from './dom.js';
 import { S, MAP, setMAP, UI, NET, G, canAct, online } from './state.js';
 import { load } from './store.js';
@@ -18,7 +18,7 @@ import { marketPart, buySlotPart, marketInit, openAll, allShown } from './market
 import { hudPart, hudInit } from './hud.js';
 import { feedPart, histInit } from './feed.js';
 import { showRules, showPile, closeModal, modalOpen } from './dialogs.js';
-import { AIX } from './ai.js';
+import { AIX, aiThink } from './ai.js';
 import { derivePart, act, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, undo, resumeSaved, onPiece, onPlayCard, startDiscard, addDiscard, confirmTrash } from './actions.js';
 import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, startLocal, radio } from './menu.js';
 import { netInit, joinRoom, netSend } from './online.js';
@@ -93,7 +93,7 @@ function onBoardHover(e) { if (!drag && !e.buttons && e.pointerType === 'mouse')
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiChoose, // (aiChoose: test/play.cjs lets an AI choose the person's moves, played through the calls below)
+window.__ED = { NET, UI, G, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiThink, // (aiThink: test/play.cjs lets an AI choose the person's moves, in the AI's worker, played through the calls below)
   render() { render(); flush(); },
   aiPace(k) { AIX.pace = k; }, fitCheck, // (test/play.cjs: the board check, judged at once on a settled page) // (test/play.cjs: shorter pauses between the AIs' moves)
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },

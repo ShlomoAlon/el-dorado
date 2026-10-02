@@ -14,11 +14,11 @@ const SIZES = [['owner', { width: 1536, height: 639 }, 1.25], ['phone', { width:
 const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
 
 /* one decision for the person's seat, made in the page through the UI's own calls; returns what it did (or why it couldn't) */
-function step() {
-  const E = window.__ED, S = E.S, UI = E.UI, me = S.cur, mems = window.__mem || (window.__mem = {}), mem = mems[me] || (mems[me] = {});
+async function step() {
+  const E = window.__ED, S = E.S, UI = E.UI, me = S.cur;
   // pass-and-play: the hand is covered until the player to move takes the device (the Reveal button)
   { const b = document.getElementById('bRev'); if (b) { b.click(); return 'reveal'; } }
-  const a = E.aiChoose(S, 'raleigh', mem, Math.random);
+  const a = await E.aiThink(S, 'raleigh', me); // (in the AI's worker, as the AIs think: the person's turn waits on nothing else meanwhile)
   // every state the page passes through is noted (each call leaves the page drawn, as a frame after a tap would)
   const seen = window.__seen || (window.__seen = { modes: {}, labels: {} });
   const call = (f, ...x) => { E[f](...x); seen.modes[UI.mode] = 1; for (const e of document.querySelectorAll('#actBtns .bslot:not(.off)')) seen.labels[e.textContent] = 1; };
