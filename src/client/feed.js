@@ -11,12 +11,12 @@
    explorer went. Public information only: the engine's events carry the types of cards that became public (played, spent,
    removed, taken) and just counts for the cards kept at the end of a turn. */
 import { CT, SYMNAME, plural, fmt, assert } from '../engine.gen.js';
-import { $, esc, setHTML, reduceMotion, EASE } from './dom.js';
+import { $, esc, setHTML, reduceMotion } from './dom.js';
 import { S, MAP, NET, G, online, isAI, passing } from './state.js';
 import { toast } from './dialogs.js';
 import { render, after } from './frame.js';
 import { cardHTML } from './cards.js';
-import { rectT, landed } from './hand.js';
+import { flyIn } from './hand.js';
 import { marketRectOf } from './market.js';
 import { setTrail } from './board/overlays.js';
 import { load, store } from './store.js';
@@ -208,16 +208,9 @@ function feedFly(added,pl){
     if(g.got)flies.push({kind:'got',from:marketRectOf(g.got)});
     for(const fl of flies){if(!gel.isConnected||!fl.from||!fl.from.width)continue;
     [...gel.querySelectorAll(fl.kind==='got'?'.fc.got':'.fcs .fc')].forEach((tEl,i)=>{
-      const to=tEl.getBoundingClientRect();if(!to.width)return;
-      const el=document.createElement('div');el.className='card fly';el.innerHTML=cardHTML(tEl.dataset.t);$('#cards').appendChild(el);
-      const fr=fl.kind==='hand'?{left:fl.from.left+fl.from.width/2-to.width*.4,top:fl.from.top+fl.from.height/2-to.height*.4,width:to.width*.8,height:to.height*.8}:fl.from;
-      const [x0,y0,,s0]=rectT(fr,0),[x1,y1,,s1]=rectT(to,0),T=(x,y,r,s)=>`translate3d(${x}px,${y}px,0) rotate(${r}deg) scale(${s})`;
-      tEl.style.opacity=0;
-      const a=el.animate([{transform:T(x0,y0,fl.kind==='hand'?-8:0,s0),opacity:fl.kind==='hand'?0:1},{transform:T(x1,y1,0,s1),opacity:1}],
-        {duration:fl.kind==='got'?550:400,delay:i*70,easing:EASE,fill:'both'});
-      // (a card in flight becomes the card in the row: it must end exactly where that card is, or it jumps as it lands)
-      const done=()=>{const ok=landed(el,tEl,tEl.dataset.t+' in the recap');tEl.style.opacity='';el.remove();if(ok)ok();};
-      a.finished.then(done,done);
+      // (from a chip: the card comes out of its middle, a little smaller, tilted and fading in)
+      const fr=fl.kind==='hand'?{left:fl.from.left+fl.from.width/2-tEl.offsetWidth*.4,top:fl.from.top+fl.from.height/2-tEl.offsetHeight*.4,width:tEl.offsetWidth*.8}:fl.from;
+      flyIn(tEl,fr,{duration:fl.kind==='got'?550:400,delay:i*70,tilt:fl.kind==='hand'?-8:0,fade:fl.kind==='hand'});
     });}
   }
 }

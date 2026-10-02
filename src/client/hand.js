@@ -3,12 +3,11 @@
    CSS transition on transform, which the compositor runs. A new card is placed at the deck first and moved into the
    hand one frame later, so it slides in without the browser having to lay out anything in between. */
 import { CT, typeOf, plural, assert } from '../engine.gen.js';
-import { CHECKS } from './debug.js';
 import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
 import { S, UI, cur, hp, viewIdx, canAct, G, covered } from './state.js';
 import { geo, handTop } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
-import { render } from './frame.js';
+import { render, after } from './frame.js';
 import { targetAt, setHot, hotTarget } from './board/overlays.js';
 import { startAim } from './aim.js';
 import { onHandCard, onPlayCard, cardUsable, isTargeted, isDisc, doMove, startDiscard, addDiscard, togglePick, playAction } from './actions.js';
@@ -23,14 +22,23 @@ export const buySlotBox = { x: 0, y: 0, w: 92 }; // where the purchase slot sits
 const T = (x, y, rot, sc) => `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) rotate(${rot.toFixed(2)}deg) scale(${sc.toFixed(3)})`;
 export function setT(el, x, y, rot, sc) { el.__t = { x, y, rot, sc }; setStyle(el, 'transform', T(x, y, rot, sc)); }
 /* the card's box (cw × 1.4 cw, scaled about its centre) covering a screen rectangle */
-export function rectT(rect, rot) { const cw = geo.cw, ch = cw * 1.4, A = geo.app, sc = rect.width / cw; return [rect.left - A.left - (cw - rect.width) / 2, rect.top - A.top - (ch - rect.height) / 2, rot || 0, sc]; }
+function rectT(rect, rot) { const cw = geo.cw, ch = cw * 1.4, A = geo.app, sc = rect.width / cw; return [rect.left - A.left - (cw - rect.width) / 2, rect.top - A.top - (ch - rect.height) / 2, rot || 0, sc]; }
 export const placeAt = (el, rect, rot) => setT(el, ...rectT(rect, rot));
-/* every flight ends by handing over to the card it becomes: call as it ends, before the copy is removed. It must end
-   exactly on that card (place, size, upright), or the card jumps as it lands */
-export function landed(ghost, card, what) {
-  if (!CHECKS || !card || !card.isConnected) return;
-  const g = ghost.getBoundingClientRect(), r = card.getBoundingClientRect(), d = Math.max(Math.abs(g.left - r.left), Math.abs(g.top - r.top), Math.abs(g.width - r.width), Math.abs(g.height - r.height));
-  return () => assert(d < 1.5, 'view: a flying card lands exactly where its card is shown (' + what + ', ' + d.toFixed(1) + ' px off)');
+/* a card flies in as itself: it is already where the game puts it (in the recap, on a pile) and is animated there from
+   where it came from (from: a rect on screen), ending as it rests (no transform), so it can only land in its own place.
+   No copy flies for it: nothing to hand over to, keep in step or remove. o: tilt, fade (how it starts), lift (rises a
+   little on its way), delay, duration; raise: an element lifted over the controls while the card flies (a pile, which
+   sits under the turn buttons) */
+export function flyIn(el, from, o = {}) {
+  if (reduceMotion || !from || !from.width) return;
+  assert(getComputedStyle(el).transform === 'none', 'view: a card flies in to its own resting place (it rests with a transform: it would jump as the flight ends)');
+  const to = el.getBoundingClientRect(); if (!to.width) return;
+  const dx = from.left - to.left, dy = from.top - to.top, s = from.width / to.width, at = (x, y, r, k) => `translate(${x.toFixed(1)}px,${y.toFixed(1)}px) rotate(${r}deg) scale(${k.toFixed(3)})`;
+  const k = [{ transformOrigin: '0 0', transform: at(dx, dy, o.tilt || 0, s), opacity: o.fade ? 0 : 1 }];
+  if (o.lift) k.push({ transformOrigin: '0 0', transform: at(dx, dy - 30, 0, s * 1.15), opacity: 1, offset: .3 });
+  k.push({ transformOrigin: '0 0', transform: 'none', opacity: 1 });
+  const a = el.animate(k, { duration: o.duration || 400, delay: o.delay || 0, easing: EASE, fill: 'backwards' });
+  if (o.raise) { o.raise.classList.add('flying'); const end = () => o.raise.classList.remove('flying'); a.finished.then(end, end); }
 }
 function newCard(S,id) {
   const el = document.createElement('div'); el.className = 'card'; el.innerHTML = cardHTML(typeOf(S,id)); el.title = cardTitle(typeOf(S,id));
@@ -131,13 +139,10 @@ function setLeft(el, txt) { let b = el.querySelector('.left'); if (!txt) { if (b
 function clear() { for (const [, el] of cardEls) el.remove(); cardEls.clear(); lastViewer = -1; entering = []; }
 export const handPart = { name: 'hand',  update, reset: clear };
 
-/* a card bought (or taken) by the player on view flies from where it was bought into the discard pile */
-export function flyToDiscard(t, from) {
-  if (!from || !from.width || reduceMotion) return;
-  const el = document.createElement('div'); el.className = 'card fly'; el.innerHTML = cardHTML(t); $('#cards').appendChild(el);
-  const [x, y, , sc] = rectT(from, 0), end = rectT(geo.disc, 0); // (ends as the pile shows its card: upright, its size)
-  const done = () => { const ok = landed(el, $('#discStack .mcard'), t + ' onto the discard pile'); el.remove(); if (ok) ok(); };
-  el.animate([{ transform: T(x, y, 0, sc) }, { transform: T(x, y - 30, 0, sc * 1.15), offset: .3 }, { transform: T(...end) }], { duration: 700, easing: EASE, fill: 'forwards' }).finished.then(done, done);
+/* a card bought (or taken) by the player on view flies from where it was bought onto their discard pile: the pile's top
+   card, once this frame has drawn it there */
+export function flyToDiscard(from) {
+  after(() => { const c = $('#discStack .mcard'); if (c) flyIn(c, from, { duration: 700, lift: true, raise: $('#discPile') }); });
 }
 
 /* ---------- pressing and dragging a card ---------- */
