@@ -448,15 +448,17 @@ export class Room extends DurableObject {
   // left: the player resigned; the game goes on without them, so they are no longer in this room (the lobby's /find, /match)
   roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map((s, i) => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid), left: !!(this.S && this.S.players[i].resigned) })), results: d.results || null }; }
   send(ws, obj) { wsSend(ws, JSON.stringify(obj)); }
-  stateFor(uid, ev) {
+  // by: the move this state follows, when a player made it ({ seat, n: that page's number for it }): the page that made it
+  // has shown it already (it applies its own moves at once when it can) and only checks it here
+  stateFor(uid, ev, by) {
     const seat = this.owners.indexOf(uid);
     // left: ms on the turn clock (the page counts it down from when the message arrives), null when no clock runs
-    return { t: 'state', S: E.redact(this.S, seat), ev: ev || [], seat, undo: seat >= 0 && seat === this.S.cur && E.recCanUndo(this.rec), left: this.d.deadline ? Math.max(0, this.d.deadline - Date.now()) : null, room: this.roomInfo() };
+    return { t: 'state', S: E.redact(this.S, seat), ev: ev || [], by: by || null, seat, undo: seat >= 0 && seat === this.S.cur && E.recCanUndo(this.rec), left: this.d.deadline ? Math.max(0, this.d.deadline - Date.now()) : null, room: this.roomInfo() };
   }
-  sendAll(ev) {
+  sendAll(ev, by) {
     for (const ws of this.ctx.getWebSockets()) {
       const { uid } = ws.deserializeAttachment(); // (every socket gets its attachment when it is accepted)
-      if (this.S && this.d.status !== 'lobby') this.send(ws, this.stateFor(uid, ev)); else this.send(ws, { t: 'room', room: this.roomInfo() });
+      if (this.S && this.d.status !== 'lobby') this.send(ws, this.stateFor(uid, ev, by)); else this.send(ws, { t: 'room', room: this.roomInfo() });
     }
   }
   fetch(req) { return this.guard(new URL(req.url).pathname, null, () => this.onFetch(req)); }
@@ -494,7 +496,8 @@ export class Room extends DurableObject {
     if (raw === 'ping') { ws.send('pong'); return; }
     let m; try { m = JSON.parse(raw); } catch (e) { return; }
     const { uid } = ws.deserializeAttachment(), d = this.d; // (a socket is only accepted into a room that exists)
-    const err = e => this.send(ws, { t: 'error', err: e });
+    const n = Number.isInteger(m.n) ? m.n : null; // (a move's number on the page: echoed with its answer, so the page knows which of its moves it answers)
+    const err = e => this.send(ws, { t: 'error', err: e, n });
     if (d.status === 'lobby') {
       const seat = d.seats.find(s => s.uid === uid);
       if (m.t === 'color' && seat && PCOLORS.includes(m.color) && !d.seats.some(s => s !== seat && s.color === m.color)) { seat.color = m.color; await this.persist(); this.sendAll(); }
@@ -549,7 +552,7 @@ export class Room extends DurableObject {
       if (!r.ok) return err(r.err); // (a refused action changes nothing)
       d.timeouts[seat] = 0;
       if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn();
-      await this.afterChange(r.ev); // the player's answer first: waiting on the lobby below lets an AI alarm run meanwhile
+      await this.afterChange(r.ev, { seat, n }); // the player's answer first: waiting on the lobby below lets an AI alarm run meanwhile
       if (m.a.t === 'resign') await this.tellLobby(); // (they are out of the room now)
       return;
     }
@@ -567,9 +570,9 @@ export class Room extends DurableObject {
     d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null;
     await this.nextTurn(); await this.lobbyChanged();
   }
-  async afterChange(ev) {
+  async afterChange(ev, by) {
     if (this.S.over && this.d.status === 'playing') await this.finish();
-    await this.persist(); this.sendAll(ev);
+    await this.persist(); this.sendAll(ev, by);
   }
   /* time bank: each turn adds opts.turn seconds to the player's clock, and time not used carries over to their later
      turns (undo doesn't change it). d.bank[seat] = ms left when their last turn ended; d.clock = whose clock is running. */

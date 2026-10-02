@@ -8,6 +8,7 @@
 //   4. room lists (public listed, private not) and quick match (starts when full, or early when everyone asks)
 //   NODE_PATH=$(npm root -g) node test/online.cjs        (or: node test/run.mjs --online)
 const { chromium, startServer, openPage, settle, report } = require('./lib.cjs');
+const { step } = require('./playstep.cjs');
 const T = report('online');
 (async () => {
   const srv = await startServer(), b = await chromium.launch(), pages = [];
@@ -217,6 +218,36 @@ const T = report('online');
     const ends = await Promise.all([Pa, Pb].map(P => wait(P, () => __ED.S.over && __ED.NET.room.results, null, 120000)));
     T.ok('two games at once: both reach their end', ends.every(Boolean));
     T.ok('two games at once: each page heard only its own room', (await Promise.all([Pa, Pb].map(P => P.evaluate(() => window.__alien)))).every(n => n === 0));
+
+    // ---------- 3c. a whole game played online through the UI, as a quick person plays it: the same player as the local
+    //      played games (test/playstep.cjs), every other move made while the last one is still on its way to the server
+    {
+      const P = await open('Play'); await signIn(P, 'Paz');
+      // (a real connection's delay: each message the page sends reaches the server 150 ms later, in order, so a quick
+      // player's taps land while their last move is still on its way, as on the live site)
+      await P.evaluate(() => { const send = WebSocket.prototype.send; WebSocket.prototype.send = function (d) { setTimeout(() => send.call(this, d), 150); }; });
+      await mkRoom(P, { max: 3, turn: 60, course: 'first', rated: false });
+      await wait(P, () => __ED.NET.room && __ED.NET.room.seats.length === 1);
+      await P.click('[data-addai="raleigh"]'); await wait(P, () => __ED.NET.room.seats.length === 2);
+      await P.click('[data-addai="raleigh"]'); await wait(P, () => __ED.NET.room.seats.length === 3);
+      await P.click('#rlStart'); await wait(P, () => __ED.online());
+      await P.evaluate(() => { window.__prefer = ['travellog', 'scientist']; }); // (so the game reaches the removal choice, and plays on while moves are on their way)
+      const did = {}, odd = []; let steps = 0;
+      const ready = quick => P.waitForFunction(q => { const E = window.__ED; return E.S.over || (E.canAct() && (q || (!E.NET.busy && !E.UI.anim)) && E.UI.mode !== 'pay' && E.UI.mode !== 'discardFor'); }, quick, { timeout: 90000 });
+      try {
+        for (; steps < 1500; steps++) {
+          const quick = !!(steps % 2); await ready(quick); if (!quick) await settle(P);
+          if (await P.evaluate(() => __ED.S.over)) break;
+          const [busy, ahead, r] = await P.evaluate(`(async () => [__ED.NET.busy, __ED.NET.pending.length, await (${step})()])()`), k = (busy ? 'in flight: ' : ahead ? 'ahead of the server: ' : '') + r.split(':')[0];
+          did[k] = (did[k] || 0) + 1;
+          // (with a move still on its way, the page offers nothing to move to: a tap then does nothing, as for a person)
+          if (r.startsWith('unmapped') && !busy) { odd.push(r); break; }
+        }
+      } catch (e) { odd.push('stopped: ' + e.message.split('\n')[0]); }
+      T.ok('a whole game online, played quickly through the UI', await P.evaluate(() => __ED.S.over) && !odd.length, steps + ' moves; ' + odd.join('; '));
+      T.ok('online: the removal choice was reached, and moves were made while others were still on their way to the server', Object.keys(did).some(k => /^(\w[\w ]*: )?trash/.test(k)) && Object.keys(did).some(k => k.startsWith('ahead of the server')), JSON.stringify(did));
+      console.log('     did: ' + JSON.stringify(did));
+    }
 
     // ---------- 4. room lists and quick match
     const D = await open('D'), E2 = await open('E'), F = await open('F'); await signIn(D, 'Dora'); await signIn(E2, 'Emil'); await signIn(F, 'Finn');

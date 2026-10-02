@@ -6,6 +6,7 @@
 // cards, removal cards, the Transmitter, base camps, game over). Animations run 20x faster (they still run).
 //   NODE_PATH=$(npm root -g) node test/play.cjs [--games n]
 const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { step } = require('./playstep.cjs');
 const T = report('play');
 const arg = process.argv.slice(2), GAMES = +(arg[arg.indexOf('--games') + 1] || 0) || 3;
 // the sizes the games are played at: the owner's screen, a phone, a tablet
@@ -13,51 +14,6 @@ const SIZES = [['owner', { width: 1536, height: 639 }, 1.25], ['phone', { width:
 // and one game passed around one device: two people (both played here) and an AI, hands hidden until each one's Reveal
 const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
 
-/* one decision for the person's seat, made in the page through the UI's own calls; returns what it did (or why it couldn't) */
-async function step() {
-  const E = window.__ED, S = E.S, UI = E.UI, me = S.cur;
-  // pass-and-play: the hand is covered until the player to move takes the device (the Reveal button)
-  { const b = document.getElementById('bRev'); if (b) { b.click(); return 'reveal'; } }
-  const a = await E.aiThink(S, 'raleigh', me); // (in the AI's worker, as the AIs think: the person's turn waits on nothing else meanwhile)
-  // every state the page passes through is noted (each call leaves the page drawn, as a frame after a tap would)
-  const seen = window.__seen || (window.__seen = { modes: {}, labels: {} });
-  const call = (f, ...x) => { E[f](...x); seen.modes[UI.mode] = 1; for (const e of document.querySelectorAll('#actBtns .bslot:not(.off)')) seen.labels[e.textContent] = 1; };
-  const stackOf = t => { let i = S.market.findIndex(s => s.t === t && s.n > 0); if (i >= 0) return ['m', i]; i = S.reserve.findIndex(s => s.t === t && s.n > 0); return i >= 0 ? ['r', i] : null; };
-  const piece = pi => { if (UI.piece !== pi) call('onPiece', me, pi); };
-  const pick = id => { if (UI.mode === 'card' && UI.card !== id) call('cancelMode'); if (!(UI.mode === 'card' && UI.card === id)) { if (S.turn.active && S.turn.active.id === id) call('onPlayCard', id); else call('onHandCard', id); } };
-  switch (a.t) {
-    case 'move': case 'native': {
-      if (UI.mode === 'card' && UI.card !== a.card) call('cancelMode');
-      piece(a.pi); pick(a.card);
-      if (!UI.targets.has(a.to)) return 'unmapped ' + a.t + ': ' + a.to + ' is not a target';
-      call('doMove', a.to); return a.t + (S.turn.active ? ' (strength left)' : ''); }
-    case 'pay': {
-      if (UI.mode !== 'idle') call('cancelMode');
-      piece(a.pi); pick(a.cards[0]);
-      const tg = UI.targets.get(a.to); if (!tg || tg.t !== 'pay') return 'unmapped pay: ' + a.to + ' is not a space paid for with cards';
-      // the first card dragged onto the space; the rest dragged after it, or (every other time) tapped in the hand
-      const tap = (window.__payN = (window.__payN || 0) + 1) % 2 === 0;
-      call('startDiscard', a.to, a.cards[0]); for (const id of a.cards.slice(1)) if (UI.mode === 'discardFor') call(tap ? 'onHandCard' : 'addDiscard', id);
-      return 'pay ' + tg.kind + (tap ? ' (tapped)' : ''); }
-    case 'action': { if (UI.mode !== 'idle') call('cancelMode'); call('onHandCard', a.card); return 'action'; }
-    case 'trash': { if (UI.mode !== 'trashPick') return 'unmapped trash: the removal choice is not showing'; for (const id of a.cards) call('onHandCard', id); call('confirmTrash'); return 'trash ' + a.cards.length; }
-    case 'transmit': { if (UI.mode !== 'idle') call('cancelMode'); call('onHandCard', a.card); const st = stackOf(a.type); if (UI.mode !== 'transmit' || !st) return 'unmapped transmit';
-      call('pickFromMarket', st[0], st[1]); return 'transmit'; }
-    case 'buy': { if (UI.mode !== 'idle') call('cancelMode'); const st = stackOf(a.type); if (!st) return 'unmapped buy: no stack of ' + a.type;
-      call('pickFromMarket', st[0], st[1]); if (UI.mode !== 'pay') return 'unmapped buy: ' + a.type + ' not offered';
-      for (const id of a.cards) if (UI.mode === 'pay') call('onHandCard', id); return 'buy'; } // (paid in full, it's bought after a short pause)
-    case 'end': { if (UI.mode !== 'idle') call('cancelMode');
-      // first, as a person might: a tap on a market card the rules allow but the coins in hand don't cover (it must say so,
-      // not open a purchase that can only be cancelled)
-      const poor = [...document.querySelectorAll('#market .mslot:not(.no):not(.can):not(.empty)')][0];
-      if (poor) { call('pickFromMarket', 'm', +poor.dataset.i); E.render(); seen.modes['tapped a card out of reach'] = 1; if (UI.mode !== 'idle') call('cancelMode'); }
-      call('startEndTurn'); let warned = false;
-      if (UI.mode === 'buyWarn') { warned = true; call('startEndTurn'); }
-      if (UI.mode === 'endTurn') { for (const id of a.keep) call('onHandCard', id); call('finishTurn'); }
-      return 'end' + (warned ? ' (after the buy reminder)' : '') + (a.keep.length ? ' keeping ' + a.keep.length : ''); }
-  }
-  return 'unmapped ' + a.t;
-}
 
 (async () => {
   const srv = await serveStatic(), b = await chromium.launch(), t0 = Date.now();

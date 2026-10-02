@@ -17,7 +17,7 @@ import { openAll, marketRectOf } from './market.js';
 import { feedWatch } from './feed.js';
 import { sfx, sfxEvent } from './sound.js';
 import { aiKick, aiReset } from './ai.js';
-import { netAct, reconnect } from './online.js';
+import { netAct, netPlay, reconnect } from './online.js';
 import { diag } from './debug.js';
 
 /* a different game is on show (a new deal, a loaded save, a replay, an online game): the old one's AI moves are off, its
@@ -70,7 +70,7 @@ export function playEvents(ev,viewer){
 export function act(a){
   if(!canAct()){if(online()&&!S.over&&S.cur===NET.seat)toast('Reconnecting… your move wasn’t sent.');return;}
   diag('act '+a.t);
-  if(online()){netAct({t:'act',a});render();return;}
+  if(online()){netPlay(a);render();return;}
   const r=applyLocal(S.cur,a);
   if(!r.ok){sfx('error');toast(r.err);render();}
 }

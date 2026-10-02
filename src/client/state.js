@@ -18,20 +18,22 @@ export const UI = new Proxy({ mode: 'idle', card: null, piece: 0, picks: [], tar
   { set(t, k, v) { if (!Object.is(t[k], v)) { t[k] = v; render(); } return true; } });
 /* nothing selected: no card, no picks, no purchase or payment under way */
 export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = []; UI.buy = null; UI.pending = null; }
-/* NET.S: the online game the server last sent (the game on show is online while it is that one); NET.seat: my seat in it;
-   NET.clockEnd: when the turn clock runs out (local time) */
+/* NET.S: the online game the server last sent; NET.shown: the online game on show (the server's, or with our own moves
+   applied ahead of it: the game on show is online while it is that one); NET.seat: my seat in it;
+   NET.clockEnd: when the turn clock runs out (local time)
+   NET.seq: the page's moves, numbered; NET.pending: its own moves shown before the server confirmed them ({n, a}: online.js) */
 /* Any change to NET asks for a frame (render): its flags (busy, connected, canUndo, status, …) are written in many places
    (messages, timers, the socket), and the page shows them; none of those places has to remember to redraw. A value written
    again unchanged asks nothing. (The view never writes NET while drawing, so this can't loop.) */
-export const NET = new Proxy({ available: false, cfg: null, user: null, token: null, ws: null, lobbyWs: null, room: null, S: null, seat: -1, connected: false, clockEnd: null,
-  canUndo: false, busy: false, heard: 0, status: '', rooms: [], active: null, code: null, pendingRoom: null, viewUser: null, leaving: false }, // leaving: resigned, going to the Online screen once the server has it
+export const NET = new Proxy({ available: false, cfg: null, user: null, token: null, ws: null, lobbyWs: null, room: null, S: null, shown: null, seat: -1, connected: false, clockEnd: null,
+  canUndo: false, busy: false, seq: 0, pending: [], heard: 0, status: '', rooms: [], active: null, code: null, pendingRoom: null, viewUser: null, leaving: false }, // leaving: resigned, going to the Online screen once the server has it
   { set(t, k, v) { if (!Object.is(t[k], v)) { t[k] = v; render(); } return true; } });
 /* rec: the local game's record (engine recNewGame; saved with the game, kept as a replay once it's over).
    replay: set while watching a replay (replay.js): nothing can be played then */
 export const G = { rec: null, replay: null };
 export const cur = () => S.players[S.cur];
 export const myId = () => NET.user ? NET.user.id : null;
-export const online = () => !!S && S === NET.S;
+export const online = () => !!S && S === NET.shown;
 export const isAI = i => !!S.players[i].ai;
 export const canAct = () => !G.replay && (!S || (online() ? S.cur === NET.seat && NET.connected && !S.over : !isAI(S.cur)));
 // local games with AI seats: while an AI moves, the table shows the hand of the human who played last
