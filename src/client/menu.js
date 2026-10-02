@@ -9,7 +9,7 @@ import { GAME_READY } from './ready.js';
 import { toast } from './dialogs.js';
 import { showGame, resumeSaved, resignSeat, resignLocal, endLocal } from './actions.js';
 import { aiKick, aiNetLoad } from './ai.js';
-import { api, gsiMount, signOut, signedIn, joinRoom, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, exitOnline, resignOnline } from './online.js';
+import { api, gsiMount, signOut, signedIn, joinRoom, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, roomSend, exitOnline, resignOnline } from './online.js';
 import { loadReplayId, openReplay } from './replay.js';
 import { load, store } from './store.js';
 import { diag, CHECKS } from './debug.js';
@@ -97,8 +97,8 @@ function menuChange(e){
     if(/^who\d$/.test(n))store('seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value))); return;}
   if(n==='buywarn'){store('buywarn',e.target.checked?'1':'0');return;}
   if(n==='otab'){onlineTab();return;}
-  if(n==='rlrated'){netSend({t:'rated',v:e.target.value==='1'});return;}
-  if(n==='rlcol'){netSend({t:'color',color:e.target.value});return;}
+  if(n==='rlrated'){roomSend({t:'rated',v:e.target.value==='1'});return;}
+  if(n==='rlcol'){roomSend({t:'color',color:e.target.value});return;}
 }
 function menuClick(e){
   const b=e.target.closest('button');if(!b||b.disabled)return;
@@ -123,14 +123,14 @@ function menuClick(e){
     case'lkCopy':{const i=mq('#lkIn');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value).then(()=>toast('Link copied')).catch(()=>{/* expected: clipboard refused; the link stays selected to copy by hand */});return;}
     case'rlLeave':leaveRoom();showHub();return;
     case'rlStart':netSend({t:'start'});return;
-    case'rlNow':netSend({t:'now'});return;
+    case'rlNow':roomSend({t:'now'});return;
   }
   if(b.dataset.join){joinRoom(b.dataset.join);return;}
   if(b.dataset.uid){NET.viewUser=b.dataset.uid;setRadio('otab','me');onlineTab();return;}
   if(b.dataset.rid||b.dataset.id){if(onlineGame()){toast('Your game is still on: watch replays once it’s over.');return;}closeLobbyWs();loadReplayId(b.dataset.rid||b.dataset.id);return;}
   if(b.dataset.lid){const L=myGames().find(x=>String(x.created)===b.dataset.lid);if(L)openReplay(L,null);return;}
-  if(b.dataset.addai){netSend({t:'addAI',ai:b.dataset.addai});return;}
-  if(b.dataset.rmai){netSend({t:'removeAI',uid:b.dataset.rmai});return;}
+  if(b.dataset.addai){roomSend({t:'addAI',ai:b.dataset.addai});return;}
+  if(b.dataset.rmai){roomSend({t:'removeAI',uid:b.dataset.rmai});return;}
 }
 
 /* ---- start screen ---- */

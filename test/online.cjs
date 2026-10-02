@@ -159,7 +159,13 @@ const T = report('online');
     await A.click('#gNew'); await wait(A, () => document.querySelector('#menu').open);
     const code2 = await mkRoom(A, { max: 3, turn: 60, course: 'first' });
     await wait(A, () => __ED.NET.room && __ED.NET.room.seats.length === 1);
-    await A.click('[data-addai="fawcett"]'); await wait(A, () => __ED.NET.room.seats.length === 2);
+    // a change in the lobby shows at once: with the page's messages held back a second, the AI's seat is there in the frame
+    // after the tap, before the server has it (the server's answer then changes nothing on screen)
+    await A.evaluate(() => { const ws = __ED.NET.ws, send = ws.send.bind(ws); ws.send = d => setTimeout(() => send(d), 1000); });
+    await A.click('[data-addai="fawcett"]');
+    T.ok('the lobby shows your change at once, before the server answers', await A.evaluate(() => new Promise(r => requestAnimationFrame(() => r([...document.querySelectorAll('#rlSeats .seatrow:not(.open)')].length === 2 && __ED.NET.roomPending.length === 1)))));
+    await wait(A, () => __ED.NET.roomS && __ED.NET.roomS.seats.length === 2 && !__ED.NET.roomPending.length);
+    await A.evaluate(() => { delete __ED.NET.ws.send; }); // (messages go at once again)
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 3);
     T.ok('AI seats added from the room lobby', (await A.evaluate(() => __ED.NET.room.seats.map(s => s.ai || '').join())) === ',fawcett,raleigh', code2);
     T.ok('a full room: the AI list gives way to "the room is full"', await wait(A, () => document.querySelector('#rlAIList').hidden && !document.querySelector('#rlFull').hidden));

@@ -45,7 +45,7 @@ async function checkSchema(env) {
   await createSchema(env);
   await env.DB.prepare(`INSERT INTO settings(k,v) VALUES('schema',?) ON CONFLICT(k) DO UPDATE SET v = excluded.v`).bind(SCHEMA).run();
 }
-const aiUid = id => 'ai-' + id; // the named AIs are players in the users table (bot = AI id, no Google account)
+const aiUid = E.aiUid; // the named AIs are players in the users table (bot = AI id, no Google account)
 async function createSchema(env) {
   await env.DB.batch([
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, google_sub TEXT UNIQUE, name TEXT NOT NULL UNIQUE COLLATE NOCASE, rating REAL NOT NULL DEFAULT 1200, games INTEGER NOT NULL DEFAULT 0, wins INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)`),
@@ -401,7 +401,6 @@ async function pruneReplays(DB, uids) {
 }
 /* ---------------- Room: one live game ---------------- */
 const PCOLORS = E.COLORS.map(c => c.hex); // the seats' colours (one explorer figure each)
-const AI_RULE = 'AI players play First Expedition with 3 or 4 players for now.';
 const PLAYER_ACTIONS = ['move', 'native', 'pay', 'action', 'trash', 'transmit', 'buy', 'end', 'resign']; // what a player may send
 
 export class Room extends DurableObject {
@@ -448,17 +447,21 @@ export class Room extends DurableObject {
   // left: the player resigned; the game goes on without them, so they are no longer in this room (the lobby's /find, /match)
   roomInfo() { const d = this.d; return { code: d.code, host: d.host, status: d.status, opts: d.opts, seats: d.seats.map((s, i) => ({ uid: s.uid, name: s.name, color: s.color, now: !!s.now, ai: s.ai || null, online: !!s.ai || this.online(s.uid), left: !!(this.S && this.S.players[i].resigned) })), results: d.results || null }; }
   send(ws, obj) { wsSend(ws, JSON.stringify(obj)); }
-  // by: the move this state follows, when a player made it ({ seat, n: that page's number for it }): the page that made it
-  // has shown it already (it applies its own moves at once when it can) and only checks it here
+  /* a player's change (a move, a change in the lobby) is in: its number on their page (n), sent back with every message
+     (ack), so the page knows which of its own changes, shown ahead, the server has applied */
+  acked(uid, n) { if (n != null) (this.d.acks || (this.d.acks = {}))[uid] = n; }
+  ackOf(uid) { return this.d.acks && this.d.acks[uid] != null ? this.d.acks[uid] : null; }
+  // by: the move this state follows, when a player made it ({ seat, n: that page's number for it }): its events were played
+  // on that page already, when it showed the move
   stateFor(uid, ev, by) {
     const seat = this.owners.indexOf(uid);
     // left: ms on the turn clock (the page counts it down from when the message arrives), null when no clock runs
-    return { t: 'state', S: E.redact(this.S, seat), ev: ev || [], by: by || null, seat, undo: seat >= 0 && seat === this.S.cur && E.recCanUndo(this.rec), left: this.d.deadline ? Math.max(0, this.d.deadline - Date.now()) : null, room: this.roomInfo() };
+    return { t: 'state', S: E.redact(this.S, seat), ev: ev || [], by: by || null, ack: this.ackOf(uid), seat, undo: seat >= 0 && seat === this.S.cur && E.recCanUndo(this.rec), left: this.d.deadline ? Math.max(0, this.d.deadline - Date.now()) : null, room: this.roomInfo() };
   }
   sendAll(ev, by) {
     for (const ws of this.ctx.getWebSockets()) {
       const { uid } = ws.deserializeAttachment(); // (every socket gets its attachment when it is accepted)
-      if (this.S && this.d.status !== 'lobby') this.send(ws, this.stateFor(uid, ev, by)); else this.send(ws, { t: 'room', room: this.roomInfo() });
+      if (this.S && this.d.status !== 'lobby') this.send(ws, this.stateFor(uid, ev, by)); else this.send(ws, { t: 'room', room: this.roomInfo(), ack: this.ackOf(uid) });
     }
   }
   fetch(req) { return this.guard(new URL(req.url).pathname, null, () => this.onFetch(req)); }
@@ -499,8 +502,15 @@ export class Room extends DurableObject {
     const n = Number.isInteger(m.n) ? m.n : null; // (a move's number on the page: echoed with its answer, so the page knows which of its moves it answers)
     const err = e => this.send(ws, { t: 'error', err: e, n });
     if (d.status === 'lobby') {
-      const seat = d.seats.find(s => s.uid === uid);
-      if (m.t === 'color' && seat && PCOLORS.includes(m.color) && !d.seats.some(s => s !== seat && s.color === m.color)) { seat.color = m.color; await this.persist(); this.sendAll(); }
+      // what the players change in the lobby: the engine's room rules (the page applies the same rule to show its own change at
+      // once); ack: the last of this player's changes applied, sent with every message, so their page knows what is in
+      if (['color', 'addAI', 'removeAI', 'rated', 'now'].includes(m.t)) {
+        const A = m.t === 'addAI' && E.aiById(m.ai), row = A ? await this.env.DB.prepare(`SELECT name FROM users WHERE id=?`).bind(aiUid(A.id)).first() : null;
+        const no = E.roomChange(d, uid, m, id => row ? row.name : E.aiById(id).name); if (no) return err(no);
+        this.acked(uid, n);
+        if (m.t === 'now' && await this.seatsChanged()) return;
+        if (m.t === 'color' || m.t === 'now') { await this.persist(); this.sendAll(); } else await this.lobbyChanged(); // (the room list shows seats and rating, not colours)
+      }
       else if (m.t === 'leave') {
         if (d.opts.auto) { // match rooms never close on the host; the next player hosts
           d.seats = d.seats.filter(s => s.uid !== uid); if (d.host === uid && d.seats.length) d.host = d.seats[0].uid;
@@ -510,29 +520,11 @@ export class Room extends DurableObject {
         if (uid === d.host) { d.status = 'closed'; await this.lobbyChanged(); for (const w of this.ctx.getWebSockets()) wsClose(w, 1000, 'Room closed'); return; }
         d.seats = d.seats.filter(s => s.uid !== uid); await this.lobbyChanged(); wsClose(ws, 1000, 'Left');
       }
-      else if (m.t === 'addAI') { // host seats a named AI (each at most once per room); it plays server-side
-        if (d.opts.auto || uid !== d.host) return err('Only the host can add AI players.');
-        const A = E.aiById(m.ai); if (!A) return err('Unknown AI.');
-        if (!E.aiAllowed(d.opts.course, d.opts.max)) return err(AI_RULE);
-        if (d.seats.length >= d.opts.max) return err('This room is full.');
-        // the same AI may take several seats (named Humboldt, Humboldt 2, …; they share its rating)
-        const row = await this.env.DB.prepare(`SELECT name FROM users WHERE id=?`).bind(aiUid(A.id)).first();
-        if (d.status !== 'lobby' || d.seats.length >= d.opts.max) return err('This room is full.'); // checked again: other messages ran during the await
-        const used = d.seats.map(s => s.color), base = row ? row.name : A.name, k = d.seats.filter(s => s.ai === A.id).length;
-        d.seats.push({ uid: aiUid(A.id), name: k ? base + ' ' + (k + 1) : base, color: PCOLORS.find(c => !used.includes(c)), ai: A.id });
-        await this.lobbyChanged();
-      }
-      else if (m.t === 'removeAI') {
-        if (uid !== d.host) return err('Only the host can remove AI players.');
-        const i = d.seats.map(s => !!s.ai && s.uid === m.uid).lastIndexOf(true); if (i >= 0) d.seats.splice(i, 1); await this.lobbyChanged();
-      }
-      else if (m.t === 'rated' && uid === d.host && !d.opts.auto) { d.opts.rated = !!m.v; await this.lobbyChanged(); }
-      else if (m.t === 'now' && seat && d.opts.auto) { seat.now = !seat.now; if (await this.seatsChanged()) return; await this.persist(); this.sendAll(); }
       else if (m.t === 'start') {
         if (d.opts.auto) return;
         if (uid !== d.host) return err('Only the host can start.');
         if (d.seats.length < 2) return err('You need at least 2 players.');
-        if (d.seats.some(s => s.ai) && !E.aiAllowed(d.opts.course, d.seats.length)) return err(AI_RULE);
+        if (d.seats.some(s => s.ai) && !E.aiAllowed(d.opts.course, d.seats.length)) return err(E.AI_RULE);
         await this.startGame();
       }
       return;
@@ -550,6 +542,7 @@ export class Room extends DurableObject {
       if (!PLAYER_ACTIONS.includes(m.a.t)) return err('Bad action.'); // (timeout and endgame are the server's and local play's, not a player's)
       const prevCur = this.S.cur, r = E.recApply(this.S, this.rec, seat, m.a);
       if (!r.ok) return err(r.err); // (a refused action changes nothing)
+      this.acked(uid, n);
       d.timeouts[seat] = 0;
       if (this.S.cur !== prevCur && !this.S.over) await this.nextTurn();
       await this.afterChange(r.ev, { seat, n }); // the player's answer first: waiting on the lobby below lets an AI alarm run meanwhile

@@ -22,6 +22,32 @@ const AI_COURSES=['first'];
 function aiCourseOK(id){return AI_COURSES.includes(id);}
 // and only in 3- and 4-player games: the network was never trained on 2-player games (different rules)
 function aiAllowed(id,n){return aiCourseOK(id)&&n>=3;}
+const AI_RULE='AI players play First Expedition with 3 or 4 players for now.';
+/* the named AIs are players too (the server's users table: id ai-<AI id>) */
+const aiUid=id=>'ai-'+id;
+/* ---- a room's lobby, before its game starts: the changes players make there, one rule for the server (which decides) and
+   the page (which shows its own change at once; the server's answer confirms it). room: {host, status, opts, seats:
+   [{uid, name, color, ai?, now?}]}; m: what a player asked ({t: color | addAI | removeAI | rated | now, …}); aiName(id): the
+   name an AI's seat takes (the server's records; the page uses the AI's own). Changes room and returns '', or returns why
+   it can't (and changes nothing). */
+function roomChange(room,uid,m,aiName){
+  const seat=room.seats.find(s=>s.uid===uid),host=uid===room.host,auto=!!room.opts.auto,hex=COLORS.map(c=>c.hex);
+  if(room.status!=='lobby')return'The game has started.';
+  switch(m.t){
+    case'color':if(!seat)return'You have no seat in this room.';
+      if(!hex.includes(m.color)||room.seats.some(s=>s!==seat&&s.color===m.color))return'Someone has that colour.';seat.color=m.color;return'';
+    case'addAI':{if(auto||!host)return'Only the host can add AI players.';const A=aiById(m.ai);if(!A)return'Unknown AI.';
+      if(!aiAllowed(room.opts.course,room.opts.max))return AI_RULE;if(room.seats.length>=room.opts.max)return'This room is full.';
+      // (the same AI may take several seats: Humboldt, Humboldt 2, …; they share its rating)
+      const used=room.seats.map(s=>s.color),base=aiName(A.id),k=room.seats.filter(s=>s.ai===A.id).length;
+      room.seats.push({uid:aiUid(A.id),name:k?base+' '+(k+1):base,color:hex.find(c=>!used.includes(c)),ai:A.id});return'';}
+    case'removeAI':{if(!host)return'Only the host can remove AI players.';
+      const i=room.seats.map(s=>!!s.ai&&s.uid===m.uid).lastIndexOf(true);if(i<0)return'That AI is not in this room.';room.seats.splice(i,1);return'';}
+    case'rated':if(!host||auto)return'Only the host can change that.';room.opts.rated=!!m.v;return'';
+    case'now':if(!seat||!auto)return'Only a quick match starts early.';seat.now=!seat.now;return'';
+  }
+  return'Bad message.';
+}
 function aiNetDecode(bin){
   const u8=bin instanceof Uint8Array?bin:new Uint8Array(bin),dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
   const hl=dv.getUint32(0,true),H=JSON.parse(new TextDecoder().decode(u8.subarray(4,4+hl)));

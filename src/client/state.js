@@ -21,12 +21,13 @@ export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = 
 /* NET.S: the online game the server last sent; NET.shown: the online game on show (the server's, or with our own moves
    applied ahead of it: the game on show is online while it is that one); NET.seat: my seat in it;
    NET.clockEnd: when the turn clock runs out (local time)
-   NET.seq: the page's moves, numbered; NET.pending: its own moves shown before the server confirmed them ({n, a}: online.js) */
+   NET.seq: the page's changes, numbered; NET.pending, NET.roomPending: its own moves and lobby changes shown before the
+   server applied them ({n, a} / {n, m}: online.js); NET.roomS: the room as the server last sent it */
 /* Any change to NET asks for a frame (render): its flags (busy, connected, canUndo, status, …) are written in many places
    (messages, timers, the socket), and the page shows them; none of those places has to remember to redraw. A value written
    again unchanged asks nothing. (The view never writes NET while drawing, so this can't loop.) */
 export const NET = new Proxy({ available: false, cfg: null, user: null, token: null, ws: null, lobbyWs: null, room: null, S: null, shown: null, seat: -1, connected: false, clockEnd: null,
-  canUndo: false, busy: false, seq: 0, pending: [], heard: 0, status: '', rooms: [], active: null, code: null, pendingRoom: null, viewUser: null, leaving: false }, // leaving: resigned, going to the Online screen once the server has it
+  canUndo: false, busy: false, seq: Date.now(), pending: [], roomS: null, roomPending: [], heard: 0, status: '', rooms: [], active: null, code: null, pendingRoom: null, viewUser: null, leaving: false }, // leaving: resigned, going to the Online screen once the server has it
   { set(t, k, v) { if (!Object.is(t[k], v)) { t[k] = v; render(); } return true; } });
 /* rec: the local game's record (engine recNewGame; saved with the game, kept as a replay once it's over).
    replay: set while watching a replay (replay.js): nothing can be played then */
