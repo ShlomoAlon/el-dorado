@@ -5,6 +5,7 @@
 import { spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import fs from 'node:fs';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), arg = process.argv.slice(2), full = arg.includes('--full'), online = full || arg.includes('--online');
 const NODE_PATH = [process.env.NODE_PATH, execSync('npm root -g').toString().trim()].filter(Boolean).join(path.delimiter);
 const t0 = Date.now(); execSync('node build.mjs', { cwd: root, stdio: 'inherit' });
@@ -29,7 +30,17 @@ res.push(await run(['firstpaint', 'node test/firstpaint.cjs'])); // (timed: run 
 res.push(await run(['frames', 'node test/frames.cjs']));
 if (full) res.push(await run(['render', 'node test/render.cjs']));
 for (const r of res) { const last = r.out.trim().split('\n').filter(l => l.trim()).pop() || ''; console.log(`${r.code ? 'FAIL' : 'ok  '} ${r.name.padEnd(7)} ${String(r.s).padStart(3)} s  ${last.slice(0, 110)}`); }
-for (const r of res.filter(r => r.code)) console.log(`\n---- ${r.name} ----\n${r.out.trim().split('\n').slice(-40).join('\n')}`);
+// every test's whole output is kept (test-results/<name>.log); for a failing test, every failure is printed in full, wherever
+// it came in the output, with the indented detail lines under it (the end of the output only when a test crashed before
+// reporting any: a failure is never cut off for coming early)
+fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+for (const r of res) fs.writeFileSync(path.join(root, 'test-results', r.name + '.log'), r.out);
+for (const r of res.filter(r => r.code)) {
+  const lines = r.out.split('\n'), shown = [];
+  lines.forEach((l, i) => { if (/^\s*FAIL\b/.test(l)) { shown.push(l); for (let j = i + 1; j < lines.length && /^\s{2,}\S/.test(lines[j]) && !/^\s*(ok|FAIL)\b/.test(lines[j]); j++) shown.push(lines[j]); } });
+  const body = shown.length ? shown.join('\n') : '(no FAIL line: it stopped before reporting; its last lines)\n' + lines.filter(l => l.trim()).slice(-40).join('\n');
+  console.log(`\n---- ${r.name} (whole output: test-results/${r.name}.log) ----\n${body}`);
+}
 const bad = res.filter(r => r.code).length;
 console.log(bad ? `\n${bad} failing (${((Date.now() - t0) / 1000).toFixed(0)} s)` : `\nall ok (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
 process.exit(bad ? 1 : 0);
