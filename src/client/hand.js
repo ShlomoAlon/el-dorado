@@ -3,7 +3,6 @@
    CSS transition on transform, which the compositor runs. A new card is placed at the deck first and moved into the
    hand one frame later, so it slides in without the browser having to lay out anything in between. */
 import { CT, typeOf, plural, assert } from '../engine.gen.js';
-import { CHECKS } from './debug.js';
 import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
 import { S, UI, cur, hp, viewIdx, canAct, G, covered } from './state.js';
 import { geo, handTop } from './geometry.js';
@@ -25,7 +24,22 @@ export function setT(el, x, y, rot, sc) { el.__t = { x, y, rot, sc }; setStyle(e
 /* the card's box (cw × 1.4 cw, scaled about its centre) covering a screen rectangle */
 function rectT(rect, rot) { const cw = geo.cw, ch = cw * 1.4, A = geo.app, sc = rect.width / cw; return [rect.left - A.left - (cw - rect.width) / 2, rect.top - A.top - (ch - rect.height) / 2, rot || 0, sc]; }
 export const placeAt = (el, rect, rot) => setT(el, ...rectT(rect, rot));
-
+/* a card flies in as itself: it is already where the game puts it (in the recap, on a pile) and is animated there from
+   where it came from (from: a rect on screen), ending as it rests (no transform), so it can only land in its own place.
+   No copy flies for it: nothing to hand over to, keep in step or remove. o: tilt, fade (how it starts), lift (rises a
+   little on its way), delay, duration; raise: an element lifted over the controls while the card flies (a pile, which
+   sits under the turn buttons) */
+export function flyIn(el, from, o = {}) {
+  if (reduceMotion || !from || !from.width) return;
+  assert(getComputedStyle(el).transform === 'none', 'view: a card flies in to its own resting place (it rests with a transform: it would jump as the flight ends)');
+  const to = el.getBoundingClientRect(); if (!to.width) return;
+  const dx = from.left - to.left, dy = from.top - to.top, s = from.width / to.width, at = (x, y, r, k) => `translate(${x.toFixed(1)}px,${y.toFixed(1)}px) rotate(${r}deg) scale(${k.toFixed(3)})`;
+  const k = [{ transformOrigin: '0 0', transform: at(dx, dy, o.tilt || 0, s), opacity: o.fade ? 0 : 1 }];
+  if (o.lift) k.push({ transformOrigin: '0 0', transform: at(dx, dy - 30, 0, s * 1.15), opacity: 1, offset: .3 });
+  k.push({ transformOrigin: '0 0', transform: 'none', opacity: 1 });
+  const a = el.animate(k, { duration: o.duration || 400, delay: o.delay || 0, easing: EASE, fill: 'backwards' });
+  if (o.raise) { o.raise.classList.add('flying'); const end = () => o.raise.classList.remove('flying'); a.finished.then(end, end); }
+}
 function newCard(S,id) {
   const el = document.createElement('div'); el.className = 'card'; el.innerHTML = cardHTML(typeOf(S,id)); el.title = cardTitle(typeOf(S,id));
   $('#cards').appendChild(el); cardEls.set(id, el); wire(el, id); return el;
@@ -115,46 +129,28 @@ function update() {
   if (q) { setHTML(qb.firstElementChild, `<b>${esc(CT[q.by].n)}</b> · remove up to ${plural(q.max, 'card')}`); setHTML(qb.lastElementChild, UI.picks.length ? `<b>${UI.picks.length}</b> of ${q.max} chosen · they leave the game` : 'Tap cards to choose · they leave the game'); } // (two fixed parts: a pick rewrites only the count)
   layoutCards();
   // piles
-  const shown = pl.discard.length - (landing[vi] || 0); // (a card still flying onto the pile isn't on it yet)
-  setText($('#deckN'), pl.deck.length); setText($('#discN'), shown);
+  setText($('#deckN'), pl.deck.length); setText($('#discN'), pl.discard.length);
   const dn = Math.min(3, pl.deck.length);
   setHTML($('#deckStack'), dn ? (dn > 2 ? '<div class="back b3"></div>' : '') + (dn > 1 ? '<div class="back b2"></div>' : '') + '<div class="back"></div>' : '<div class="empty-slot"></div>');
-  const top = pl.discard[shown - 1], ds = $('#discStack'); if (ds.dataset.shows !== 'seat ' + vi + ': ' + shown) ds.dataset.shows = 'seat ' + vi + ': ' + shown;
-  setHTML($('#discStack'), top ? `<div class="mcard">${cardHTML(typeOf(S,top))}</div>` : '<div class="empty-slot"></div>');
+  pileShow($('#discStack'), pl.discard.slice(-2)); // (its top card, and the one under it: what shows while a new top flies in)
+}
+/* a pile's cards, bottom first, over its outline (the slot: always there, the cards cover it). One element per card, kept by
+   its id (the outline is in the page's markup): a card that is still there keeps its element (the old top stays where it was, under the new one), so a new card
+   never redraws the others */
+function pileShow(box, ids) {
+  const have = new Map([...box.children].slice(1).map(e => [e.dataset.id, e]));
+  for (const [id, e] of have) if (!ids.includes(id)) e.remove();
+  ids.forEach((id, i) => { let e = have.get(id); if (!e) { e = document.createElement('div'); e.className = 'mcard'; e.dataset.id = id; e.innerHTML = cardHTML(typeOf(S, id)); }
+    if (box.children[i + 1] !== e) box.insertBefore(e, box.children[i + 1] || null); });
 }
 function setLeft(el, txt) { let b = el.querySelector('.left'); if (!txt) { if (b) b.remove(); return; } if (!b) { b = document.createElement('div'); b.className = 'left'; el.appendChild(b); } setText(b, txt); }
-function clear() { for (const [, el] of cardEls) el.remove(); cardEls.clear(); lastViewer = -1; entering = []; landing.length = 0; }
+function clear() { for (const [, el] of cardEls) el.remove(); cardEls.clear(); lastViewer = -1; entering = []; }
 export const handPart = { name: 'hand',  update, reset: clear };
 
-/* every card flight: a copy of card t flies from a place on screen (from: a rect) into a slot (the element its card will be
-   shown in) and hands over to it there. The flight never picks its own end: it ends on the slot as it is when the flight
-   starts (a slot must be at rest while cards fly to it), upright and the slot's size, as slots show their cards. The slot
-   shows the card only once the copy is there: show() makes it (until then it shows what it did before), and the copy goes
-   in the same frame, compared with the card now shown: when the slot shows what the flight brings (o.shows, matched with
-   the slot's data-shows: a pile says whose it is and how many cards it shows; the card may have left it by then, the
-   pile shuffled into the deck, or the next player's pile on show in pass-and-play). o: { delay, duration, tilt (start rotation), fade (starts
-   transparent), lift (rises a little on its way) } */
-let flights = 0;
-export function flyInto(t, from, slot, show, o = {}) {
-  const to = slot.getBoundingClientRect();
-  if (reduceMotion || !from || !from.width || !to.width) { show(); return; }
-  const el = document.createElement('div'); el.className = 'card fly'; el.dataset.f = ++flights; el.innerHTML = cardHTML(t); $('#cards').appendChild(el); // (f: each flight's own copy, never taken for another's)
-  const [x0, y0, , s0] = rectT(from, 0), [x1, y1, , s1] = rectT(to, 0), k = [{ transform: T(x0, y0, o.tilt || 0, s0), opacity: o.fade ? 0 : 1 }];
-  if (o.lift) k.push({ transform: T(x0, y0 - 30, 0, s0 * 1.15), opacity: 1, offset: .3 });
-  k.push({ transform: T(x1 + 5, y1, 0, s1), opacity: 1 });
-  const land = () => { show(); after(() => {
-    const card = slot.querySelector('.mcard'), g = el.getBoundingClientRect(), r = card ? card.getBoundingClientRect() : null;
-    const d = r ? Math.max(Math.abs(g.left - r.left), Math.abs(g.top - r.top), Math.abs(g.width - r.width), Math.abs(g.height - r.height)) : Infinity;
-    el.remove();
-    if (CHECKS && slot.isConnected && slot.dataset.shows === o.shows) assert(d < 1.5, 'view: a flying card lands exactly where its card is shown (' + t + ', ' + (r ? d.toFixed(1) + ' px off' : 'no card shown') + ')'); }); };
-  el.animate(k, { duration: o.duration || 400, delay: o.delay || 0, easing: EASE, fill: 'both' }).finished.then(land, land);
-}
-/* the discard piles: per seat, how many cards are still flying onto it (the pile shows them once they land) */
-const landing = [];
-/* a card bought (or taken) by the player on view flies from where it was bought onto their discard pile */
-export function flyToDiscard(t, from, pl) {
-  landing[pl] = (landing[pl] || 0) + 1;
-  flyInto(t, from, $('#discStack'), () => { landing[pl]--; render(); }, { duration: 700, lift: true, shows: 'seat ' + pl + ': ' + S.players[pl].discard.length });
+/* a card bought (or taken) by the player on view flies from where it was bought onto their discard pile: the pile's top
+   card, once this frame has drawn it there (the card under it shows meanwhile) */
+export function flyToDiscard(from) {
+  after(() => { const c = $('#discStack .mcard:last-child'); if (c) flyIn(c, from, { duration: 700, lift: true, raise: $('#discPile') }); });
 }
 
 /* ---------- pressing and dragging a card ---------- */

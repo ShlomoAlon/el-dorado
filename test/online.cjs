@@ -37,17 +37,21 @@ const T = report('online');
       const said = await wait(W, () => /no room/i.test(document.querySelector('#menu').textContent) && !/[?&]room=/.test(location.search), null, 3000);
       T.ok('wrong room code: said within 3 s, and the code leaves the address', said, ((Date.now() - t0) / 1000).toFixed(1) + ' s; ' + await W.evaluate(() => (__ED.NET.status || '') + ' ' + location.search)); }
     // ---------- 0a. coming back: the screen is chosen from what this device knows at once (the server only adds), and a signed-in
-    //      player's server check is one round trip, not two (every request here takes 1.5 s)
-    { const slow = P => P.route('**/api/**', async r => { await new Promise(res => setTimeout(res, 1500)); await r.continue().catch(e => { if (!/already handled/.test(e.message)) throw e; }); }); // (expected: the page moved on meanwhile)
-      const back = async (P, signed) => { // (a local game started and saved; then the page is opened again)
+    //      player's server check is one round trip, not two (every request here takes 1.5 s). Counted in round trips, not in
+    //      time: the same reload is timed first with the server answering at once, and only what the slow requests add is
+    //      judged (none signed out; one, 1.5 s, signed in: two would add at least 3 s, however busy the machine), so a slower load can't pass
+    //      for a round trip, nor hide one
+    { const RT = 1500, slow = P => P.route('**/api/**', async r => { await new Promise(res => setTimeout(res, RT)); await r.continue().catch(e => { if (!/already handled/.test(e.message)) throw e; }); }); // (expected: the page moved on meanwhile)
+      const reload = async P => { const t0 = Date.now(); await P.reload({ waitUntil: 'commit' });
+        await P.waitForFunction(() => window.__ED && __ED.S && !__ED.UI.preview && !document.querySelector('#menu').open && document.documentElement.classList.contains('boardready'), null, { timeout: 15000 });
+        return Date.now() - t0; };
+      const back = async (P, signed) => { // (a local game started and saved; then the page is opened again: at once, then with slow requests)
         if (signed) await signIn(P, 'Ulla'); await P.click('label:has(input[name=mode][value=local])'); await P.waitForSelector('#sGo', { state: 'visible' });
         await P.click('#sGo'); await P.waitForFunction(() => __ED.S && !__ED.UI.preview && !document.querySelector('#menu').open);
-        await slow(P); const t0 = Date.now(); await P.reload({ waitUntil: 'commit' });
-        await P.waitForFunction(() => window.__ED && __ED.S && !__ED.UI.preview && !document.querySelector('#menu').open && document.documentElement.classList.contains('boardready'), null, { timeout: 15000 });
-        const ms = Date.now() - t0; await P.unroute('**/api/**'); return ms; };
+        const base = await reload(P); await slow(P); const ms = await reload(P); await P.unroute('**/api/**'); return { base, ms, added: ms - base }; };
       const U = await open('U'), out = await back(U, false), U2 = await open('U2'), inn = await back(U2, true);
-      T.ok('coming back, signed out: the saved game shows without waiting for the server', out < 1400, out + ' ms (requests take 1.5 s)');
-      T.ok('coming back, signed in: one round trip to the server, not two', inn < 2800, inn + ' ms (requests take 1.5 s)'); }
+      T.ok('coming back, signed out: the saved game shows without waiting for the server', out.added < RT, `${out.ms} ms with 1.5 s requests, ${out.base} ms without`);
+      T.ok('coming back, signed in: one round trip to the server, not two', inn.added < 2 * RT, `${inn.ms} ms with 1.5 s requests, ${inn.base} ms without`); }
     // ---------- 0b. the server out of reach: each request that fails says so, in the page's words (a failed refresh keeps
     //      what was loaded before, and says that too)
     { const V = await open('V'); await signIn(V, 'Vera');
@@ -57,8 +61,14 @@ const T = report('online');
       await V.click('label:has(input[name=otab][value=board])');
       T.ok('offline: a failed refresh says so, and keeps the list', await wait(V, () => /Could not refresh the leaderboard/.test(document.querySelector('#hErr').textContent) && document.querySelector('#lbList .lb'), null, 5000), await V.evaluate(() => document.querySelector('#hErr').textContent));
       await V.click('label:has(input[name=otab][value=play])'); await V.click('#cGo');
-      T.ok('offline: Create room says the server is out of reach, in the page\'s words', await wait(V, () => /^Could not reach the server/.test(document.querySelector('#hErr').textContent), null, 5000), await V.evaluate(() => document.querySelector('#hErr').textContent));
-      await V.unroute('**/api/**'); }
+      T.ok('offline: Create room says the server is out of reach, in the page\'s words', await wait(V, () => /^Could not reach the server/.test(document.querySelector('#hErr').textContent) && !document.querySelector('section[data-screen=online]').hidden && !!document.querySelector('#hErr').offsetParent, null, 5000), await V.evaluate(() => document.querySelector('#hErr').textContent));
+      await V.unroute('**/api/**');
+      // Create room opens its lobby at once, you seated, before the server has made the room (its answer held back a second here)
+      await V.route('**/api/rooms', r => setTimeout(() => r.continue(), 1000));
+      await V.click('#cGo');
+      T.ok('Create room: its lobby at once, you seated, its code to come', await V.evaluate(() => new Promise(r => requestAnimationFrame(() => r(!document.querySelector('section[data-screen=room]').hidden && document.querySelectorAll('#rlSeats .seatrow:not(.open)').length === 1 && /…/.test(document.querySelector('#rlTitle').textContent))))));
+      T.ok('Create room: the code arrives and the room connects', await wait(V, () => /^Room [A-Z0-9]{4,}$/.test(document.querySelector('#rlTitle').textContent) && __ED.NET.connected && __ED.NET.roomS && __ED.NET.roomS.seats.length === 1, null, 10000));
+      await V.unroute('**/api/rooms'); await V.click('#rlLeave'); }
     // ---------- 1. three people
     const A = await open('A'), B = await open('B'), C = await open('C');
     const ids = [await signIn(A, 'Alice'), await signIn(B, 'Bob'), await signIn(C, 'Cara')];
@@ -159,7 +169,13 @@ const T = report('online');
     await A.click('#gNew'); await wait(A, () => document.querySelector('#menu').open);
     const code2 = await mkRoom(A, { max: 3, turn: 60, course: 'first' });
     await wait(A, () => __ED.NET.room && __ED.NET.room.seats.length === 1);
-    await A.click('[data-addai="fawcett"]'); await wait(A, () => __ED.NET.room.seats.length === 2);
+    // a change in the lobby shows at once: with the page's messages held back a second, the AI's seat is there in the frame
+    // after the tap, before the server has it (the server's answer then changes nothing on screen)
+    await A.evaluate(() => { const ws = __ED.NET.ws, send = ws.send.bind(ws); ws.send = d => setTimeout(() => send(d), 1000); });
+    await A.click('[data-addai="fawcett"]');
+    T.ok('the lobby shows your change at once, before the server answers', await A.evaluate(() => new Promise(r => requestAnimationFrame(() => r([...document.querySelectorAll('#rlSeats .seatrow:not(.open)')].length === 2 && __ED.NET.roomPending.length === 1)))));
+    await wait(A, () => __ED.NET.roomS && __ED.NET.roomS.seats.length === 2 && !__ED.NET.roomPending.length);
+    await A.evaluate(() => { delete __ED.NET.ws.send; }); // (messages go at once again)
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 3);
     T.ok('AI seats added from the room lobby', (await A.evaluate(() => __ED.NET.room.seats.map(s => s.ai || '').join())) === ',fawcett,raleigh', code2);
     T.ok('a full room: the AI list gives way to "the room is full"', await wait(A, () => document.querySelector('#rlAIList').hidden && !document.querySelector('#rlFull').hidden));
@@ -231,21 +247,21 @@ const T = report('online');
       await P.click('[data-addai="raleigh"]'); await wait(P, () => __ED.NET.room.seats.length === 2);
       await P.click('[data-addai="raleigh"]'); await wait(P, () => __ED.NET.room.seats.length === 3);
       await P.click('#rlStart'); await wait(P, () => __ED.online());
-      await P.evaluate(() => { window.__prefer = ['travellog', 'scientist']; }); // (so the game reaches the removal choice, and plays on while it's on its way)
+      await P.evaluate(() => { window.__prefer = ['travellog', 'scientist']; }); // (so the game reaches the removal choice, and plays on while moves are on their way)
       const did = {}, odd = []; let steps = 0;
       const ready = quick => P.waitForFunction(q => { const E = window.__ED; return E.S.over || (E.canAct() && (q || (!E.NET.busy && !E.UI.anim)) && E.UI.mode !== 'pay' && E.UI.mode !== 'discardFor'); }, quick, { timeout: 90000 });
       try {
         for (; steps < 1500; steps++) {
           const quick = !!(steps % 2); await ready(quick); if (!quick) await settle(P);
           if (await P.evaluate(() => __ED.S.over)) break;
-          const [busy, r] = await P.evaluate(`[__ED.NET.busy, (${step})()]`), k = (busy ? 'in flight: ' : '') + r.split(':')[0];
+          const [busy, ahead, r] = await P.evaluate(`(async () => [__ED.NET.busy, __ED.NET.pending.length, await (${step})()])()`), k = (busy ? 'in flight: ' : ahead ? 'ahead of the server: ' : '') + r.split(':')[0];
           did[k] = (did[k] || 0) + 1;
           // (with a move still on its way, the page offers nothing to move to: a tap then does nothing, as for a person)
           if (r.startsWith('unmapped') && !busy) { odd.push(r); break; }
         }
       } catch (e) { odd.push('stopped: ' + e.message.split('\n')[0]); }
       T.ok('a whole game online, played quickly through the UI', await P.evaluate(() => __ED.S.over) && !odd.length, steps + ' moves; ' + odd.join('; '));
-      T.ok('online: the removal choice was reached, and moves were made while others were on their way', Object.keys(did).some(k => k.startsWith('trash')) && Object.keys(did).some(k => k.startsWith('in flight')), JSON.stringify(did));
+      T.ok('online: the removal choice was reached, and moves were made while others were still on their way to the server', Object.keys(did).some(k => /^(\w[\w ]*: )?trash/.test(k)) && Object.keys(did).some(k => k.startsWith('ahead of the server')), JSON.stringify(did));
       console.log('     did: ' + JSON.stringify(did));
     }
 

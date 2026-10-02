@@ -1,13 +1,13 @@
 /* REPLAYS: step through a recorded game (every finished game on the site, tools/ai/record.mjs, or any uploaded game log).
    The log holds the seeds and every action; the engine rebuilds each position (replay), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
-import { CT, LOG_MAX, hexAt, replayCheck, replay, applyAction, botValue, botNetReady, aiAllowed, aiSetNet, aiPlan, aiById, mulberry32, assert } from '../engine.gen.js';
+import { CT, LOG_MAX, hexAt, replayCheck, replay, botNetReady, aiAllowed, aiSetNet, aiById, assert } from '../engine.gen.js';
 import { $, esc, setHTML, setQuery } from './dom.js';
 import { S, setS, UI, G, online, clearSelection } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, banner, closeModal } from './dialogs.js';
 import { showGame, resumeSaved, playEvents, firstPiece } from './actions.js';
-import { AIX, aiNetLoad, aiReset } from './ai.js';
+import { AIX, aiNetLoad, aiReset, aiAsk, aiWaiting } from './ai.js';
 import { exitOnline } from './online.js';
 import { showSetup, showHub, showReplays, MENU } from './menu.js';
 import { load, store } from './store.js';
@@ -23,25 +23,28 @@ function buildReplay(log,id){
   }
   // the bot's view starts hidden on small portrait phones (the board needs the room); the viewer's choice is remembered
   let sp=1,side=!matchMedia('(max-width:600px) and (orientation:portrait)').matches;sp=+(load('rspeed')||1)||1;const v=load('rside');if(v!==null)side=v==='1';
-  return{log,id,states,lines,evs,i:0,timer:0,speed:sp,side,ev:{},adv:{},played:{}};
+  return{log,id,states,lines,evs,i:0,timer:0,speed:sp,side,ev:{},adv:{},asking:new Set(),played:{}};
 }
 /* ---- the evaluation: the shipped network's estimate for the position on screen, and the turn the strongest AI would play
    from it. Only where a network was trained (First Expedition, 3-4 players: aiAllowed); elsewhere the replay shows none. */
 const replayEvalOK=()=>aiAllowed(S.course.id,S.players.length)&&!AIX.failed;
 function replayNet(){if(!AIX.net)return false;aiSetNet(AIX.net);return botNetReady(S);}
-function replayEval(){const R=G.replay;if(R.ev[R.i])return R.ev[R.i];if(!replayNet())return null;
+/* (worked out in the AI's worker, once per position; null until it arrives) */
+function replayEval(){const R=G.replay,at=R.i;if(R.ev[at])return R.ev[at];if(!replayNet()||R.asking.has('ev'+at))return null;
+  R.asking.add('ev'+at);const players=S.players;
   // the network scores each explorer on its own (its expected result: 1st = 1, 2nd = ¼, …); shown as shares of the
   // winning chances, so they add up to 100%
-  const raw=S.players.map((p,j)=>p.resigned?0:Math.max(0,botValue(S,j,'net'))),tot=raw.reduce((a,x)=>a+x,0)||1;
-  return R.ev[R.i]={raw,share:raw.map((x,j)=>S.players[j].resigned?null:x/tot)};}
+  aiAsk({t:'value',S}).then(({raw})=>{R.asking.delete('ev'+at);const tot=raw.reduce((a,x)=>a+x,0)||1;
+    R.ev[at]={raw,share:raw.map((x,j)=>players[j].resigned?null:x/tot)};render();});
+  return null;}
 const ADVISOR='fawcett';
-/* the advisor's whole turn from the position on screen: [{a, html, key}] (each step described in the position it is played
-   from), or null. Worked out once per position, with a random stream of its own so it is the same each visit. */
-function replayAdvice(){const R=G.replay;if(R.i in R.adv)return R.adv[R.i];if(!replayNet()||S.over)return null;
-  const g=mulberry32(R.i*7919+1),line=aiPlan(S,ADVISOR,g);let steps=null;
-  if(line){steps=[];const gs=JSON.parse(R.states[R.i]); // (a copy of the position, played forward along the plan)
-    for(const a of line){const st=JSON.parse(JSON.stringify(gs));steps.push({a,html:describeAction(a,st),key:actionKey(a,st)});const me=gs.cur;if(!applyAction(gs,me,a,g).ok||gs.over||gs.cur!==me)break;}}
-  return R.adv[R.i]=steps;}
+/* the advisor's whole turn from the position on screen: R.adv[i] = [{a, html, key}] (each step described in the position it
+   is played from), or null. Worked out once per position, in the AI's worker (off the page's thread), with a random
+   stream of its own so it is the same each visit; shown when it arrives. */
+function replayAdvice(){const R=G.replay,at=R.i;if(at in R.adv||R.asking.has(at)||!replayNet()||S.over)return;
+  R.asking.add(at);
+  aiAsk({t:'advise',S,ai:ADVISOR,seed:at*7919+1,state:R.states[at]}).then(({line,before})=>{R.asking.delete(at);
+    R.adv[at]=line?line.map((a,j)=>{const st=JSON.parse(before[j]);return{a,html:describeAction(a,st),key:actionKey(a,st)};}):null;render();});}
 /* what the player actually did from position i to the end of their turn: [{a, html, key}] (as the advice) */
 function playedTurn(i){const R=G.replay;if(R.played[i])return R.played[i];const out=[],seat=R.log.actions[i][0];
   for(let k=i;k<R.log.actions.length&&R.log.actions[k][0]===seat;k++){const a=R.log.actions[k][1],st=JSON.parse(R.states[k]);
@@ -156,7 +159,7 @@ function replayBar(){
   if(!R.side||!ok)return;
   const ev=replayEval(),pc=v=>v==null?'–':Math.round(v*100)+'%';
   let h=`<div class="rwh">Evaluation</div>`;
-  if(!ev)h+=`<p class="m">Loading the network…</p>`;
+  if(!ev)h+=`<p class="m">${AIX.net?'Weighing the position…':'Loading the network…'}</p>`;
   else h+=`<div class="revl">${S.players.map((p,j)=>`<div class="rev${j===S.cur&&!S.over?' now':''}"><i style="background:${p.color}"></i><span class="n">${esc(p.name)}</span><span class="bar"><span style="transform:scaleX(${ev.share[j]==null?0:Math.max(0,Math.min(1,ev.share[j]))})"></span></span><b>${p.resigned?'left':pc(ev.share[j])}</b></div>`).join('')}</div>`;
   const nx=replayNext(),A=aiById(ADVISOR),who=esc(S.players[S.cur].name);let steps=null,played=null;
   if(ev&&!S.over){
@@ -164,7 +167,7 @@ function replayBar(){
     if(R.timer)h+=`<p class="m">Pause to see it.</p>`;
     else if(!(R.i in R.adv)){h+=`<p class="m">${esc(A.name)} is thinking…</p>`;adviceSoon();
       // the advice for a position arrives: still "thinking" at the same position (side open, not playing) after 5 s means its computation was starved or lost
-      if(!waitFor||waitFor.R!==R||waitFor.at!==R.i||R.timer){waitFor={R,at:R.i};waitSince=performance.now();}else{const w=performance.now()-waitSince;assert(w<5000,'view: the advice for the replay position on show arrives (waited '+Math.round(w)+' ms; timer '+(adviceT?'pending for '+adviceFor.at+(adviceFor.R===R?'':' of another replay'):'none')+', net '+(AIX.net?'loaded':'not loaded')+'; '+adviceLog.join(', ')+')');}}
+      if(!waitFor||waitFor.R!==R||waitFor.at!==R.i||R.timer){waitFor={R,at:R.i};waitSince=performance.now();}else{const w=performance.now()-waitSince;assert(w<5000,'view: the advice for the replay position on show arrives (waited '+Math.round(w)+' ms; timer '+(adviceT?'pending for '+adviceFor.at+(adviceFor.R===R?'':' of another replay'):'none')+', net '+(AIX.net?'loaded':'not loaded')+', asked '+[...R.asking].join(' ')+', the worker owes '+aiWaiting()+'; '+adviceLog.join(', ')+')');}}
     else if(!(steps=R.adv[R.i]))h+=`<p class="m">No plan for this position.</p>`;
     else{
       // compared with what the player did, step by step: m steps of the plan match theirs (✓), then what they did instead

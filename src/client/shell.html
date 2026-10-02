@@ -227,7 +227,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .fg.new{animation:fgIn .32s var(--ease) backwards}
 .fg .frc{display:flex;align-items:center}
 .fg .fcs{display:flex}
-.fc{width:var(--fw);height:calc(var(--fw)*1.4);flex:none;filter:drop-shadow(0 3px 5px rgba(0,0,0,.45))} /* (no opacity transition: a card that lands shows the same frame its flying copy goes, or it blinks) */
+.fc{width:var(--fw);height:calc(var(--fw)*1.4);flex:none;filter:drop-shadow(0 3px 5px rgba(0,0,0,.45))} /* (no opacity transition: a card flying in sets its own opacity as it starts) */
 .fc .mcard{--cw:var(--fw)}
 .fcs .fc+.fc{margin-left:calc(var(--fw)*-.42)}
 .fc.got .cface{box-shadow:0 0 0 2px var(--gold2),0 0 12px rgba(233,178,74,.45)}
@@ -290,6 +290,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 
 /* ---------- bottom controls */
 .pile{position:absolute;bottom:16px;z-index:12;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);cursor:pointer}
+.pile.flying{z-index:26} /* (while its new card flies in: over the turn buttons and the hand it passes, as the card it is) */
 #deckPile{left:16px}
 #discPile{right:16px}
 .pile .lbl{font-variant-numeric:tabular-nums;white-space:nowrap;padding:3px 9px;border-radius:9px}
@@ -336,7 +337,6 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #mkt .mslot{touch-action:none}
 #allc .mslot{touch-action:pan-y}
 .card{position:absolute;left:0;top:0;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1);transform-origin:50% 50%;will-change:transform;pointer-events:auto;cursor:pointer;touch-action:none;transition:transform .32s var(--ease),opacity .3s}
-.card.fly{pointer-events:none;z-index:200;transition:none}
 .cface{position:absolute;inset:0;border-radius:.75em;background:var(--frame);box-shadow:0 .1em 0 rgba(255,255,255,.15) inset,0 .25em .6em rgba(0,0,0,.45),0 .1em .15em rgba(0,0,0,.5);overflow:hidden;transition:box-shadow .2s,filter .2s;color:#fff}
 .cface::after{content:"";position:absolute;inset:.28em;border-radius:.55em;border:.08em solid rgba(255,226,160,.55);pointer-events:none;box-shadow:inset 0 0 0 .06em rgba(0,0,0,.35)}
 .k-g{--frame:linear-gradient(155deg,#5aa56c,#23583a 60%,#18402a);--body:#132a1d;--acc:#6fcf8a}
@@ -577,7 +577,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
   </div>
   <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button><button class="glass" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button></div>
   <div class="pile" id="deckPile" title="Draw pile — click to view"><div class="pstack" id="deckStack"></div><div class="lbl glass">Deck <b id="deckN">0</b></div></div>
-  <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
+  <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"><div class="empty-slot"></div></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
   <div id="actBtns"></div>
   <div id="playLbl">In play</div>
   <div id="buySlot" hidden><div class="bs-card"></div><div class="bs-ring"><b id="bsPaid">0</b><span>/</span><span id="bsCost">0</span></div><button class="bs-x" id="bsCancel" aria-label="Cancel purchase">✕</button></div>

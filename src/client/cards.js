@@ -18,32 +18,12 @@ function cardArt(t){
     emb=`<g transform="translate(50 36)"><ellipse cx="0" cy="22" rx="18" ry="3.5" fill="rgba(0,0,0,.25)"/><g filter="none" style="color:${col}"><use href="#i-${sym}" x="-19" y="-19" width="38" height="38" style="color:rgba(0,0,0,.35)" transform="translate(1.5 2)"/><use href="#i-${sym}" x="-19" y="-19" width="38" height="38"/></g></g>`;}
   return `<svg viewBox="0 0 100 70" preserveAspectRatio="xMidYMid slice">${cardBg(t)}${emb}</svg>`;
 }
-/* every card's title fits its box: a card is 10em wide and the title's box at most 88% of it (with its padding and border,
-   in the title's own size); a name too long for the title's size is set smaller, by its width in the title's font (measured
-   with a canvas: no layout). One stylesheet, a rule per card type that needs one: it is written again when the font has
-   loaded (its widths differ from the fallback's), and every card on screen takes it without being drawn again */
-const sheet=document.createElement('style');
-function fitTitles(){
-  const app=document.getElementById('app'),fam=getComputedStyle(app).getPropertyValue('--display').trim()||'serif',c=document.createElement('canvas').getContext('2d');
-  c.font=`400 100px ${fam}`;let css='';
-  for(const [t,d] of Object.entries(CT)){
-    const w=c.measureText(d.n).width/100+.01*d.n.length, // (its letter-spacing: .01em a letter)
-      fs=Math.min(.98,.92*8.8/(w+2*(.7+.07))); // (the box: text, two paddings of .7em and two borders of .07em, in the title's size; 8% to spare: small text doesn't shrink exactly in proportion)
-    if(fs<.98)css+=`.c-title.t-${t}{font-size:${fs.toFixed(3)}em}`;
-  }
-  if(sheet.textContent!==css)sheet.textContent=css;
-}
-export function cardsInit(){
-  document.head.appendChild(sheet);fitTitles();
-  const fam=getComputedStyle(document.getElementById('app')).getPropertyValue('--display').trim().split(',')[0];
-  document.fonts.load('100px '+fam).then(fitTitles,e=>console.warn('card font unavailable:',e)); // (the title font is ours; a failed load keeps the fallback's sizes, which fit it)
-}
 export function cardHTML(t){
   const d=CT[t];let body;
   if(d.c==='p'){const f=d.face||d.txt;body=`<div class="c-txt${f.length>16?' long':''}">${esc(f)}</div>`;}
   else{const sym=d.s==='*'?'*':d.s;body=`<div class="c-icons${d.p>=5?' many':''}">${icon(sym).repeat(d.p)}</div><div class="c-sub">${d.s==='*'?'Any one symbol':plural(d.p,SYMNAME[d.s])}</div>`;}
   const pow=d.c!=='p'?`<div class="c-pow"><b>${d.p}</b>${icon(d.s)}</div>`:'';
   const foot=`<div class="c-foot">${d.cost!=null?`<span class="c-cost">${d.cost}</span>`:'<span></span>'}${d.once?'<span class="c-once">Single use</span>':''}</div>`;
-  return `<div class="cface k-${d.c}"><div class="c-art">${cardArt(t)}</div>${pow}<div class="c-title t-${t}">${esc(d.n)}</div><div class="c-body">${body}</div>${foot}</div>`;
+  return `<div class="cface k-${d.c}"><div class="c-art">${cardArt(t)}</div>${pow}<div class="c-title">${esc(d.n)}</div><div class="c-body">${body}</div>${foot}</div>`;
 }
 export function cardTitle(t){const d=CT[t];let s=d.n;if(d.c!=='p')s+=` — ${d.p} ${d.s==='*'?'joker (machete, paddle or coin)':SYMNAME[d.s]}`;else s+=' — '+d.txt;if(d.once)s+=' Single use: removed from the game after its effect.';if(d.cost!=null)s+=` Cost ${d.cost}.`;return s;}

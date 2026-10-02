@@ -42,9 +42,14 @@ const shell = r('./src/client/shell.html').replace('<!--COURSES:course-->', cour
 // (no network access there) carries it inline
 const netBin = readFileSync(new URL('./src/ai/first.bin', import.meta.url)), netHash = createHash('sha256').update(netBin).digest('hex').slice(0, 10), netFile = `first.${netHash}.bin`;
 // the page's script: the modules in src/client bundled into one minified file by esbuild (installed with wrangler)
-const bundle = net => esbuild.buildSync({ entryPoints: [new URL('./src/client/main.js', import.meta.url).pathname], bundle: true, format: 'iife',
-  minify: !process.env.DEV, target: 'es2020', write: false, define: { AI_NET: JSON.stringify(net) }, logLevel: 'error' }).outputFiles[0].text;
-const script = net => `<script>\n${bundle(net)}</script>\n`;
+// the AI's worker (src/client/aiworker.js: the AI thinks off the page's thread): a script of its own, from the same engine;
+// the site serves it as a file named by its contents (fetched when an AI first plays), the artifact carries it inline (AI_WORKER)
+const pack = entry => esbuild.buildSync({ entryPoints: [new URL(entry, import.meta.url).pathname], bundle: true, format: 'iife',
+  minify: !process.env.DEV, target: 'es2020', write: false, logLevel: 'error' }).outputFiles[0].text;
+const workerJs = pack('./src/client/aiworker.js');
+const bundle = (net, worker) => esbuild.buildSync({ entryPoints: [new URL('./src/client/main.js', import.meta.url).pathname], bundle: true, format: 'iife',
+  minify: !process.env.DEV, target: 'es2020', write: false, define: { AI_NET: JSON.stringify(net), AI_WORKER: JSON.stringify(worker) }, logLevel: 'error' }).outputFiles[0].text;
+const script = (net, worker) => `<script>\n${bundle(net, worker)}</script>\n`;
 // fonts (Figtree variable 400–800 and Young Serif, Latin subset) are served by the site itself: no render-blocking
 // request to another domain; the artifact (no network) gets them embedded
 const FONTS = [['Figtree', 'figtree-latin.woff2', '400 800'], ['Young Serif', 'young-serif-latin.woff2', '400']];
@@ -58,9 +63,11 @@ const withFonts = (html, fonts) => html.replace('<!--FONTS: build.mjs puts the s
 const minCss = c => esbuild.transformSync(c, { loader: 'css', minify: true }).code;
 const LATE = /<style data-late>([\s\S]*?)<\/style>/, late = shell.match(LATE)[1];
 const hashed = (ext, text) => { const n = `app.${createHash('sha256').update(text).digest('hex').slice(0, 10)}.${ext}`; writeFileSync(new URL('./public/' + n, import.meta.url), text); return n; };
-for (const f of readdirSync(new URL('./public/', import.meta.url))) if (/^app\.[0-9a-f]{10}\.(js|css)$/.test(f)) unlinkSync(new URL('./public/' + f, import.meta.url));
+for (const f of readdirSync(new URL('./public/', import.meta.url))) if (/^(app\.[0-9a-f]{10}\.(js|css)|aiw\.[0-9a-f]{10}\.js)$/.test(f)) unlinkSync(new URL('./public/' + f, import.meta.url));
 const faceCss = siteFonts.replace(/<\/?style>/g, ''); // the game's fonts are declared in the game's CSS: the start screen never fetches them
-const cssFile = hashed('css', minCss(faceCss + late)), jsFile = hashed('js', bundle({ url: '/ai/' + netFile, hash: netHash }));
+const cssFile = hashed('css', minCss(faceCss + late)), workerFile = `aiw.${createHash('sha256').update(workerJs).digest('hex').slice(0, 10)}.js`;
+writeFileSync(new URL('./public/' + workerFile, import.meta.url), workerJs);
+const jsFile = hashed('js', bundle({ url: '/ai/' + netFile, hash: netHash }, { url: workerFile }));
 const siteShell = withFonts(shell, '').replace(LATE, '').replace(/<style>([\s\S]*?)<\/style>/, (m, c) => `<style>${minCss(c)}</style>`);
 // the start screen needs only the page itself: the game's CSS and script are fetched at once (preloaded) but applied and run
 // only once the start screen is painted (two frames: the first one drawn), so they never hold the first frame back; the
@@ -74,7 +81,7 @@ mkdirSync(new URL('./public/ai/', import.meta.url), { recursive: true });
 writeFileSync(new URL('./public/ai/' + netFile, import.meta.url), netBin);
 writeFileSync(new URL('./public/index.html', import.meta.url),
   `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="theme-color" content="#0a1310">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="El Dorado">\n${head}</head>\n<body>\n${body}</body>\n</html>\n`);
-writeFileSync(new URL('./build/artifact.html', import.meta.url), withFonts(shell, artFonts) + '\n' + script({ b64: netBin.toString('base64') }));
+writeFileSync(new URL('./build/artifact.html', import.meta.url), withFonts(shell, artFonts) + '\n' + script({ b64: netBin.toString('base64') }, { src: workerJs }));
 // the live AI-training page (/train.html): a standalone page, copied as is
 writeFileSync(new URL('./public/train.html', import.meta.url), r('./src/client/train.html'));
 // the first round trip: the page (the start screen, whole) must fit in the ~14 KB a server sends before waiting for the

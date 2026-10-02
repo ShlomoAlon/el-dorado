@@ -30,7 +30,7 @@ for (const f of scan) if (f.includes(path.sep + 'test' + path.sep)) readFileSync
 for (const f of scan) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (SILENT.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a catch that drops the error: name the failure it expects, or handle it`); } });
 if (!ESLint) { console.log('lint: ESLint is not installed (npm i -g eslint): the module check could not run'); process.exit(1); }
 const files = []; const walk = d => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) walk(p); else if (/\.js$/.test(f.name) && !/^ui_/.test(f.name)) files.push(p); } }; walk(dir);
-const eslint = new ESLint({ cwd: root, overrideConfigFile: true, overrideConfig: [{ files: ['**/*.js'], languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser, AI_NET: 'readonly', google: 'readonly' /* Google sign-in's script */ } },
+const eslint = new ESLint({ cwd: root, overrideConfigFile: true, overrideConfig: [{ files: ['**/*.js'], languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser, AI_NET: 'readonly', AI_WORKER: 'readonly', google: 'readonly' /* Google sign-in's script */ } },
   rules: { 'no-undef': 'error', 'no-unused-vars': ['error', { vars: 'all', args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }], 'no-const-assign': 'error', 'no-import-assign': 'error', 'no-dupe-keys': 'error', 'no-redeclare': 'error' } }] });
 const res = await eslint.lintFiles(files);
 let errors = 0, warns = 0;
@@ -44,6 +44,10 @@ for (const r of res) for (const m of r.messages) {
 const srcOf = Object.fromEntries(files.map(f => [f, readFileSync(f, 'utf8')]));
 const imported = new Set(Object.values(srcOf).flatMap(t => [...t.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.{1,2}\//g)].flatMap(m => m[1].split(',').map(x => x.trim().split(/\s+as\s+/)[0]))));
 for (const f of files) srcOf[f].split('\n').forEach((l, i) => { for (const m of l.matchAll(/export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([\w$]+)/g)) if (!imported.has(m[1])) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} '${m[1]}' is exported but no module imports it: call it where it's needed, or don't export it`); } });
+// the AI thinks only in its worker (src/client/aiworker.js): a page module importing the engine's thinking would hold up
+// frames and taps while an AI weighs its turn (2026-10-02: the replay advisor blocked the page 130-400 ms)
+const THINK = /\b(aiChoose|aiPlan|aiStep|aiNextSteps|botValue|botChoose|botPlanTurn|botPlanChoose|botPlanTurnChoose)\b/;
+for (const f of files) if (!f.endsWith(path.sep + 'aiworker.js')) srcOf[f].split('\n').forEach((l, i) => { const m = l.match(/^import\s*\{([^}]*)\}\s*from\s*'\.\.\/(\.\.\/)?engine\.gen\.js'/); if (m && THINK.test(m[1])) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} the AI's thinking (${m[1].match(THINK)[1]}) runs only in its worker: ask it through ai.js (aiThink, aiAsk)`); } });
 errors += silent;
 console.log(errors ? `lint: ${errors} errors, ${warns} warnings` : `lint ok${warns ? ` (${warns} warnings)` : ''}`);
 process.exit(errors ? 1 : 0);

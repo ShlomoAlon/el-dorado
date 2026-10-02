@@ -38,7 +38,51 @@ function updateHeader(){
    game, and the message, written as a whole when it changes (a new message never redraws or moves the timer) */
 /* the message: one line (owner, 2026-10-01), so a new message never moves what's below it */
 function say(html){const M=$('#pmsg');if(M.__h===html)return;setHTML(M,html);
-  if(CHECKS)after(()=>assert(M.scrollWidth<=M.clientWidth+1,'view: the prompt\'s message fits on one line ('+M.textContent+')'));}
+  if(CHECKS)after(()=>{assert(M.scrollWidth<=M.clientWidth+1,'view: the prompt\'s message fits on one line ('+M.textContent+')');checkMessages(M,html);});}
+/* the prompt's messages, as data: each a function of what it says. LONGEST holds each one's widest wordings (the longest
+   name a player can type, the most digits, every card and symbol name), and checkMessages measures every one against the
+   prompt's room at each size the page is shown at, not only the messages a game happens to reach there */
+const whoHTML=(name,color)=>`<span class="who"><i style="background:${color}"></i>${esc(name)}</span>`;
+const MSG={
+  over:()=>'The expedition is over.',
+  status:t=>`<span class="m">${esc(t)}</span>`, // (the connection lost: what matters now)
+  reconnecting:()=>'<span class="m">Reconnecting…</span>',
+  passOn:who=>who+'is up next: pass the device.',
+  switchPawn:()=>'<span class="m">Tap a pawn to switch.</span>',
+  noSpace:()=>'<span class="m">No space in reach.</span>',
+  goOn:(n,sym)=>`<b>${n}</b> ${SYMNAME[sym]}${n>1?'s':''} left. <span class="m">Tap a space to go on.</span>`,
+  payFor:(kind,k,need)=>`${kind==='camp'?'Base camp':kind==='blr'?'Blockade':'Rubble'}: ${kind==='camp'?'remove':'discard'} <b>${k} of ${need}</b>.`+(need-k?' <span class="m">Drag or tap cards.</span>':''),
+  trash:(max,k)=>`Remove up to <b>${max}</b> card${max>1?'s':''} from the game (${k}/${max}).`,
+  transmit:()=>'<b>Transmitter</b>: take any card, free.',
+  buyWarn:(name,more)=>`Still affordable: <b>${esc(name)}</b>${more?` +${more} more`:''}.`,
+  keeping:k=>k?`Keeping <b>${k}</b> for next turn.`:'Tap cards to keep them for next turn.',
+};
+const LONGEST={over:[[]],status:[['Connection lost. Reconnecting…']],reconnecting:[[]],
+  passOn:[[whoHTML('W'.repeat(14),'#fff')]], // (a pass-and-play name: typed on this device, at most 14 letters; W is the widest)
+  switchPawn:[[]],noSpace:[[]],goOn:Object.keys(SYMNAME).map(k=>[9,k]),payFor:['camp','blr','rubble'].map(k=>[k,0,9]),
+  trash:[[2,0]],transmit:[[]],buyWarn:Object.values(CT).map(c=>[c.n,9]),keeping:[[9],[0]]};
+/* every message's widest wordings against the prompt's room, once per width it is shown at. Measured without writing to
+   the page (the browser's text metrics, as the prompt's fonts set them), so no frame is rebuilt for a check; the one on
+   show checks the measuring itself */
+let msgAt=-1,msgCtx=null;
+function msgWidth(html,cs){
+  const ctx=msgCtx||(msgCtx=document.createElement('canvas').getContext('2d')),t=document.createElement('template');t.innerHTML=html;
+  const bolder=w=>+w<600?700:900;let x=0;
+  const walk=(n,wt)=>{for(const c of n.childNodes){
+    if(c.nodeType===3){ctx.font=`${wt} ${cs.fontSize} ${cs.fontFamily}`;x+=ctx.measureText(c.data.replace(/\s+/g,' ')).width;}
+    else if(c.tagName==='I')x+=11+7; // (the colour dot, and the gap after it)
+    else if(c.classList.contains('who')){x+=8;walk(c,800);} // (its margin)
+    else walk(c,c.tagName==='B'?bolder(wt):wt);}};
+  walk(t.content,cs.fontWeight);return x;
+}
+function checkMessages(M,html){
+  if(document.fonts.status!=='loaded')return; // (measured in the prompt's own fonts)
+  const cs=getComputedStyle(M),w=M.clientWidth;
+  if(M.textContent.trim()){const est=msgWidth(html,cs);assert(Math.abs(est-M.scrollWidth)<=Math.max(4,M.scrollWidth*.03)||M.scrollWidth<=w&&est<=w,'view: the prompt messages are measured as the page lays them out ('+Math.round(est)+' measured, '+M.scrollWidth+' laid out: '+M.textContent+')');}
+  if(w===msgAt||!w)return;msgAt=w;
+  for(const k in MSG)for(const a of LONGEST[k]){const h=MSG[k](...a),x=msgWidth(h,cs);
+    assert(x<=w+1,'view: every prompt message fits on one line at its widest ('+k+': '+h.replace(/<[^>]+>/g,'')+', '+Math.round(x)+' of '+w+' px)');}
+}
 /* every turn button: its words and its slot (s3: right, above the big one's edge; s2: left; p: the big one). Labels are
    data, so every one is checked against its slot (checkLabels), not only those a test happens to show */
 const BTN={undo:{t:'Undo',s:'s3',id:'bUndo'},cards:{t:'Cards',s:'s3',id:'bMkt'},keepAll:{t:'Keep all',s:'s3',id:'bAll'},keepNone:{t:'None',s:'s3',id:'bAll'},
@@ -50,39 +94,38 @@ function updatePrompt(){
   if(T.classList.contains('timed')!==timed)T.classList.toggle('timed',timed);renderTimer();
   if(!S){say('');btnWire(B,[]);return;}
   const pl=cur();
-  const who=`<span class="who"><i style="background:${pl.color}"></i>${esc(pl.name)}</span>`;
+  const who=whoHTML(pl.name,pl.color);
   let txt='',btns=[];
   if(G.replay){btnWire(B,[]);return;} // (the prompt is hidden in a replay: its dock says each step, the one place that does)
-  if(S.over){say('The expedition is over.');btnWire(B,[{...BTN.results,fn:showGameOver},{...BTN.newGame,fn:showSetup}]);return;}
-  if(online()&&NET.status){say(`<span class="m">${esc(NET.status)}</span>`);btnWire(B,[]);return;} // (the connection lost: what matters now)
-  if(!canAct()){say(online()&&S.cur===NET.seat?'<span class="m">Reconnecting…</span>':'');btnWire(B,[]);return;} // (whose turn it is shows on the chips; what they do, in the recap)
-  if(covered()){say(who+'is up next: pass the device.');btnWire(B,[{...BTN.reveal,fn:()=>{UI.revealed=turnKey();}}]);return;}
+  if(S.over){say(MSG.over());btnWire(B,[{...BTN.results,fn:showGameOver},{...BTN.newGame,fn:showSetup}]);return;}
+  if(online()&&NET.status){say(MSG.status(NET.status));btnWire(B,[]);return;}
+  if(!canAct()){say(online()&&S.cur===NET.seat?MSG.reconnecting():'');btnWire(B,[]);return;} // (whose turn it is shows on the chips; what they do, in the recap)
+  if(covered()){say(MSG.passOn(who));btnWire(B,[{...BTN.reveal,fn:()=>{UI.revealed=turnKey();}}]);return;}
   const undoBtn={...BTN.undo,dis:!canUndo()||NET.busy,fn:undo};
   switch(UI.mode){
     case 'idle':{
       // (no words for the obvious: whose turn it is shows on the chips, what to do on the cards)
-      if(pl.pieces.length>1&&pl.pieces.every(k=>k!=='done'))txt='<span class="m">Tap a pawn to switch.</span>';
+      if(pl.pieces.length>1&&pl.pieces.every(k=>k!=='done'))txt=MSG.switchPawn();
       btns=[undoBtn,{...BTN.end,fn:startEndTurn}];break;}
     case 'card':{
       const act=S.turn.active&&S.turn.active.id===UI.card;
-      if(!UI.targets.size)txt='<span class="m">No space in reach.</span>';
-      else if(act)txt=`<b>${S.turn.active.left}</b> ${SYMNAME[S.turn.active.sym]}${S.turn.active.left>1?'s':''} left. <span class="m">Tap a space to go on.</span>`;
+      if(!UI.targets.size)txt=MSG.noSpace();
+      else if(act)txt=MSG.goOn(S.turn.active.left,S.turn.active.sym);
       btns=[undoBtn,{...(act?BTN.stop:BTN.cancel),fn:cancelMode},{...BTN.end,fn:startEndTurn}];break;}
     case 'pay':{ // (the buy slot shows the card and what's paid; no Buy button: it's bought once the cards paid cover its price, payProgress)
       btns=[{...BTN.cancel,fn:cancelMode}];break;}
     case 'discardFor':{
-      const P2=UI.pending;const verb=P2.kind==='camp'?'remove':'discard';const left=P2.need-UI.picks.length;
-      txt=`${P2.kind==='camp'?'Base camp':P2.kind==='blr'?'Blockade':'Rubble'}: ${verb} <b>${UI.picks.length} of ${P2.need}</b>.`+(left?' <span class="m">Drag or tap cards.</span>':'');
+      const P2=UI.pending;txt=MSG.payFor(P2.kind,UI.picks.length,P2.need);
       btns=[{...BTN.cancel,fn:cancelMode},{...BTN.confirm,dis:UI.picks.length!==P2.need,fn:confirmDiscardFor}];break;}
     case 'trashPick':{
-      txt=`Remove up to <b>${UI.max}</b> card${UI.max>1?'s':''} from the game (${UI.picks.length}/${UI.max}).`;
+      txt=MSG.trash(UI.max,UI.picks.length);
       btns=[{...(UI.picks.length?BTN.remove:BTN.skip),fn:confirmTrash}];break;}
-    case 'transmit':{txt='<b>Transmitter</b>: take any card, free.';
+    case 'transmit':{txt=MSG.transmit();
       btns=[{...BTN.cancel,fn:cancelMode}];break;}
     case 'buyWarn':{const names=[...new Set(affordable().map(a=>CT[a.t].n))];
-      txt=`Still affordable: <b>${esc(names[0])}</b>${names.length>1?` +${names.length-1} more`:''}.`;
+      txt=MSG.buyWarn(names[0],names.length-1);
       btns=[{...BTN.back,fn:cancelMode},{...BTN.cards,fn:()=>{cancelMode();openAll(true);}},{...BTN.endAnyway,fn:startEndTurn}];break;}
-    case 'endTurn':{const k=UI.picks.length;txt=k?`Keeping <b>${k}</b> for next turn.`:'Tap cards to keep them for next turn.';
+    case 'endTurn':{const k=UI.picks.length;txt=MSG.keeping(k);
       btns=[{...BTN.back,fn:cancelMode},{...(k===pl.hand.length?BTN.keepNone:BTN.keepAll),fn:()=>{UI.picks=UI.picks.length===pl.hand.length?[]:pl.hand.slice();render();}},{...(k?BTN.endKeep:BTN.discardEnd),fn:finishTurn}];break;}
   }
   say(txt);btnWire(B,btns);

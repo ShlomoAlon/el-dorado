@@ -16,7 +16,7 @@ import { S, MAP, NET, G, online, isAI, passing } from './state.js';
 import { toast } from './dialogs.js';
 import { render, after } from './frame.js';
 import { cardHTML } from './cards.js';
-import { flyInto } from './hand.js';
+import { flyIn } from './hand.js';
 import { marketRectOf } from './market.js';
 import { setTrail } from './board/overlays.js';
 import { load, store } from './store.js';
@@ -209,9 +209,8 @@ function feedFly(added,pl){
     for(const fl of flies){if(!gel.isConnected||!fl.from||!fl.from.width)continue;
     [...gel.querySelectorAll(fl.kind==='got'?'.fc.got':'.fcs .fc')].forEach((tEl,i)=>{
       // (from a chip: the card comes out of its middle, a little smaller, tilted and fading in)
-      const fr=fl.kind==='hand'?{left:fl.from.left+fl.from.width/2-tEl.offsetWidth*.4,top:fl.from.top+fl.from.height/2-tEl.offsetHeight*.4,width:tEl.offsetWidth*.8,height:tEl.offsetHeight*.8}:fl.from;
-      tEl.style.opacity=0; // (its place in the row is kept; the card shows once its copy lands there)
-      flyInto(tEl.dataset.t,fr,tEl,()=>{tEl.style.opacity='';},{duration:fl.kind==='got'?550:400,delay:i*70,tilt:fl.kind==='hand'?-8:0,fade:fl.kind==='hand'});
+      const fr=fl.kind==='hand'?{left:fl.from.left+fl.from.width/2-tEl.offsetWidth*.4,top:fl.from.top+fl.from.height/2-tEl.offsetHeight*.4,width:tEl.offsetWidth*.8}:fl.from;
+      flyIn(tEl,fr,{duration:fl.kind==='got'?550:400,delay:i*70,tilt:fl.kind==='hand'?-8:0,fade:fl.kind==='hand'});
     });}
   }
 }

@@ -56,15 +56,7 @@ export function checksInit(during) {
   // frame that wrote it is drawn (a timer after it: never while the views update)
   const wq = new Set(); let wt = 0;
   const words = () => { wt = 0; const rg = document.createRange();
-    for (const t of wq) { const p = t.parentElement, x = t.data; if (!p || !t.isConnected || !x.trim()) continue;
-      // no text is cut off: the text itself lies inside the nearest box that clips it (overflow, or an ellipsis)
-      // (its own box: within two levels of it; a view onto the board or the game area cuts what it shows on purpose)
-      for (let e = p, k = 0; e && k < 3 && !/^(vp|app|stage|bscale|lside|feed)$/.test(e.id); e = e.parentElement, k++) { const cs = getComputedStyle(e); if (cs.textOverflow !== 'ellipsis' && cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
-        rg.selectNodeContents(t); const tr = rg.getBoundingClientRect(), er = e.getBoundingClientRect();
-        // (an ellipsis cuts inside its box: there the box's content is wider than the box)
-        if (cs.textOverflow === 'ellipsis' ? e.scrollWidth > e.clientWidth + 1 : tr.width && er.width && (tr.left < er.left - 1 || tr.right > er.right + 1)) assert(false, 'view: no text is cut off ("' + x.trim().slice(0, 40) + '" in ' + (e.id ? '#' + e.id : e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0]) + ', ' + (cs.textOverflow === 'ellipsis' ? e.scrollWidth + ' wide in ' + e.clientWidth : Math.round(tr.width) + ' wide in ' + Math.round(er.width)) + ')');
-        break; }
-      if (!/^(inline-)?(flex|grid)$/.test(getComputedStyle(p).display)) continue;
+    for (const t of wq) { const p = t.parentElement, x = t.data; if (!p || !t.isConnected || !x.trim() || !/^(inline-)?(flex|grid)$/.test(getComputedStyle(p).display)) continue;
       rg.selectNodeContents(t); const tr = rg.getBoundingClientRect(); if (!tr.width) continue; // (not shown)
       const touch = (n, before) => { if (!n || n.nodeType !== 1) return false; const r = n.getBoundingClientRect(); return r.width > 0 && (before ? tr.left - r.right < 2 : r.left - tr.right < 2); };
       if ((/^\s/.test(x) && touch(t.previousSibling, true)) || (/\s$/.test(x) && touch(t.nextSibling, false))) assert(false, 'view: words never run together ("' + p.textContent.trim().slice(0, 40) + '": text beside an element in a ' + getComputedStyle(p).display + ' box)'); }

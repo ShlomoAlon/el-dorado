@@ -17,7 +17,7 @@ import { openAll, marketRectOf } from './market.js';
 import { feedWatch } from './feed.js';
 import { sfx, sfxEvent } from './sound.js';
 import { aiKick, aiReset } from './ai.js';
-import { netAct, reconnect } from './online.js';
+import { netAct, netPlay, reconnect } from './online.js';
 import { diag } from './debug.js';
 
 /* a different game is on show (a new deal, a loaded save, a replay, an online game): the old one's AI moves are off, its
@@ -62,7 +62,7 @@ export function playEvents(ev,viewer){
     if(e.e==='move')animateMove(e.pl,e.pi,e.path);
     else if(e.e==='block'){if(!watched)toast(S.players[e.pl].name+' claims blockade #'+e.n);}
     else if(e.e==='arrive')toast(S.players[e.pl].name+' reaches El Dorado!',2200);
-    else if(e.e==='play'&&e.got&&(viewer===undefined||viewer===e.pl))flyToDiscard(e.got,takeBuyFrom()||marketRectOf(e.got),e.pl);
+    else if(e.e==='play'&&e.got&&(viewer===undefined||viewer===e.pl))flyToDiscard(takeBuyFrom()||marketRectOf(e.got));
     else if(e.e==='timeout')toast(S.players[e.pl].name+' ran out of time');
     else if(e.e==='resign')toast(S.players[e.pl].name+' left the game');
   }
@@ -70,7 +70,7 @@ export function playEvents(ev,viewer){
 export function act(a){
   if(!canAct()){if(online()&&!S.over&&S.cur===NET.seat)toast('Reconnecting… your move wasn’t sent.');return;}
   diag('act '+a.t);
-  if(online()){netAct({t:'act',a});render();return;}
+  if(online()){netPlay(a);render();return;}
   const r=applyLocal(S.cur,a);
   if(!r.ok){sfx('error');toast(r.err);render();}
 }

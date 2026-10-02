@@ -1,10 +1,9 @@
 /* BOOT: wires the modules together, sets the order the view parts update in, and decides what opens first (a replay
    or room link, a game in progress, the Online screen, or the start screen). */
-import { buildCourse, courseById, assert, aiChoose, buyOptions, coinVal, CT } from '../engine.gen.js';
+import { buildCourse, courseById, assert, buyOptions, coinVal, CT } from '../engine.gen.js';
 import { $ } from './dom.js';
 import { S, MAP, setMAP, UI, NET, G, canAct, online } from './state.js';
 import { load } from './store.js';
-import { cardsInit } from './cards.js';
 import { addPart, render, flush, freshInit } from './frame.js';
 import { watchGeometry, geo } from './geometry.js';
 import { GAME_READY } from './ready.js';
@@ -19,7 +18,7 @@ import { marketPart, buySlotPart, marketInit, openAll, allShown } from './market
 import { hudPart, hudInit } from './hud.js';
 import { feedPart, histInit } from './feed.js';
 import { showRules, showPile, closeModal, modalOpen } from './dialogs.js';
-import { AIX } from './ai.js';
+import { AIX, aiThink } from './ai.js';
 import { derivePart, act, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, undo, resumeSaved, onPiece, onPlayCard, startDiscard, addDiscard, confirmTrash } from './actions.js';
 import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, startLocal, radio } from './menu.js';
 import { netInit, joinRoom, netSend } from './online.js';
@@ -37,7 +36,7 @@ for (const p of [derivePart, overlaysPart, piecesPart, cameraPart, hudPart, feed
 GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); });
 
 function boot() {
-  boundaryInit(); debugInit(); { const inPlay = () => !!S && !UI.preview && !document.getElementById('menu').open; checksInit(inPlay); freshInit(inPlay); } /* (in play: a game on show, no menu over it) */ boardLayers(); cardsInit(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
+  boundaryInit(); debugInit(); { const inPlay = () => !!S && !UI.preview && !document.getElementById('menu').open; checksInit(inPlay); freshInit(inPlay); } /* (in play: a game on show, no menu over it) */ boardLayers(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
   if (!document.documentElement.classList.contains('resume')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check)
   $('#deckPile').onclick = () => showPile('deck'); $('#discPile').onclick = () => showPile('discard');
   $('#rulesBtn').onclick = showRules; histInit();
@@ -94,7 +93,7 @@ function onBoardHover(e) { if (!drag && !e.buttons && e.pointerType === 'mouse')
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiChoose, buyOptions, coinVal, CT, // (aiChoose: test/play.cjs lets an AI choose the person's moves, played through the calls below; the rest let it choose a purchase of its own)
+window.__ED = { NET, UI, G, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiThink, buyOptions, coinVal, CT, // (aiThink: test/playstep.cjs lets an AI choose the person's moves, in the AI's worker, played through the calls below; the rest let it choose a purchase of its own)
   render() { render(); flush(); },
   aiPace(k) { AIX.pace = k; }, fitCheck, // (test/play.cjs: the board check, judged at once on a settled page) // (test/play.cjs: shorter pauses between the AIs' moves)
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },

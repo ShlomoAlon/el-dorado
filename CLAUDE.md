@@ -84,7 +84,7 @@ Fix nothing before step 5: first make sure our checks would catch the bug, then 
    - **Write the chain in chat before editing** (one line: symptom → mechanism → design decision → fix), so the owner can
      see when it's skipped. A failure that shows up while finishing a fix is a new bug, with its own chain and its own
      pass through steps 2–4.
-   - **Tripwire: stop on a second patch.** If a fix causes a new failure, or you're about to change the same element or
+   - **Tripwire: stop on a second patch** (commit check Q15). If a fix causes a new failure, or you're about to change the same element or
      function a second time for the same goal, stop: the design is wrong, not one patch short. Write the chain again from
      the symptom (2026-10-01: the prompt's timer, then its message, then its game-over room, each patched in turn, when
      the real fault was one: the prompt's layout depended on the game state).
