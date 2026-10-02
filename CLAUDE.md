@@ -156,7 +156,8 @@ Every fix is exactly one; the commit says which.
   "nothing moves without an animation"). Examples: captions keep their line when empty, plus the one-height assertion;
   blockades keyed by what each draws, so no deal change can redraw an unchanged one; lint declares the browser's globals
   and rejects every other undeclared name, so no renamed variable can become a silent global.
-- **PARTIAL: this instance fixed properly, but the decision stands.** The fix is honest, but other instances of the same
+- **PARTIAL: this instance fixed properly, but the decision stands.** Only when you are certain no root fix exists (the
+  commit check's Q14; owner, 2026-10-02): if one exists, do it. The fix is honest, but other instances of the same
   choice remain and can bite later. The commit says what remains and why it wasn't changed (too big for now, needs the
   owner, out of scope). Example: swapping the Undo and Cancel slots; Undo no longer stands alone beside a hole, but
   Cancel now does while paying, because the grid still reserves both.

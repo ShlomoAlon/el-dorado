@@ -36,6 +36,7 @@ function problems(msg) {
     if (!quoted.length && !(k === 'Q12' && /\bQ3\b/.test(ans[k]))) bad.push(`${k}: quote the assertion's message in double quotes`);
     for (const m of quoted) if (!src.includes(m)) bad.push(`${k}: no assertion in src/ says "${m}"`); }
   if (kind === 'HACK' && !/Owner OK:\s*\S/.test(ans.Q11)) bad.push('Q11 for a HACK: "Owner OK: <when the owner agreed>"');
+  if (kind !== 'ROOT' && !/^yes\b.{40,}/is.test(ans.Q14)) bad.push(`Q14 for a ${kind}: "Yes", and why no root fix exists (not certain? do the root fix instead)`);
   return bad;
 }
 const refuse = (bad, code) => { console.error('commit refused (CLAUDE.md "Fixing bugs", .claude/bugfix-commit.md): the message needs\n  - ' + bad.join('\n  - ')); process.exit(code); };

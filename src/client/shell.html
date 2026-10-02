@@ -532,7 +532,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 
 }
 @keyframes pulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.4}}
-@keyframes fgIn{from{opacity:0;transform:translateY(-6px) scale(.94)}}
+@keyframes fgIn{from{opacity:0}} /* (opacity only: the step is where its cards fly to, and a place that moves while they fly makes them land off it, then jump) */
 @keyframes bsIn{from{transform:translateY(-14px) scale(.9);opacity:0}}
 #shell,#overlay,#banner{--display:'Young Serif', Georgia, 'Times New Roman', serif;--ui:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;font-family:var(--ui)}
 html.gameready.boardready #shell{visibility:visible} /* once the game's fonts are in (ui_boot.js) and its board is fitted (fit): no text swaps fonts, no board jumps */

@@ -18,6 +18,7 @@ Q10 (step 5, tripwire): Is this the second change to the same element or functio
 Q11 (ROOT/PARTIAL/HACK): Why this kind and not the one above it? For PARTIAL: what remains and why. For HACK: when did the owner agree?
 Q12 (step 6): Which assertion does the root cause suggest? Quote its message in double quotes and name the test that fires it on the code before the fix, or say why the assertion in Q3 already states it.
 Q13 (step 7): Full suite exit code; what was checked at the owner's setup; what could not be verified?
+Q14 (root fix): After all is said and done, are you absolutely certain that there is no root fix?
 
 ## Not a bug fix (`Fix: none`)
 Q0 (not a fix): Why is this not a bug fix?
@@ -28,4 +29,7 @@ Q0 (not a fix): Why is this not a bug fix?
 - An answer of "none" to Q3, Q4, Q7 or Q12 is allowed only when an assertion or test is truly impossible, acknowledged in
   full: `A: none — WARNING WARNING WARNING: <why nothing can check this>`.
 - For HACK, Q11's answer says when the owner agreed ("Owner OK: …").
+- For PARTIAL and HACK, Q14's answer starts "Yes" and says why no root fix exists (the owner, 2026-10-02: the one good
+  reason not to fix at the root is that there is no root fix; if you aren't certain, do the root fix instead). For
+  ROOT, it says which decision changed.
 - Titles starting "WIP" never reach `main` (git's pre-push hook, `.githooks/pre-push`).
