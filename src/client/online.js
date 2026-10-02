@@ -1,6 +1,6 @@
 /* ONLINE — talks to the game server (Cloudflare Worker).
    Sign in with Google → hub (profile, rooms, leaderboard) → room lobby → game. */
-import { applyAction, assert, roomChange, aiById } from '../engine.gen.js';
+import { applyAction, assert, roomChange, roomJoin, aiById } from '../engine.gen.js';
 import { S, setS, UI, NET, online, viewIdx, myId } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, modal, closeModal } from './dialogs.js';
@@ -53,13 +53,21 @@ export function closeLobbyWs(){if(NET.lobbyWs){NET.lobbyWs.close();NET.lobbyWs=n
 
 /* ---------- room connection ---------- */
 export function netSend(m){if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(m));else{NET.busy=false;toast('Reconnecting…');}}
-/* mine: a room this page just created, so the lobby is drawn at once from what it already knows (host, options), before
-   the server's first word about it */
-export function joinRoom(code,mine){
+/* a room this page is making (opts): its lobby is drawn at once from what the page knows (you host it, seated as the
+   server will seat you, its options); its code comes with the server's answer (roomMade) */
+export function newRoom(opts){
+  closeLobbyWs();leaveRoomSocket();NET.code=null;NET.S=null;NET.shown=null;NET.roomPending=[];
+  const r={code:null,status:'lobby',host:myId(),opts,seats:[]};roomJoin(r,myId(),NET.user.name);r.seats[0].online=true;
+  NET.room=NET.roomS=r;showRoomLobby();return r;
+}
+/* the room made: its code, then the connection (unless the page left its lobby meanwhile) */
+export function roomMade(r,code){if(NET.room!==r||NET.code)return;r.code=code;joinRoom(code,r);}
+/* made: the room this page made (newRoom), already on show */
+export function joinRoom(code,made){
   closeLobbyWs();leaveRoomSocket();
-  NET.room=mine?{code,status:'lobby',host:myId(),opts:mine,seats:[]}:{code,status:'connecting',seats:[]};NET.code=code;NET.S=null;NET.shown=null;NET.retries=0;
+  NET.room=made||{code,status:'connecting',seats:[]};NET.code=code;NET.S=null;NET.shown=null;NET.retries=0;
   setQuery({room:code,replay:null});
-  connectRoom();if(mine)showRoomLobby(); // (a room just made is a lobby; any other is shown once its first message says what it is)
+  connectRoom();if(made)renderRoomLobby(); // (a room just made is on show already; any other is shown once its first message says what it is)
 }
 /* the room's screen, once there is something to show on it: its lobby, or why it can't be reached (a game in progress
    shows the game instead) */
@@ -145,6 +153,7 @@ function differ(a,b,at='',out=[]){
 }
 /* a change in the lobby (colour, an AI added or removed, rated, start now): shown at once, sent with its number */
 export function roomSend(m){
+  if(!NET.connected){netSend(m);roomScreen();return;} // (not connected: nothing is shown ahead of a message that can't go; netSend says so, and the lobby shows the room as it is)
   const n=nextN(),r=roomAhead(NET.room,[m]);
   if(r){NET.roomPending=[...NET.roomPending,{n,m}];NET.room=r;roomScreen();}
   netSend({...m,n});

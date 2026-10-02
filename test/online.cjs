@@ -57,8 +57,14 @@ const T = report('online');
       await V.click('label:has(input[name=otab][value=board])');
       T.ok('offline: a failed refresh says so, and keeps the list', await wait(V, () => /Could not refresh the leaderboard/.test(document.querySelector('#hErr').textContent) && document.querySelector('#lbList .lb'), null, 5000), await V.evaluate(() => document.querySelector('#hErr').textContent));
       await V.click('label:has(input[name=otab][value=play])'); await V.click('#cGo');
-      T.ok('offline: Create room says the server is out of reach, in the page\'s words', await wait(V, () => /^Could not reach the server/.test(document.querySelector('#hErr').textContent), null, 5000), await V.evaluate(() => document.querySelector('#hErr').textContent));
-      await V.unroute('**/api/**'); }
+      T.ok('offline: Create room says the server is out of reach, in the page\'s words', await wait(V, () => /^Could not reach the server/.test(document.querySelector('#hErr').textContent) && !document.querySelector('section[data-screen=online]').hidden && !!document.querySelector('#hErr').offsetParent, null, 5000), await V.evaluate(() => document.querySelector('#hErr').textContent));
+      await V.unroute('**/api/**');
+      // Create room opens its lobby at once, you seated, before the server has made the room (its answer held back a second here)
+      await V.route('**/api/rooms', r => setTimeout(() => r.continue(), 1000));
+      await V.click('#cGo');
+      T.ok('Create room: its lobby at once, you seated, its code to come', await V.evaluate(() => new Promise(r => requestAnimationFrame(() => r(!document.querySelector('section[data-screen=room]').hidden && document.querySelectorAll('#rlSeats .seatrow:not(.open)').length === 1 && /…/.test(document.querySelector('#rlTitle').textContent))))));
+      T.ok('Create room: the code arrives and the room connects', await wait(V, () => /^Room [A-Z0-9]{4,}$/.test(document.querySelector('#rlTitle').textContent) && __ED.NET.connected && __ED.NET.roomS && __ED.NET.roomS.seats.length === 1, null, 10000));
+      await V.unroute('**/api/rooms'); await V.click('#rlLeave'); }
     // ---------- 1. three people
     const A = await open('A'), B = await open('B'), C = await open('C');
     const ids = [await signIn(A, 'Alice'), await signIn(B, 'Bob'), await signIn(C, 'Cara')];

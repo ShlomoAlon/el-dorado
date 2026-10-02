@@ -25,6 +25,14 @@ function aiAllowed(id,n){return aiCourseOK(id)&&n>=3;}
 const AI_RULE='AI players play First Expedition with 3 or 4 players for now.';
 /* the named AIs are players too (the server's users table: id ai-<AI id>) */
 const aiUid=id=>'ai-'+id;
+/* a player takes a seat in a room's lobby, with the first colour free (the first to sit hosts a room whose host has no
+   seat): the server seats players as they connect; the page that made a room shows itself seated at once. False if
+   there is no seat for them (seated already, the room full, the game started). */
+function roomJoin(room,uid,name){
+  if(room.status!=='lobby'||room.seats.some(s=>s.uid===uid)||room.seats.length>=room.opts.max)return false;
+  const used=room.seats.map(s=>s.color);room.seats.push({uid,name,color:COLORS.map(c=>c.hex).find(c=>!used.includes(c))});
+  if(!room.seats.some(s=>s.uid===room.host))room.host=uid;return true;
+}
 /* ---- a room's lobby, before its game starts: the changes players make there, one rule for the server (which decides) and
    the page (which shows its own change at once; the server's answer confirms it). room: {host, status, opts, seats:
    [{uid, name, color, ai?, now?}]}; m: what a player asked ({t: color | addAI | removeAI | rated | now, …}); aiName(id): the

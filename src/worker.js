@@ -400,7 +400,6 @@ async function pruneReplays(DB, uids) {
   }
 }
 /* ---------------- Room: one live game ---------------- */
-const PCOLORS = E.COLORS.map(c => c.hex); // the seats' colours (one explorer figure each)
 const PLAYER_ACTIONS = ['move', 'native', 'pay', 'action', 'trash', 'transmit', 'buy', 'end', 'resign']; // what a player may send
 
 export class Room extends DurableObject {
@@ -483,10 +482,7 @@ export class Room extends DurableObject {
       const uid = req.headers.get('x-uid'), name = req.headers.get('x-name');
       const pair = new WebSocketPair();
       this.ctx.acceptWebSocket(pair[1], [uid]); pair[1].serializeAttachment({ uid, name });
-      if (this.d.status === 'lobby' && !this.d.seats.find(s => s.uid === uid) && this.d.seats.length < this.d.opts.max) {
-        const used = this.d.seats.map(s => s.color);
-        this.d.seats.push({ uid, name, color: PCOLORS.find(c => !used.includes(c)) });
-        if (!this.d.seats.find(s => s.uid === this.d.host)) this.d.host = uid;
+      if (E.roomJoin(this.d, uid, name)) { // (the engine's rule: the page that made the room shows its host seated by it at once)
         if (await this.seatsChanged()) return new Response(null, { status: 101, webSocket: pair[0] });
         await this.persist(); this.tellLobby();
       }
