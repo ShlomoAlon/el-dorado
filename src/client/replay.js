@@ -7,7 +7,7 @@ import { S, setS, UI, G, online, clearSelection } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, banner, closeModal } from './dialogs.js';
 import { showGame, resumeSaved, playEvents, firstPiece } from './actions.js';
-import { AIX, aiNetLoad, aiReset, aiAsk } from './ai.js';
+import { AIX, aiNetLoad, aiReset, aiAsk, aiWaiting } from './ai.js';
 import { exitOnline } from './online.js';
 import { showSetup, showHub, showReplays, MENU } from './menu.js';
 import { load, store } from './store.js';
@@ -167,7 +167,7 @@ function replayBar(){
     if(R.timer)h+=`<p class="m">Pause to see it.</p>`;
     else if(!(R.i in R.adv)){h+=`<p class="m">${esc(A.name)} is thinking…</p>`;adviceSoon();
       // the advice for a position arrives: still "thinking" at the same position (side open, not playing) after 5 s means its computation was starved or lost
-      if(!waitFor||waitFor.R!==R||waitFor.at!==R.i||R.timer){waitFor={R,at:R.i};waitSince=performance.now();}else{const w=performance.now()-waitSince;assert(w<5000,'view: the advice for the replay position on show arrives (waited '+Math.round(w)+' ms; timer '+(adviceT?'pending for '+adviceFor.at+(adviceFor.R===R?'':' of another replay'):'none')+', net '+(AIX.net?'loaded':'not loaded')+'; '+adviceLog.join(', ')+')');}}
+      if(!waitFor||waitFor.R!==R||waitFor.at!==R.i||R.timer){waitFor={R,at:R.i};waitSince=performance.now();}else{const w=performance.now()-waitSince;assert(w<5000,'view: the advice for the replay position on show arrives (waited '+Math.round(w)+' ms; timer '+(adviceT?'pending for '+adviceFor.at+(adviceFor.R===R?'':' of another replay'):'none')+', net '+(AIX.net?'loaded':'not loaded')+', asked '+[...R.asking].join(' ')+', the worker owes '+aiWaiting()+'; '+adviceLog.join(', ')+')');}}
     else if(!(steps=R.adv[R.i]))h+=`<p class="m">No plan for this position.</p>`;
     else{
       // compared with what the player did, step by step: m steps of the plan match theirs (✓), then what they did instead
