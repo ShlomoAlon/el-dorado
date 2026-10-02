@@ -132,17 +132,25 @@ function update() {
   setText($('#deckN'), pl.deck.length); setText($('#discN'), pl.discard.length);
   const dn = Math.min(3, pl.deck.length);
   setHTML($('#deckStack'), dn ? (dn > 2 ? '<div class="back b3"></div>' : '') + (dn > 1 ? '<div class="back b2"></div>' : '') + '<div class="back"></div>' : '<div class="empty-slot"></div>');
-  const top = pl.discard[pl.discard.length - 1];
-  setHTML($('#discStack'), top ? `<div class="mcard">${cardHTML(typeOf(S,top))}</div>` : '<div class="empty-slot"></div>');
+  pileShow($('#discStack'), pl.discard.slice(-2)); // (its top card, and the one under it: what shows while a new top flies in)
+}
+/* a pile's cards, bottom first, over its outline (the slot: always there, the cards cover it). One element per card, kept by
+   its id (the outline is in the page's markup): a card that is still there keeps its element (the old top stays where it was, under the new one), so a new card
+   never redraws the others */
+function pileShow(box, ids) {
+  const have = new Map([...box.children].slice(1).map(e => [e.dataset.id, e]));
+  for (const [id, e] of have) if (!ids.includes(id)) e.remove();
+  ids.forEach((id, i) => { let e = have.get(id); if (!e) { e = document.createElement('div'); e.className = 'mcard'; e.dataset.id = id; e.innerHTML = cardHTML(typeOf(S, id)); }
+    if (box.children[i + 1] !== e) box.insertBefore(e, box.children[i + 1] || null); });
 }
 function setLeft(el, txt) { let b = el.querySelector('.left'); if (!txt) { if (b) b.remove(); return; } if (!b) { b = document.createElement('div'); b.className = 'left'; el.appendChild(b); } setText(b, txt); }
 function clear() { for (const [, el] of cardEls) el.remove(); cardEls.clear(); lastViewer = -1; entering = []; }
 export const handPart = { name: 'hand',  update, reset: clear };
 
 /* a card bought (or taken) by the player on view flies from where it was bought onto their discard pile: the pile's top
-   card, once this frame has drawn it there */
+   card, once this frame has drawn it there (the card under it shows meanwhile) */
 export function flyToDiscard(from) {
-  after(() => { const c = $('#discStack .mcard'); if (c) flyIn(c, from, { duration: 700, lift: true, raise: $('#discPile') }); });
+  after(() => { const c = $('#discStack .mcard:last-child'); if (c) flyIn(c, from, { duration: 700, lift: true, raise: $('#discPile') }); });
 }
 
 /* ---------- pressing and dragging a card ---------- */
