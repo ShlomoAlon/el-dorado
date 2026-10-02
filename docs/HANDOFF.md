@@ -172,7 +172,14 @@ Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), s
 
 ### 6.4 Client UI essentials
 - `act(a)`: local → snapshot for undo, `applyAction`, `playEvents` (animations/toasts; call before render so market DOM
-  still exists for fly-to-discard), `syncMode`, render, banner on turn change. Online → `netSend({t:'act',a})`, `NET.busy`.
+  still exists for fly-to-discard), `syncMode`, render, banner on turn change. Online → `netPlay(a)` (online.js): a move
+  whose outcome the page knows is applied at once and sent numbered (`NET.pending` until the server's `ack` covers it;
+  the assertion "our own move, shown ahead of the server, is what the server made of it" checks every one); a move that
+  draws or shuffles is sent and waited for (`NET.busy`). The lobby's changes go the same way (`roomSend`, engine
+  `roomChange`). `online()` asks whether the game on show is the room's (`NET.shown`), not whether it is the server's last.
+- The AI thinks in a Web Worker (src/client/aiworker.js, its own hashed file `aiw.<hash>.js`, inline in the artifact):
+  local AI turns (`aiThink`), the replay's evaluation and advice (`aiAsk`). Lint refuses a page module importing the
+  engine's thinking (aiChoose, aiPlan, botValue, …).
 - Card layer: all cards are absolutely positioned elements in `#cards`, moved with `transform` transitions
   (`layoutCards()` computes the fan; hovered card lifts & scales; selected/picked lift). Draws fly from the deck pile.
 - Aim arrow: `aimLoop` (rAF) runs while a movement card is selected; mouse → follows cursor, snaps to targets

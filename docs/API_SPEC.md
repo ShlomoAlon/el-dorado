@@ -383,18 +383,23 @@ it closes or ends, or after 2 h in the lobby or 12 h in play.
 
 | phase | message |
 |---|---|
-| lobby | `{t: 'color', color}`, `{t: 'leave'}`, `{t: 'now'}` (quick match: toggle "start now"). A seat is taken by connecting. |
-| lobby, host | `{t: 'addAI', ai}`, `{t: 'removeAI', uid}`, `{t: 'rated', v}`, `{t: 'start'}` |
-| playing | `{t: 'act', a}`: a player action (§1.5: not `timeout` or `endgame`) for the sender's seat. The server runs `recApply`; a refused action is answered with an error and leaves the game untouched. |
+| lobby | `{t: 'color', color, n}`, `{t: 'leave'}`, `{t: 'now', n}` (quick match: toggle "start now"). A seat is taken by connecting (`roomJoin`). |
+| lobby, host | `{t: 'addAI', ai, n}`, `{t: 'removeAI', uid, n}`, `{t: 'rated', v, n}`, `{t: 'start'}` |
+| playing | `{t: 'act', a, n}`: a player action (§1.5: not `timeout` or `endgame`) for the sender's seat. The server runs `recApply`; a refused action is answered with an error and leaves the game untouched. |
+
+`n`: the page's number for the change (counting up from the time the page loaded). The lobby's changes follow the
+engine's room rules (`roomChange`), which the page applies too: it shows its own change at once and keeps it until the
+server's `ack` covers it. In play, a move whose outcome the page can know (it draws no card and shuffles nothing) is
+shown the same way, ahead of the server; a move that draws waits for the server's state (`NET.busy`).
 | playing | `{t: 'undo'}`: the player to move takes back their last action if `recCanUndo`. |
 
 **Server → client:**
 
 | message | |
 |---|---|
-| `{t: 'room', room}` | In the lobby, after every change. |
-| `{t: 'state', S, ev, seat, undo, left, room}` | In play, after every change, to every socket. `S` is `redact(S, seat)`; `seat` is the receiver's seat (−1 for watchers); `undo` says whether this seat may undo now; `left` is the ms left on the turn clock (null when none runs; the page counts down from when the message arrives). |
-| `{t: 'error', err}` | The receiver's message was refused (the game is untouched). |
+| `{t: 'room', room, ack}` | In the lobby, after every change. |
+| `{t: 'state', S, ev, by, ack, seat, undo, left, room}` | In play, after every change, to every socket. `by` = `{seat, n}`: the move this state follows, when a player made it (its page played its events when it showed the move); `ack`: the last of the receiver's numbers (`n`) the server has applied, in this message and every other. `S` is `redact(S, seat)`; `seat` is the receiver's seat (−1 for watchers); `undo` says whether this seat may undo now; `left` is the ms left on the turn clock (null when none runs; the page counts down from when the message arrives). |
+| `{t: 'error', err, n}` | The receiver's message (its number `n`, if it had one) was refused (the game is untouched); what the page showed ahead of it goes. |
 
 `room = {code, host, status, opts: {max, course, turn, pub, rated, auto}, seats: [{uid, name, color, now, ai, online}], results}`
 
