@@ -22,10 +22,16 @@ async function step() {
   // a card the test wants played (window.__prefer: types), bought whenever the coins in hand allow it (instead of the AI's
   // purchase, or before it ends its turn), paid with the hand's cards in order until they cover it: a game then reaches
   // what that card does every time, not only when the deal and the AI happen to lead there
-  const wanted = () => (window.__prefer || []).map(t => E.buyOptions(S, me).find(o => o.t === t)).find(Boolean);
+  // (they are reserve cards, which can be bought once a market stack has sold out: until then, the market stack closest to
+  // selling out is bought, as a player opening the reserve would)
+  const wanted = () => { const pref = window.__prefer || []; if (!pref.length) return null; const opts = E.buyOptions(S, me);
+    return pref.map(t => opts.find(o => o.t === t)).find(Boolean) || (!S.market.some(st => st.n === 0) && opts.filter(o => o.src === 'm').sort((x, y) => S.market[x.i].n - S.market[y.i].n)[0]) || null; };
   const buyWanted = () => { const w = wanted(); call('pickFromMarket', w.src, w.i); let paid = 0;
     for (const id of S.players[me].hand.slice()) { if (paid >= E.CT[w.t].cost || UI.mode !== 'pay') break; call('onHandCard', id); paid += E.coinVal(S, id); }
     return 'buy ' + w.t; };
+  // and played as soon as it is in hand (nothing else under way: no card being played, no removal asked)
+  const inHand = !S.turn.active && !S.turn.pending && S.players[me].hand.find(id => (window.__prefer || []).includes(S.cards[id]));
+  if (inHand) { if (UI.mode !== 'idle') call('cancelMode'); call('onHandCard', inHand); return 'action (' + S.cards[inHand] + ')'; }
   switch (a.t) {
     case 'move': case 'native': {
       if (UI.mode === 'card' && UI.card !== a.card) call('cancelMode');
