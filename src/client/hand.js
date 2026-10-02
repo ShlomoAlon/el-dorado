@@ -8,7 +8,7 @@ import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js
 import { S, UI, cur, hp, viewIdx, canAct, G, covered } from './state.js';
 import { geo, handTop } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
-import { render } from './frame.js';
+import { render, after } from './frame.js';
 import { targetAt, setHot, hotTarget } from './board/overlays.js';
 import { startAim } from './aim.js';
 import { onHandCard, onPlayCard, cardUsable, isTargeted, isDisc, doMove, startDiscard, addDiscard, togglePick, playAction } from './actions.js';
@@ -23,15 +23,9 @@ export const buySlotBox = { x: 0, y: 0, w: 92 }; // where the purchase slot sits
 const T = (x, y, rot, sc) => `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) rotate(${rot.toFixed(2)}deg) scale(${sc.toFixed(3)})`;
 export function setT(el, x, y, rot, sc) { el.__t = { x, y, rot, sc }; setStyle(el, 'transform', T(x, y, rot, sc)); }
 /* the card's box (cw × 1.4 cw, scaled about its centre) covering a screen rectangle */
-export function rectT(rect, rot) { const cw = geo.cw, ch = cw * 1.4, A = geo.app, sc = rect.width / cw; return [rect.left - A.left - (cw - rect.width) / 2, rect.top - A.top - (ch - rect.height) / 2, rot || 0, sc]; }
+function rectT(rect, rot) { const cw = geo.cw, ch = cw * 1.4, A = geo.app, sc = rect.width / cw; return [rect.left - A.left - (cw - rect.width) / 2, rect.top - A.top - (ch - rect.height) / 2, rot || 0, sc]; }
 export const placeAt = (el, rect, rot) => setT(el, ...rectT(rect, rot));
-/* every flight ends by handing over to the card it becomes: call as it ends, before the copy is removed. It must end
-   exactly on that card (place, size, upright), or the card jumps as it lands */
-export function landed(ghost, card, what) {
-  if (!CHECKS || !card || !card.isConnected) return;
-  const g = ghost.getBoundingClientRect(), r = card.getBoundingClientRect(), d = Math.max(Math.abs(g.left - r.left), Math.abs(g.top - r.top), Math.abs(g.width - r.width), Math.abs(g.height - r.height));
-  return () => assert(d < 1.5, 'view: a flying card lands exactly where its card is shown (' + what + ', ' + d.toFixed(1) + ' px off)');
-}
+
 function newCard(S,id) {
   const el = document.createElement('div'); el.className = 'card'; el.innerHTML = cardHTML(typeOf(S,id)); el.title = cardTitle(typeOf(S,id));
   $('#cards').appendChild(el); cardEls.set(id, el); wire(el, id); return el;
@@ -121,23 +115,46 @@ function update() {
   if (q) { setHTML(qb.firstElementChild, `<b>${esc(CT[q.by].n)}</b> · remove up to ${plural(q.max, 'card')}`); setHTML(qb.lastElementChild, UI.picks.length ? `<b>${UI.picks.length}</b> of ${q.max} chosen · they leave the game` : 'Tap cards to choose · they leave the game'); } // (two fixed parts: a pick rewrites only the count)
   layoutCards();
   // piles
-  setText($('#deckN'), pl.deck.length); setText($('#discN'), pl.discard.length);
+  const shown = pl.discard.length - (landing[vi] || 0); // (a card still flying onto the pile isn't on it yet)
+  setText($('#deckN'), pl.deck.length); setText($('#discN'), shown);
   const dn = Math.min(3, pl.deck.length);
   setHTML($('#deckStack'), dn ? (dn > 2 ? '<div class="back b3"></div>' : '') + (dn > 1 ? '<div class="back b2"></div>' : '') + '<div class="back"></div>' : '<div class="empty-slot"></div>');
-  const top = pl.discard[pl.discard.length - 1];
+  const top = pl.discard[shown - 1], ds = $('#discStack'); if (ds.dataset.shows !== 'seat ' + vi + ': ' + shown) ds.dataset.shows = 'seat ' + vi + ': ' + shown;
   setHTML($('#discStack'), top ? `<div class="mcard">${cardHTML(typeOf(S,top))}</div>` : '<div class="empty-slot"></div>');
 }
 function setLeft(el, txt) { let b = el.querySelector('.left'); if (!txt) { if (b) b.remove(); return; } if (!b) { b = document.createElement('div'); b.className = 'left'; el.appendChild(b); } setText(b, txt); }
-function clear() { for (const [, el] of cardEls) el.remove(); cardEls.clear(); lastViewer = -1; entering = []; }
+function clear() { for (const [, el] of cardEls) el.remove(); cardEls.clear(); lastViewer = -1; entering = []; landing.length = 0; }
 export const handPart = { name: 'hand',  update, reset: clear };
 
-/* a card bought (or taken) by the player on view flies from where it was bought into the discard pile */
-export function flyToDiscard(t, from) {
-  if (!from || !from.width || reduceMotion) return;
-  const el = document.createElement('div'); el.className = 'card fly'; el.innerHTML = cardHTML(t); $('#cards').appendChild(el);
-  const [x, y, , sc] = rectT(from, 0), end = rectT(geo.disc, 0); // (ends as the pile shows its card: upright, its size)
-  const done = () => { const ok = landed(el, $('#discStack .mcard'), t + ' onto the discard pile'); el.remove(); if (ok) ok(); };
-  el.animate([{ transform: T(x, y, 0, sc) }, { transform: T(x, y - 30, 0, sc * 1.15), offset: .3 }, { transform: T(...end) }], { duration: 700, easing: EASE, fill: 'forwards' }).finished.then(done, done);
+/* every card flight: a copy of card t flies from a place on screen (from: a rect) into a slot (the element its card will be
+   shown in) and hands over to it there. The flight never picks its own end: it ends on the slot as it is when the flight
+   starts (a slot must be at rest while cards fly to it), upright and the slot's size, as slots show their cards. The slot
+   shows the card only once the copy is there: show() makes it (until then it shows what it did before), and the copy goes
+   in the same frame, compared with the card now shown: when the slot shows what the flight brings (o.shows, matched with
+   the slot's data-shows: a pile says whose it is and how many cards it shows; the card may have left it by then, the
+   pile shuffled into the deck, or the next player's pile on show in pass-and-play). o: { delay, duration, tilt (start rotation), fade (starts
+   transparent), lift (rises a little on its way) } */
+let flights = 0;
+export function flyInto(t, from, slot, show, o = {}) {
+  const to = slot.getBoundingClientRect();
+  if (reduceMotion || !from || !from.width || !to.width) { show(); return; }
+  const el = document.createElement('div'); el.className = 'card fly'; el.dataset.f = ++flights; el.innerHTML = cardHTML(t); $('#cards').appendChild(el); // (f: each flight's own copy, never taken for another's)
+  const [x0, y0, , s0] = rectT(from, 0), [x1, y1, , s1] = rectT(to, 0), k = [{ transform: T(x0, y0, o.tilt || 0, s0), opacity: o.fade ? 0 : 1 }];
+  if (o.lift) k.push({ transform: T(x0, y0 - 30, 0, s0 * 1.15), opacity: 1, offset: .3 });
+  k.push({ transform: T(x1 + 5, y1, 0, s1), opacity: 1 });
+  const land = () => { show(); after(() => {
+    const card = slot.querySelector('.mcard'), g = el.getBoundingClientRect(), r = card ? card.getBoundingClientRect() : null;
+    const d = r ? Math.max(Math.abs(g.left - r.left), Math.abs(g.top - r.top), Math.abs(g.width - r.width), Math.abs(g.height - r.height)) : Infinity;
+    el.remove();
+    if (CHECKS && slot.isConnected && slot.dataset.shows === o.shows) assert(d < 1.5, 'view: a flying card lands exactly where its card is shown (' + t + ', ' + (r ? d.toFixed(1) + ' px off' : 'no card shown') + ')'); }); };
+  el.animate(k, { duration: o.duration || 400, delay: o.delay || 0, easing: EASE, fill: 'both' }).finished.then(land, land);
+}
+/* the discard piles: per seat, how many cards are still flying onto it (the pile shows them once they land) */
+const landing = [];
+/* a card bought (or taken) by the player on view flies from where it was bought onto their discard pile */
+export function flyToDiscard(t, from, pl) {
+  landing[pl] = (landing[pl] || 0) + 1;
+  flyInto(t, from, $('#discStack'), () => { landing[pl]--; render(); }, { duration: 700, lift: true, shows: 'seat ' + pl + ': ' + S.players[pl].discard.length });
 }
 
 /* ---------- pressing and dragging a card ---------- */
