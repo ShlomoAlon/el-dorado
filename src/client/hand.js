@@ -2,7 +2,8 @@
    Cards are positioned with transforms computed from cached sizes (geometry.js), never by measuring; every move is a
    CSS transition on transform, which the compositor runs. A new card is placed at the deck first and moved into the
    hand one frame later, so it slides in without the browser having to lay out anything in between. */
-import { CT, typeOf, plural } from '../engine.gen.js';
+import { CT, typeOf, plural, assert } from '../engine.gen.js';
+import { CHECKS } from './debug.js';
 import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js';
 import { S, UI, cur, hp, viewIdx, canAct, G, covered } from './state.js';
 import { geo, handTop } from './geometry.js';
@@ -24,6 +25,13 @@ export function setT(el, x, y, rot, sc) { el.__t = { x, y, rot, sc }; setStyle(e
 /* the card's box (cw × 1.4 cw, scaled about its centre) covering a screen rectangle */
 export function rectT(rect, rot) { const cw = geo.cw, ch = cw * 1.4, A = geo.app, sc = rect.width / cw; return [rect.left - A.left - (cw - rect.width) / 2, rect.top - A.top - (ch - rect.height) / 2, rot || 0, sc]; }
 export const placeAt = (el, rect, rot) => setT(el, ...rectT(rect, rot));
+/* every flight ends by handing over to the card it becomes: call as it ends, before the copy is removed. It must end
+   exactly on that card (place, size, upright), or the card jumps as it lands */
+export function landed(ghost, card, what) {
+  if (!CHECKS || !card || !card.isConnected) return;
+  const g = ghost.getBoundingClientRect(), r = card.getBoundingClientRect(), d = Math.max(Math.abs(g.left - r.left), Math.abs(g.top - r.top), Math.abs(g.width - r.width), Math.abs(g.height - r.height));
+  return () => assert(d < 1.5, 'view: a flying card lands exactly where its card is shown (' + what + ', ' + d.toFixed(1) + ' px off)');
+}
 function newCard(S,id) {
   const el = document.createElement('div'); el.className = 'card'; el.innerHTML = cardHTML(typeOf(S,id)); el.title = cardTitle(typeOf(S,id));
   $('#cards').appendChild(el); cardEls.set(id, el); wire(el, id); return el;
@@ -127,8 +135,9 @@ export const handPart = { name: 'hand',  update, reset: clear };
 export function flyToDiscard(t, from) {
   if (!from || !from.width || reduceMotion) return;
   const el = document.createElement('div'); el.className = 'card fly'; el.innerHTML = cardHTML(t); $('#cards').appendChild(el);
-  const [x, y, , sc] = rectT(from, 0), end = rectT(geo.disc, 6);
-  el.animate([{ transform: T(x, y, 0, sc) }, { transform: T(x, y - 30, 0, sc * 1.15), offset: .3 }, { transform: T(...end) }], { duration: 700, easing: EASE, fill: 'forwards' }).finished.then(() => el.remove(), () => el.remove());
+  const [x, y, , sc] = rectT(from, 0), end = rectT(geo.disc, 0); // (ends as the pile shows its card: upright, its size)
+  const done = () => { const ok = landed(el, $('#discStack .mcard'), t + ' onto the discard pile'); el.remove(); if (ok) ok(); };
+  el.animate([{ transform: T(x, y, 0, sc) }, { transform: T(x, y - 30, 0, sc * 1.15), offset: .3 }, { transform: T(...end) }], { duration: 700, easing: EASE, fill: 'forwards' }).finished.then(done, done);
 }
 
 /* ---------- pressing and dragging a card ---------- */
