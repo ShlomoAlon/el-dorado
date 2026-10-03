@@ -149,7 +149,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* ---------- board */
 #vp{position:absolute;inset:0;overflow:hidden;background:radial-gradient(ellipse 80% 70% at 45% 42%,#18291f 0%,#0e1a15 55%,#080f0c 100%);touch-action:none;cursor:grab}
 #vp::after{content:"";position:absolute;inset:0;pointer-events:none;will-change:transform;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45) 100%)}
-#vp.drag{cursor:grabbing}
+#grab{position:absolute;inset:0;pointer-events:none}#grab.on{pointer-events:auto;cursor:grabbing} /* (the grabbing cursor while the board is dragged: on a layer of its own over the board, so only it is restyled; on #vp, cursor being inherited, every board element was) */
 /* the board layer: always composited (see applyView); #bscale carries the scale baked in once a zoom settles */
 #stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 #bscale{position:relative;transform-origin:0 0}
@@ -554,7 +554,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <div id="shell"><div id="gamecell">
 <div id="app">
   <div id="vp" data-fades>
-    <div id="stage"><div id="bscale"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels"></div><svg id="board2" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels2"></div><div id="pieces"></div><div id="bfx"></div></div></div>
+    <div id="stage"><div id="bscale"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels"></div><svg id="board2" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels2"></div><div id="pieces"></div><div id="bfx"></div></div></div><div id="grab"></div>
     <div id="tip"></div>
   </div>
   <div id="hud">

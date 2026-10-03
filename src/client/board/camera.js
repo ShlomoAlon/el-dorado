@@ -137,8 +137,8 @@ export function setupPanZoom() {
       const dx = e.clientX - start.x, dy = e.clientY - start.y;
       if (!cam.dragMoved && Math.hypot(dx, dy) > 5) {
         cam.dragMoved = true; moved();
-        // the grabbing cursor: mouse only (the class change restyles every board element, a stall at the start of a touch drag)
-        if (e.pointerType === 'mouse') v.classList.add('drag');
+        // the grabbing cursor (a mouse): shown by its own layer over the board, so the board's elements aren't restyled
+        if (e.pointerType === 'mouse') $('#grab').classList.add('on');
         try { v.setPointerCapture(e.pointerId); } catch (_) { /* expected: the pointer was already released */ }
       }
       // follow the pointer from the first pixel (a 5 px dead zone made the board jump when the drag began); 5 px still tells a drag from a click
@@ -149,7 +149,7 @@ export function setupPanZoom() {
     if (!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId);
     if (ptrs.size === 1) { pinch = null; beginPan(); } // one finger left: continue panning from here, no jump
     else if (ptrs.size >= 2) beginPinch();
-    cam.pointers = ptrs.size; if (ptrs.size) diag(`still down: ${[...ptrs.keys()].join(',')}`); if (!ptrs.size && cam.dragMoved) diag(`———— drag ${++drags} ended`); if (!ptrs.size) { start = null; pinch = null; v.classList.remove('drag'); setTimeout(() => cam.dragMoved = false, 0); scheduleSettle(); }
+    cam.pointers = ptrs.size; if (ptrs.size) diag(`still down: ${[...ptrs.keys()].join(',')}`); if (!ptrs.size && cam.dragMoved) diag(`———— drag ${++drags} ended`); if (!ptrs.size) { start = null; pinch = null; $('#grab').classList.remove('on'); setTimeout(() => cam.dragMoved = false, 0); scheduleSettle(); }
   };
   window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   const mid = f => () => zoomAt(geo.app.width / 2, geo.app.height / 2, f);
