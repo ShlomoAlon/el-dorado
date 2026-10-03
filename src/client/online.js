@@ -7,7 +7,7 @@ import { toast, modal, closeModal } from './dialogs.js';
 import { MENU, showHub, showRoomLobby, renderRoomLobby, roomsRender, loadProfile } from './menu.js';
 import { showGame, playEvents, afterChange } from './actions.js';
 import { sfx } from './sound.js';
-import { diag } from './debug.js';
+import { diag, outsideEvent } from './debug.js';
 import { failed } from './boundary.js';
 import { load, store } from './store.js';
 import { setQuery } from './dom.js';
@@ -77,7 +77,7 @@ function connectRoom(){
   const code=NET.code;if(!code)return;
   const ws=new WebSocket(wsUrl('/api/rooms/'+code+'/ws'));NET.ws=ws;NET.heard=Date.now();
   ws.onopen=()=>{NET.connected=true;NET.retries=0;NET.status='';NET.heard=Date.now();if(S)render();};
-  ws.onmessage=e=>{NET.heard=Date.now();if(e.data==='pong')return;let m;try{m=JSON.parse(e.data);}catch(_){return;}onRoomMsg(m);};
+  ws.onmessage=e=>{NET.heard=Date.now();if(e.data==='pong')return;let m;try{m=JSON.parse(e.data);}catch(_){return;}outsideEvent();onRoomMsg(m);}; // (checks: what another player did, as a tap of ours)
   ws.onclose=e=>{if(e.code===4404)noRoom(ws);else lostConnection(ws);};
   // heartbeat: the server answers every ping, so a connection that hears nothing for 40 s is dead (a network that dropped
   // without closing it): give it up and reconnect, which brings the room's current state
