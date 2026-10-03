@@ -2,7 +2,7 @@
    The log holds the seeds and every action; the engine rebuilds each position (replay), so a replay is exactly the
    game that was played. Nothing here changes any rules. */
 import { CT, LOG_MAX, hexAt, replayCheck, replay, botNetReady, aiAllowed, aiSetNet, aiById, assert } from '../engine.gen.js';
-import { $, esc, setHTML, setQuery } from './dom.js';
+import { $, esc, setText, setHTML, setQuery } from './dom.js';
 import { S, setS, UI, G, online, clearSelection } from './state.js';
 import { render, resetView } from './frame.js';
 import { toast, banner, closeModal } from './dialogs.js';
@@ -148,14 +148,14 @@ function replayBar(){
     d.querySelectorAll('.rspd button').forEach(b=>b.onclick=()=>{G.replay.speed=+b.dataset.v;store('rspeed',b.dataset.v);render();});
     d.querySelector('#rbA').onclick=()=>{G.replay.side=!G.replay.side;store('rside',G.replay.side?'1':'0');render();};
     const rr=d.querySelector('#rbR');rr.oninput=()=>go(+rr.value);}
-  d.hidden=false;side.hidden=!R.side;$('#app').classList.add('replaying');d.querySelector('#rbTxt').innerHTML=replayPromptHTML()+`<span class="rpos"> · move ${R.i} / ${R.states.length-1} · round ${S.round}</span>`;
-  const n=R.states.length-1,gb=d.querySelector('#rbGo');gb.textContent=R.timer?'❚❚':'▶';gb.setAttribute('aria-label',R.timer?'Pause':'Play');
+  d.hidden=false;side.hidden=!R.side;$('#app').classList.add('replaying');setHTML(d.querySelector('#rbTxt'),replayPromptHTML()+`<span class="rpos"> · move ${R.i} / ${R.states.length-1} · round ${S.round}</span>`);
+  const n=R.states.length-1,gb=d.querySelector('#rbGo');setText(gb,R.timer?'❚❚':'▶');gb.setAttribute('aria-label',R.timer?'Pause':'Play');
   d.querySelectorAll('.rspd button').forEach(b=>b.classList.toggle('on',+b.dataset.v===R.speed));
   const tg=d.querySelector('#rbA'),ok=replayEvalOK();tg.hidden=!ok;if(!ok)side.hidden=true;
   tg.classList.toggle('on',R.side);tg.setAttribute('aria-pressed',R.side?'true':'false');
   const rr=d.querySelector('#rbR');rr.max=n;rr.value=R.i;
   const fig=(v,w)=>String(v).padStart(w,'\u2007'); // (figure spaces: the label keeps one width all through the replay)
-  d.querySelector('#rbPos').textContent=`move ${fig(R.i,String(n).length)} / ${n} · round ${fig(S.round,2)}`;
+  setText(d.querySelector('#rbPos'),`move ${fig(R.i,String(n).length)} / ${n} · round ${fig(S.round,2)}`);
   if(!R.side||!ok)return;
   const ev=replayEval(),pc=v=>v==null?'–':Math.round(v*100)+'%';
   let h=`<div class="rwh">Evaluation</div>`;
