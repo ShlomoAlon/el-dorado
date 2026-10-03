@@ -1,7 +1,9 @@
 /* Card faces: the same markup for the hand, the market, the piles and other players' turn feed. */
-import { CT, SYMNAME, plural } from '../engine.gen.js';
+import { CT, SYMNAME, plural, assert } from '../engine.gen.js';
 import { esc } from './dom.js';
 import { cardBg } from './art.js';
+import { CHECKS } from './debug.js';
+import { afterDrawn } from './frame.js';
 function icon(sym,cls){return `<svg class="${cls||''}" viewBox="-10 -10 20 20"><use href="#i-${sym==='*'?'x':sym}" x="-10" y="-10" width="20" height="20"/></svg>`;}
 const GLYPH={
  transmitter:`<g stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"><path d="M0 -4 L-6 10 M0 -4 L6 10 M-3.6 4 H3.6 M-4.8 7 H4.8"/><path d="M-4.5 -8 Q-7 -4 -4.5 0 M4.5 -8 Q7 -4 4.5 0 M-8 -10.5 Q-12 -4 -8 2.5 M8 -10.5 Q12 -4 8 2.5"/></g><circle cy="-4" r="1.8" fill="#fff"/>`,
@@ -16,14 +18,29 @@ function cardArt(t){
   if(d.c==='p')emb=`<g transform="translate(50 35) scale(2.1)">${GLYPH[t]}</g>`;
   else{const sym=d.s==='*'?'x':d.s;const col={j:'#f2fff5',w:'#f2f9ff',v:'#ffe08a',x:'#8a6a1f'}[sym];
     emb=`<g transform="translate(50 36)"><ellipse cx="0" cy="22" rx="18" ry="3.5" fill="rgba(0,0,0,.25)"/><g filter="none" style="color:${col}"><use href="#i-${sym}" x="-19" y="-19" width="38" height="38" style="color:rgba(0,0,0,.35)" transform="translate(1.5 2)"/><use href="#i-${sym}" x="-19" y="-19" width="38" height="38"/></g></g>`;}
-  return `<svg viewBox="0 0 100 70" preserveAspectRatio="xMidYMid slice">${cardBg(t)}${emb}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 70" preserveAspectRatio="xMidYMid slice">${sprites()}${cardBg(t)}${emb}</svg>`;
 }
+/* a card type's art is drawn once, as an image (its own copy of the page's icon symbols inside), and every card of that
+   type shows that image: art that never changes is never rebuilt as live elements in each card (49 elements a card, laid
+   out and painted again whenever a card appeared: a buy's new cards cost 6-11 ms of a frame). Made and loaded at start,
+   so a card never shows without its art */
+let SPRITES = null;
+const sprites = () => SPRITES ??= new XMLSerializer().serializeToString(document.querySelector('body > svg defs'));
+const ART = new Map(), artImgs = [];
+const artUrl = t => { let u = ART.get(t); if (!u) { u = URL.createObjectURL(new Blob([cardArt(t)], { type: 'image/svg+xml' })); ART.set(t, u); } return u; };
+export function artLoad() { for (const t of Object.keys(CT)) { const i = new Image(); i.src = artUrl(t); artImgs.push(i); } return Promise.all(artImgs.map(i => i.decode())); }
+const CARD_MAX = 30;
+let artChecked = false;
+// (checks: every card art shown is loaded: a card never appears without its art, filled in a frame later)
+function checkArt() { artChecked = false; for (const i of document.querySelectorAll('.c-art img')) if (i.checkVisibility({ visibilityProperty: true, opacityProperty: true })) assert(i.complete && i.naturalWidth > 0, 'view: a card\'s art is loaded before the card shows'); }
 export function cardHTML(t){
   const d=CT[t];let body;
   if(d.c==='p'){const f=d.face||d.txt;body=`<div class="c-txt${f.length>16?' long':''}">${esc(f)}</div>`;}
   else{const sym=d.s==='*'?'*':d.s;body=`<div class="c-icons${d.p>=5?' many':''}">${icon(sym).repeat(d.p)}</div><div class="c-sub">${d.s==='*'?'Any one symbol':plural(d.p,SYMNAME[d.s])}</div>`;}
   const pow=d.c!=='p'?`<div class="c-pow"><b>${d.p}</b>${icon(d.s)}</div>`:'';
   const foot=`<div class="c-foot">${d.cost!=null?`<span class="c-cost">${d.cost}</span>`:'<span></span>'}${d.once?'<span class="c-once">Single use</span>':''}</div>`;
-  return `<div class="cface k-${d.c}"><div class="c-art">${cardArt(t)}</div>${pow}<div class="c-title">${esc(d.n)}</div><div class="c-body">${body}</div>${foot}</div>`;
+  const html = `<div class="cface k-${d.c}"><div class="c-art"><img src="${artUrl(t)}" alt="" draggable="false"></div>${pow}<div class="c-title">${esc(d.n)}</div><div class="c-body">${body}</div>${foot}</div>`;
+  if (CHECKS) { assert((html.match(/<[a-z]/g) || []).length <= CARD_MAX, `view: a card face is a few elements, its art one image drawn once per card type (${t})`); if (!artChecked) { artChecked = true; afterDrawn(checkArt); } }
+  return html;
 }
 export function cardTitle(t){const d=CT[t];let s=d.n;if(d.c!=='p')s+=` — ${d.p} ${d.s==='*'?'joker (machete, paddle or coin)':SYMNAME[d.s]}`;else s+=' — '+d.txt;if(d.once)s+=' Single use: removed from the game after its effect.';if(d.cost!=null)s+=` Cost ${d.cost}.`;return s;}
