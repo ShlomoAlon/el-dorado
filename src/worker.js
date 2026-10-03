@@ -406,7 +406,7 @@ const PLAYER_ACTIONS = ['move', 'native', 'pay', 'action', 'trash', 'transmit', 
 
 export class Room extends DurableObject {
   constructor(ctx, env) {
-    super(ctx, env); this.d = null; this.S = null; this.rec = null;
+    super(ctx, env); this.d = null; this.S = null; this.rec = null; this.queue = Promise.resolve(); this.busy = null;
     E.setAssertMode({ debug: env.DEV_AUTH === '1' });
     ctx.blockConcurrencyWhile(() => this.restore());
   }
@@ -421,9 +421,22 @@ export class Room extends DurableObject {
   /* The room's boundary: each entry point (fetch, webSocketMessage, alarm, webSocketClose) runs in here. A bug (a failed
      assertion, or any exception) stops that one operation: it is logged and stored as a report with the room and its record,
      the room is rebuilt from storage (its last good state; the message that hit the bug is refused), and everyone is sent
-     the state again. If even that fails, the socket that sent the message is closed; the object itself stays up. */
-  async guard(what, ws, f) {
-    try { return await f(); }
+     the state again. If even that fails, the socket that sent the message is closed; the object itself stays up.
+     One event at a time: each waits for the one before it to finish. The runtime holds events back only while the room's
+     own storage is busy, not while it waits on the database or the lobby, so a handler that waits there would otherwise let
+     the next event run in its middle (2026-10-03: Start, sent while Add AI waited on the AI's name, began the game without
+     the AI; an AI's turn ran in the middle of a resignation). */
+  guard(what, ws, f) {
+    const run = this.queue.then(() => this.run(what, ws, f));
+    this.queue = run.then(() => { }, () => { }); // (the queue only orders events: a failure is the caller's, through run, which the runtime receives)
+    return run;
+  }
+  async run(what, ws, f) {
+    let mine = false;
+    try {
+      E.assert(!this.busy, `room: one event at a time (${String(what).slice(0, 60)} began while ${String(this.busy).slice(0, 60)} was still running)`);
+      this.busy = what; mine = true;
+      return await f(); }
     catch (e) {
       console.error('room', this.d && this.d.code, what, e);
       await storeBug(this.env, 'room', 'room:' + (this.d ? this.d.code : '?'), { msg: errText(e), stack: e && e.stack, context: { what, d: this.d, rec: this.rec } });
@@ -434,6 +447,7 @@ export class Room extends DurableObject {
       } catch (e2) { console.error('room: could not recover', e2); if (ws) wsClose(ws, 1011, 'Server error'); }
       return new Response('Server error', { status: 500 });
     }
+    finally { if (mine) this.busy = null; }
   }
   // the game (S) and its board (MAP), rebuilt from the record
   load() { this.S = E.recState(this.rec); }

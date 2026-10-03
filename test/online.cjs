@@ -3,6 +3,7 @@
 //      move, undo, buy, end turn, the turn clock, refused actions, two resignations → game over, ratings, the replay
 //   2. a rated room with two AI seats: the AIs play on the server; after the person resigns they finish the race and
 //      every rating moves by its delta
+//   2b. two people and an AI, Start pressed right after Add AI: the game has all three
 //   3. an unrated room: nobody's rating moves
 //   3b. two games at once: both run to their end side by side, each page hears only its own room
 //   4. room lists (public listed, private not) and quick match (starts when full, or early when everyone asks)
@@ -219,6 +220,16 @@ const T = report('online');
     const lbC = await board(A);
     T.ok('an unrated game changes no rating', lbC['ai-raleigh'].g === lbB['ai-raleigh'].g && lbC['ai-raleigh'].r === lbB['ai-raleigh'].r && lbC[ids[0]].r === lbB[ids[0]].r);
 
+    // ---------- 2b. two people and an AI: the host adds the AI and presses Start at once, before the server has answered the
+    //      AI (owner, 2026-10-03: the game began with the two people only); the game has all three, on both pages
+    { const H = await open('H'), F = await open('F'); await signIn(H, 'Hana'); await signIn(F, 'Ivo');
+      const c = await mkRoom(H, { max: 4, turn: 60, course: 'first', rated: false });
+      await wait(H, () => __ED.NET.room && __ED.NET.room.seats.length === 1);
+      await F.fill('#jCode', c); await F.click('#jGo'); await wait(H, () => __ED.NET.roomS && __ED.NET.roomS.seats.length === 2);
+      await H.click('[data-addai="raleigh"]'); await H.click('#rlStart');
+      const all = await Promise.all([H, F].map(P => wait(P, () => __ED.online() && __ED.S && __ED.S.players.length === 3)));
+      T.ok('two people and an AI, Start pressed right after Add AI: the game has all three', all.every(Boolean), (await Promise.all([H, F].map(P => P.evaluate(() => __ED.S ? __ED.S.players.map(q => q.ai || q.name).join(',') : 'no game')))).join(' | '));
+      await done(H, F); }
     // ---------- 3b. two games at once: each room is its own server object, so games run side by side; each page only ever
     //      hears its own room (checked on every message), and both games reach their end with their AIs racing at once
     const Pa = await open('Pa'), Pb = await open('Pb'); await signIn(Pa, 'Gil'); await signIn(Pb, 'Gwen');
