@@ -15,7 +15,8 @@ async function step() {
   if (E.S !== S || !E.canAct()) return 'not my turn'; // (the game moved on while it thought)
   // every state the page passes through is noted (each call leaves the page drawn, as a frame after a tap would)
   const seen = window.__seen || (window.__seen = { modes: {}, labels: {} });
-  const call = (f, ...x) => { E[f](...x); seen.modes[UI.mode] = 1; for (const e of document.querySelectorAll('#actBtns .bslot:not(.off)')) seen.labels[e.textContent] = 1; };
+  // (each call is a tap of the person's: the page sees it as an input, as it would a real one; a key no handler uses)
+  const call = (f, ...x) => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Unidentified' })); E[f](...x); seen.modes[UI.mode] = 1; for (const e of document.querySelectorAll('#actBtns .bslot:not(.off)')) seen.labels[e.textContent] = 1; };
   const stackOf = t => { let i = S.market.findIndex(s => s.t === t && s.n > 0); if (i >= 0) return ['m', i]; i = S.reserve.findIndex(s => s.t === t && s.n > 0); return i >= 0 ? ['r', i] : null; };
   const piece = pi => { if (UI.piece !== pi) call('onPiece', me, pi); };
   const pick = id => { if (UI.mode === 'card' && UI.card !== id) call('cancelMode'); if (!(UI.mode === 'card' && UI.card === id)) { if (S.turn.active && S.turn.active.id === id) call('onPlayCard', id); else call('onHandCard', id); } };
