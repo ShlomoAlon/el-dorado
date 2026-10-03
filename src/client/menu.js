@@ -78,9 +78,9 @@ function menuOpen(screen){watchFlash();
   // (the page opens the dialog as plain HTML, before any script: already on screen, it only takes the focus)
   if(d.open)MENU.f.focus({preventScroll:true});
   else{d.show();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});
-    // opened during a game (the Menu button): it comes in like a window, its backdrop fading in and the menu rising into
-    // place, a little longer than a window's (owner, 2026-10-03: clean and noticeable; the page's first menu stays instant)
-    if(ig&&!reduceMotion){d.animate([{opacity:0},{opacity:1}],{duration:300,easing:'ease'});MENU.f.animate([{transform:'translateY(14px) scale(.98)',opacity:0},{transform:'none',opacity:1}],{duration:450,easing:EASE});}}
+    // opened during a game (the Menu button): it comes in like a window, fading in and rising into place with a window's
+    // timing (owner, 2026-10-03; the page's first menu stays instant)
+    if(ig&&!reduceMotion){d.animate([{opacity:0},{opacity:1}],{duration:250,easing:'ease'});MENU.f.animate([{transform:'translateY(14px) scale(.98)',opacity:0},{transform:'none',opacity:1}],{duration:350,easing:EASE});}}
   if(CHECKS)requestAnimationFrame(()=>requestAnimationFrame(menuReach));
   render(); // (the layer that dims the game follows: dialogs.js coverPart)
 }
