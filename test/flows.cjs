@@ -130,6 +130,12 @@ const T = report('flows');
   await p.click('#bOk');
   await check('answered: the market opens again', () => window.__ED.UI.mode === 'idle' && !window.__ED.S.turn.pending && !document.querySelector('#market .mslot.no'));
   await check('answered: the heading goes, the board comes back', () => document.querySelector('#choice').hidden && !document.querySelector('#vp').classList.contains('dim'));
+  // a change of layout on purpose (a replay opening: its dock, the Exit replay button), drawn by a slow frame (a busy
+  // machine, a slow phone): the frame comes late, but what it moves is still that change, not a jump
+  await settle(p); await p.mouse.move(1, 1); await p.waitForTimeout(700); // (away from the last input: a shift right after one is excused anyway)
+  await S(l => { window.__ED.openReplay(l, null); const t = performance.now(); while (performance.now() - t < 900); }, log);
+  await check('a replay opened by a slow frame: its layout change is the expected one', () => !!window.__ED.G.replay && document.querySelector('#menuBtn').textContent === 'Exit replay');
+  await settle(p);
   T.ok('no page errors', !p.errors.length, p.errors.slice(0, 5).join(' | '));
   await b.close(); srv.close(); T.done();
 })().catch(e => { console.error(e); process.exit(1); });
