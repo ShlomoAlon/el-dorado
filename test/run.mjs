@@ -9,26 +9,32 @@ import fs from 'node:fs';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), arg = process.argv.slice(2), full = arg.includes('--full'), online = full || arg.includes('--online');
 const NODE_PATH = [process.env.NODE_PATH, execSync('npm root -g').toString().trim()].filter(Boolean).join(path.delimiter);
 const t0 = Date.now(); execSync('node build.mjs', { cwd: root, stdio: 'inherit' });
-const run = ([name, cmd]) => new Promise(res => { const t = Date.now(); let out = '';
-  const c = spawn(cmd, { cwd: root, shell: true, env: { ...process.env, NODE_PATH } });
+/* every test has a time limit that matches when it should end: what it normally takes in this run (normal: seconds, side by
+   side with the others), half as much again for a busy machine (runs swing by about a fifth), and 5 s. A test past it has
+   hung: it is stopped (its whole process group: browsers, servers) and fails with what it printed so far, instead of the run
+   waiting (owner, 2026-10-03: never run anything without a timer that roughly matches when it's supposed to end) */
+const run = ([name, cmd, normal]) => new Promise(res => { const t = Date.now(), limit = Math.round(1.5 * normal + 5); let out = '', hung = false;
+  const c = spawn(cmd, { cwd: root, shell: true, detached: true, env: { ...process.env, NODE_PATH } });
   c.stdout.on('data', d => out += d); c.stderr.on('data', d => out += d);
-  c.on('close', code => res({ name, code, out, s: ((Date.now() - t) / 1000).toFixed(0) })); });
+  const timer = setTimeout(() => { hung = true; try { process.kill(-c.pid, 'SIGKILL'); } catch (e) { /* expected: it exited just now */ } }, limit * 1000);
+  c.on('close', code => { clearTimeout(timer); if (hung) out += `\nFAIL ${name}: still running after ${limit} s (normally about ${normal} s): stopped as hung; its output so far is above\n`;
+    res({ name, code: hung ? 'hung' : code, out, s: ((Date.now() - t) / 1000).toFixed(0) }); }); });
 const res = await Promise.all([
-  ['lint', 'node test/lint.mjs'],
-  ['rules', 'node test/rules.test.mjs'],
-  ['engine', 'node test/engine.test.mjs' + (full ? '' : ' --quick')],
-  ['layout', 'node test/layout.cjs' + (full ? '' : ' --quick')],
-  ['flows', 'node test/flows.cjs'],
-  ['taps', 'node test/taps.cjs'],
-  ['play', 'node test/play.cjs' + (full ? ' --games 6' : '')], // whole games through the UI, every assertion on (coverage)
-  ['menus', 'node test/menus.cjs'],
-  ['worker', 'npx wrangler deploy --dry-run --outdir /tmp/wdry'],
-  ...(online ? [['online', 'node test/online.cjs']] : []),
+  ['lint', 'node test/lint.mjs', 15],
+  ['rules', 'node test/rules.test.mjs', 2],
+  ['engine', 'node test/engine.test.mjs' + (full ? '' : ' --quick'), full ? 120 : 50],
+  ['layout', 'node test/layout.cjs' + (full ? '' : ' --quick'), full ? 130 : 60],
+  ['flows', 'node test/flows.cjs', 40],
+  ['taps', 'node test/taps.cjs', 15],
+  ['play', 'node test/play.cjs' + (full ? ' --games 6' : ''), full ? 180 : 80], // whole games through the UI, every assertion on (coverage)
+  ['menus', 'node test/menus.cjs', 20],
+  ['worker', 'npx wrangler deploy --dry-run --outdir /tmp/wdry', 20],
+  ...(online ? [['online', 'node test/online.cjs', 290]] : []),
 ].map(run));
 // the timing measurements (frame costs, wheel latency) need a quiet machine: they run once everything else has finished
-res.push(await run(['firstpaint', 'node test/firstpaint.cjs'])); // (timed: run alone) the start screen drawn within 100 ms of the HTML arriving
-res.push(await run(['frames', 'node test/frames.cjs']));
-if (full) res.push(await run(['render', 'node test/render.cjs']));
+res.push(await run(['firstpaint', 'node test/firstpaint.cjs', 12])); // (timed: run alone) the start screen drawn within 100 ms of the HTML arriving
+res.push(await run(['frames', 'node test/frames.cjs', 10]));
+if (full) res.push(await run(['render', 'node test/render.cjs', 30]));
 for (const r of res) { const last = r.out.trim().split('\n').filter(l => l.trim()).pop() || ''; console.log(`${r.code ? 'FAIL' : 'ok  '} ${r.name.padEnd(7)} ${String(r.s).padStart(3)} s  ${last.slice(0, 110)}`); }
 // every test's whole output is kept (test-results/<name>.log); for a failing test, every failure is printed in full, wherever
 // it came in the output, with the indented detail lines under it (the end of the output only when a test crashed before
