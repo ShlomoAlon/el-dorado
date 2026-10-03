@@ -39,12 +39,15 @@ export function menuInit(){
   MENU.f.addEventListener('change',menuChange);
   MENU.f.addEventListener('click',menuClick);
   mq('#jCode').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();mq('#jGo').click();}});
-  MENU.dlg.addEventListener('cancel',e=>{e.preventDefault();if(menuDismissible())menuClose();}); // Esc
+  // the menu is opened with show(), never as a modal (showModal makes the whole page inert: every element, the board's
+  // thousands included, restyled each time it opens and closes, a 15-20 ms frame); it covers the screen, so a click
+  // never reaches the game, and Esc is ours
+  MENU.dlg.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(menuDismissible())menuClose();}});
   MENU.dlg.addEventListener('click',e=>{if(e.target===MENU.dlg&&menuDismissible())menuClose();}); // the backdrop
   setupSync();
   const d=MENU.dlg;
   if(document.documentElement.classList.contains('resume'))d.close(); // a saved game or a link opens instead (boot decides)
-  else if(d.open){d.close();d.showModal();MENU.f.focus({preventScroll:true});}
+  else if(d.open)MENU.f.focus({preventScroll:true});
 }
 const menuDismissible=()=>inGame()&&MENU.screen!=='room';
 const onlineGame=()=>inGame()&&online(); // an online game in progress: one game at a time, so the menu only offers going back to it
@@ -72,10 +75,9 @@ function menuOpen(screen){watchFlash();
   mq('#acct').classList.toggle('inroom',screen==='room');
   if(MENU.screen!==screen){for(const s of mqa('section[data-screen]'))s.hidden=s.dataset.screen!==screen;MENU.screen=screen;MENU.f.scrollTop=0;}
   clearTimeout(MENU.closeT);d.classList.remove('closing');document.documentElement.classList.remove('resume');
-  // the page opens the dialog as plain HTML (before any script); the first time, it becomes a modal dialog (focus, Esc),
-  // looking exactly the same (no fade: it is already on screen)
-  if(d.open&&!d.matches(':modal')){d.close();d.showModal();MENU.f.focus({preventScroll:true});}
-  else if(!d.open){d.showModal();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});
+  // (the page opens the dialog as plain HTML, before any script: already on screen, it only takes the focus)
+  if(d.open)MENU.f.focus({preventScroll:true});
+  else{d.show();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});
     // opened during a game (the Menu button): it comes in like a window, its backdrop fading in and the menu rising into
     // place, a little longer than a window's (owner, 2026-10-03: clean and noticeable; the page's first menu stays instant)
     if(ig&&!reduceMotion){d.animate([{opacity:0},{opacity:1}],{duration:300,easing:'ease'});MENU.f.animate([{transform:'translateY(14px) scale(.98)',opacity:0},{transform:'none',opacity:1}],{duration:450,easing:EASE});}}

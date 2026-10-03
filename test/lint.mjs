@@ -27,6 +27,10 @@ const SKIP = /console\.log\([^)]*\b(skip|skipped|skipping|not checked|not tested
 const BYHAND = /\.(newPage|newContext)\(/;
 for (const f of scan) if (f.includes(path.sep + 'test' + path.sep) && !f.endsWith(path.sep + 'lib.cjs')) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (BYHAND.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a test page opened by hand: use openPage (test/lib.cjs), or its failed assertions go unseen`); } });
 for (const f of scan) if (f.includes(path.sep + 'test' + path.sep)) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (SKIP.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a test that skips its own check: make the setup it needs, or fail`); } });
+// no modal dialogs in the page: showModal makes the whole page inert, so every element (the board's thousands) is restyled
+// each time one opens and closes, a 15-20 ms frame (docs/POSTMORTEMS: the menu's slow entrance); open with show()
+const MODAL = /\.showModal\(/;
+for (const f of scan) if (f.includes(path.sep + 'client' + path.sep)) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (MODAL.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a modal dialog restyles the whole page: open it with show()`); } });
 for (const f of scan) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (SILENT.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a catch that drops the error: name the failure it expects, or handle it`); } });
 if (!ESLint) { console.log('lint: ESLint is not installed (npm i -g eslint): the module check could not run'); process.exit(1); }
 const files = []; const walk = d => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) walk(p); else if (/\.js$/.test(f.name) && !/^ui_/.test(f.name)) files.push(p); } }; walk(dir);
