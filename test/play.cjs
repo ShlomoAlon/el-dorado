@@ -15,9 +15,10 @@ const SIZES = [['owner', { width: 1536, height: 639 }, 1.25], ['phone', { width:
 const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
 // the CPU a whole game may use (owner, 2026-10-03: a ratchet on resources): every process of game 1's own browser, from the
 // first move to the end, at most CPU_MS per action of the game (a longer deal is a longer game: the budget grows with it).
-// Measured 2026-10-03: 202 ms per action (33.5 core-s for 166 actions, 43.8 for 217), with animations 20x faster. Lower it
-// as the game gets cheaper; never raise it to pass: find what got slower
-const CPU_MS = 240;
+// Measured 2026-10-03: 202 ms per action (33.5 core-s for 166 actions, 43.8 for 217), with animations 20x faster; 131 once
+// the explorers and the board's effects kept their own layers. Lower it as the game gets cheaper; never raise it to pass:
+// find what got slower
+const CPU_MS = 160;
 
 
 (async () => {

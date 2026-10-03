@@ -147,7 +147,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 
 /* ---------- board */
 #vp{position:absolute;inset:0;overflow:hidden;background:radial-gradient(ellipse 80% 70% at 45% 42%,#18291f 0%,#0e1a15 55%,#080f0c 100%);touch-action:none;cursor:grab}
-#vp::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45) 100%)}
+#vp::after{content:"";position:absolute;inset:0;pointer-events:none;will-change:transform;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45) 100%)}
 #vp.drag{cursor:grabbing}
 /* the board layer: always composited (see applyView); #bscale carries the scale baked in once a zoom settles */
 #stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
@@ -163,7 +163,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .bl-badge.tgt .bl-halo{stroke:var(--gold2);stroke-width:3}
 .bl-badge.hot .bl-halo{stroke-width:5;animation:none}
 /* explorers (board/pieces.js): HTML over the board, in board units; a move is a compositor animation */
-#pieces,#bfx{position:absolute;left:0;top:0;pointer-events:none}
+#pieces,#bfx{position:absolute;left:0;top:0;pointer-events:none;will-change:transform} /* (each a layer of its own, always: an explorer's walk is composited, and without them Chrome splits the board into new layers for each walk and merges them after, drawing the whole board again twice a move) */
 .piece{position:absolute;left:0;top:0;width:0;height:0}
 .piece>div{position:absolute}.piece svg{display:block;overflow:visible}
 .psel{opacity:0}.piece.sel .psel{opacity:1}
