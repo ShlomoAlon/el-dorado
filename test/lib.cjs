@@ -39,12 +39,30 @@ async function startServer() {
   stop(); throw new Error('wrangler dev did not start:\n' + out.slice(-2000));
 }
 
+/* a test page. The first page error or failed assertion stops the whole test there and then (owner, 2026-10-03: a failure
+   is reported the moment it happens; nothing runs on past it): it prints the error with its stack, the page's own log
+   (debug.js), and saves a screenshot (test-results/<name>-failed.png), then exits failing. allow: errors a test causes on
+   purpose (a regular expression), which only count as page.errors */
 async function openPage(browser, name, opts = {}) {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...opts }), page = await ctx.newPage();
+  const { allow, ...ctxOpts } = opts;
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...ctxOpts }), page = await ctx.newPage();
   page.errors = [];
-  page.on('pageerror', e => page.errors.push(`${name}: ${e.message}` + (process.env.STACK ? '\n' + e.stack : '')));
+  let stopping = false;
+  const stop = async (msg, stack) => {
+    if (stopping) return; stopping = true;
+    const out = [`FAIL ${name}: the page failed, the test stops here`, '  ' + msg, ...String(stack || '').split('\n').slice(1, 12).map(l => '  ' + l.trim())];
+    const log = await Promise.race([page.evaluate(() => window.__ED && window.__ED.diagLog ? window.__ED.diagLog().slice(-30) : []).catch(() => [] /* expected: the page is gone or busy; the log is a help, the failure is reported anyway */), new Promise(r => setTimeout(() => r([]), 2000))]);
+    if (log.length) out.push('  the page\'s log (last lines):', ...log.map(l => '    ' + l));
+    const shot = path.join(ROOT, 'test-results', name.replace(/[^\w.-]+/g, '_') + '-failed.png');
+    fs.mkdirSync(path.dirname(shot), { recursive: true });
+    if (await Promise.race([page.screenshot({ path: shot }).then(() => true, () => false), new Promise(r => setTimeout(() => r(false), 3000))])) out.push('  screenshot: ' + path.relative(ROOT, shot));
+    console.log(out.join('\n'));
+    process.exit(1);
+  };
+  const seen = (msg, stack) => { page.errors.push(`${name}: ${msg}`); if (!(allow && allow.test(msg))) stop(msg, stack); };
+  page.on('pageerror', e => seen(e.message, e.stack));
   // (Google's sign-in script and the fonts can't load in the test sandbox: not the page's errors)
-  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_CERT|ERR_TUNNEL|gsi|fonts/.test(m.text())) page.errors.push(`${name} console: ${m.text()}`); });
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_CERT|ERR_TUNNEL|gsi|fonts/.test(m.text())) seen('console: ' + m.text()); });
   return page;
 }
 /* nothing finite is animating (card flights, explorer moves, fades); infinite effects (a low clock's pulse) don't count */

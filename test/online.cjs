@@ -13,7 +13,7 @@ const T = report('online');
 (async () => {
   const srv = await startServer(), b = await chromium.launch(), pages = [];
   try {
-    const open = async name => { const p = await openPage(b, name); pages.push(p); await p.goto(srv.url); await p.waitForFunction(() => window.__ED); return p; };
+    const open = async name => { const p = await openPage(b, name, { allow: /self-test/ }); pages.push(p); await p.goto(srv.url); await p.waitForFunction(() => window.__ED); return p; };
     const signIn = async (p, name) => {
       await p.click('#sMode label[data-v="online"]'); await p.waitForSelector('#devName', { state: 'visible' });
       await p.fill('#devName', name); await p.click('#devGo');
