@@ -122,7 +122,7 @@ function update() {
   // what each card is doing: selected, picked to pay or keep, discarded for a space, dimmed (can't be used now), in play
   const act = S.turn.active, acting = canAct(), rn = G.replay && replayNext(), rx = rn && rn[1];
   for (const id of want) {
-    const el = cardEls.get(id); let dim = false;
+    const el = cardEls.get(id); let dim = !acting && !G.replay; // (not this player's turn: the hand looks as it does for a card that can't be played, owner 2026-10-03)
     if (UI.mode === 'transmit') dim = id !== UI.card;
     if (acting && (UI.mode === 'idle' || UI.mode === 'card') && UI.card !== id) dim = !cardUsable(id);
     el.classList.toggle('sel', (UI.mode === 'card' || UI.mode === 'transmit') && UI.card === id);
