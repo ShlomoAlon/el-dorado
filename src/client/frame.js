@@ -16,17 +16,18 @@ export function render() { gen++; if (!raf) raf = requestAnimationFrame(flush); 
 export const changeGen = () => gen;
 // a frame is due: the state has moved on and the page doesn't show it yet (checks judge the page only when it is up to date)
 export const frameDue = () => !!raf;
-import { diag, DEBUG, CHECKS, frameMark, watchFlash } from './debug.js';
+import { diag, CHECKS, frameMark, watchFlash } from './debug.js';
 import { assert } from '../engine.gen.js';
 import { failed } from './boundary.js';
 export function flush() {
   if (raf) { cancelAnimationFrame(raf); raf = 0; }
-  const t0 = DEBUG ? performance.now() : 0;
+  const t1 = CHECKS ? performance.now() : 0;
   safe(frameMark, 'checks'); // (checks: what changed before this frame is judged apart from it)
-  drawing = true; try { for (const p of parts) safe(() => p.update(), p.name); } finally { drawing = false; }
-  for (const f of afterQ.splice(0)) safe(f, 'after');
+  let slow = '', slowMs = 0; // (checks: the slowest part of this frame, named when the frame is slow)
+  drawing = true; try { for (const p of parts) { const t = CHECKS ? performance.now() : 0; safe(() => p.update(), p.name); if (CHECKS) { const d = performance.now() - t; if (d > slowMs) { slowMs = d; slow = p.name; } } } } finally { drawing = false; }
+  const t2 = CHECKS ? performance.now() : 0; for (const f of afterQ.splice(0)) safe(f, 'after'); const t3 = CHECKS ? performance.now() : 0;
   safe(frameMark, 'checks');
-  if (DEBUG) { const ms = performance.now() - t0; if (ms > 8) diag(`update ${ms.toFixed(0)} ms`); }
+  if (CHECKS) { const t4 = performance.now(), ms = t4 - t1; if (ms > 8) diag(`update ${ms.toFixed(0)} ms (parts ${(t2 - t1).toFixed(0)}, slowest ${slow} ${slowMs.toFixed(0)}; after ${(t3 - t2).toFixed(0)}; checks ${(t4 - t3).toFixed(0)})`); }
 }
 export function after(f) { afterQ.push(f); render(); }
 /* checks that measure the page run once the frame showing it has been drawn, in a task right after it: its layout is
