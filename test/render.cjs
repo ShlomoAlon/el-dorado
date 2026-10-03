@@ -40,7 +40,10 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     const info = `edge energy mid-zoom ${sm.toFixed(2)}, settled ${sa.toFixed(2)}, fresh ${sc.toFixed(2)}`;
     if (tr.bscale === null) console.log(`n/a  zoom baked in once it settles: no #bscale in this build (${info})`);
     else { const ls = +((tr.stage.match(/scale\(([\d.]+)\)/) || [])[1] || 1), bs = +((tr.bscale.match(/scale\(([\d.]+)\)/) || [])[1] || 1);
-      ok('zoom baked in once it settles', Math.abs(ls - 1) <= .01 && bs > 1.2, `layer scale ${ls}, board scale ${bs} (${info})`); }
+      ok('zoom baked in once it settles', Math.abs(ls - 1) <= .01 && bs > 1.2, `layer scale ${ls}, board scale ${bs} (${info})`);
+      // the bake is a sharp redraw: the settled board is (nearly) as sharp as one drawn afresh (owner, 2026-10-03: a little
+      // softer at most); seen only where the layer rests on whole pixels (otherwise the screenshot redraws it)
+      ok('the settled zoom is as sharp as a fresh redraw', sa >= sc * .9, `edge energy settled ${sa.toFixed(2)}, fresh ${sc.toFixed(2)}`); }
     await p.close(); }
   { // 3. wheel latency
     const p = await open(); const cdp = await p.context().newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); await p.mouse.move(600, 420);

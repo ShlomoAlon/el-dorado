@@ -24,13 +24,30 @@ function applyView() {
   if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; });
   scheduleSettle();
 }
-function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 250); }
+function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 250); if (CHECKS) { clearTimeout(restT); restT = setTimeout(restCheck, 700); } }
+/* at rest the board's layer sits on whole device pixels: the layer is a finished picture, and one placed between pixels is
+   blended by the graphics card and looks soft (owner, 2026-10-03, on a 4K screen); half a device pixel at most, unseen */
+const snap = () => { const d = devicePixelRatio; view.x = Math.round(view.x * d) / d; view.y = Math.round(view.y * d) / d; };
 function settle() {
-  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
+  if (cam.pointers || gliding) { scheduleSettle(); return; }
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
+    snap(); if (Math.abs(view.s / baked - 1) >= .005) { diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`;
+      // the one sharp redraw: Chrome keeps a will-change layer at the resolution it chose before (so the baked zoom stayed
+      // soft, owner 2026-10-03), and picks it again only when the hint goes and comes back: one frame without it, for
+      // every layer the zoom scales (the board's, and the pieces' and effects' inside it)
+      const ls = [stage(), $('#pieces'), $('#bfx')]; for (const e of ls) e.style.willChange = 'auto'; requestAnimationFrame(() => { for (const e of ls) e.style.willChange = ''; }); }
+    stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
   });
+}
+/* checks: once the board is at rest (no gesture or glide, settled), its layer sits on whole device pixels, read from the
+   transform it has (whoever wrote it) */
+let restT = 0;
+function restCheck() {
+  if (cam.pointers || gliding) { restT = setTimeout(restCheck, 300); return; }
+  const m = stage().style.transform.match(/translate3d\(([-\d.e]+)px,\s*([-\d.e]+)px/), d = devicePixelRatio; if (!m) return;
+  const off = v => Math.abs(v * d - Math.round(v * d));
+  assert(off(+m[1]) < .01 && off(+m[2]) < .01, `view: the board at rest sits on whole device pixels (at ${m[1]}, ${m[2]} css px, ${d} device px each)`);
 }
 /* the part of the game area the board should fill: under the prompt, left of the market, above the hand */
 function safeRect() {
@@ -62,7 +79,7 @@ export function fit(anim) {
   }
   cam.fitZoomed = view.s > whole * 1.01;
   // not animated: drawn sharp at this scale right away (no blurry frame, no later redraw once it's on screen)
-  if (anim) glide(); else { baked = view.s; $('#bscale').style.transform = `scale(${baked})`; }
+  if (anim) glide(); else { snap(); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; }
   applyView(); cam.userZoomed = false;
   document.documentElement.classList.add('boardready'); // the game area may show now (with its fonts): never an unfitted board
 }
