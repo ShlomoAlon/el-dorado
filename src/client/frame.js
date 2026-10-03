@@ -29,6 +29,10 @@ export function flush() {
   if (DEBUG) { const ms = performance.now() - t0; if (ms > 8) diag(`update ${ms.toFixed(0)} ms`); }
 }
 export function after(f) { afterQ.push(f); render(); }
+/* checks that measure the page run once the frame showing it has been drawn, in a task right after it: its layout is
+   done then, so measuring costs nothing. (In after() they made the browser lay the page out early, inside the frame:
+   up to 10 ms of a frame in the tests, which the player's browser never pays) */
+export function afterDrawn(f) { requestAnimationFrame(() => { const c = new MessageChannel(); c.port1.onmessage = () => safe(f, 'check'); c.port2.postMessage(0); }); }
 export function resetView() { for (const p of parts) if (p.reset) safe(() => p.reset(), p.name + ' reset'); render(); }
 /* checks (debug and tests): the page is up to date. Four times a second and after every input, when no frame is due, one extra frame is drawn:
    with nothing new it must change nothing. If it changes something, the state had moved on without anyone asking for a

@@ -4,7 +4,7 @@ import { CT, SYMNAME, assert } from '../engine.gen.js';
 import { $, esc, setText, setHTML, setStyle, show, reduceMotion, EASE } from './dom.js';
 import { S, UI, NET, G, cur, canAct, online, covered, turnKey } from './state.js';
 import { onGeo, geo } from './geometry.js';
-import { render, after } from './frame.js';
+import { render, afterDrawn } from './frame.js';
 import { CHECKS } from './debug.js';
 import { showGameOver, showPlayer } from './dialogs.js';
 import { showSetup } from './menu.js';
@@ -38,7 +38,7 @@ function updateHeader(){
    game, and the message, written as a whole when it changes (a new message never redraws or moves the timer) */
 /* the message: one line (owner, 2026-10-01), so a new message never moves what's below it */
 function say(html){const M=$('#pmsg');if(M.__h===html)return;setHTML(M,html);
-  if(CHECKS)after(()=>assert(M.scrollWidth<=M.clientWidth+1,'view: the prompt\'s message fits on one line ('+M.textContent+')'));}
+  if(CHECKS)afterDrawn(()=>assert(M.scrollWidth<=M.clientWidth+1,'view: the prompt\'s message fits on one line ('+M.textContent+')'));}
 /* every turn button: its words and its slot (s3: right, above the big one's edge; s2: left; p: the big one). Labels are
    data, so every one is checked against its slot (checkLabels), not only those a test happens to show */
 const BTN={undo:{t:'Undo',s:'s3',id:'bUndo'},cards:{t:'Cards',s:'s3',id:'bMkt'},keepAll:{t:'Keep all',s:'s3',id:'bAll'},keepNone:{t:'None',s:'s3',id:'bAll'},
@@ -103,7 +103,7 @@ function checkLabels(B){
 function btnWire(B,btns){
   if(!B.firstChild)B.innerHTML=SLOTS.map(s=>`<button type="button" class="btn bslot ${s}${s==='p'?' pri big':''}"></button>`).join('');
   const on=btns.length>0;if(B.hidden===on)B.hidden=!on;
-  if(CHECKS&&on&&!labelsChecked){labelsChecked=true;after(()=>checkLabels(B));}
+  if(CHECKS&&on&&!labelsChecked){labelsChecked=true;afterDrawn(()=>checkLabels(B));}
   for(const s of SLOTS){
     const el=B.querySelector('.'+s),here=btns.filter(x=>x.s===s),b=here[0];
     assert(here.length<=1,'turn buttons: one button per slot');

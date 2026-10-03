@@ -35,8 +35,12 @@ const expected = t => t >= expectedAt - 600 && t <= Math.max(expectedAt + 600, e
 let flashEnd = 0, flashOn = false, flashSide = null, flashAt = 0, leftAt = null, flashLeft = 0, lastInput = -1e9, flashBy = '', prevT = 0;
 // (how dark: the layers that cover the game, [data-dims], by their opacity; the board stepped back, [data-fades], by how faded it is)
 let darkBy = ''; // (which layer was darkest: named in a failure)
-const darkness = () => { let l = 0; darkBy = ''; for (const e of document.querySelectorAll('[data-dims],[data-fades]')) { if (!e.isConnected || !e.checkVisibility()) continue; const o = +getComputedStyle(e).opacity, d = e.hasAttribute('data-dims') ? o : 1 - o; if (d > l) { l = d; darkBy = '#' + e.id; } } return l; };
+let dimmers = null; // (the layers that can dim the game: fixed in the page's markup, found once)
+const darkness = () => { let l = 0; darkBy = ''; for (const e of dimmers || (dimmers = [...document.querySelectorAll('[data-dims],[data-fades]')])) { if (!e.isConnected || !e.checkVisibility()) continue; const o = +getComputedStyle(e).opacity, d = e.hasAttribute('data-dims') ? o : 1 - o; if (d > l) { l = d; darkBy = '#' + e.id; } } return l; };
 // (a change is the player's if a tap, a key or a server message came after the dimming started to move: two events, two changes)
+// (read once a frame has been drawn, in a task right after it: the styles are up to date then, so reading an opacity costs
+// nothing; read during a frame, it made the browser work out the styles early, up to 10 ms of a frame in the tests)
+const afterFrame = f => requestAnimationFrame(() => { const c = new MessageChannel(); c.port1.onmessage = f; c.port2.postMessage(0); });
 function flashStep() {
   const t = performance.now(), l = darkness(), side = l >= .6;
   if (l >= .9 || l <= .1) leftAt = null; else if (leftAt === null) leftAt = t; // (when it left a settled level)
@@ -46,14 +50,14 @@ function flashStep() {
     // busy machine draws few frames, and a crossing seen late must not make a long pause look short)
   if (side) flashBy = darkBy; prevT = t;
   flashSide = side;
-  if (t < flashEnd) requestAnimationFrame(flashStep); else { flashOn = false; flashSide = null; }
+  if (t < flashEnd) afterFrame(flashStep); else flashOn = false; // (the level it ends on stays known: nothing changes it unwatched)
 }
 /* checks: something from outside the page changed it, like a tap: a message from the server (another player acted, the game
    started). A change it makes is not the page's own flash */
 export function outsideEvent() { if (CHECKS) lastInput = performance.now(); }
 export function watchFlash() {
   if (!CHECKS) return; flashEnd = performance.now() + 1000; if (flashOn) return;
-  flashOn = true; flashSide = darkness() >= .6; flashAt = -1e9; leftAt = null; prevT = performance.now(); requestAnimationFrame(flashStep);
+  flashOn = true; flashAt = -1e9; leftAt = null; prevT = performance.now(); afterFrame(flashStep); // (flashSide: the level last seen)
 }
 export function checksInit(during) {
   if (CHECKS) for (const t of ['pointerdown', 'keydown']) addEventListener(t, () => { lastInput = performance.now(); }, true);

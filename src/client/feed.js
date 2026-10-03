@@ -14,7 +14,7 @@ import { CT, SYMNAME, plural, fmt, assert } from '../engine.gen.js';
 import { $, esc, setHTML, reduceMotion } from './dom.js';
 import { S, MAP, NET, G, online, isAI, passing } from './state.js';
 import { toast } from './dialogs.js';
-import { render, after } from './frame.js';
+import { render, after, afterDrawn } from './frame.js';
 import { cardHTML } from './cards.js';
 import { flyIn } from './hand.js';
 import { marketRectOf } from './market.js';
@@ -195,7 +195,7 @@ function update(){
   else{const was=ROW.key,added=stepsInto(row,t);ROW.key=t.key;
     // a watched player's new steps fly in (out of their chip; a card bought or taken, out of the market), not a turn the page opened on
     const fly=watched&&was!==null&&added.length&&!reduceMotion;if(fly)for(const a of added)a.el.classList.add('new');
-    if(added.length)after(()=>{if(CHECKS)checkSize(F);if(fly)feedFly(added,t.pl);});}
+    if(added.length&&CHECKS)afterDrawn(()=>checkSize(F));if(fly)after(()=>feedFly(added,t.pl));}
   F.hidden=false;
 }
 /* the newest turn on show in the row (for pointing at its steps) */
