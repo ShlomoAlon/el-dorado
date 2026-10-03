@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="El Dorado">
 <link rel="preload" href="app.d87ed2e7ef.css" as="style">
-<link rel="preload" href="app.788ecf5c0b.js" as="script">
+<link rel="preload" href="app.4eb336d563.js" as="script">
 </head>
 <body>
 <title>El Dorado Expedition</title>
@@ -76,7 +76,7 @@
 <!-- the menu: one native dialog; every screen is written here once and shown with the hidden attribute. Choices are
      native form controls (they keep their own state); ui_menu.js reads them and fills only the data lists. -->
 <script>/* a saved game or a room / replay link opens straight into it: no start screen first */try{if(localStorage.getItem('eldorado-game-v2')||/[?&](room|replay)=/.test(location.search))document.documentElement.classList.add('resume')}catch(e){}</script>
-<dialog id="menu" aria-label="Menu" open>
+<dialog id="menu" aria-label="Menu" data-dims open>
 <form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
   <div class="acct" id="acct"></div>
   <div class="ingame" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn pri" id="sBack">Back to game</button></span></div>
@@ -141,6 +141,6 @@
 
 
 
-<script>requestAnimationFrame(()=>requestAnimationFrame(()=>{const c=document.createElement('link'),s=()=>{const j=document.createElement('script');j.src='app.788ecf5c0b.js';document.body.appendChild(j)};c.rel='stylesheet';c.href='app.d87ed2e7ef.css';c.onload=s;c.onerror=s;document.head.appendChild(c)}))</script>
+<script>requestAnimationFrame(()=>requestAnimationFrame(()=>{const c=document.createElement('link'),s=()=>{const j=document.createElement('script');j.src='app.4eb336d563.js';document.body.appendChild(j)};c.rel='stylesheet';c.href='app.d87ed2e7ef.css';c.onload=s;c.onerror=s;document.head.appendChild(c)}))</script>
 </body>
 </html>

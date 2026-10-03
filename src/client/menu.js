@@ -12,7 +12,7 @@ import { aiKick, aiNetLoad } from './ai.js';
 import { api, gsiMount, signOut, signedIn, joinRoom, newRoom, roomMade, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, roomSend, exitOnline, resignOnline } from './online.js';
 import { loadReplayId, openReplay } from './replay.js';
 import { load, store } from './store.js';
-import { diag, CHECKS } from './debug.js';
+import { diag, CHECKS, watchCover } from './debug.js';
 /* course list: official routes first; 'random' picks one of them */
 function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:courseById(id);}
 // (a room's course, as the server sends it: one this page doesn't know yet, from a newer version, shows as the first)
@@ -59,7 +59,7 @@ function menuReach(){
   if(!row||!row.offsetHeight)return;const r=row.getBoundingClientRect(),f=MENU.f.getBoundingClientRect();
   assert(r.top>=f.top-1&&r.bottom<=f.bottom+1,"view: a menu screen's actions are on screen without scrolling ("+MENU.screen+': '+Math.round(r.bottom-f.bottom)+' px below)');
 }
-function menuOpen(screen){
+function menuOpen(screen){watchCover();
   $('#overlay').innerHTML=''; // one window at a time: the menu replaces results, rules or a pile (never left underneath it)
   const d=MENU.dlg,ig=inGame(),rs=ig?resignSeat():-1;
   mq('#ingame').hidden=!ig;
@@ -77,7 +77,7 @@ function menuOpen(screen){
   else if(!d.open){d.showModal();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});}
   if(CHECKS)requestAnimationFrame(()=>requestAnimationFrame(menuReach));
 }
-export function menuClose(){const d=MENU.dlg;document.documentElement.classList.remove('resume');if(!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
+export function menuClose(){watchCover();const d=MENU.dlg;document.documentElement.classList.remove('resume');if(!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
 // after signing in or out: the account bar and whatever depends on it
 function menuRefresh(){acctRender();if(MENU.screen==='online'){if(NET.user)openLobbyWs();onlineRender();}} // (signed in on the Online screen: its room list goes live at once)
 

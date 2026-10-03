@@ -1,4 +1,5 @@
 import { assert } from '../engine.gen.js';
+import { overlayUp } from './dom.js';
 /* On-device diagnostics. The page keeps a log of its last 200 notable events (fits, zoom bakes, layout changes, errors):
    a bug report carries it (boundary.js). With ?debug in the address (debug mode) the log is also shown over the game,
    with more in it (screen size changes, touches, slow frames, what changed on the page), a Mark button to tap right after
@@ -26,7 +27,23 @@ const playAt = t => { for (let i = playLog.length - 1; i >= 0; i--) if (playLog[
 export function expectLayout() { const t = expectedAt = performance.now(); expectedEnd = Infinity;
   requestAnimationFrame(() => requestAnimationFrame(() => { if (expectedAt === t) expectedEnd = performance.now(); })); }
 const expected = t => t >= expectedAt - 600 && t <= Math.max(expectedAt + 600, expectedEnd);
+/* checks: the game is never shown bare between two overlays (owner, 2026-10-03: End game in the menu flickered). Every
+   overlay change (menu, a window) calls watchCover() first; for the next second, every frame weighs how much the game is
+   dimmed (the opacity of what dims it: [data-dims]) and fails when it drops from dimmed to bare and an overlay comes back,
+   with no input of the player's in between (two windows the player opened one after the other are two changes) */
+let coverEnd = 0, coverTop = 0, coverDip = 1, coverInput = 0;
+const coverLevel = () => { let l = 0; for (const e of document.querySelectorAll('[data-dims]')) { if (e.tagName === 'DIALOG' ? !e.open : !e.isConnected) continue; l = Math.max(l, +getComputedStyle(e).opacity); } return l; };
+export function watchCover() {
+  if (!CHECKS) return; const was = coverEnd > performance.now(); coverEnd = performance.now() + 1000;
+  if (was) return; coverTop = coverLevel(); coverDip = coverTop;
+  const step = () => { const l = coverLevel();
+    if (coverTop >= .9) { coverDip = Math.min(coverDip, l); if (overlayUp() && l >= .9 && coverDip < .6 && coverInput < performance.now() - 1000) { coverDip = l; assert(false, 'view: one overlay replacing another keeps the game dimmed (the game showed bare between them)'); } }
+    else if (l >= .9) { coverTop = l; coverDip = l; }
+    if (performance.now() < coverEnd) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
 export function checksInit(during) {
+  if (CHECKS) for (const t of ['pointerdown', 'keydown']) addEventListener(t, () => { if (coverDip < .6) coverInput = performance.now(); }, true);
   if (!CHECKS) return; inPlay = during;
   // layout shifts: an element already on screen moving because something else changed (the owner's rule: nothing moves
   // without an animation or a direct action; animations move by transform, which never counts as a shift). Every shift
