@@ -14,7 +14,7 @@ const rect = e => { const r = e.getBoundingClientRect(); return { left: r.left, 
 /* measures everything the views need; whoever calls it (the resize observer, the camera fitting the board), a change that
    matters (the game area's size, the recap's room) asks for a redraw here, so no caller can measure it away unseen */
 export function measure() {
-  const app = $('#app'), a = rect(app), fits = geo.recapFits;
+  const app = $('#app'), a = rect(app), was = JSON.stringify(geo);
   const sized = a.width !== geo.app.width || a.height !== geo.app.height;
   geo.app = a;
   geo.cw = parseFloat(getComputedStyle(app).getPropertyValue('--cw')) || 132; // set per game-area size (container queries)
@@ -25,7 +25,7 @@ export function measure() {
   { const r = rect($('#actBtns')); geo.act = r.width ? { left: r.left - a.left, right: r.right - a.left, bottom: r.bottom - a.top } : null; } // (the turn buttons, in the game area: what a chosen card may not rise into)
   geo.deck = rect($('#deckStack')); geo.disc = rect($('#discStack'));
   if (sized) expectLayout(); // (the game area changed size: what's in it moves, on purpose)
-  if (sized || geo.recapFits !== fits) render(); // (a new size, or the recap's room came or went: the views lay themselves out again)
+  if (JSON.stringify(geo) !== was) render(); // (anything measured changed: the views that read it lay themselves out again; none is left judging what matters)
   return sized;
 }
 export function watchGeometry() {
