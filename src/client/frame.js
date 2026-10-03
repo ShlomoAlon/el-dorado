@@ -11,12 +11,12 @@ export function addPart(p) { parts.push(p); }
 // a part that fails is a bug: logged and reported (boundary.js), and the other parts still update
 const safe = (f, what) => { try { f(); } catch (e) { console.error(what, e); failed(e, 'view ' + what); } };
 let gen = 0;
-export function render() { gen++; if (!raf) raf = requestAnimationFrame(flush); }
+export function render() { gen++; if (!raf) raf = requestAnimationFrame(flush); watchFlash(); } // (checks: a change starts the watch for flashes)
 /* which change the page is at: each render() (a change) moves it on; what is derived from the state is kept for one */
 export const changeGen = () => gen;
 // a frame is due: the state has moved on and the page doesn't show it yet (checks judge the page only when it is up to date)
 export const frameDue = () => !!raf;
-import { diag, DEBUG, CHECKS, frameMark } from './debug.js';
+import { diag, DEBUG, CHECKS, frameMark, watchFlash } from './debug.js';
 import { assert } from '../engine.gen.js';
 import { failed } from './boundary.js';
 export function flush() {

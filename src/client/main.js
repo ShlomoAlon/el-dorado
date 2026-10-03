@@ -17,7 +17,7 @@ import { aimPart, aimInit } from './aim.js';
 import { marketPart, buySlotPart, marketInit, openAll, allShown } from './market.js';
 import { hudPart, hudInit } from './hud.js';
 import { feedPart, histInit } from './feed.js';
-import { showRules, showPile, closeModal, modalOpen } from './dialogs.js';
+import { showRules, showPile, closeModal, modalOpen, coverPart } from './dialogs.js';
 import { AIX, aiThink } from './ai.js';
 import { act, targets, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, undo, resumeSaved, onPiece, onPlayCard, startDiscard, addDiscard, confirmTrash } from './actions.js';
 import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, startLocal, radio } from './menu.js';
@@ -32,7 +32,7 @@ import { drag } from './hand.js';
 import { checksPart } from './checks.js';
 
 // the order parts update in each frame: first what the selection allows, then the view from back to front
-for (const p of [overlaysPart, piecesPart, cameraPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, replayPart, checksPart]) addPart(p); // (checks: the page's invariants, last)
+for (const p of [coverPart, overlaysPart, piecesPart, cameraPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, replayPart, checksPart]) addPart(p); // (checks: the page's invariants, last)
 GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); });
 
 function boot() {

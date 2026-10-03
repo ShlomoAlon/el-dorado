@@ -1,12 +1,14 @@
 /* Everything that opens over the game: the round banner, toasts, and one modal at a time (rules, results, a pile).
    The menu is its own dialog (menu.js); opening a modal closes it. */
 import { CT, SYMCOL, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
-import { $, esc } from './dom.js';
+import { $, esc, overlayUp } from './dom.js';
 import { S, UI, NET, online, hp, viewIdx, covered } from './state.js';
 import { cardHTML } from './cards.js';
 import { MENU, menuClose, showSetup, showHub } from './menu.js';
 import { exitOnline } from './online.js';
 import { loadReplayId, openReplay } from './replay.js';
+import { watchFlash } from './debug.js';
+import { render } from './frame.js';
 
 export function banner(t,s){const b=$('#banner');b.querySelector('.t').textContent=t;b.querySelector('.s').textContent=s||'';
   b.getAnimations().forEach(a=>a.cancel());
@@ -15,10 +17,13 @@ let toastT=0;
 export function toast(t,ms){const e=$('#toast');const host=MENU.dlg.open?MENU.dlg:document.body;if(e.parentNode!==host)host.appendChild(e); /* over the menu while it's open */
   e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),ms||1700);}
 /* one overlay at a time (the menu is its own dialog: menu.js; it closes when another overlay opens) */
-export function modal(html,onMount,dismiss){const o=$('#overlay');if(MENU.dlg.open)MENU.dlg.close();
+export function modal(html,onMount,dismiss){watchFlash();const o=$('#overlay');if(MENU.dlg.open)MENU.dlg.close();
   o.innerHTML=`<div class="scrim"><div class="modal">${html}</div></div>`;const sc=o.firstChild;
-  if(dismiss)sc.onclick=e=>{if(e.target===sc)closeModal();};onMount(sc);}
-export function closeModal(){menuClose();const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');sc.querySelector('.modal').className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};}
+  if(dismiss)sc.onclick=e=>{if(e.target===sc)closeModal();};onMount(sc);render();}
+export function closeModal(){watchFlash();menuClose();const o=$('#overlay');const sc=o.firstChild;if(!sc)return;sc.classList.add('closing');sc.querySelector('.modal').className='modal';sc.style.pointerEvents='none';sc.animate([{opacity:1},{opacity:0}],{duration:160}).onfinish=()=>{sc.remove();};render();}
+/* the layer that dims the game: on exactly while an overlay is up (the menu or a window), so a window replacing the menu, or
+   another window, keeps it on; every overlay change asks for a frame (render) */
+export const coverPart={name:'cover',update(){const d=$('#dim'),on=overlayUp();if(d.classList.contains('on')!==on)d.classList.toggle('on',on);}};
 export const modalOpen=()=>!!document.querySelector('#overlay .modal');
 
 export function showRules(){

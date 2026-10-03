@@ -26,7 +26,31 @@ const playAt = t => { for (let i = playLog.length - 1; i >= 0; i--) if (playLog[
 export function expectLayout() { const t = expectedAt = performance.now(); expectedEnd = Infinity;
   requestAnimationFrame(() => requestAnimationFrame(() => { if (expectedAt === t) expectedEnd = performance.now(); })); }
 const expected = t => t >= expectedAt - 600 && t <= Math.max(expectedAt + 600, expectedEnd);
+/* checks: the screen never flashes (owner, 2026-10-03: End game in the menu flickered; a check for that one path would miss
+   the next). Whatever changes the page (a frame asked for, an overlay opening or closing) starts a watch: for the next
+   second every frame weighs how dark the game is under what covers it (darkness, below) and notes each time that
+   crosses from dimmed to bare or back. A crossing undone within 450 ms, with no input of the player's since the dimming started to move, is a flash:
+   the game shown bare between two overlays, or a dimming that came and went. (450 ms: shorter than a fade out and back in, about 400;
+   a pause on purpose, such as the board shown still before the results, takes about 650.) */
+let flashEnd = 0, flashOn = false, flashSide = null, flashAt = 0, leftAt = null, flashLeft = 0, lastInput = -1e9;
+// (how dark: the layers that cover the game, [data-dims], by their opacity; the board stepped back, [data-fades], by how faded it is)
+const darkness = () => { let l = 0; for (const e of document.querySelectorAll('[data-dims],[data-fades]')) { if (!e.isConnected || !e.checkVisibility()) continue; const o = +getComputedStyle(e).opacity; l = Math.max(l, e.hasAttribute('data-dims') ? o : 1 - o); } return l; };
+// (a change is the player's if a tap or a key came after the dimming started to move: two taps, two changes)
+function flashStep() {
+  const t = performance.now(), l = darkness(), side = l >= .6;
+  if (l >= .9 || l <= .1) leftAt = null; else if (leftAt === null) leftAt = t; // (when it left a settled level)
+  if (flashSide !== null && side !== flashSide) {
+    if (t - flashAt < 450 && !(lastInput > flashLeft)) assert(false, 'view: the screen never flashes (the dimming over the game ' + (side ? 'dropped and came back' : 'came and went') + ' within ' + Math.round(t - flashAt) + ' ms, with no input between)');
+    flashAt = t; flashLeft = leftAt === null ? t : leftAt; }
+  flashSide = side;
+  if (t < flashEnd) requestAnimationFrame(flashStep); else { flashOn = false; flashSide = null; }
+}
+export function watchFlash() {
+  if (!CHECKS) return; flashEnd = performance.now() + 1000; if (flashOn) return;
+  flashOn = true; flashSide = darkness() >= .6; flashAt = -1e9; leftAt = null; requestAnimationFrame(flashStep);
+}
 export function checksInit(during) {
+  if (CHECKS) for (const t of ['pointerdown', 'keydown']) addEventListener(t, () => { lastInput = performance.now(); }, true);
   if (!CHECKS) return; inPlay = during;
   // layout shifts: an element already on screen moving because something else changed (the owner's rule: nothing moves
   // without an animation or a direct action; animations move by transform, which never counts as a shift). Every shift

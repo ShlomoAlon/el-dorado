@@ -52,6 +52,18 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
   await settle(p); await p.click('#menuBtn');
   await check('closing it comes back to Replays, the game kept', new Function('r', `return !window.__ED.G.replay && ${screen('replays')} && !document.querySelector('#ingame').hidden && JSON.stringify(window.__ED.S.players.map(q => q.hand)) === r`), pos);
   await p.click('#sBack'); await check('Back to game', () => !document.querySelector('#menu').open && !!window.__ED.S && !window.__ED.G.replay);
+  // from the menu to the window it opens and back (Resign, then Keep playing), and End game from the menu straight to the
+  // results: the game never shows bare between two overlays (the page's cover check fails the test at once if it does)
+  await p.click('#menuBtn'); await check('Menu again', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden);
+  await settle(p); await p.click('#sResign'); await check('Resign asks first', () => !!document.querySelector('#overlay #rsNo'));
+  await settle(p); await p.click('#overlay #rsNo'); await check('Keep playing: back to the game', () => !document.querySelector('#overlay .scrim:not(.closing)') && !window.__ED.S.over);
+  await settle(p); await p.waitForTimeout(1100); await p.click('#menuBtn'); await check('and the menu once more', () => document.querySelector('#menu').open);
+  await settle(p); await p.click('#sEnd'); await check('End game asks first', () => !!document.querySelector('#overlay #egYes'));
+  await settle(p); await p.click('#overlay #egYes');
+  await check('ended from the menu: the results', () => window.__ED.S.over && !!document.querySelector('#overlay #gNew'));
+  await settle(p); await p.waitForTimeout(1100); // (the cover check watches a second after each change)
+  await p.click('#overlay #gNew'); await check('New game: the start screen', new Function(`return document.querySelector('#menu').open && ${screen('setup')}`));
+  await p.click('#sGo'); await check('another game starts', () => !!window.__ED.S && !window.__ED.S.over && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(p);
   // the end of a game: two resign, the third wins, the results come up; New game goes back to the start screen
   await p.evaluate(() => { __ED.act({ t: 'resign' }); }); await p.evaluate(() => { __ED.act({ t: 'resign' }); });
   await check('game over: the results', () => window.__ED.S.over && !!document.querySelector('#overlay #gNew') && document.querySelectorAll('#overlay .prow').length === 3);
