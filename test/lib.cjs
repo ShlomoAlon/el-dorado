@@ -78,4 +78,17 @@ function report(title) {
     get fails() { return fails; },
   };
 }
-module.exports = { chromium, serveStatic, startServer, openPage, settle, report, ROOT };
+/* the CPU a process and everything it started use from now on (Linux /proc, sampled every 200 ms): cpuMeter(pid) -> stop(),
+   which returns core-seconds. For a browser: every process of it (the page's renderer, the GPU process, the AI's worker) */
+function cpuMeter(rootPid) {
+  const tck = 100, seen = new Map(), base = new Map();
+  const stat = pid => { try { const s = fs.readFileSync(`/proc/${pid}/stat`, 'utf8'), f = s.slice(s.lastIndexOf(')') + 2).split(' '); return { ppid: +f[1], cpu: +f[11] + +f[12] }; }
+    catch (e) { return null; /* expected: the process exited between the listing and the read */ } };
+  const tick = () => { const all = new Map(); for (const d of fs.readdirSync('/proc')) if (/^\d+$/.test(d)) { const s = stat(d); if (s) all.set(+d, s); }
+    const mine = new Set([rootPid]); let grew = true; while (grew) { grew = false; for (const [p, s] of all) if (!mine.has(p) && mine.has(s.ppid)) { mine.add(p); grew = true; } }
+    for (const p of mine) { const s = all.get(p); if (!s) continue; if (!base.has(p)) base.set(p, 0); seen.set(p, Math.max(seen.get(p) || 0, s.cpu)); } };
+  tick(); for (const [p, c] of seen) base.set(p, c); // (what each process had used before: not counted; one started later from 0)
+  const iv = setInterval(tick, 200);
+  return () => { tick(); clearInterval(iv); let t = 0; for (const [p, c] of seen) t += c - (base.get(p) || 0); return t / tck; };
+}
+module.exports = { chromium, serveStatic, startServer, openPage, settle, report, cpuMeter, ROOT };

@@ -5,7 +5,7 @@
 // including states no scripted test reaches (moving on with a card's leftover strength, the buy reminder, keeping
 // cards, removal cards, the Transmitter, base camps, game over). Animations run 20x faster (they still run).
 //   NODE_PATH=$(npm root -g) node test/play.cjs [--games n]
-const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { chromium, serveStatic, openPage, settle, report, cpuMeter } = require('./lib.cjs');
 const { step } = require('./playstep.cjs');
 const T = report('play');
 const arg = process.argv.slice(2), GAMES = +(arg[arg.indexOf('--games') + 1] || 0) || 3;
@@ -13,13 +13,20 @@ const arg = process.argv.slice(2), GAMES = +(arg[arg.indexOf('--games') + 1] || 
 const SIZES = [['owner', { width: 1536, height: 639 }, 1.25], ['phone', { width: 390, height: 844 }, 2], ['tablet', { width: 768, height: 1024 }, 1]];
 // and one game passed around one device: two people (both played here) and an AI, hands hidden until each one's Reveal
 const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
+// the CPU a whole game may use (owner, 2026-10-03: a ratchet on resources): every process of game 1's own browser, from the
+// first move to the end, at most CPU_MS per action of the game (a longer deal is a longer game: the budget grows with it).
+// Measured 2026-10-03: 202 ms per action (33.5 core-s for 166 actions, 43.8 for 217), with animations 20x faster. Lower it
+// as the game gets cheaper; never raise it to pass: find what got slower
+const CPU_MS = 240;
 
 
 (async () => {
   const srv = await serveStatic(), b = await chromium.launch(), t0 = Date.now();
   const games = [...Array.from({ length: GAMES }, (_, g) => SIZES[g % SIZES.length]), PASS];
   const results = await Promise.all(games.map(async ([name, viewport, dpr, pass], g) => {
-    const p = await openPage(b, `game ${g + 1} (${name})`, { viewport, deviceScaleFactor: dpr });
+    // game 1 (the owner's screen) in a browser of its own: the CPU of everything it runs is that one game's
+    const srvB = g === 0 ? await chromium.launchServer() : null, own = srvB && await chromium.connect(srvB.wsEndpoint()); // (a browser server: its process is known)
+    const p = await openPage(own || b, `game ${g + 1} (${name})`, { viewport, deviceScaleFactor: dpr });
     const cdp = await p.context().newCDPSession(p); await cdp.send('Animation.enable'); await cdp.send('Animation.setPlaybackRate', { playbackRate: 20 });
     await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     // (what the page shows if its start screen can't be used: a rare timeout under load, not yet explained)
@@ -32,7 +39,7 @@ const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
     } catch (e) { throw new Error(e.message.split('\n')[0] + ' — page: ' + await pageState()); }
     await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
     await p.evaluate(() => window.__ED.aiPace(.05)); // (the AIs' pauses, 20x shorter: their moves and animations unchanged)
-    const did = {}, unmapped = []; let steps = 0;
+    const did = {}, unmapped = []; let steps = 0; const cpu = own && cpuMeter(srvB.process().pid);
     // (every other step goes on while an explorer is still walking, as a quick player does: animations never hold up input)
     const ready = quick => p.waitForFunction(q => { const E = window.__ED; return E.S.over || (E.canAct() && (q || !E.walking()) && E.UI.mode !== 'pay' && E.UI.mode !== 'discardFor'); }, quick, { timeout: 60000 });
     try {
@@ -43,14 +50,16 @@ const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
         const r = await p.evaluate(step); const k = r.split(':')[0]; did[k] = (did[k] || 0) + 1; if (r.startsWith('unmapped')) { unmapped.push(r); break; }
       }
     } catch (e) { unmapped.push('stopped: ' + e.message.split('\n')[0]); }
+    const used = cpu && cpu(), actions = await p.evaluate(() => { const E = window.__ED, L = E.G.rec || E.UI.lastReplay; return L ? L.actions.length : 0; }); // (over: the record is kept as a replay)
     const over = await p.evaluate(() => !!window.__ED.S.over), round = await p.evaluate(() => window.__ED.S.round);
     const seen = await p.evaluate(() => window.__seen ? { modes: Object.keys(window.__seen.modes), labels: Object.keys(window.__seen.labels) } : { modes: [], labels: [] });
-    await p.close();
-    return { name, g, over, round, steps, did, modes: seen.modes, labels: seen.labels, unmapped, errors: p.errors };
+    await p.close(); if (own) { await own.close(); await srvB.close(); }
+    return { name, g, over, round, steps, did, modes: seen.modes, labels: seen.labels, unmapped, errors: p.errors, used, actions };
   }));
   for (const r of results) {
     T.ok(`game ${r.g + 1} (${r.name}): played to the end through the UI`, r.over && !r.unmapped.length, `${r.steps} moves of the person's, round ${r.round}${r.unmapped.length ? '; ' + r.unmapped.join('; ') : ''}`);
     T.ok(`game ${r.g + 1} (${r.name}): no assertion failed, no page error`, !r.errors.length, r.errors.slice(0, 3).join(' | '));
+    if (r.used != null) T.ok(`game ${r.g + 1} (${r.name}): the whole game's CPU within budget (${CPU_MS} ms per action)`, r.actions > 0 && r.used * 1000 <= CPU_MS * r.actions, `${r.used.toFixed(1)} core-s for ${r.actions} actions: ${(r.used * 1000 / r.actions).toFixed(0)} ms each, budget ${(CPU_MS * r.actions / 1000).toFixed(1)} core-s`);
     console.log(`     did: ${JSON.stringify(r.did)}\n     modes: ${r.modes.join(', ')}\n     buttons: ${r.labels.join(', ')}`);
   }
   console.log(`     ${GAMES} games in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
