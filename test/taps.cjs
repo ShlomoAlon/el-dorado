@@ -18,19 +18,19 @@ const T = report('taps');
     if (await p.evaluate(() => window.__ED.S.players[window.__ED.S.cur].ai)) continue;
     setup = await p.evaluate(() => { const E = window.__ED, S = E.S, other = (S.cur + 1) % S.players.length;
       for (const id of S.players[S.cur].hand) { E.onHandCard(id); E.render();
-        for (const [k, t] of [...E.UI.targets]) { if (k[0] === 'B' || t.kind !== 'move') continue;
+        for (const [k, t] of [...E.targets()]) { if (k[0] === 'B' || t.kind !== 'move') continue;
           const [q, r] = k.split(',').map(Number);
           for (const below of [`${q},${r + 1}`, `${q - 1},${r + 1}`]) { const h = E.MAP.hexes.get(below);
             if (!h || h.type === 'm' || S.players.some(pl => pl.pieces.includes(below))) continue;
             S.players[other].pieces[0] = below; E.render();
-            if (!E.UI.targets.has(k)) { E.onHandCard(id); E.render(); }
-            if (E.UI.targets.has(k)) return { k, below }; } }
+            if (!E.targets().has(k)) { E.onHandCard(id); E.render(); }
+            if (E.targets().has(k)) return { k, below }; } }
         E.cancelMode(); E.render(); }
       return null; });
   }
   T.ok('a target with an explorer just below it', !!setup);
   if (setup) {
-    await p.waitForFunction(() => !window.__ED.UI.anim, null, { timeout: 10000 }); await settle(p);
+    await p.waitForFunction(() => !window.__ED.walking(), null, { timeout: 10000 }); await settle(p);
     // just below the target's centre: inside the space, and inside the figure's box that stands up into it
     const pt = await p.evaluate(k => { const r = document.querySelector(`#board2 .tgt[data-t="${k}"] polygon`).getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2 + 4;
       return { x, y, covered: [...document.querySelectorAll('.pin')].some(e => { const q = e.getBoundingClientRect(); return x > q.left && x < q.right && y > q.top && y < q.bottom; }) }; }, setup.k);
@@ -41,7 +41,7 @@ const T = report('taps');
     await p.mouse.click(pt.x, pt.y);
     T.ok('a tap on it moves there', await p.waitForFunction(b => JSON.stringify(window.__ED.S.players[window.__ED.S.cur].pieces) !== b, before, { timeout: 4000 }).then(() => true, () => false));
     // a tap on my explorer's own space (found the same way) reaches it: with a card chosen for it, the card is put down
-    await p.waitForFunction(() => !window.__ED.UI.anim, null, { timeout: 10000 }); await settle(p);
+    await p.waitForFunction(() => !window.__ED.walking(), null, { timeout: 10000 }); await settle(p);
     const sel = await p.evaluate(() => { const E = window.__ED, P = E.S.players[E.S.cur]; E.cancelMode(); E.render();
       for (const id of P.hand) { E.onHandCard(id); E.render(); if (E.UI.mode === 'card' && P.pieces[E.UI.piece] !== 'done') return { k: P.pieces[E.UI.piece] }; E.cancelMode(); E.render(); }
       return null; });

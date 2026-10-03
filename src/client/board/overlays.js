@@ -7,13 +7,14 @@ import { S, MAP, UI, G, cur } from '../state.js';
 import { L, hexPts, label, edgeSeg } from './terrain.js';
 import { layout, xy } from './layout.js';
 import { view, boardPoint, onViewMove } from './camera.js';
+import { targets } from '../actions.js';
 
 /* ---------- targets: one ring per reachable space, kept while the space stays a target ---------- */
 const rings = new Map(); // space key → element
 const isPayKind = k => k === 'rubble' || k === 'camp';
 function updateTargets() {
-  for (const [k, g] of rings) if (!UI.targets.has(k)) { g.remove(); rings.delete(k); }
-  for (const [k, t] of UI.targets) {
+  for (const [k, g] of rings) if (!targets().has(k)) { g.remove(); rings.delete(k); }
+  for (const [k, t] of targets()) {
     if (k[0] === 'B') continue;
     const cls = 'tgt' + (isPayKind(t.kind) ? ' dis' : '') + (hot === k ? ' hot' : '');
     let g = rings.get(k);
@@ -37,7 +38,7 @@ function updateBlockades() {
   for (const bi of blEls.keys()) if (bi >= S.blockades.length) { for (const e of blEls.get(bi).els) e.remove(); blEls.delete(bi); delete blPos[bi]; } // (a deal with fewer blockades)
   assert(blEls.size === open, 'view: the board shows exactly the open blockades');
   for (const bg of L.bl.querySelectorAll('.bl-badge')) {
-    const k = 'B' + bg.dataset.bi, tg = UI.targets.has(k), cls = 'bl-badge' + (tg ? ' tgt' : '') + (hot === k ? ' hot' : '');
+    const k = 'B' + bg.dataset.bi, tg = targets().has(k), cls = 'bl-badge' + (tg ? ' tgt' : '') + (hot === k ? ' hot' : '');
     if (bg.getAttribute('class') !== cls) bg.setAttribute('class', cls);
   }
 }
@@ -101,7 +102,7 @@ export function setHot(k) {
   if (k === hot) return; const was = hot; hot = k;
   const el = x => x[0] === 'B' ? L.bl.querySelector(`[data-bi="${x.slice(1)}"]`) : rings.get(x);
   if (was) { const e = el(was); if (e) e.classList.remove('hot'); }
-  if (k) { const e = el(k); if (e) e.classList.add('hot'); showHover(k, UI.targets.get(k)); } else hideHover();
+  if (k) { const e = el(k); if (e) e.classList.add('hot'); showHover(k, targets().get(k)); } else hideHover();
 }
 function hexRound(x, y) {
   const q = (SQ3 / 3 * x - y / 3) / R, r = (2 / 3 * y) / R; let rx = q, rz = r, ry = -q - r; let a = Math.round(rx), b = Math.round(ry), c = Math.round(rz);
@@ -110,8 +111,8 @@ function hexRound(x, y) {
 /* the target at a screen point: a blockade badge within reach, else the space under it */
 export function targetAt(cx, cy) {
   const [x, y] = boardPoint(cx, cy);
-  for (const bi in blPos) { const p = blPos[bi]; if (UI.targets.has('B' + bi) && Math.hypot(p[0] - x, p[1] - y) < 24) return 'B' + bi; }
-  const k = hexRound(x, y); return UI.targets.has(k) ? k : null;
+  for (const bi in blPos) { const p = blPos[bi]; if (targets().has('B' + bi) && Math.hypot(p[0] - x, p[1] - y) < 24) return 'B' + bi; }
+  const k = hexRound(x, y); return targets().has(k) ? k : null;
 }
 /* the space under a screen point (its key, whether or not the board has one there) */
 export function spaceAt(cx, cy) { const [x, y] = boardPoint(cx, cy); return hexRound(x, y); }
@@ -152,7 +153,7 @@ export const overlaysPart = { name: 'overlays',
     assert(L.hl && L.trail && L.path && L.bl, 'view: the board layers exist before anything is drawn on them');
     if (!S) return; // (a game on show has its board: showGame)
     // the targets changed (another card, another explorer, a move made): the path and tip shown were for the old ones
-    const tsig = [...UI.targets.keys()].join(',') + '|' + UI.card + '|' + UI.piece;
+    const tsig = [...targets().keys()].join(',') + '|' + UI.card + '|' + UI.piece;
     if (tsig !== targetsSig) { targetsSig = tsig; setHot(null); hideHover(); }
     updateBlockades(); updateTargets(); updatePips();
   },

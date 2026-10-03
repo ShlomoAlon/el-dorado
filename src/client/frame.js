@@ -3,12 +3,17 @@
    layout (sizes come from geometry.js), so an update costs what actually changed on screen. Code that has to measure
    the new DOM (a card flying to where it now sits) runs in after(): once every part has written. */
 const parts = [], afterQ = [];
-let raf = 0;
+let raf = 0, drawing = false;
+/* the view parts are drawing: they read the state and write the page, never the state (state.js checks every write) */
+export const isDrawing = () => drawing;
 /* p: { update(), reset?() } — reset: a different game is on show (drop its elements) */
 export function addPart(p) { parts.push(p); }
 // a part that fails is a bug: logged and reported (boundary.js), and the other parts still update
 const safe = (f, what) => { try { f(); } catch (e) { console.error(what, e); failed(e, 'view ' + what); } };
-export function render() { if (!raf) raf = requestAnimationFrame(flush); }
+let gen = 0;
+export function render() { gen++; if (!raf) raf = requestAnimationFrame(flush); }
+/* which change the page is at: each render() (a change) moves it on; what is derived from the state is kept for one */
+export const changeGen = () => gen;
 // a frame is due: the state has moved on and the page doesn't show it yet (checks judge the page only when it is up to date)
 export const frameDue = () => !!raf;
 import { diag, DEBUG, CHECKS, frameMark } from './debug.js';
@@ -18,7 +23,7 @@ export function flush() {
   if (raf) { cancelAnimationFrame(raf); raf = 0; }
   const t0 = DEBUG ? performance.now() : 0;
   safe(frameMark, 'checks'); // (checks: what changed before this frame is judged apart from it)
-  for (const p of parts) safe(() => p.update(), p.name);
+  drawing = true; try { for (const p of parts) safe(() => p.update(), p.name); } finally { drawing = false; }
   for (const f of afterQ.splice(0)) safe(f, 'after');
   safe(frameMark, 'checks');
   if (DEBUG) { const ms = performance.now() - t0; if (ms > 8) diag(`update ${ms.toFixed(0)} ms`); }
@@ -35,8 +40,12 @@ export function freshInit(during) {
   const who = r => { const n = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (!n) return '?'; const c = n.getAttribute('class');
     const was = r.type === 'childList' ? '' : ': ' + String(r.oldValue).slice(0, 80) + ' -> ' + String(r.type === 'attributes' ? r.target.getAttribute(r.attributeName) : r.target.data).slice(0, 80);
     return ((n.closest('[id]') || {}).id || '?') + ' ' + n.tagName.toLowerCase() + (c ? '.' + c.split(' ')[0] : '') + (r.type === 'attributes' ? ' [' + r.attributeName + ']' : r.type === 'childList' ? ' (elements)' : ' (text)') + was; };
+  let due = 0; // checks in a row that found a frame due (and so judged nothing)
   const check = () => {
-    if (raf || !during()) return;
+    if (!during()) { due = 0; return; }
+    // a frame is due: judged at the next check. Not for long: a page that always has a frame due is never judged, and never rests
+    if (raf) { assert(++due < 40, 'view: the page rests (a frame was due at every check for 10 s)'); return; }
+    due = 0;
     safe(frameMark, 'checks'); // (what came before this frame is judged as before)
     mo.observe(app, { subtree: true, childList: true, attributes: true, attributeOldValue: true, characterData: true, characterDataOldValue: true });
     flush();
@@ -45,6 +54,8 @@ export function freshInit(during) {
       return r.type === 'childList' ? true : r.type === 'attributes' ? r.target.getAttribute(r.attributeName) !== r.oldValue : r.target.data !== r.oldValue; });
     mo.disconnect();
     if (stale.length) assert(false, 'view: the page is up to date (a frame with nothing new still changed ' + who(stale[0]) + ')');
+    // and it rests: a frame with nothing new asks for no other (one that did would draw again, and again: a page that never idles)
+    assert(!raf, 'view: the page rests (a frame with nothing new asked for another frame)');
   };
   setInterval(check, 250);
   // and right after every input (once its handlers have run): a handler that changed something without asking for a frame

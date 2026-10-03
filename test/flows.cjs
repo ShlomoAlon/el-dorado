@@ -14,7 +14,7 @@ const T = report('flows');
   const S = (f, a) => p.evaluate(f, a);
   const until = (f, a, ms = 15000) => p.waitForFunction(f, a, { timeout: ms }).then(() => true, () => false);
   const check = async (name, f, a, ms) => T.ok(name, await until(f, a, ms));
-  const idle = async () => { await until(() => !window.__ED.UI.anim, null, 10000); await settle(p); };
+  const idle = async () => { await until(() => !window.__ED.walking(), null, 10000); await settle(p); };
   const center = async sel => { const r = await p.evaluate(s => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, sel); if (!r) throw new Error('not found: ' + sel); return r; };
   // seat 2 is an AI (Fawcett: the network, fetched from /ai/first.<hash>.bin when it first moves) for the AI-turn step. The order
   // around the table is dealt at random: a new page until the person moves first (the steps below start with their turn)
@@ -33,7 +33,7 @@ const T = report('flows');
   // 2. select a card with a click: it lifts, its targets appear
   // (a deal can start a player with no card that moves an explorer: then pass until someone has one; the AI seat plays its own turn)
   const findMove = () => S(() => { const E = window.__ED, S = E.S, P = S.players[S.cur];
-    for (const id of P.hand) { E.onHandCard(id); E.render(); const ks = [...E.UI.targets].filter(([k, t]) => k[0] !== 'B' && t.kind === 'move').map(([k]) => k); E.cancelMode(); E.render(); if (ks.length) return { id, ks }; } return null; });
+    for (const id of P.hand) { E.onHandCard(id); E.render(); const ks = [...E.targets()].filter(([k, t]) => k[0] !== 'B' && t.kind === 'move').map(([k]) => k); E.cancelMode(); E.render(); if (ks.length) return { id, ks }; } return null; });
   let pick = await findMove();
   for (let k = 0; k < 6 && !pick; k++) { await S(() => { window.__ED.act({ t: 'end', keep: [] }); }); await until(() => { const E = window.__ED; return !E.S.players[E.S.cur].ai; }, null, 30000); await idle(); pick = await findMove(); }
   T.ok('a playable card', !!pick);

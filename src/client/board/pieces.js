@@ -38,7 +38,9 @@ function piecePos(pl, i) {
   const px = -C.dy, py = C.dx, off = (idx - 1.5) * 18;
   return [C.x + px * off + C.dx * R * 1.6, C.y + py * off + C.dy * R * 1.6];
 }
-const stopAnims = P => { P.walk = null; for (const a of P.anims.splice(0)) a.cancel(); moving.delete(P); UI.anim = moving.size > 0; };
+/* an explorer is walking (the view's own: the walks it has started and not finished) */
+export const walking = () => moving.size > 0;
+const stopAnims = P => { P.walk = null; for (const a of P.anims.splice(0)) a.cancel(); moving.delete(P); };
 function rest(P, t) { if (P.tf === t) return; P.tf = t; P.el.style.transform = t; }
 function update() {
   if (!S) return;
@@ -64,7 +66,7 @@ export function animateMove(pl, i, keys) {
   const T = pts.map(p => tf(...p)), at = moving.has(P) ? getComputedStyle(P.el).transform : null; stopAnims(P); if (at && at !== 'none') T[0] = at;
   if (reduceMotion || T.length < 2) { rest(P, T[T.length - 1]); return; }
   P.tf = T[T.length - 1]; P.el.style.transform = T[0]; // (where it rests once the walk is done; shown on its old space until then)
-  P.el.style.zIndex = '3'; moving.add(P); UI.anim = true;
+  P.el.style.zIndex = '3'; moving.add(P);
   const token = P.walk = {};
   requestAnimationFrame(() => requestAnimationFrame(() => {
     if (P.walk !== token || !moving.has(P)) return; // (the game jumped in the meantime: update() has placed it)
@@ -75,10 +77,10 @@ export function animateMove(pl, i, keys) {
     P.anims = [slide,
       P.pin.animate([{ transform: 'translateY(0) scale(1)', easing: 'cubic-bezier(.61,1,.88,1)' }, { transform: `translateY(${-up}px) scale(1.08)`, offset: .5, easing: 'cubic-bezier(.12,0,.39,0)' }, { transform: 'translateY(0) scale(1)' }], { duration: STEP, iterations: n }),
       P.shadow.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(.66)', opacity: .5, offset: .5 }, { transform: 'scale(1)', opacity: 1 }], { duration: STEP, iterations: n, easing: 'ease-in-out' })];
-    slide.finished.then(() => { if (P.anims[0] !== slide) return; P.anims = []; moving.delete(P); UI.anim = moving.size > 0; render(); }, () => { }); // (cancelled: the game jumped)
+    slide.finished.then(() => { if (P.anims[0] !== slide) return; P.anims = []; moving.delete(P); render(); }, () => { }); // (cancelled: the game jumped)
   }));
 }
 export const piecesPart = { name: 'pieces', 
   update,
-  reset() { for (const P of els.values()) { stopAnims(P); P.el.remove(); } els.clear(); moving.clear(); UI.anim = false; },
+  reset() { for (const P of els.values()) { stopAnims(P); P.el.remove(); } els.clear(); moving.clear(); },
 };

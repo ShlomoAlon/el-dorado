@@ -8,6 +8,7 @@ import { reduceMotion } from './dom.js';
 import { toast } from './dialogs.js';
 import { failed } from './boundary.js';
 import { applyLocal } from './actions.js';
+import { walking } from './board/pieces.js';
 // gen: which game is on show (aiReset: showGame); a move scheduled for an earlier one is dropped (the worker keeps each AI's
 // memory for the game it was asked about)
 // pace: the pauses' scale (1 in play; test/play.cjs plays whole games faster: the same moves, shorter pauses)
@@ -55,7 +56,7 @@ export function aiKick(){
   const seat=S.cur,round=S.round,gen=AIX.gen,first=!S.turn.active&&!S.players[seat].play.length&&!S.turn.bought;
   const go=async()=>{
     if(gen!==AIX.gen)return;
-    if(UI.anim){AIX.timer=setTimeout(go,120);return;} // let a moving explorer finish first (thinking can take a frame or two)
+    if(walking()){AIX.timer=setTimeout(go,120);return;} // let a moving explorer finish first (thinking can take a frame or two)
     if(S.over||S.cur!==seat||S.round!==round){AIX.timer=0;aiKick();return;} // (in the meantime someone resigned, or the game was ended)
     const id=S.players[seat].ai;
     if(aiUsesNet(id)&&!AIX.net&&!AIX.failed)await aiNetLoad();
