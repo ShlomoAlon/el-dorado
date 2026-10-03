@@ -180,6 +180,46 @@ html.mix-3a .clist{grid-template-columns:1fr 1fr}
 html.mix-3b .clist{grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}html.mix-3b .clist label{min-height:0;padding:6px 8px}html.mix-3b .clist .cth svg{height:40px}html.mix-3b .clist label>span:last-child{display:none}
 html:not(.mix-1b) #tPair,html:not(.mix-1c) #tSum,.tiles .gone{display:none!important}html.mix-1b #tPlay{display:none}html.mix-1c #tPlaySub{display:none}
 @media (max-width:600px){.mtiles,.tpair{grid-template-columns:1fr}.tpair .tile{flex-direction:row;align-items:center}.tmap svg{width:84px;height:40px}.ttl{min-height:calc(100dvh - 210px)}}
+/* ---- design mix, Online (parts 6-11): one view at a time (#oIn data-ov: home, create, join, board, me); versions by html.mix-* */
+.ottl{min-height:min(520px,calc(100dvh - 230px))}
+.tile.off{opacity:.45;cursor:default}.tile.off:hover{border-color:var(--line2)}
+.signt{cursor:default}.signt .tt{gap:6px}.signt .gsi{min-height:0}.signt .prow{display:flex;gap:8px;margin-top:4px}.signt input{flex:1;min-width:0}
+html:not(.mix-6b) .pv6{display:none}
+.ohead{display:none;align-items:baseline;gap:8px;margin-bottom:14px}.ohead h2{margin:0}
+#oIn:not([data-ov=home]):not([data-ov=create]):not([data-ov=join]) .ohead{display:flex}
+html.mix-10a #oIn .ohead{display:none!important}html.mix-10b #hTabs,html.mix-10a .oquiet{display:none}
+#hTabs{margin-bottom:16px}
+.otiles{margin-bottom:18px}.opair{display:grid;grid-template-columns:1fr;gap:12px}html.mix-7b .opair{grid-template-columns:1fr 1fr}html.mix-7b .opair .tile{flex-direction:column;align-items:flex-start;gap:10px}
+.jtile{cursor:default}.jtile .prow{display:flex;gap:8px;margin-top:6px}.jtile input{flex:1;min-width:0;max-width:150px;text-transform:uppercase;letter-spacing:.12em}
+html.mix-9a .jhint{display:none}html.mix-9b .jtile{cursor:pointer}html.mix-9b .jslot{display:none}
+#jBig .prow{display:flex;gap:10px}#jBig input{flex:1;min-width:0;font-size:28px;text-align:center;letter-spacing:.3em;text-transform:uppercase;font-family:var(--display);padding:12px}
+.ocreate,.ojoin{display:none}
+#oIn[data-ov=create] .ocreate,#oIn[data-ov=join] .ojoin{display:block}
+html.mix-8a #oIn[data-ov=create] :is(.otiles,.orooms,.oquiet,#hTabs,.rejoin),#oIn[data-ov=join] :is(.otiles,.orooms,.oquiet,#hTabs,.rejoin){display:none!important}
+html.mix-8b .chead{display:none}.opair .ocreate{grid-column:1/-1}html.mix-8b .opair .ocreate{margin:0}html.mix-8b .ocreate{border:1px solid var(--gold);border-radius:14px;padding:14px 16px 4px;margin:-6px 0 18px;background:rgba(233,178,74,.05)}
+html.mix-8b #oIn[data-ov=create] #oCreateT{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold)}
+.oquiet{margin-top:6px}.oquiet .tile{padding:10px 14px}
+.orooms .rrow{border-radius:12px}
+#pfOut{margin-top:6px}html.mix-11a #pfOut{display:none}
+html.mix-11b #mform{position:relative}html.mix-11b #acct{position:absolute;top:26px;right:26px;margin:0;z-index:2}
+html.mix-11b #sMode{margin-right:min(150px,32%)}
+.achip{display:inline-flex;align-items:center;gap:8px;padding:5px 12px 5px 5px;border-radius:999px;border:1px solid var(--line2);background:#0c1512;font:inherit;font-size:13px;color:var(--text);cursor:pointer;max-width:150px}
+.achip .av{width:26px;height:26px;font-size:12px}.achip span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ---- design mix, room lobby (12) and Replays (13) */
+html.mix-12a section[data-screen=room]>h2,html.mix-12a #rlSub{text-align:center}html.mix-12a #rlTitle{font-size:34px}
+html.mix-12a section[data-screen=room]>.prow{max-width:420px;margin:0 auto 18px}
+html.mix-12a #rlSeats{display:grid;grid-template-columns:1fr 1fr;gap:10px}html.mix-12a .seatrow{min-height:62px;border-radius:14px;padding:0 14px;border-color:var(--line2)}
+html.mix-12a .seatrow b{font-size:15px}html.mix-12a .seatrow.open.addai{cursor:pointer;color:var(--gold2)}html.mix-12a .seatrow.open.addai:hover{border-color:var(--gold)}
+html.mix-12a #rlAIBox{display:none}html.mix-12a section.aiopen #rlAIBox{display:block}
+html.mix-12a section[data-screen=room]>.mrow{flex-direction:column-reverse;align-items:stretch;gap:8px}
+html.mix-12a #rlLeave{border:0;background:none;box-shadow:none;color:var(--muted);text-decoration:underline;font-weight:500;align-self:center}
+html.mix-12a #rlStart,html.mix-12a #rlNow{width:100%}
+html.mix-12b #rlSeats{display:flex;flex-direction:column;gap:6px}html.mix-12b #rlAIList{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+html.mix-12b section[data-screen=room]>.mrow #rlStart{flex:1}
+.rlist button.rrow13{flex-direction:row;align-items:center;gap:14px;padding:8px 12px}.rrow13 .rth{flex:none;width:110px;border-radius:8px;background:rgba(0,0,0,.25)}.rrow13 .rth svg{display:block;width:110px;height:44px}
+.rrow13 .rtx{display:flex;flex-direction:column;gap:3px;min-width:0}
+html.mix-13b .rlist button{flex-direction:row;align-items:baseline;justify-content:space-between;gap:12px;padding:8px 12px}html.mix-13b .rlist button span{text-align:right}html.mix-13b .rlist button b{white-space:nowrap;flex:none}
+@media (max-width:600px){html.mix-12a #rlSeats{grid-template-columns:1fr}.rrow13 .rth,.rrow13 .rth svg{width:84px;height:36px}html.mix-13b .rlist button{flex-direction:column;align-items:flex-start;gap:2px}html.mix-13b .rlist button span{text-align:left}}
 </style>
 <style data-late>
 /* the game's CSS: a separate cached file on the site (build.mjs), inline in the artifact */
@@ -636,7 +676,8 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <!-- the menu: one native dialog; every screen is written here once and shown with the hidden attribute. Choices are
      native form controls (they keep their own state); ui_menu.js reads them and fills only the data lists. -->
 <script>/* a room / replay link opens straight into it: no start screen first (a saved game waits behind the title, Continue) */try{if(/[?&](room|replay)=/.test(location.search))document.documentElement.classList.add('resume')}catch(e){}
-/* (design mix: each part's variant, ?mix=1a2a3a4a5a) */{const m=(/[?&]mix=([0-9a-z]+)/.exec(location.search)||[,'1a2a3a4a5a'])[1];for(const v of m.match(/\d[a-z]/g)||[])document.documentElement.classList.add('mix-'+v);}</script>
+/* (design mix: each part's variant, ?mix=1a2a3a4a5a) */{const d='1b2b3a4a5c6a7a8a9a10a11a12a13a',m=(/[?&]mix=([0-9a-z]+)/.exec(location.search)||[,d])[1],h=document.documentElement;for(const v of(d+m).match(/\d+[a-z]/g)||[])h.classList.remove('mix-'+v),h.classList.add('mix-'+v);
+  for(const p of new Set(((d+m).match(/\d+(?=[a-z])/g)||[]))){const all=[...h.classList].filter(c=>new RegExp('^mix-'+p+'[a-z]$').test(c));for(const c of all.slice(0,-1))h.classList.remove(c);}}</script>
 <dialog id="menu" aria-label="Menu" open>
 <form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
   <div class="acct" id="acct"></div>
@@ -674,30 +715,55 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
   </section>
   <section data-screen="online" hidden>
     <div id="oOff" hidden><h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p></div>
-    <div id="oOut" hidden><h2>Play online</h2><p class="sub">Sign in (top of this screen) so your rating follows you. Rated games move your Elo rating, and you can play against people, the AIs, or both.</p>
+    <div id="oOut" hidden><div class="ttl ottl">
+      <h2>Play online</h2><p class="sub">Sign in so your rating follows you. Rated games move your rating; play against people, the AIs, or both.</p>
+      <div class="tiles">
+        <div class="tile gold signt"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M4 17c.8-3.2 3-4.8 6-4.8s5.2 1.6 6 4.8"/></svg></span><span class="tt"><b>Sign in</b><span>With your Google account</span><span class="gsi" id="gsiMain"></span>
+          <span class="field" id="oDev" hidden><span class="prow"><input id="devName" maxlength="16" placeholder="Name (test servers only)"><button type="button" class="btn" id="devGo">Sign in</button></span></span></span></div>
+        <div class="tile off pv6"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M11 2.5L4.5 11h5l-1 6.5L15.5 9h-5z"/></svg></span><span class="tt"><b>Quick match</b><span>Sign in first</span></span></div>
+        <div class="tile off pv6"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg></span><span class="tt"><b>Create a room…</b><span>Sign in first</span></span></div>
+        <div class="tile off pv6"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="10" r="3.2"/><path d="M10.2 10H17M14.5 10v2.6M16.8 10v2"/></svg></span><span class="tt"><b>Join with a code</b><span>Sign in first</span></span></div>
+      </div>
       <p class="note warn" id="oNoG" hidden>Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>
-      <div class="field" id="oDev" hidden><label>Developer sign-in (local testing only)</label><div class="prow"><input id="devName" maxlength="16" placeholder="Name"><button type="button" class="btn" id="devGo">Sign in</button></div></div></div>
+    </div></div>
     <div id="oIn" hidden>
-      <h2>Online</h2>
+      <div class="ohead"><button type="button" class="lnk sback" id="oBack">‹ Back</button><h2 id="oTitle">Play online</h2></div>
       <div class="seg" id="hTabs"><label data-v="play"><input type="radio" name="otab" value="play" checked><span>Play</span></label><label data-v="board"><input type="radio" name="otab" value="board"><span>Leaderboard</span></label><label data-v="me"><input type="radio" name="otab" value="me"><span>Profile</span></label></div>
       <div class="tab" data-tab="play">
         <div class="rejoin" id="rejoin" hidden><span>You have a game in progress.</span><button type="button" class="btn pri" id="rejoinGo">Rejoin</button></div>
         <p class="note" id="oBusy" hidden>You’re in a game. Finish it, or resign, to play another; <b>Back to game</b> is at the top.</p>
         <div id="oPlay">
-        <div class="field"><label>Quick match</label><div class="boxrow"><span class="note">Join the next public game. It starts as soon as 3 players are in (90 s added per turn, unused time carries over, rated).</span><button type="button" class="btn pri" id="qGo">Quick match</button></div></div>
-        <div class="field"><label>Create a room</label>
-          <div class="opts"><div class="seg"><label data-v="1"><input type="radio" name="pub" value="1" checked><span>Public</span></label><label data-v="0"><input type="radio" name="pub" value="0"><span>Private</span></label></div><div class="seg"><label data-v="2"><input type="radio" name="max" value="2"><span>2 players</span></label><label data-v="3"><input type="radio" name="max" value="3" checked><span>3 players</span></label><label data-v="4"><input type="radio" name="max" value="4"><span>4 players</span></label></div><div class="seg"><label data-v="1"><input type="radio" name="rated" value="1" checked><span>Rated</span></label><label data-v="0"><input type="radio" name="rated" value="0"><span>Unrated</span></label></div><div class="seg"><label data-v="60"><input type="radio" name="turn" value="60"><span>60s</span></label><label data-v="90"><input type="radio" name="turn" value="90" checked><span>90s</span></label><label data-v="120"><input type="radio" name="turn" value="120"><span>2 min</span></label><label data-v="180"><input type="radio" name="turn" value="180"><span>3 min</span></label></div></div>
-          <div class="clist" id="cCourse"><!--COURSES:ocourse--></div>
-          <p class="note"><span class="if-pub">Public rooms are listed below for anyone to join.</span><span class="if-priv">Private rooms are not listed; share the code or link.</span> <span class="if-rated">Rated: the result changes everyone’s rating, AIs included.</span><span class="if-unrated">Unrated: a friendly game, ratings stay as they are.</span> You can add AI players in the room. Clock: each turn adds the chosen time to your clock, and time you don't use carries over to your next turns. When it runs out the turn ends automatically; missing 3 turns in a row forfeits.</p>
-          <div class="mrow left"><button type="button" class="btn pri big" id="cGo">Create room</button></div></div>
-        <div class="field"><label>Join with a code</label><div class="prow"><input id="jCode" maxlength="5" placeholder="e.g. K7Q2M" autocomplete="off"><button type="button" class="btn" id="jGo">Join</button></div></div>
-        <div class="field"><label>Open rooms</label><div id="roomsOpen"></div></div>
-        <div class="field" id="liveBox" hidden><label>Games in progress</label><div id="roomsLive"></div></div>
+          <div class="tiles otiles">
+            <button type="button" class="tile gold" id="qGo"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M11 2.5L4.5 11h5l-1 6.5L15.5 9h-5z"/></svg></span><span class="tt"><b>Quick match</b><span>The next public game: 3 players, rated, 90 s a turn</span></span></button>
+            <div class="opair">
+              <button type="button" class="tile" id="oCreateT"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg></span><span class="tt"><b>Create a room…</b><span>Public or private, your course and clock; add AIs</span></span></button>
+              <div class="tile jtile" id="oJoinT"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="10" r="3.2"/><path d="M10.2 10H17M14.5 10v2.6M16.8 10v2"/></svg></span><span class="tt"><b>Join with a code</b><span class="jslot" id="jSlot"><span class="prow"><input id="jCode" maxlength="5" placeholder="K7Q2M" autocomplete="off"><button type="button" class="btn" id="jGo">Join</button></span></span><span class="jhint">A friend’s 5-letter room code</span></span></div>
+            </div>
+          </div>
+          <div class="ocreate" id="oCreate">
+            <div class="shead chead"><button type="button" class="lnk sback" id="cBack">‹ Back</button><h2>Create a room</h2></div>
+            <div class="mtiles"><label class="mtile"><input type="radio" name="pub" value="1" checked><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2 2 2.8 4.5 2.8 7S12 15 10 17c-2-2-2.8-4.5-2.8-7S8 5 10 3z"/></svg></span><span class="tt"><b>Public</b><span>Listed under Open rooms for anyone to join</span></span></label><label class="mtile"><input type="radio" name="pub" value="0"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4.5" y="9" width="11" height="8" rx="1.8"/><path d="M7 9V6.5a3 3 0 016 0V9"/></svg></span><span class="tt"><b>Private</b><span>Only people with the code or link</span></span></label></div>
+            <div class="srow"><div class="field"><label>Players</label><div class="seg" id="cMax"><label data-v="2"><input type="radio" name="max" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="max" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="max" value="4"><span>4</span></label></div></div><div class="sgo"><button type="button" class="btn pri big" id="cGo">Create room</button></div></div>
+            <details class="more" open><summary><span class="chev" aria-hidden="true">›</span><b>More options</b><span>Rating, clock, course</span></summary>
+              <div class="field"><label>Rating</label><div class="seg"><label data-v="1"><input type="radio" name="rated" value="1" checked><span>Rated</span></label><label data-v="0"><input type="radio" name="rated" value="0"><span>Unrated</span></label></div></div>
+              <div class="field"><label>Time per turn</label><div class="seg"><label data-v="60"><input type="radio" name="turn" value="60"><span>60s</span></label><label data-v="90"><input type="radio" name="turn" value="90" checked><span>90s</span></label><label data-v="120"><input type="radio" name="turn" value="120"><span>2 min</span></label><label data-v="180"><input type="radio" name="turn" value="180"><span>3 min</span></label></div></div>
+              <div class="field"><label>Course</label><div class="clist" id="cCourse"><!--COURSES:ocourse--></div></div>
+              <p class="note">You can add AI players in the room. Each turn adds the chosen time to your clock, and time you don’t use carries over; when it runs out the turn ends, and missing 3 turns in a row forfeits.</p>
+            </details>
+          </div>
+          <div class="ojoin" id="oJoin"><div class="shead"><button type="button" class="lnk sback" id="jBack">‹ Back</button><h2>Join with a code</h2></div><p class="sub">Type the room’s 5-letter code, or open the link your friend sent.</p><div id="jBig"></div></div>
+          <div class="field orooms"><label>Open rooms</label><div id="roomsOpen"></div></div>
+          <div class="field orooms" id="liveBox" hidden><label>Games in progress</label><div id="roomsLive"></div></div>
+          <div class="tiles oquiet">
+            <button type="button" class="tile quiet" id="oBoardT"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 3.5h8v4a4 4 0 01-8 0zM6 5H3.5a2.5 2.5 0 002.7 3M14 5h2.5a2.5 2.5 0 01-2.7 3M10 11.5V14M7 16.5h6"/></svg></span><span class="tt"><b>Leaderboard</b><span id="oBoardSub">Every player’s rating</span></span></button>
+            <button type="button" class="tile quiet" id="oMeT"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M4 17c.8-3.2 3-4.8 6-4.8s5.2 1.6 6 4.8"/></svg></span><span class="tt"><b>Profile</b><span id="oMeSub">Your name, rating and games</span></span></button>
+          </div>
         </div>
       </div>
       <div class="tab" data-tab="board"><div id="lbList"><p class="note">Loading…</p></div></div>
       <div class="tab" data-tab="me"><button type="button" class="linkbtn" id="pfBack" hidden>‹ Leaderboard</button><div id="pf"><p class="note">Loading…</p></div>
-        <div class="field" id="meNameBox"><label>Display name</label><div class="prow"><input id="meName" maxlength="16"><button type="button" class="btn" id="meSave">Save</button></div></div></div>
+        <div class="field" id="meNameBox"><label>Display name</label><div class="prow"><input id="meName" maxlength="16"><button type="button" class="btn" id="meSave">Save</button></div></div>
+        <button type="button" class="btn" id="pfOut">Sign out</button></div>
     </div>
     <p class="note warn" id="hErr"></p>
   </section>

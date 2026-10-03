@@ -35,6 +35,9 @@ export function menuInit(){
   let ai=[];try{ai=JSON.parse(load('seats')||'[]');}catch(e){/* expected: a stored value from another version */}
   mqa('#seats select').forEach((s,i)=>{if(aiById(ai[i]))s.value=ai[i];});
   setupRestore();thumbsInit();if(MIX('2b'))mq('#sMore').open=true;
+  if(MIX('9b'))mq('#jBig').appendChild(mq('#jSlot .prow')); // (one code field: in its tile, or on its own screen)
+  if(MIX('8b'))mq('#oCreateT').after(mq('#oCreate')); // (8b: the options open right under their tile)
+  mq('#oIn').dataset.ov='home';
   if(load('buywarn')==='0')mq('#sBuyWarn').checked=false; // (settings: kept on this device)
   MENU.f.addEventListener('submit',e=>e.preventDefault());
   MENU.f.addEventListener('change',menuChange);
@@ -88,7 +91,9 @@ function menuRefresh(){acctRender();if(MENU.screen==='online'){if(NET.user)openL
 function acctRender(){
   const el=mq('#acct'),u=NET.user,key=!NET.available?'-':u?[u.id,u.name,Math.round(u.rating),u.games,u.wins].join('|'):'out';
   if(MENU.acct===key)return;MENU.acct=key;el.hidden=!NET.available;if(!NET.available)return;
+  if(!u&&MIX('11b')){el.innerHTML='';return;} // (11b: signing in is the Online screen's)
   if(!u){const g=NET.cfg.google;el.innerHTML=`<span class="m">Not signed in</span>${g?'<div id="gsiTop" class="gsiSm gsi"></div>':''}`;if(g)gsiMount(el.querySelector('#gsiTop'),t=>toast(t,3000),menuRefresh,'medium');return;}
+  if(MIX('11b')){el.innerHTML=`<button type="button" class="achip" id="acChip" title="Your profile"><span class="av">${esc(u.name.slice(0,1).toUpperCase())}</span><span><b>${esc(u.name)}</b> · ${Math.round(u.rating)}</span></button>`;return;}
   el.innerHTML=`<span class="av">${esc(u.name.slice(0,1).toUpperCase())}</span><span><b>${esc(u.name)}</b> · <b class="rt">${Math.round(u.rating)}</b> · ${plural(u.games,'game')} · ${plural(u.wins,'win')}</span><span class="acb"><button type="button" class="linkbtn" id="acProfile">Profile</button><button type="button" class="linkbtn" id="acOut">Sign out</button></span>`;
 }
 
@@ -105,6 +110,8 @@ function menuChange(e){
   if(n==='rlcol'){roomSend({t:'color',color:e.target.value});return;}
 }
 function menuClick(e){
+  if(MIX('9b')&&e.target.closest('#oJoinT')){ov('join');requestAnimationFrame(()=>mq('#jCode').focus());return;}
+  if(e.target.closest('.seatrow.addai')){mq('section[data-screen=room]').classList.toggle('aiopen');return;} // (12a: an open seat offers the AIs)
   const b=e.target.closest('button');if(!b||b.disabled)return;
   const err=t=>{hubErr(t);};
   const run=f=>Promise.resolve().then(f).catch(x=>err(x.message));
@@ -120,6 +127,11 @@ function menuClick(e){
     case'tPass':setRadio('how','pass');howApply('pass');setupSync();prepareGame(true);startLocal();return;
     case'tSum':case'tSetup':openSetup();return;
     case'sToTitle':showSetup();return;
+    case'oCreateT':ov(MIX('8b')&&mq('#oIn').dataset.ov==='create'?'home':'create');return;
+    case'cBack':case'jBack':case'oBack':ov('home');return;
+    case'oBoardT':ov('board');return;
+    case'oMeT':ov('me');return;
+    case'pfOut':case'acChip':if(b.id==='acChip'){ov('me');if(MENU.screen!=='online')showHub();return;}{const was=MENU.screen;leaveRoom();if(online())exitOnline();signOut(was==='room'||was==='online'?showHub:menuRefresh);}return;
     case'tResign':case'tResign2':case'tResT':menuClose();resignLocal();return;
     case'tEnd':case'tEnd2':case'tEndT':menuClose();endLocal();return;
     case'acProfile':NET.viewUser=null;setRadio('otab','me');showHub();return;
@@ -167,6 +179,9 @@ export function setupSync(){
   setRadio('how',anyAI?'ai':'pass');setText(mq('#sSum'),setupSummary());
   if(MIX('3b'))courseBig();
 }
+/* the Online screen's view: home (its tiles), create, join, board (Leaderboard), me (Profile) */
+function ov(v){mq('#oIn').dataset.ov=v;if(v==='board'||v==='me'||v==='home')setRadio('otab',v==='home'?'play':v);
+  setText(mq('#oTitle'),{board:'Leaderboard',me:'Profile'}[v]||'Play online');MENU.f.scrollTop=0;onlineTab();}
 /* ---- design mix (design/menu-mix): the title screen, the setup's two tiles, the remembered setup, course pictures ---- */
 const MIX=v=>document.documentElement.classList.contains('mix-'+v);
 const AI_DEFAULT=['humboldt','raleigh','fawcett'];
@@ -199,7 +214,7 @@ function setupRestore(){let o=null;try{o=JSON.parse(load('setup')||'null');}catc
 /* every course card shows its route: each space a dot in its terrain's colour (from the engine's own map) */
 const THUMB={};
 const courseThumb=(id,w,h)=>THUMB[id+w]||(THUMB[id+w]=id==='random'?`<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"><text x="${w/2}" y="${h*.7}" text-anchor="middle" font-family="Georgia, serif" font-size="${h*.55}" fill="rgba(248,220,151,.55)">?</text></svg>`:mapThumb(buildCourse(courseById(id),1),w,h));
-function thumbsInit(){for(const inp of mqa('#sC input[name=course]')){const l=inp.closest('label'),t=document.createElement('span');t.className='cth';t.innerHTML=courseThumb(inp.value,160,64);l.insertBefore(t,l.firstChild.nextSibling);}}
+function thumbsInit(){for(const inp of mqa('#sC input[name=course],#cCourse input[name=ocourse]')){const l=inp.closest('label'),t=document.createElement('span');t.className='cth';t.innerHTML=courseThumb(inp.value,160,64);l.insertBefore(t,l.firstChild.nextSibling);}}
 function courseBig(){const id=radio('course'),C=courseById(id);setHTML(mq('#sCBig'),courseThumb(id,320,150)+`<b>${esc(courseName(id))}</b>`+(C?`<span>Boards ${esc(C.p.map(x=>x[0]).join(' · '))}</span>`:''));}
 /* the title screen: Continue (a game in progress), Play (or New game during one), Set up a game…; during a game, Resign and End game */
 function titleFill(){
@@ -250,11 +265,11 @@ export function startLocal(){
 /* leave the room this page is in (before its game starts: afterwards the server ignores it and the socket just closes) */
 function leaveRoom(){if(!NET.code){NET.room=null;return;} // (a room still being made: it is never joined (roomMade))
   if(NET.connected)netSend({t:'leave'});NET.code=null;leaveRoomSocket();setQuery({room:null,replay:null});}
-export function showHub(){if(NET.user)openLobbyWs();onlineRender();menuOpen('online');}
+export function showHub(){if(NET.user)openLobbyWs();if(MENU.screen!=='online')mq('#oIn').dataset.ov='home';onlineRender();menuOpen('online');}
 function onlineRender(){
   const u=NET.user;mq('#oOff').hidden=NET.available;mq('#oOut').hidden=!NET.available||!!u;mq('#oIn').hidden=!NET.available||!u;
   if(!NET.available)return;
-  if(!u){mq('#oNoG').hidden=!!NET.cfg.google;mq('#oDev').hidden=!NET.cfg.dev;return;}
+  if(!u){mq('#oNoG').hidden=!!NET.cfg.google;mq('#oDev').hidden=!NET.cfg.dev;const g=mq('#gsiMain');if(NET.cfg.google&&!g.firstChild)gsiMount(g,t=>toast(t,3000),menuRefresh,'large');return;}
   const busy=onlineGame();mq('#oBusy').hidden=!busy;mq('#oPlay').hidden=busy;mq('#rejoin').hidden=busy||!NET.active;roomsRender();onlineTab();
 }
 export function roomsRender(){
@@ -312,7 +327,7 @@ export function renderRoomLobby(){
   mq('#lkIn').value=NET.code?location.origin+location.pathname+'?room='+NET.code:'';
   mq('#rlCount').textContent=`Players ${seats.length}/${max}`;
   setHTML(mq('#rlSeats'),seats.map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="seatrow"><span><i style="background:${s.color}"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note">(you)</span>':''}</span>${A?`<span class="lbp"><span class="note">${esc(A.tier)}</span>${host&&lobby?`<button type="button" class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note">${s.now?'wants to start · ':''}${s.uid===r.host&&!auto?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('')
-    +(o?'<div class="seatrow open"><span class="note">Open seat</span></div>'.repeat(Math.max(0,max-seats.length)):'<p class="note">Connecting…</p>')); // (every seat the room holds has its row: a player joining fills one, and nothing below moves)
+    +(o?(MIX('12a')&&host&&!auto&&lobby&&aiAllowed(o.course,o.max)?'<div class="seatrow open addai"><span class="note">Open seat · <b>Add an AI</b></span></div>':'<div class="seatrow open"><span class="note">Open seat</span></div>').repeat(Math.max(0,max-seats.length)):'<p class="note">Connecting…</p>')); // (every seat the room holds has its row: a player joining fills one, and nothing below moves)
   if(CHECKS)requestAnimationFrame(roomPlace);
   const ctl=host&&!auto&&lobby,aiOK=!!(o&&aiAllowed(o.course,o.max));
   mq('#rlAIBox').hidden=!ctl;mq('#rlAINo').hidden=aiOK;mq('#rlAIList').hidden=!aiOK||!room;mq('#rlFull').hidden=!aiOK||room;
@@ -335,6 +350,7 @@ function gameRowHTML(attr,g,me,where,you=true){
   const won=g.places?g.names.filter((_,i)=>g.places[i]===1).map(esc).join(' & '):'',C=courseById(g.course);
   const res=!g.places?'Unfinished':me<0?`Won by ${won}`:g.places[me]===1&&you?`<span class="plc p1">1st</span> You won`:g.places[me]===1?`<span class="plc p1">1st</span> of ${g.names.length}`:`<span class="plc p${g.places[me]}">${ordn(g.places[me])}</span> of ${g.names.length} · won by ${won}`;
   const sub=[where,C&&C.name,g.rounds&&plural(g.rounds,'round'),new Date(g.created).toLocaleString([],{dateStyle:'medium',timeStyle:'short'})].filter(Boolean).join(' · ');
+  if(MIX('13a'))return`<button type="button" class="rrow13" ${attr}><span class="rth">${C?courseThumb(g.course,110,44):''}</span><span class="rtx"><b>${res}</b><span>${esc(sub)}</span></span></button>`;
   return`<button type="button" ${attr}><b>${res}</b><span>${esc(sub)}</span></button>`;}
 export function showReplays(){
   const mine=mq('#rMine'),loc=myGames().map(L=>{const hum=L.players.map((p,i)=>p.bot?-1:i).filter(i=>i>=0); // (you: the one person at the table)
