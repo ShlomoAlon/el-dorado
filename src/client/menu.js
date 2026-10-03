@@ -120,8 +120,8 @@ function menuClick(e){
     case'tPass':setRadio('how','pass');howApply('pass');setupSync();prepareGame(true);startLocal();return;
     case'tSum':case'tSetup':openSetup();return;
     case'sToTitle':showSetup();return;
-    case'tResign':case'tResign2':menuClose();resignLocal();return;
-    case'tEnd':case'tEnd2':menuClose();endLocal();return;
+    case'tResign':case'tResign2':case'tResT':menuClose();resignLocal();return;
+    case'tEnd':case'tEnd2':case'tEndT':menuClose();endLocal();return;
     case'acProfile':NET.viewUser=null;setRadio('otab','me');showHub();return;
     case'acOut':{const was=MENU.screen;leaveRoom();if(online())exitOnline();signOut(was==='room'||was==='online'?showHub:menuRefresh);return;} // signed out: out of any room
     case'devGo':run(async()=>signedIn(await api('/api/auth/dev',{method:'POST',body:JSON.stringify({name:mq('#devName').value||'Tester'})}),menuRefresh));return;
@@ -211,7 +211,12 @@ function titleFill(){
   if(ig){setText(mq('#tContSub'),`Round ${S.round} · ${S.players.map(p=>p.name).join(', ')}`);
     const m=mq('#tContMap');m.hidden=!MIX('4b');if(MIX('4b'))setHTML(m,mapThumb(MAP,160,70,S.players.flatMap(p=>p.pieces.filter(k=>k!=='done').map(k=>({k,color:p.color})))));}
   const rs=ig?resignSeat():-1,lk=MIX('5b')?'#tGame':'#tLinks';mq('#tLinks').hidden=mq('#tGame').hidden=true;
-  if(ig){mq(lk).hidden=false;for(const id of['#tResign','#tResign2']){const r=mq(id);r.hidden=rs<0;r.textContent='Resign'+(rs>=0&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');}}
+  // 5c: during a game the tiles are this game's: Continue, Resign, End game (a new game only once this one is over)
+  const c5=MIX('5c')&&ig;mq('#tResT').hidden=!c5||rs<0;mq('#tEndT').hidden=!c5;
+  for(const id of['#tPlay','#tPair','#tSum','#tSetup'])mq(id).classList.toggle('gone',c5);
+  if(c5&&rs>=0){const many=S.players.filter(p=>!p.ai).length>1;setText(mq('#tResTT'),'Resign'+(many?' ('+S.players[rs].name+')':''));
+    setText(mq('#tResTSub'),(many?S.players[rs].name:'You')+' leave'+(many?'s':'')+' the expedition and finish'+(many?'es':'')+' last among those still racing');}
+  if(ig&&!MIX('5c')){mq(lk).hidden=false;for(const id of['#tResign','#tResign2']){const r=mq(id);r.hidden=rs<0;r.textContent='Resign'+(rs>=0&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');}}
 }
 /* The start screen's background IS the game about to start: made from the current choices (this deal's seed) and laid
    out exactly as it will be played (board, pieces, hand, top bar). A changed choice remakes it behind the menu; Start
