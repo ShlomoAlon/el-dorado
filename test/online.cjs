@@ -241,22 +241,28 @@ const T = report('online');
     await done(Pa, Pb);
     // ---------- 3c. a whole game played online through the UI, as a quick person plays it: the same player as the local
     //      played games (test/playstep.cjs), every other move made while the last one is still on its way to the server
-    {
-      const P = await open('Play'); await signIn(P, 'Paz');
+    //      Two games side by side (owner, 2026-10-03): a fixed one, the same deal, shuffles and choices every run (a seed, and
+    //      each move left to land before the next), which must reach the removal choice, so that path is proven on every run; and a random one, a new seed each run
+    //      (printed, so a failure can be played again: SEED_RANDOM=<n>), played quickly (every other tap while the last move is on its way), which must finish
+    //      cleanly: over many runs it goes where no fixed game does
+    // (the fixed seed, 2, was found by playing the same game in the engine alone for seeds 1 to 40, about 3 s, and confirmed
+    //  here: its game buys and plays two Travel Logs; seed 1's never reaches a removal)
+    const wholeGame = async (name, SEED, fixed) => {
+      const P = await open(name); await signIn(P, name);
       // (a real connection's delay: each message the page sends reaches the server 150 ms later, in order, so a quick
       // player's taps land while their last move is still on its way, as on the live site)
       await P.evaluate(() => { const send = WebSocket.prototype.send; WebSocket.prototype.send = function (d) { setTimeout(() => send.call(this, d), 150); }; });
-      await mkRoom(P, { max: 3, turn: 60, course: 'first', rated: false });
+      await mkRoom(P, { max: 3, turn: 60, course: 'first', rated: false, seed: SEED });
       await wait(P, () => __ED.NET.room && __ED.NET.room.seats.length === 1);
       await P.click('[data-addai="raleigh"]'); await wait(P, () => __ED.NET.room.seats.length === 2);
       await P.click('[data-addai="raleigh"]'); await wait(P, () => __ED.NET.room.seats.length === 3);
       await P.click('#rlStart'); await wait(P, () => __ED.online());
-      await P.evaluate(() => { window.__prefer = ['travellog', 'scientist']; }); // (so the game reaches the removal choice, and plays on while moves are on their way)
+      await P.evaluate(s => { window.__prefer = ['travellog', 'scientist']; window.__seed = s; }, SEED); // (so the game reaches the removal choice, and plays on while moves are on their way)
       const did = {}, odd = []; let steps = 0;
       const ready = quick => P.waitForFunction(q => { const E = window.__ED; return E.S.over || (E.canAct() && (q || (!E.NET.busy && !E.walking())) && E.UI.mode !== 'pay' && E.UI.mode !== 'discardFor'); }, quick, { timeout: 90000 });
       try {
         for (; steps < 1500; steps++) {
-          const quick = !!(steps % 2); await ready(quick); if (!quick) await settle(P);
+          const quick = !fixed && !!(steps % 2); await ready(quick); if (!quick) await settle(P); // (the fixed game waits for each move to land: a quick tap decides from wherever the last move has got to, which varies)
           if (await P.evaluate(() => __ED.S.over)) break;
           const [busy, ahead, r] = await P.evaluate(`(async () => [__ED.NET.busy, __ED.NET.pending.length, await (${step})()])()`), k = (busy ? 'in flight: ' : ahead ? 'ahead of the server: ' : '') + r.split(':')[0];
           did[k] = (did[k] || 0) + 1;
@@ -264,12 +270,13 @@ const T = report('online');
           if (r.startsWith('unmapped') && !busy) { odd.push(r); break; }
         }
       } catch (e) { odd.push('stopped: ' + e.message.split('\n')[0]); }
-      T.ok('a whole game online, played quickly through the UI', await P.evaluate(() => __ED.S.over) && !odd.length, steps + ' moves; ' + odd.join('; '));
-      T.ok('online: the removal choice was reached, and moves were made while others were still on their way to the server', Object.keys(did).some(k => /^(\w[\w ]*: )?trash/.test(k)) && Object.keys(did).some(k => k.startsWith('ahead of the server')), JSON.stringify(did));
-      console.log('     did: ' + JSON.stringify(did));
+      T.ok(`a whole game online (${fixed ? 'fixed' : 'random'}, seed ${SEED}), played quickly through the UI`, await P.evaluate(() => __ED.S.over) && !odd.length, steps + ' moves; ' + odd.join('; '));
+      if (fixed) T.ok('online (fixed game): the removal choice was reached', Object.keys(did).some(k => /^(\w[\w ]*: )?trash/.test(k)), JSON.stringify(did));
+      else T.ok('online (random game): moves were made while others were still on their way to the server', Object.keys(did).some(k => k.startsWith('ahead of the server')), JSON.stringify(did));
+      console.log(`     did (${name}): ` + JSON.stringify(did));
       await done(P);
-    }
-
+    };
+    await Promise.all([wholeGame('Play', +process.env.SEED_FIXED || 2, true), wholeGame('Roam', +process.env.SEED_RANDOM || (Math.random() * 1e9) >>> 0, false)]);
     // ---------- 4. room lists and quick match
     const D = await open('D'), E2 = await open('E'), F = await open('F'); await signIn(D, 'Dora'); await signIn(E2, 'Emil'); await signIn(F, 'Finn');
     const pub = await mkRoom(D, { max: 3, turn: 60, course: 'first', pub: true }), priv = await mkRoom(E2, { max: 3, turn: 60, course: 'first', pub: false });

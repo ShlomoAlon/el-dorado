@@ -196,7 +196,9 @@ async function upsertUser(env, sub, displayName) {
 /* a room's options: what the player chose (checked), or a quick match's, which are fixed. Developer servers allow short clocks. */
 function roomOpts(env, b) {
   const turn = TURN_CHOICES.includes(+b.turn) || (env.DEV_AUTH === '1' && +b.turn >= 5) ? +b.turn : 90;
-  return { max: Math.min(4, Math.max(2, +b.max || 3)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn, pub: b.pub !== false, rated: b.rated !== false, auto: false };
+  // seed (developer servers only): the game's deal, shuffles and AI choices all come from it, so a test plays the same game every run
+  const seed = env.DEV_AUTH === '1' && Number.isInteger(b.seed) ? b.seed >>> 0 : undefined;
+  return { max: Math.min(4, Math.max(2, +b.max || 3)), course: b.course === 'random' || E.courseById(b.course) ? b.course : E.COURSES[0].id, turn, pub: b.pub !== false, rated: b.rated !== false, auto: false, seed };
 }
 const matchOpts = env => ({ max: MATCH_SIZE, course: 'random', turn: env.DEV_AUTH === '1' ? 20 : 90, pub: true, rated: true, auto: true });
 async function createRoom(env, uid, opts) {
@@ -554,8 +556,8 @@ export class Room extends DurableObject {
   }
   async startGame() {
     const d = this.d;
-    E.shuffle(d.seats, Math.random); // the order around the table (who moves first): new each game; seat i plays player i
-    ({ gs: this.S, rec: this.rec } = E.recNewGame({ course: d.opts.course === 'random' ? E.COURSES[Math.floor(Math.random() * E.COURSES.length)] : E.courseById(d.opts.course), seed: (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true }, E.recSecret()));
+    E.shuffle(d.seats, d.opts.seed == null ? Math.random : E.mulberry32(d.opts.seed ^ 0x5ea75)); // the order around the table (who moves first): new each game (a test's seed: the same); seat i plays player i
+    ({ gs: this.S, rec: this.rec } = E.recNewGame({ course: d.opts.course === 'random' ? E.COURSES[Math.floor(Math.random() * E.COURSES.length)] : E.courseById(d.opts.course), seed: d.opts.seed ?? (Math.random() * 1e9) | 0, players: d.seats.map(s => ({ name: s.name, color: s.color, ai: s.ai || undefined })), fullRace: true }, d.opts.seed ?? E.recSecret()));
     d.status = 'playing'; d.timeouts = {}; d.bank = {}; d.clock = null;
     await this.nextTurn(); await this.lobbyChanged();
   }
@@ -590,7 +592,8 @@ export class Room extends DurableObject {
     useNet(); const ev = []; const fast = !this.watched(); let n = 0;
     do {
       const seat = this.S.cur, mem = this.aiMem[seat] || (this.aiMem[seat] = {});
-      const r = E.aiStep(this.S, this.S.players[seat].ai, mem, this.rec, Math.random); ev.push(...r.ev);
+      const rnd = this.d.opts.seed == null ? Math.random : E.mulberry32(this.d.opts.seed + this.rec.actions.length); // (a test's seed: the same choice every run)
+      const r = E.aiStep(this.S, this.S.players[seat].ai, mem, this.rec, rnd); ev.push(...r.ev);
     } while (fast && this.aiToMove() && ++n < AI_BATCH);
     if (!this.S.over) { if (this.aiToMove()) await this.scheduleAI(700); else await this.startTurnTimer(); }
     await this.afterChange(ev);

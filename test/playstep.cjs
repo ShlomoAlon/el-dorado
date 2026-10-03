@@ -11,7 +11,9 @@ async function step() {
   // (online the page holds the state as its seat sees it: other players' cards are unnamed, so the AI chooses on a copy
   // without them, as the server's AIs never see a person's hand either)
   const view = E.online() ? { ...S, players: S.players.map((q, i) => i === me ? q : { ...q, hand: [], deck: [] }) } : S;
-  const a = await E.aiThink(view, 'raleigh', me); // (in the AI's worker, as the AIs think: the person's turn waits on nothing else meanwhile)
+  // (in the AI's worker, as the AIs think: the person's turn waits on nothing else meanwhile; window.__seed: a test's seed, so
+  // the same position always gets the same choice and the game is the same every run)
+  const a = await E.aiThink(view, 'raleigh', me, window.__seed == null ? undefined : window.__seed + S.log.length);
   if (E.S !== S || !E.canAct()) return 'not my turn'; // (the game moved on while it thought)
   // every state the page passes through is noted (each call leaves the page drawn, as a frame after a tap would)
   const seen = window.__seen || (window.__seen = { modes: {}, labels: {} });

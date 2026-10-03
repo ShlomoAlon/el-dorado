@@ -28,7 +28,7 @@ function worker(){
   return W;
 }
 /* an AI's next action in the game on show (its memory of earlier turns is the worker's, kept per seat for this game) */
-export const aiThink=(S,ai,seat)=>aiAsk({t:'choose',S,ai,seat,gen:AIX.gen}).then(r=>r.a);
+export const aiThink=(S,ai,seat,seed)=>aiAsk({t:'choose',S,ai,seat,gen:AIX.gen,seed}).then(r=>r.a); // (seed: tests only, the same choice every run)
 export function aiAsk(m){return new Promise((resolve,reject)=>{const id=++seq;waiting.set(id,{resolve,reject,t:m.t,at:performance.now()});worker().postMessage({...m,id});});}
 /* what the worker has still to answer (for checks' messages): each request's kind and how long it has waited */
 export const aiWaiting=()=>[...waiting.values()].map(p=>p.t+' '+Math.round(performance.now()-p.at)+' ms').join(', ')||'nothing';

@@ -8,11 +8,12 @@ let gen = -1; const mems = new Map(); // (each AI seat's memory across its turns
 const ops = {
   init(m) { setAssertMode({ debug: m.debug }); },
   net(m) { aiSetNet(aiNetDecode(m.bin)); },
-  /* a local AI's next action: its memory is kept here, per seat, until the page starts another game */
+  /* a local AI's next action: its memory is kept here, per seat, until the page starts another game. seed: a test's own
+     random stream for this choice (the same game every run), else Math.random */
   choose(m) {
     if (m.gen !== gen) { gen = m.gen; mems.clear(); }
     if (!mems.has(m.seat)) mems.set(m.seat, {});
-    return { a: aiChoose(m.S, m.ai, mems.get(m.seat), Math.random) };
+    return { a: aiChoose(m.S, m.ai, mems.get(m.seat), m.seed == null ? Math.random : mulberry32(m.seed)) };
   },
   /* how the network rates each player's position (resigned: 0) */
   value(m) { return { raw: m.S.players.map((p, j) => p.resigned ? 0 : Math.max(0, botValue(m.S, j, 'net'))) }; },
