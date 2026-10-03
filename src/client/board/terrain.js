@@ -18,6 +18,17 @@ const ICOL={j:'#f4fff6',w:'#f2f9ff',v:'#5a3d07',g:'#5a3c05',r:'#f5f5f2',c:'#fff4
 const CHIP={j:'rgba(10,40,22,.42)',w:'rgba(8,34,64,.42)',v:'rgba(255,248,225,.5)',r:'rgba(30,32,31,.45)',c:'rgba(70,16,8,.45)',g:'rgba(255,250,230,.55)'};
 
 /* board layers other modules draw into (made with the board) */
+/* a small picture of a course's map (the menu: course choices, a saved game): every space as a dot in its terrain's
+   colour; marks: [{k, color}] explorers drawn on their spaces. w×h: the picture's box (its viewBox) */
+export function mapThumb(M,w=160,h=64,marks=[]){
+  const hs=[...M.hexes.values()],P=h2=>[R*Math.sqrt(3)*(h2.q+h2.r/2),R*1.5*h2.r];let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const c of hs){const[x,y]=P(c);x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);}
+  const k=Math.min((w-12)/(x1-x0+2*R),(h-8)/(y1-y0+2*R)),ox=w/2-(x0+x1)/2*k,oy=h/2-(y0+y1)/2*k,r=(R*k*.95).toFixed(2);
+  const col=c=>{const t=c.type==='g'?(c.sym||'g'):c.type;return TSHADE[t]?TSHADE[t][Math.min(3,Math.max(0,(c.val||1)-1))][0]:TFILL[t]?TFILL[t][0]:'#777';};
+  const at=c=>{const[x,y]=P(c);return[(x*k+ox).toFixed(1),(y*k+oy).toFixed(1)];};
+  return`<svg viewBox="0 0 ${w} ${h}" aria-hidden="true">${hs.map(c=>{const[x,y]=at(c);return`<circle cx="${x}" cy="${y}" r="${r}" fill="${col(c)}"/>`;}).join('')}`
+    +marks.map(m=>{const c=M.hexes.get(m.k);if(!c)return'';const[x,y]=at(c);return`<circle cx="${x}" cy="${y}" r="${(R*k*1.6).toFixed(2)}" fill="${m.color}" stroke="#0b1411" stroke-width="1.4"/>`;}).join('')+'</svg>';
+}
 export const L={};
 /* the overlay layers (highlights, trail, path, blockades), on #board2: made at startup and again with each board drawn, so
    anything that draws on them (the recap's trail, the targets) never depends on a board having been drawn first */

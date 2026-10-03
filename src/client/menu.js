@@ -2,9 +2,10 @@
    `hidden`; choices are native form controls that keep their own state (the Online tabs are pure CSS). This file wires
    them, reads them when they're used, and fills only the boxes that hold data (seats, rooms, leaderboard, profile,
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
-import { COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, recSecret, plural, shuffle, assert } from '../engine.gen.js';
+import { COLORS, COURSES, courseById, buildCourse, aiById, aiAllowed, aiUsesNet, recNewGame, recSecret, plural, shuffle, assert } from '../engine.gen.js';
+import { mapThumb } from './board/terrain.js';
 import { $, esc, setHTML, setText, setQuery } from './dom.js';
-import { S, setS, UI, NET, G, clearSelection, online, myId, inGame, loadSave, save, myGames } from './state.js';
+import { S, setS, UI, NET, G, MAP, clearSelection, online, myId, inGame, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
 import { toast } from './dialogs.js';
 import { showGame, resumeSaved, resignSeat, resignLocal, endLocal } from './actions.js';
@@ -33,6 +34,7 @@ export function menuInit(){
   // AI seats chosen before are remembered on this device
   let ai=[];try{ai=JSON.parse(load('seats')||'[]');}catch(e){/* expected: a stored value from another version */}
   mqa('#seats select').forEach((s,i)=>{if(aiById(ai[i]))s.value=ai[i];});
+  setupRestore();thumbsInit();if(MIX('2b'))mq('#sMore').open=true;
   if(load('buywarn')==='0')mq('#sBuyWarn').checked=false; // (settings: kept on this device)
   MENU.f.addEventListener('submit',e=>e.preventDefault());
   MENU.f.addEventListener('change',menuChange);
@@ -47,7 +49,7 @@ export function menuInit(){
 }
 const menuDismissible=()=>inGame()&&MENU.screen!=='room';
 const onlineGame=()=>inGame()&&online(); // an online game in progress: one game at a time, so the menu only offers going back to it
-const MODE={setup:'local',online:'online',room:'online',replays:'replays'};
+const MODE={title:'local',setup:'local',online:'online',room:'online',replays:'replays'};
 /* the menu for where the player is: an online game (in progress, or just finished: its room is left) → Online; else the start screen */
 export function showMenu(){if(online()&&S.over){exitOnline();showHub();}else if(onlineGame())showHub();else showSetup();}
 
@@ -62,10 +64,11 @@ function menuReach(){
 function menuOpen(screen){
   $('#overlay').innerHTML=''; // one window at a time: the menu replaces results, rules or a pile (never left underneath it)
   const d=MENU.dlg,ig=inGame(),rs=ig?resignSeat():-1;
-  mq('#ingame').hidden=!ig;
+  mq('#ingame').hidden=true; // (design mix: the title screen says what's in progress, and offers going back to it)
   if(ig){mq('#igTxt').innerHTML=`<b>Game in progress</b> · round ${S.round}${online()?' · online':''}`;const r=mq('#sResign');r.hidden=rs<0;
     r.textContent='Resign'+(rs>=0&&!online()&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');mq('#sEnd').hidden=online();}
-  if(screen==='setup'){const saved=loadSave();mq('#sResume').hidden=!(saved&&!saved.S.over&&!ig);setText(mq('#sGo'),ig?'Start a new game':'Start expedition');}
+  if(screen==='setup')setText(mq('#sGo'),ig?'Start a new game':'Start expedition');
+  if(screen==='title')titleFill();
   acctRender();
   setRadio('mode',MODE[screen]);mq('#sMode').hidden=screen==='room'||onlineGame(); // in a room, Leave is the way out; in an online game, Back to game
   mq('#acct').classList.toggle('inroom',screen==='room');
@@ -93,7 +96,8 @@ function acctRender(){
 function menuChange(e){
   const n=e.target.name||e.target.id;
   if(n==='mode'){({local:showSetup,online:showHub,replays:showReplays})[e.target.value]();return;}
-  if(n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){setupSync();prepareGame();
+  if(n==='how'){howApply(e.target.value);setupSync();prepareGame();return;}
+  if(n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){if(n==='np')howApply(radio('how'));setupSync();prepareGame();
     if(/^who\d$/.test(n))store('seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value))); return;}
   if(n==='buywarn'){store('buywarn',e.target.checked?'1':'0');return;}
   if(n==='otab'){onlineTab();return;}
@@ -110,6 +114,14 @@ function menuClick(e){
     case'sEnd':menuClose();endLocal();return;
     case'sResume':menuClose();resumeSaved();return;
     case'sGo':delete b.dataset.q;startLocal();return;
+    case'tCont':menuClose();return;
+    case'tPlay':startLocal();return;
+    case'tAI':setRadio('how','ai');howApply('ai');setupSync();prepareGame(true);startLocal();return;
+    case'tPass':setRadio('how','pass');howApply('pass');setupSync();prepareGame(true);startLocal();return;
+    case'tSum':case'tSetup':openSetup();return;
+    case'sToTitle':showSetup();return;
+    case'tResign':case'tResign2':menuClose();resignLocal();return;
+    case'tEnd':case'tEnd2':menuClose();endLocal();return;
     case'acProfile':NET.viewUser=null;setRadio('otab','me');showHub();return;
     case'acOut':{const was=MENU.screen;leaveRoom();if(online())exitOnline();signOut(was==='room'||was==='online'?showHub:menuRefresh);return;} // signed out: out of any room
     case'devGo':run(async()=>signedIn(await api('/api/auth/dev',{method:'POST',body:JSON.stringify({name:mq('#devName').value||'Tester'})}),menuRefresh));return;
@@ -135,7 +147,9 @@ function menuClick(e){
 }
 
 /* ---- start screen ---- */
-export function showSetup(){closeLobbyWs();setupSync();prepareGame();menuOpen('setup');}
+export function showSetup(){closeLobbyWs();setupSync();prepareGame();menuOpen('title');}
+/* the full setup (from the title's Set up a game…, or its summary) */
+function openSetup(){setupSync();prepareGame();menuOpen('setup');}
 // what the choices allow: seats shown, AI only where it plays, one colour per seat, at least one person
 export function setupSync(){
   const n=+radio('np'),aiOK=aiAllowed(radio('course'),n),rows=[...mqa('#seats .seat')];
@@ -148,6 +162,56 @@ export function setupSync(){
     if(i<n&&rows.slice(0,i).some(q=>col(q)===col(r))){const free=COLORS.find(c=>!rows.slice(0,n).some(q=>q!==r&&col(q)===c.id));r.querySelector(`.sws input[value="${free.id}"]`).checked=true;}}); // (4 colours, at most 4 seats: one is free)
   rows.forEach((r,i)=>{for(const x of r.querySelectorAll('.sws input'))x.disabled=rows.slice(0,n).some((q,j)=>j!==i&&col(q)===x.value);});
   const allAI=rows.slice(0,n).every(r=>r.querySelector('select').value);mq('#allAI').hidden=!allAI;mq('#sGo').disabled=allAI;
+  // the two tiles follow the seats (an AI seated: against the AI; none: pass and play); the AI's is off where AIs don't play
+  const anyAI=rows.slice(0,n).some(r=>r.querySelector('select').value),aiT=mq('input[name=how][value=ai]');aiT.disabled=!aiOK;
+  setRadio('how',anyAI?'ai':'pass');setText(mq('#sSum'),setupSummary());
+  if(MIX('3b'))courseBig();
+}
+/* ---- design mix (design/menu-mix): the title screen, the setup's two tiles, the remembered setup, course pictures ---- */
+const MIX=v=>document.documentElement.classList.contains('mix-'+v);
+const AI_DEFAULT=['humboldt','raleigh','fawcett'];
+/* how you play: against the AI fills the other seats with AIs (the ones picked last time), pass and play makes every seat a person's and hides the hands */
+function howApply(how){
+  const n=+radio('np'),rows=[...mqa('#seats .seat')];let saved=[];try{saved=JSON.parse(load('seats')||'[]');}catch(e){/* expected: a stored value from another version */}
+  const aiOK=aiAllowed(radio('course'),n);
+  rows.forEach((r,i)=>{const sel=r.querySelector('select');
+    if(how==='pass'||!aiOK||i===0)sel.value='';else if(!sel.value)sel.value=aiById(saved[i])?saved[i]:AI_DEFAULT[(i-1)%3];});
+  mq('#sPriv').checked=how==='pass'&&n>1;
+}
+/* the game set up, in one line: "Ana against Humboldt and Raleigh · First Expedition" */
+function setupSummary(){
+  const n=+radio('np'),rows=[...mqa('#seats .seat')].slice(0,n),ps=rows.map((r,i)=>{const A=aiById(r.querySelector('select').value);
+    return{ai:!!A,name:A?A.name:r.querySelector('input[name^=nm]').value.trim()||'Player '+(i+1)};});
+  const list=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1],hum=ps.filter(p=>!p.ai).map(p=>p.name),ais=ps.filter(p=>p.ai).map(p=>p.name);
+  return(ais.length?`${list(hum)} against ${list(ais)}`:`${list(hum)} take turns`)+' · '+courseName(radio('course'));
+}
+/* the whole setup is remembered on this device, so Play is the game set up last time */
+function setupStore(){const rows=[...mqa('#seats .seat')];
+  store('setup',JSON.stringify({np:radio('np'),course:radio('course'),full:radio('full'),priv:mq('#sPriv').checked,
+    who:rows.map(r=>r.querySelector('select').value),nm:rows.map(r=>r.querySelector('input[name^=nm]').value),col:rows.map(r=>r.querySelector('.sws input:checked').value)}));}
+function setupRestore(){let o=null;try{o=JSON.parse(load('setup')||'null');}catch(e){/* expected: a stored value from another version */}
+  if(!o){howApply('ai');return;} // (a first visit: you against Humboldt and Raleigh on First Expedition)
+  const ok=(n,v)=>!!MENU.f.querySelector(`input[name="${n}"][value="${v}"]`);
+  if(ok('np',o.np))setRadio('np',o.np);if(ok('course',o.course))setRadio('course',o.course);if(ok('full',o.full))setRadio('full',o.full);mq('#sPriv').checked=!!o.priv;
+  [...mqa('#seats .seat')].forEach((r,i)=>{const sel=r.querySelector('select');if(o.who&&(o.who[i]===''||aiById(o.who[i])))sel.value=o.who[i];
+    if(o.nm&&o.nm[i]!=null)r.querySelector('input[name^=nm]').value=o.nm[i];const c=o.col&&r.querySelector(`.sws input[value="${o.col[i]}"]`);if(c)c.checked=true;});
+}
+/* every course card shows its route: each space a dot in its terrain's colour (from the engine's own map) */
+const THUMB={};
+const courseThumb=(id,w,h)=>THUMB[id+w]||(THUMB[id+w]=id==='random'?`<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"><text x="${w/2}" y="${h*.7}" text-anchor="middle" font-family="Georgia, serif" font-size="${h*.55}" fill="rgba(248,220,151,.55)">?</text></svg>`:mapThumb(buildCourse(courseById(id),1),w,h));
+function thumbsInit(){for(const inp of mqa('#sC input[name=course]')){const l=inp.closest('label'),t=document.createElement('span');t.className='cth';t.innerHTML=courseThumb(inp.value,160,64);l.insertBefore(t,l.firstChild.nextSibling);}}
+function courseBig(){const id=radio('course'),C=courseById(id);setHTML(mq('#sCBig'),courseThumb(id,320,150)+`<b>${esc(courseName(id))}</b>`+(C?`<span>Boards ${esc(C.p.map(x=>x[0]).join(' · '))}</span>`:''));}
+/* the title screen: Continue (a game in progress), Play (or New game during one), Set up a game…; during a game, Resign and End game */
+function titleFill(){
+  const ig=inGame(),sum=setupSummary(),cont=mq('#tCont'),play=mq('#tPlay');
+  cont.hidden=!ig;cont.classList.toggle('gold',ig);play.classList.toggle('gold',!ig);mq('#tAI').classList.toggle('gold',!ig);
+  setText(mq('#tPlayT'),ig?'New game':'Play');setText(mq('#tPlaySub'),sum);setText(mq('#tSumTxt'),sum);
+  const n=+radio('np'),names=[...mqa('#seats .seat')].slice(0,n).filter(r=>!r.querySelector('select').value).map((r,i)=>r.querySelector('input[name^=nm]').value.trim()||'Player '+(i+1));
+  setText(mq('#tAISub'),sum);setText(mq('#tPassSub'),(names.length>1?names.join(', '):n+' people')+' on this device · '+courseName(radio('course')));
+  if(ig){setText(mq('#tContSub'),`Round ${S.round} · ${S.players.map(p=>p.name).join(', ')}`);
+    const m=mq('#tContMap');m.hidden=!MIX('4b');if(MIX('4b'))setHTML(m,mapThumb(MAP,160,70,S.players.flatMap(p=>p.pieces.filter(k=>k!=='done').map(k=>({k,color:p.color})))));}
+  const rs=ig?resignSeat():-1,lk=MIX('5b')?'#tGame':'#tLinks';mq('#tLinks').hidden=mq('#tGame').hidden=true;
+  if(ig){mq(lk).hidden=false;for(const id of['#tResign','#tResign2']){const r=mq(id);r.hidden=rs<0;r.textContent='Resign'+(rs>=0&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');}}
 }
 /* The start screen's background IS the game about to start: made from the current choices (this deal's seed) and laid
    out exactly as it will be played (board, pieces, hand, top bar). A changed choice remakes it behind the menu; Start
@@ -172,7 +236,7 @@ export function startLocal(){
   if(!GAME_READY.done){GAME_READY.then(startLocal);return;} // the game's fonts are still on their way: start the moment they're in
   if(mq('#sGo').disabled)return;
   if(!UI.preview)prepareGame(true); // Start a new game from a game in progress: made behind the menu first
-  UI.preview=false;save();if(S.players.some(p=>p.ai&&aiUsesNet(p.ai)))aiNetLoad();
+  UI.preview=false;save();setupStore();if(S.players.some(p=>p.ai&&aiUsesNet(p.ai)))aiNetLoad();
   menuClose();aiKick();
   SETUP.seed=(Math.random()*1e9)|0;SETUP.order=newOrder();SETUP.cur=null; // the next deal
 }

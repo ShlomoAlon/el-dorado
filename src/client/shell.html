@@ -140,6 +140,46 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #acct{min-height:32px} /* its line is there before the script fills it: nothing below moves */
 #shell{isolation:isolate} /* nothing in the game can stack above the menu, whatever its z-index */
 #shell{visibility:hidden} /* the game shows once its CSS (the late block) has arrived */
+/* ---- design mix (design/menu-mix): the title screen (D1-A's look) and the setup (D1-B's short top). ?mix=1a2a3a4a5a picks each part's variant */
+.ttl{display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;min-height:min(600px,calc(100dvh - 190px));max-width:440px;margin:0 auto}
+.ttl h2{font-size:clamp(30px,5vw,40px)}.ttl .sub{max-width:380px}
+.tiles{display:flex;flex-direction:column;gap:12px;width:100%}
+.tile{display:flex;align-items:center;gap:14px;width:100%;box-sizing:border-box;text-align:left;padding:13px 16px;border-radius:14px;border:1px solid var(--line2);background:#0f1814;color:var(--text);font:inherit;cursor:pointer;transition:border-color .15s}
+.tile:hover{border-color:var(--gold)}
+.tile .ti,.mtile .ti{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.06);flex:none;color:var(--gold2)}
+.tile .tt,.mtile .tt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.tile .tt b{font-family:var(--display);font-weight:400;font-size:21px;line-height:1.2}
+.tile.quiet .tt b{font-family:inherit;font-weight:800;font-size:15px}
+.tile .tt span,.mtile .tt span{font-size:13px;color:var(--muted);line-height:1.35}
+.tile.gold{background:linear-gradient(#f3c461,#d99a2b);border-color:#f5cf7c;color:var(--goldInk);box-shadow:0 8px 24px rgba(233,178,74,.28)}
+.tile.gold .tt span{color:#5f430e}.tile.gold .ti{background:rgba(58,40,7,.14);color:var(--goldInk)}
+.tpair{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tpair .tile{flex-direction:column;align-items:flex-start;gap:10px}
+.tmap{flex:none;border-radius:8px;background:rgba(11,20,17,.5);padding:2px}.tmap svg{display:block;width:118px;height:52px}
+.tsum{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 16px;border-radius:12px;border:1px dashed var(--line2);background:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;text-align:left}
+.tsum:hover{border-color:var(--gold)}.tsumc{color:var(--gold2);font-weight:800;white-space:nowrap}
+.tlinks{margin:18px 0 0;display:flex;gap:6px;justify-content:center;align-items:center;color:var(--muted)}
+.lnk{border:0;background:none;color:var(--muted);text-decoration:underline;font:inherit;font-size:13.5px;cursor:pointer;padding:4px}
+.tgame{margin-top:22px;width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:16px;border-top:1px solid var(--line)}
+.tgl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}.tgb{display:flex;gap:8px}
+.shead{display:flex;align-items:baseline;gap:8px;margin-bottom:16px}.shead h2{margin:0}.sback{text-decoration:none;font-weight:700;margin-left:-4px}
+.mtiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 18px}
+.mtile{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:#0c1512;border:1px solid var(--line2);cursor:pointer;position:relative}
+.mtile input{position:absolute;opacity:0;pointer-events:none}.mtile .tt b{font-size:15px;font-weight:800}
+.mtile:has(input:checked){border-color:var(--gold);background:rgba(233,178,74,.1);box-shadow:inset 0 0 0 1px var(--gold)}
+.mtile:has(input:focus-visible){outline:2px solid var(--gold);outline-offset:2px}
+.srow{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}.srow .field{margin:0}
+.ssum{text-align:right;font-size:12.5px;color:var(--muted);margin:8px 0 4px;min-height:1.4em}
+.more{margin-top:12px;border-top:1px solid var(--line)}
+.more summary{list-style:none;display:flex;align-items:baseline;gap:10px;padding:14px 2px 12px;cursor:pointer;flex-wrap:wrap}
+.more summary::-webkit-details-marker{display:none}.more summary b{font-size:15px}.more summary>span:last-child{font-size:12.5px;color:var(--muted)}
+.chev{display:inline-block;transition:transform .15s;color:var(--muted);font-weight:800}.more[open] .chev{transform:rotate(90deg)}
+.clist .cth{display:block;width:100%;margin:-4px 0 4px}.clist .cth svg{display:block;width:100%;height:64px}
+html.mix-3a .clist{grid-template-columns:1fr 1fr}
+.cbig{display:none}html.mix-3b .cbig{display:block;border:1px solid var(--gold);border-radius:12px;background:#0c1512;padding:10px 12px 12px;margin-bottom:8px}
+.cbig svg{display:block;width:100%;height:150px}.cbig b{font-size:15px}.cbig span{font-size:12.5px;color:var(--muted);margin-left:8px}
+html.mix-3b .clist{grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}html.mix-3b .clist label{min-height:0;padding:6px 8px}html.mix-3b .clist .cth svg{height:40px}html.mix-3b .clist label>span:last-child{display:none}
+html:not(.mix-1b) #tPair,html:not(.mix-1c) #tSum{display:none}html.mix-1b #tPlay{display:none}html.mix-1c #tPlaySub{display:none}
+@media (max-width:600px){.mtiles,.tpair{grid-template-columns:1fr}.tpair .tile{flex-direction:row;align-items:center}.tmap svg{width:84px;height:40px}.ttl{min-height:calc(100dvh - 210px)}}
 </style>
 <style data-late>
 /* the game's CSS: a separate cached file on the site (build.mjs), inline in the artifact */
@@ -595,21 +635,40 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <div id="overlay"></div>
 <!-- the menu: one native dialog; every screen is written here once and shown with the hidden attribute. Choices are
      native form controls (they keep their own state); ui_menu.js reads them and fills only the data lists. -->
-<script>/* a saved game or a room / replay link opens straight into it: no start screen first */try{if(localStorage.getItem('eldorado-game-v2')||/[?&](room|replay)=/.test(location.search))document.documentElement.classList.add('resume')}catch(e){}</script>
+<script>/* a room / replay link opens straight into it: no start screen first (a saved game waits behind the title, Continue) */try{if(/[?&](room|replay)=/.test(location.search))document.documentElement.classList.add('resume')}catch(e){}
+/* (design mix: each part's variant, ?mix=1a2a3a4a5a) */{const m=(/[?&]mix=([0-9a-z]+)/.exec(location.search)||[,'1a2a3a4a5a'])[1];for(const v of m.match(/\d[a-z]/g)||[])document.documentElement.classList.add('mix-'+v);}</script>
 <dialog id="menu" aria-label="Menu" open>
 <form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
   <div class="acct" id="acct"></div>
   <div class="ingame" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn pri" id="sBack">Back to game</button></span></div>
   <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>This device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label></div>
-  <section data-screen="setup">
-    <h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
-    <div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div><p class="note" id="n2note" hidden>Two players each lead two explorers. Both must reach El Dorado.</p></div>
+  <section data-screen="title">
+    <div class="ttl">
+      <h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
+      <div class="tiles">
+        <button type="button" class="tile" id="tCont" hidden><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18"><path d="M7 5l8 5-8 5z" fill="currentColor"/></svg></span><span class="tt"><b>Continue</b><span id="tContSub"></span></span><span class="tmap" id="tContMap"></span></button>
+        <button type="button" class="tile" id="tPlay"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M10 2.8l2.2 4.6 5 .6-3.7 3.4 1 5-4.5-2.5-4.5 2.5 1-5L2.8 8l5-.6z"/></svg></span><span class="tt"><b id="tPlayT">Play</b><span id="tPlaySub"></span></span></button>
+        <div class="tpair" id="tPair"><button type="button" class="tile" id="tAI"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="4" y="7" width="12" height="9" rx="2.5"/><path d="M10 7V4M8 11h.01M12 11h.01" stroke-linecap="round"/></svg></span><span class="tt"><b>Play against the AI</b><span id="tAISub"></span></span></button><button type="button" class="tile" id="tPass"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7.5" cy="7" r="2.6"/><circle cx="13.5" cy="7.5" r="2.2"/><path d="M2.8 16c.6-2.8 2.4-4.2 4.7-4.2s4.1 1.4 4.7 4.2M12.6 12c2 .1 3.6 1.4 4.1 4"/></svg></span><span class="tt"><b>Pass and play</b><span id="tPassSub"></span></span></button></div>
+        <button type="button" class="tsum" id="tSum"><span id="tSumTxt"></span><span class="tsumc">Change</span></button>
+        <button type="button" class="tile quiet" id="tSetup"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 6h8M15 6h2M3 14h2M9 14h8"/><circle cx="13" cy="6" r="2"/><circle cx="7" cy="14" r="2"/></svg></span><span class="tt"><b>Set up a game…</b><span>Players, AI opponents, course, colours, rules</span></span></button>
+      </div>
+      <p class="tlinks" id="tLinks" hidden><button type="button" class="lnk" id="tResign">Resign</button><span aria-hidden="true">·</span><button type="button" class="lnk" id="tEnd">End this game</button></p>
+      <div class="tgame" id="tGame" hidden><span class="tgl">This game</span><span class="tgb"><button type="button" class="btn" id="tResign2">Resign</button><button type="button" class="btn" id="tEnd2">End game</button></span></div>
+    </div>
+  </section>
+  <section data-screen="setup" hidden>
+    <div class="shead"><button type="button" class="lnk sback" id="sToTitle">‹ Back</button><h2>Set up a game</h2></div>
+    <div class="mtiles"><label class="mtile"><input type="radio" name="how" value="ai" checked><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="4" y="7" width="12" height="9" rx="2.5"/><path d="M10 7V4M8 11h.01M12 11h.01" stroke-linecap="round"/></svg></span><span class="tt"><b>Against the AI</b><span>You, and AI explorers for the other seats</span></span></label><label class="mtile"><input type="radio" name="how" value="pass"><span class="ti"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7.5" cy="7" r="2.6"/><circle cx="13.5" cy="7.5" r="2.2"/><path d="M2.8 16c.6-2.8 2.4-4.2 4.7-4.2s4.1 1.4 4.7 4.2M12.6 12c2 .1 3.6 1.4 4.1 4"/></svg></span><span class="tt"><b>Pass and play</b><span>Friends take turns on this device</span></span></label></div>
+    <div class="srow"><div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div><p class="note" id="n2note" hidden>Two players each lead two explorers. Both must reach El Dorado.</p></div><div class="sgo"><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div></div>
+    <p class="ssum" id="sSum"></p>
+    <details class="more" id="sMore"><summary><span class="chev" aria-hidden="true">›</span><b>More options</b><span>Leaders and colours, course, end of game, privacy</span></summary>
     <div class="field"><label>Expedition leaders</label><div id="seats"><!--SEATS--></div><p class="note warn" id="allAI" hidden>Seat at least one human player.</p></div>
-    <div class="field"><label>Course</label><div class="clist" id="sC"><!--COURSES:course--></div><div class="aiNote" id="aiNote" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div></div>
+    <div class="field"><label>Course</label><div class="cbig" id="sCBig"></div><div class="clist" id="sC"><!--COURSES:course--></div><div class="aiNote" id="aiNote" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><label data-v="1"><input type="radio" name="full" value="1" checked><span>When all but one arrive</span></label><label data-v="0"><input type="radio" name="full" value="0"><span>At the first arrival (official)</span></label></div></div>
     <div class="field"><label class="chk"><input type="checkbox" name="priv" id="sPriv"> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
     <div class="field"><label>Settings</label><label class="chk"><input type="checkbox" name="buywarn" id="sBuyWarn" checked> <span>Before I end my turn, remind me if I can still buy a card</span></label></div>
-    <div class="mrow"><button type="button" class="btn" id="sResume" hidden>Resume saved game</button><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
+    </details>
+    <button type="button" class="btn" id="sResume" hidden>Resume saved game</button>
   </section>
   <section data-screen="online" hidden>
     <div id="oOff" hidden><h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p></div>

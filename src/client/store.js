@@ -8,6 +8,7 @@ const KEYS = {
   games: 'eldorado-games-v2',   // finished local games, kept to watch again (state.js)
   token: 'ed-token',            // the sign-in session (online.js)
   seats: 'eldorado-seats',      // the setup screen's AI choices (menu.js)
+  setup: 'eldorado-setup',      // the whole setup, so Play is the game set up last time (menu.js)
   buywarn: 'eldorado-buywarn',  // setting: "you can still afford" reminder (menu.js)
   market: 'eldorado-mkt',       // market shown or hidden (market.js)
   sound: 'eldorado-sound',      // sound on or off (sound.js)

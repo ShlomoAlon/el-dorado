@@ -64,7 +64,7 @@ function boot() {
   // here, from this device, at once, and the server check only adds to it
   const q = new URLSearchParams(location.search), rid = (q.get('replay') || '').replace(/[^a-z0-9]/g, ''), room = (q.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const local = () => {
-    if (resumeSaved()) return;
+    if (resumeSaved()) { showSetup(); return; } // (design mix: a saved game waits behind the title screen: Continue)
     showSetup(); if ($('#sGo').dataset.q) { delete $('#sGo').dataset.q; startLocal(); } // Start pressed before the script had loaded
   };
   const known = !rid && !room && !load('token') && radio('mode') !== 'online'; // (Online picked before the script had loaded: its screen needs the server)
