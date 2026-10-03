@@ -105,7 +105,7 @@ export function exitReplay(){expectLayout();const from=G.replay.from;replayStop(
 
 /* words for one action, read against the position before it */
 function describeAction(a,st){
-  const T=id=>CT[st.cards[id]]?CT[st.cards[id]].n:'?',sp=k=>{if(!k)return'';if(k[0]==='B'){const B=st.blockades[+k.slice(1)];return`blockade #${B?B.n:'?'}`;}const h=hexAt(S,k);return h?`${TERR[h.type]||h.type}${h.val>1?' '+h.val:''}`:k;};
+  const T=id=>CT[st.cards[id]]?CT[st.cards[id]].n:'?',sp=k=>{if(!k)return'';if(k[0]==='B'){const B=st.blockades[+k.slice(1)];return`blockade #${B?B.n:'?'}`;}const h=hexAt(st,k);return h?`${TERR[h.type]||h.type}${h.val>1?' '+h.val:''}`:k;};
   const list=ids=>ids&&ids.length?ids.map(T).join(', '):'nothing';
   const stack=a=>CT[a.type]?CT[a.type].n:'?';
   switch(a.t){
