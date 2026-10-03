@@ -3,7 +3,7 @@
    them, reads them when they're used, and fills only the boxes that hold data (seats, rooms, leaderboard, profile,
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
 import { COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, recSecret, plural, shuffle, assert } from '../engine.gen.js';
-import { $, esc, setHTML, setText, setQuery } from './dom.js';
+import { $, esc, setHTML, setText, setQuery, reduceMotion, EASE } from './dom.js';
 import { S, setS, UI, NET, G, clearSelection, online, myId, inGame, loadSave, save, myGames } from './state.js';
 import { GAME_READY } from './ready.js';
 import { toast } from './dialogs.js';
@@ -74,7 +74,10 @@ function menuOpen(screen){
   // the page opens the dialog as plain HTML (before any script); the first time, it becomes a modal dialog (focus, Esc),
   // looking exactly the same (no fade: it is already on screen)
   if(d.open&&!d.matches(':modal')){d.close();d.showModal();MENU.f.focus({preventScroll:true});}
-  else if(!d.open){d.showModal();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});}
+  else if(!d.open){d.showModal();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});
+    // opened during a game (the Menu button): it comes in like a window, its backdrop fading in and the menu rising into
+    // place, a little longer than a window's (owner, 2026-10-03: clean and noticeable; the page's first menu stays instant)
+    if(ig&&!reduceMotion){d.animate([{opacity:0},{opacity:1}],{duration:300,easing:'ease'});MENU.f.animate([{transform:'translateY(14px) scale(.98)',opacity:0},{transform:'none',opacity:1}],{duration:450,easing:EASE});}}
   if(CHECKS)requestAnimationFrame(()=>requestAnimationFrame(menuReach));
 }
 export function menuClose(){const d=MENU.dlg;document.documentElement.classList.remove('resume');if(!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
