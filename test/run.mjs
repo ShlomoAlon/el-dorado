@@ -9,10 +9,11 @@ import fs from 'node:fs';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), arg = process.argv.slice(2), full = arg.includes('--full'), online = full || arg.includes('--online');
 const NODE_PATH = [process.env.NODE_PATH, execSync('npm root -g').toString().trim()].filter(Boolean).join(path.delimiter);
 const t0 = Date.now(); execSync('node build.mjs', { cwd: root, stdio: 'inherit' });
-/* every test has a time limit: about three times what it takes in this run (normal: seconds, side by side with the others),
-   never less than a minute. A test past it has hung: it is stopped (its whole process group: browsers, servers) and fails
-   with what it printed so far, instead of the run waiting forever */
-const run = ([name, cmd, normal]) => new Promise(res => { const t = Date.now(), limit = Math.max(60, 3 * normal); let out = '', hung = false;
+/* every test has a time limit that matches when it should end: what it normally takes in this run (normal: seconds, side by
+   side with the others), half as much again for a busy machine (runs swing by about a fifth), and 5 s. A test past it has
+   hung: it is stopped (its whole process group: browsers, servers) and fails with what it printed so far, instead of the run
+   waiting (owner, 2026-10-03: never run anything without a timer that roughly matches when it's supposed to end) */
+const run = ([name, cmd, normal]) => new Promise(res => { const t = Date.now(), limit = Math.round(1.5 * normal + 5); let out = '', hung = false;
   const c = spawn(cmd, { cwd: root, shell: true, detached: true, env: { ...process.env, NODE_PATH } });
   c.stdout.on('data', d => out += d); c.stderr.on('data', d => out += d);
   const timer = setTimeout(() => { hung = true; try { process.kill(-c.pid, 'SIGKILL'); } catch (e) { /* expected: it exited just now */ } }, limit * 1000);
