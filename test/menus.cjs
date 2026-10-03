@@ -27,11 +27,13 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
   const won = LOG.players.filter((_, i) => LOG.result.places[i] === 1).map(x => x.name).join(' & ');
   await check('a game kept here: who won, then where and when (no upload button)', w => { const b = document.querySelector('#rMine [data-lid] b'); return !!b && b.textContent === 'Won by ' + w && !document.querySelector('#rUp'); }, won);
   // opening it plays it; closing it comes back to Replays
+  // closed while the advisor is still thinking (as a quick player does): its answer, arriving after, must find nothing broken.
+  // The replay is closed in the same moment the page asks the AI's worker for advice (not caught by polling: the answer can
+  // come between two looks)
+  await p.evaluate(() => { const pm = Worker.prototype.postMessage; Worker.prototype.postMessage = function (m, ...r) { pm.call(this, m, ...r);
+    if (m && m.t === 'advise' && !window.__R) { window.__R = window.__ED.G.replay; queueMicrotask(() => document.querySelector('#menuBtn').click()); } }; }); // (a microtask: once the frame asking has finished, before any answer can come back)
   await p.click('#rMine [data-lid]');
-  await check('a kept game opens as a replay', () => !!window.__ED.G.replay && !document.querySelector('#menu').open);
-  // closed while the advisor is still thinking (as a quick player does): its answer, arriving after, must find nothing broken
-  await check('the advisor is asked about the replay\'s first position, and the replay closed at once', () => { const R = window.__ED.G.replay; if (!R || !R.asking.size) return false;
-    window.__R = R; document.querySelector('#menuBtn').click(); return !window.__ED.G.replay; });
+  await check('a kept game opens as a replay; the advisor is asked, and the replay closed at once', () => !!window.__R && !window.__ED.G.replay);
   await check('the advice arrives after the replay closed', () => window.__R.asking.size === 0);
   await check('closing it comes back to Replays', new Function(`return !window.__ED.G.replay && document.querySelector('#menu').open && ${screen('replays')} && document.querySelector('input[name=mode][value=replays]').checked`));
   // a game: the menu over it has the game bar; a replay watched from there keeps the game
