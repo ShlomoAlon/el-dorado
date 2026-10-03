@@ -44,7 +44,7 @@ export function freshInit(during) {
   const check = () => {
     if (!during()) { due = 0; return; }
     // a frame is due: judged at the next check. Not for long: a page that always has a frame due is never judged, and never rests
-    if (raf) { assert(++due < 40, 'view: the page rests (a frame was due at every check for 10 s)'); return; }
+    if (raf) { if (++due >= 40) { due = 0; assert(false, 'view: the page rests (a frame was due at every check for 10 s)'); } return; }
     due = 0;
     safe(frameMark, 'checks'); // (what came before this frame is judged as before)
     mo.observe(app, { subtree: true, childList: true, attributes: true, attributeOldValue: true, characterData: true, characterDataOldValue: true });
