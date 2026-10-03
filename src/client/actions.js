@@ -5,8 +5,8 @@ import { CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantPay, buyOpti
 import { esc } from './dom.js';
 import { S, setS, UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave, humanRacing, passing } from './state.js';
 import { showSetup, buyReminder } from './menu.js';
-import { replayDecorate } from './replay.js';
-import { render, resetView } from './frame.js';
+import { replayTargets } from './replay.js';
+import { render, resetView, changeGen } from './frame.js';
 import { toast, modal, closeModal, showGameOver } from './dialogs.js';
 import { buildBoard } from './board/terrain.js';
 import { fitSoon } from './board/camera.js';
@@ -35,11 +35,16 @@ export function resync(){
   toast('Something went wrong, sorry. The game was restored.',3200);render();
 }
 
+/* where the selection can go now (space or blockade key -> what it costs): derived from the game and the selection, never
+   stored; worked out once per change (render) and kept until the next */
+let tgCache=null,tgGen=-1;
+export function targets(){if(tgGen!==changeGen()){tgGen=changeGen();tgCache=computeTargets();}return tgCache;}
 function computeTargets(){
-  const T=new Map();UI.targets=T;if(S.over||passing()||!canAct()||NET.busy||S.turn.pending)return;
+  const T=new Map();if(!S)return T;if(G.replay)return replayTargets()||T;if(S.over||passing()||!canAct()||NET.busy||S.turn.pending)return T;
   const src=UI.mode==='card'?cardTargets(S,S.cur,UI.piece,UI.card):UI.mode==='idle'?payTargets(S,S.cur,UI.piece):null;
   if(src)for(const[k,v]of src)T.set(k,v);
   else if(UI.mode==='discardFor')T.set(UI.pending.tk,UI.pending);
+  return T;
 }
 /* the card can do something now: an action card (played from the hand), or somewhere on the board to put it */
 export function cardUsable(id){return(def(S,id).c==='p'&&typeOf(S,id)!=='native')||cardTargets(S,S.cur,UI.piece,id).size>0;}
@@ -47,6 +52,7 @@ export const isTargeted=id=>def(S,id).c!=='p'||typeOf(S,id)==='native';
 export function firstPiece(){return Math.max(0,cur().pieces.findIndex(k=>k!=='done'));}
 /* after the state changed, put the UI into the matching mode */
 function syncMode(turnChanged){
+  if(!online()&&!G.replay&&!isAI(S.cur))UI.viewer=S.cur; // (a local game: the last human to move, whose hand shows during AI turns)
   if(turnChanged||!canAct())clearSelection();
   if(S.turn.pending){UI.mode='trashPick';UI.max=S.turn.pending.max;if(turnChanged)UI.picks=[];}
   else if(UI.mode==='trashPick'){UI.mode='idle';UI.picks=[];}
@@ -99,7 +105,7 @@ export function afterChange(turnChanged,ended){
 /* ---------- UI actions (build an action from the current selection) ---------- */
 export function doMove(tk){
   if(UI.mode==='discardFor')return; // the pending space itself: cards are dragged or tapped in
-  const tg=UI.targets.get(tk);if(!tg)return;
+  const tg=targets().get(tk);if(!tg)return;
   if(isDisc(tg))startDiscard(tk,cur().hand.includes(UI.card)?UI.card:null);
   else act({t:tg.t,card:UI.card,pi:tg.pi,to:tk}); // a move, or the Native
 }
@@ -107,7 +113,7 @@ export const isDisc=tg=>!!tg&&tg.t==='pay'; // paid for with cards from the hand
 /* Rubble / base camp / rubble blockade: each card dragged (or tapped) onto the space counts toward its cost.
    The move happens as soon as enough cards are in. */
 export function startDiscard(tk,firstId){
-  const tg=UI.targets.get(tk);assert(isDisc(tg),'startDiscard: a space paid for with cards');
+  const tg=targets().get(tk);assert(isDisc(tg),'startDiscard: a space paid for with cards');
   UI.mode='discardFor';UI.pending={tk,...tg};UI.card=null;UI.picks=[];
   if(firstId)addDiscard(firstId);else render();
 }
@@ -209,5 +215,3 @@ export function endLocal(){if(!S||S.over||online()||G.replay)return;
     sc.querySelector('#egNo').onclick=closeModal;
     sc.querySelector('#egYes').onclick=()=>{closeModal();if(!S||S.over)return;assert(applyLocal(S.cur,{t:'endgame'}).ok,'endgame is accepted');};},true);}
 
-/* the first view part of every frame: what the selection allows now (the targets), before anything is drawn */
-export const derivePart = { name: 'derive', update(){if(!S)return;if(!online()&&!G.replay&&!isAI(S.cur))UI.viewer=S.cur;computeTargets();if(G.replay)replayDecorate();}};

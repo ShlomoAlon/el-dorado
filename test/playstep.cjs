@@ -36,12 +36,12 @@ async function step() {
     case 'move': case 'native': {
       if (UI.mode === 'card' && UI.card !== a.card) call('cancelMode');
       piece(a.pi); pick(a.card);
-      if (!UI.targets.has(a.to)) return 'unmapped ' + a.t + ': ' + a.to + ' is not a target (' + JSON.stringify({ mode: UI.mode, card: UI.card, piece: UI.piece, pi: a.pi, targets: [...UI.targets.keys()], busy: E.NET.busy, active: S.turn.active, pending: S.turn.pending, at: S.players[me].pieces }) + ')';
+      if (!E.targets().has(a.to)) return 'unmapped ' + a.t + ': ' + a.to + ' is not a target (' + JSON.stringify({ mode: UI.mode, card: UI.card, piece: UI.piece, pi: a.pi, targets: [...E.targets().keys()], busy: E.NET.busy, active: S.turn.active, pending: S.turn.pending, at: S.players[me].pieces }) + ')';
       call('doMove', a.to); return a.t + (S.turn.active ? ' (strength left)' : ''); }
     case 'pay': {
       if (UI.mode !== 'idle') call('cancelMode');
       piece(a.pi); pick(a.cards[0]);
-      const tg = UI.targets.get(a.to); if (!tg || tg.t !== 'pay') return 'unmapped pay: ' + a.to + ' is not a space paid for with cards';
+      const tg = E.targets().get(a.to); if (!tg || tg.t !== 'pay') return 'unmapped pay: ' + a.to + ' is not a space paid for with cards';
       // the first card dragged onto the space; the rest dragged after it, or (every other time) tapped in the hand
       const tap = (window.__payN = (window.__payN || 0) + 1) % 2 === 0;
       call('startDiscard', a.to, a.cards[0]); for (const id of a.cards.slice(1)) if (UI.mode === 'discardFor') call(tap ? 'onHandCard' : 'addDiscard', id);

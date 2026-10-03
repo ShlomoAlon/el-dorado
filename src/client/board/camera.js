@@ -9,6 +9,7 @@ import { geo, onGeo, measure, handTop } from '../geometry.js';
 import { after, frameDue } from '../frame.js';
 import { diag, diagLog, CHECKS } from '../debug.js';
 import { layout, xy } from './layout.js';
+import { walking } from './pieces.js';
 export const view = { s: 1, x: 0, y: 0 };
 /* userZoomed: the player moved the board (a resize then keeps their view); dragMoved: the current press became a drag
    (its click is not a tap) */
@@ -82,7 +83,7 @@ function clampView() {
    players' explorers are followed at their turn's start only: following their moves is the owner's to decide */
 let followed = null;
 export const cameraPart = { name: 'camera', update() {
-  if (!S || !MAP || S.over || passing() || UI.anim || UI.preview || G.replay) return;
+  if (!S || !MAP || S.over || passing() || walking() || UI.preview || G.replay) return;
   const pl = cur(), game = S.seed + '|' + S.players.length, key = game + '|' + S.round + '|' + S.cur + (canAct() ? '|' + UI.piece + '|' + pl.pieces.join() : '');
   if (key === followed) return;
   const same = followed && followed.startsWith(game + '|'); followed = key;
@@ -175,7 +176,7 @@ let fitSeen = ''; // (the last sample's finding: a wrong fit counts once it is t
    only once it is the same on two samples in a row */
 export function fitCheck(settled) {
   if (frameDue()) return; // (the state has moved on and the next frame will show it: the page is judged once it does)
-  if (!S || S.over || UI.preview || cam.userZoomed || gliding || cam.pointers || UI.anim || UI.mode !== 'idle' || S.turn.pending || document.getElementById('menu').open) return; // (a removal being chosen raises the whole hand, by design)
+  if (!S || S.over || UI.preview || cam.userZoomed || gliding || cam.pointers || walking() || UI.mode !== 'idle' || S.turn.pending || document.getElementById('menu').open) return; // (a removal being chosen raises the whole hand, by design)
   const rect = e => e.getBoundingClientRect(), cards = [...document.querySelectorAll('#cards .card:not(.inplay)')].filter(c => c.style.pointerEvents !== 'none'); // (not those leaving the hand: hand.js)
   // (only when nothing finite is animating anywhere: the market sliding in, a card dealt, the board gliding)
   if (!cards.length || document.getAnimations().some(a => a.playState === 'running' && isFinite(a.effect && a.effect.getComputedTiming().endTime))) return;

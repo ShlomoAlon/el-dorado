@@ -120,9 +120,9 @@ function describeAction(a,st){
   }
   return esc(a.t);
 }
-/* the next action's space and card, marked on the board and in the hand */
-export function replayDecorate(){if(G.replay.hover){UI.targets=new Map([[G.replay.hover,{kind:'move'}]]);return;}const a=replayNext();if(!a||S.over)return;const x=a[1];
-  if(x.to&&x.to[0]!=='B'&&hexAt(S,x.to))UI.targets=new Map([[x.to,{kind:x.t==='pay'?(hexAt(S,x.to).type==='c'?'camp':'rubble'):'move'}]]);}
+/* the next action's space, marked on the board (the replay's targets: actions.js targets()); null: none */
+export function replayTargets(){if(G.replay.hover)return new Map([[G.replay.hover,{kind:'move'}]]);const a=replayNext();if(!a||S.over)return null;const x=a[1];
+  return x.to&&x.to[0]!=='B'&&hexAt(S,x.to)?new Map([[x.to,{kind:x.t==='pay'?(hexAt(S,x.to).type==='c'?'camp':'rubble'):'move'}]]):null;}
 function replayPromptHTML(){
   const R=G.replay,a=replayNext();
   if(!a)return`<b>End of the replay.</b> ${S.over?'The game is over.':'The log stops here'+(R.log.result&&R.log.result.capped?' (it hit the 25-round cap).':'.')}`;

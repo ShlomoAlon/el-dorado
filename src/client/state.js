@@ -1,9 +1,12 @@
 /* The page's own state: the game on show (S, and its board MAP), what the player has selected (UI), the online connection
    (NET), and the game record / replay (G). Selectors answer "who am I, whose turn, may I act". */
-import { isActive, recState, replayCheck, recFinal, mapOf } from '../engine.gen.js';
+import { isActive, recState, replayCheck, recFinal, mapOf, assert } from '../engine.gen.js';
 import { failed } from './boundary.js';
 import { load, store } from './store.js';
-import { render } from './frame.js';
+import { render, isDrawing } from './frame.js';
+/* every write to UI or NET: the view draws the state, it never changes it (a write while drawing asks for another frame,
+   which draws again and writes again: the page never rests, and the state is whatever the last frame made of it) */
+const written = (t, k, v) => { assert(!isDrawing(), `view: drawing never changes the page's state (UI.${String(k)} or NET.${String(k)} written while drawing)`); if (!Object.is(t[k], v)) { t[k] = v; render(); } return true; };
 /* the game on show (the engine's functions take it as their first argument) and its board */
 export let S = null, MAP = null;
 export function setS(gs) { S = gs; if (gs) MAP = mapOf(gs); }
@@ -13,9 +16,9 @@ export function setMAP(m) { MAP = m; }
    by input handlers, timers and actions, and every one of them is drawn; none has to remember to redraw (a handler that
    forgot left the page stale until something else drew it). A value written again unchanged asks nothing; a list changed
    in place (UI.picks.push) is drawn by the render() its caller already makes */
-export const UI = new Proxy({ mode: 'idle', card: null, piece: 0, picks: [], targets: new Map(), revealed: null, hover: null, mktOpen: true, allFor: null,
-  buy: null, pending: null, max: 0, viewer: null, preview: false, anim: false, lastReplay: null },
-  { set(t, k, v) { if (!Object.is(t[k], v)) { t[k] = v; render(); } return true; } });
+export const UI = new Proxy({ mode: 'idle', card: null, piece: 0, picks: [], revealed: null, hover: null, mktOpen: true, allFor: null,
+  buy: null, pending: null, max: 0, viewer: null, preview: false, lastReplay: null },
+  { set: written });
 /* nothing selected: no card, no picks, no purchase or payment under way */
 export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = []; UI.buy = null; UI.pending = null; }
 /* NET.S: the online game the server last sent; NET.shown: the online game on show (the server's, or with our own moves
@@ -28,7 +31,7 @@ export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = 
    again unchanged asks nothing. (The view never writes NET while drawing, so this can't loop.) */
 export const NET = new Proxy({ available: false, cfg: null, user: null, token: null, ws: null, lobbyWs: null, room: null, S: null, shown: null, seat: -1, connected: false, clockEnd: null,
   canUndo: false, busy: false, seq: Date.now(), pending: [], roomS: null, roomPending: [], heard: 0, status: '', rooms: [], active: null, code: null, pendingRoom: null, viewUser: null, leaving: false }, // leaving: resigned, going to the Online screen once the server has it
-  { set(t, k, v) { if (!Object.is(t[k], v)) { t[k] = v; render(); } return true; } });
+  { set: written });
 /* rec: the local game's record (engine recNewGame; saved with the game, kept as a replay once it's over).
    replay: set while watching a replay (replay.js): nothing can be played then */
 export const G = { rec: null, replay: null };

@@ -10,7 +10,7 @@ import { cardHTML, cardTitle } from './cards.js';
 import { render, after } from './frame.js';
 import { targetAt, setHot, hotTarget } from './board/overlays.js';
 import { startAim } from './aim.js';
-import { onHandCard, onPlayCard, cardUsable, isTargeted, isDisc, doMove, startDiscard, addDiscard, togglePick, playAction } from './actions.js';
+import { onHandCard, onPlayCard, cardUsable, isTargeted, isDisc, doMove, startDiscard, addDiscard, togglePick, playAction, targets } from './actions.js';
 import { replayNext } from './replay.js';
 import { sfx } from './sound.js';
 
@@ -179,7 +179,7 @@ function wire(el, id) {
     if (drag.kind === 'aim') { drag.cx = e.clientX; drag.cy = e.clientY; startAim(); return; }
     const A = geo.app, cw = geo.cw, ch = cw * 1.4;
     setT(el, e.clientX - A.left - cw / 2, e.clientY - A.top - ch * .4, dx * .02, 1.08); el.style.zIndex = 150;
-    const k = targetAt(e.clientX, e.clientY), dk = k && isDisc(UI.targets.get(k)) ? k : null; setHot(dk);
+    const k = targetAt(e.clientX, e.clientY), dk = k && isDisc(targets().get(k)) ? k : null; setHot(dk);
     el.classList.toggle('go', !!dk || (UI.mode !== 'discardFor' && pastHand(e.clientY)));
     if (UI.mode === 'pay') $('#buySlot').classList.toggle('hot', pastHand(e.clientY));
   });
@@ -188,13 +188,13 @@ function wire(el, id) {
     if (!d.started) { if (d.inHand) onHandCard(id); else onPlayCard(id); return; }
     if (d.kind === 'aim') {
       const k = d.hot;
-      if (k && UI.targets.has(k)) doMove(k);
+      if (k && targets().has(k)) doMove(k);
       else if (!d.wasSel && !(S.turn.active && S.turn.active.id === id)) { UI.mode = 'idle'; UI.card = null; }
       render(); return;
     }
     if (d.kind !== 'free') return;
     el.classList.remove('free', 'go');
-    const k = targetAt(e.clientX, e.clientY), tg = k && UI.targets.get(k); setHot(null);
+    const k = targetAt(e.clientX, e.clientY), tg = k && targets().get(k); setHot(null);
     if (UI.mode === 'pay') { $('#buySlot').classList.remove('hot'); if (pastHand(e.clientY) && !UI.picks.includes(id)) { sfx('pick'); togglePick(id); } else render(); }
     else if (isDisc(tg)) { if (UI.mode === 'discardFor') addDiscard(id); else startDiscard(k, id); }
     else if (UI.mode !== 'discardFor' && pastHand(e.clientY)) playAction(id); else render();

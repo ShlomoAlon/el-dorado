@@ -102,7 +102,7 @@ const T = report('online');
       const Q = await who(); if (!Q) break;
       before = await Q.evaluate(() => JSON.stringify(__ED.S.players[__ED.S.cur].pieces));
       const moved = await Q.evaluate(() => { const E = __ED, S = E.S; for (const id of S.players[S.cur].hand) { E.onHandCard(id);
-        const k = [...E.UI.targets].find(([k, t]) => k[0] !== 'B' && t.kind === 'move'); if (k) { E.doMove(k[0]); return k[0]; } E.cancelMode(); } return null; });
+        const k = [...E.targets()].find(([k, t]) => k[0] !== 'B' && t.kind === 'move'); if (k) { E.doMove(k[0]); return k[0]; } E.cancelMode(); } return null; });
       if (moved) P = Q;
       else { const cur = await Q.evaluate(() => __ED.S.cur); await Q.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'end', keep: [] } })); await wait(Q, c => __ED.S.cur !== c, cur); }
     }
@@ -249,7 +249,7 @@ const T = report('online');
       await P.click('#rlStart'); await wait(P, () => __ED.online());
       await P.evaluate(() => { window.__prefer = ['travellog', 'scientist']; }); // (so the game reaches the removal choice, and plays on while moves are on their way)
       const did = {}, odd = []; let steps = 0;
-      const ready = quick => P.waitForFunction(q => { const E = window.__ED; return E.S.over || (E.canAct() && (q || (!E.NET.busy && !E.UI.anim)) && E.UI.mode !== 'pay' && E.UI.mode !== 'discardFor'); }, quick, { timeout: 90000 });
+      const ready = quick => P.waitForFunction(q => { const E = window.__ED; return E.S.over || (E.canAct() && (q || (!E.NET.busy && !E.walking())) && E.UI.mode !== 'pay' && E.UI.mode !== 'discardFor'); }, quick, { timeout: 90000 });
       try {
         for (; steps < 1500; steps++) {
           const quick = !!(steps % 2); await ready(quick); if (!quick) await settle(P);

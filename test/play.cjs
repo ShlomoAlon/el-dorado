@@ -34,10 +34,10 @@ const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
     await p.evaluate(() => window.__ED.aiPace(.05)); // (the AIs' pauses, 20x shorter: their moves and animations unchanged)
     const did = {}, unmapped = []; let steps = 0;
     // (every other step goes on while an explorer is still walking, as a quick player does: animations never hold up input)
-    const ready = quick => p.waitForFunction(q => { const E = window.__ED; return E.S.over || (E.canAct() && (q || !E.UI.anim) && E.UI.mode !== 'pay' && E.UI.mode !== 'discardFor'); }, quick, { timeout: 60000 });
+    const ready = quick => p.waitForFunction(q => { const E = window.__ED; return E.S.over || (E.canAct() && (q || !E.walking()) && E.UI.mode !== 'pay' && E.UI.mode !== 'discardFor'); }, quick, { timeout: 60000 });
     try {
       for (; steps < 1500; steps++) {
-        if (steps % 2) { await ready(true); if (await p.evaluate(() => window.__ED.UI.anim)) did['during a walk'] = (did['during a walk'] || 0) + 1; }
+        if (steps % 2) { await ready(true); if (await p.evaluate(() => window.__ED.walking())) did['during a walk'] = (did['during a walk'] || 0) + 1; }
         else { await ready(false); await settle(p); await p.evaluate(() => window.__ED.fitCheck(true)); } // (the board check at every settled step, not only when its samples happen to see one)
         if (await p.evaluate(() => window.__ED.S.over)) break;
         const r = await p.evaluate(step); const k = r.split(':')[0]; did[k] = (did[k] || 0) + 1; if (r.startsWith('unmapped')) { unmapped.push(r); break; }

@@ -10,7 +10,7 @@ import { showGameOver, showPlayer } from './dialogs.js';
 import { showSetup } from './menu.js';
 import { openAll } from './market.js';
 import { sfx, SND } from './sound.js';
-import { undo, canUndo, cancelMode, startEndTurn, finishTurn, confirmDiscardFor, confirmTrash, affordable } from './actions.js';
+import { undo, canUndo, cancelMode, startEndTurn, finishTurn, confirmDiscardFor, confirmTrash, affordable, targets } from './actions.js';
 
 /* ---------- the top bar: round, and one chip per player (cards, blockades held, arrived) ---------- */
 function updateHeader(){
@@ -65,7 +65,7 @@ function updatePrompt(){
       btns=[undoBtn,{...BTN.end,fn:startEndTurn}];break;}
     case 'card':{
       const act=S.turn.active&&S.turn.active.id===UI.card;
-      if(!UI.targets.size)txt='<span class="m">No space in reach.</span>';
+      if(!targets().size)txt='<span class="m">No space in reach.</span>';
       else if(act)txt=`<b>${S.turn.active.left}</b> ${SYMNAME[S.turn.active.sym]}${S.turn.active.left>1?'s':''} left. <span class="m">Tap a space to go on.</span>`;
       btns=[undoBtn,{...(act?BTN.stop:BTN.cancel),fn:cancelMode},{...BTN.end,fn:startEndTurn}];break;}
     case 'pay':{ // (the buy slot shows the card and what's paid; no Buy button: it's bought once the cards paid cover its price, payProgress)
