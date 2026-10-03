@@ -130,7 +130,7 @@ function marketEnd(){const d=mdrag;mdrag=null;d.el.style.opacity='';window.remov
 
 export function marketInit(){
   // (checks: the card under the pointer is the one resting there, in the market and in the All cards spread)
-  if(CHECKS)for(const c of['#market','#allMarket','#reserve'])$(c).addEventListener('pointermove',e=>{const box=$(c);hoverCheck(c,box,e.clientX,e.clientY,()=>box.querySelectorAll('.mslot'),slotRest,()=>box.querySelector('.mslot:hover'));});
+  if(CHECKS)for(const c of['#market','#allMarket','#reserve'])$(c).addEventListener('pointermove',e=>{const box=$(c);hoverCheck(c,box,e.clientX,e.clientY,()=>box.querySelectorAll('.mslot'),slotRest,()=>box.querySelector('.mslot:hover'),()=>!!mdrag);});
   const pick=e=>{if(!S||passing()||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;
     const inAll=!!e.target.closest('#allc');pickFromMarket(s.dataset.src,+s.dataset.i);if(inAll&&UI.mode==='pay')openAll(false);};
   for(const c of['#market','#allMarket','#reserve']){$(c).addEventListener('click',e=>{if(mdragJustEnded){mdragJustEnded=false;return;}pick(e);});$(c).addEventListener('pointerdown',marketDown);}

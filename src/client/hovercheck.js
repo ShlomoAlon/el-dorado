@@ -6,9 +6,11 @@ import { assert } from '../engine.gen.js';
 import { afterDrawn } from './frame.js';
 /* where: a name; box: the element that holds them (only a point where the page's topmost element is inside it is judged:
    under a menu or another panel the pointer isn't over these items at all); items(): the elements; rest(el): its resting box in page coordinates {l, t, w, h, z, rot?: degrees about its centre} (the topmost resting
-   box under the pointer wins where they overlap, as in a fanned hand); hovered(): the highlighted element or null */
-export function hoverCheck(where, box, x, y, items, rest, hovered) {
+   box under the pointer wins where they overlap, as in a fanned hand); hovered(): the highlighted element or null; off(): true while the rule doesn't apply (a drag) */
+export function hoverCheck(where, box, x, y, items, rest, hovered, off = () => false) {
   afterDrawn(() => {
+    // (whether the rule applies is decided when the page is judged, not when the pointer moved: a drag may have begun since)
+    if (off()) return;
     const t = document.elementFromPoint(x, y); if (!t || !box.contains(t)) return;
     let under = null, uz = -Infinity;
     for (const e of items()) { const r = rest(e); if (!r || r.z < uz) continue;

@@ -171,8 +171,8 @@ export function flyToDiscard(from) {
 const pastHand = y => y < geo.app.top + geo.app.height - geo.cw * 1.4 * 1.25; // dragged up out of the hand
 /* checks: the card under the pointer in the hand is the one whose resting place is there (hovercheck.js); while nothing is
    dragged and the hand is shown */
-if (CHECKS) addEventListener('pointermove', e => { if (drag || !S || covered() || G.replay) return;
-  hoverCheck('hand', $('#cardhits'), e.clientX, e.clientY, () => hp().hand.map(id => cardEls.get(id)).filter(Boolean), el => el.__rest, () => (UI.hover && cardEls.get(UI.hover)) || null); });
+if (CHECKS) addEventListener('pointermove', e => { const off = () => !!drag || !S || covered() || G.replay; if (off()) return;
+  hoverCheck('hand', $('#cardhits'), e.clientX, e.clientY, () => hp().hand.map(id => cardEls.get(id)).filter(Boolean), el => el.__rest, () => (UI.hover && cardEls.get(UI.hover)) || null, off); });
 function wire(el, id) {
   const hit = el.__hit; // (the pointer's: its events; the card: what is drawn and moved)
   hit.addEventListener('pointerenter', () => { if (drag || covered()) return; if (hp().hand.includes(id)) UI.hover = id; });
