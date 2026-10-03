@@ -51,7 +51,7 @@ async function openPage(browser, name, opts = {}) {
   const stop = async (msg, stack) => {
     if (stopping) return; stopping = true;
     const out = [`FAIL ${name}: the page failed, the test stops here`, '  ' + msg, ...String(stack || '').split('\n').slice(1, 12).map(l => '  ' + l.trim())];
-    const log = await Promise.race([page.evaluate(() => window.__ED && window.__ED.diagLog ? window.__ED.diagLog().slice(-30) : []).catch(() => []), new Promise(r => setTimeout(() => r([]), 2000))]);
+    const log = await Promise.race([page.evaluate(() => window.__ED && window.__ED.diagLog ? window.__ED.diagLog().slice(-30) : []).catch(() => [] /* expected: the page is gone or busy; the log is a help, the failure is reported anyway */), new Promise(r => setTimeout(() => r([]), 2000))]);
     if (log.length) out.push('  the page\'s log (last lines):', ...log.map(l => '    ' + l));
     const shot = path.join(ROOT, 'test-results', name.replace(/[^\w.-]+/g, '_') + '-failed.png');
     fs.mkdirSync(path.dirname(shot), { recursive: true });

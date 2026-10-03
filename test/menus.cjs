@@ -29,7 +29,10 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
   // opening it plays it; closing it comes back to Replays
   await p.click('#rMine [data-lid]');
   await check('a kept game opens as a replay', () => !!window.__ED.G.replay && !document.querySelector('#menu').open);
-  await settle(p); await p.click('#menuBtn');
+  // closed while the advisor is still thinking (as a quick player does): its answer, arriving after, must find nothing broken
+  await check('the advisor is asked about the replay\'s first position, and the replay closed at once', () => { const R = window.__ED.G.replay; if (!R || !R.asking.size) return false;
+    window.__R = R; document.querySelector('#menuBtn').click(); return !window.__ED.G.replay; });
+  await check('the advice arrives after the replay closed', () => window.__R.asking.size === 0);
   await check('closing it comes back to Replays', new Function(`return !window.__ED.G.replay && document.querySelector('#menu').open && ${screen('replays')} && document.querySelector('input[name=mode][value=replays]').checked`));
   // a game: the menu over it has the game bar; a replay watched from there keeps the game
   await p.click('#sMode label[data-v="local"]'); await check('This device tab', new Function(`return ${screen('setup')}`));
