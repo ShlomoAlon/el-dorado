@@ -11,8 +11,9 @@ import { affordable, pickFromMarket, payTotal, cancelMode } from './actions.js';
 import { setT, placeAt, buySlotBox } from './hand.js';
 import { sfx } from './sound.js';
 import { render } from './frame.js';
+import { hoverCheck, slotRest } from './hovercheck.js';
 import { load, store } from './store.js';
-import { expectLayout, diag } from './debug.js';
+import { expectLayout, diag, CHECKS } from './debug.js';
 
 const noMkt=()=>$('#app').classList.toggle('nomkt',!UI.mktOpen||$('#mkt').classList.contains('cramped'));
 function setMkt(open){expectLayout();UI.mktOpen=open;$('#mkt').classList.toggle('hid',!open);noMkt();$('#mktBtn').classList.toggle('on',open);store('market',open?'1':'0');
@@ -52,7 +53,7 @@ function patchSlots(box,specs,before){
   specs.forEach((sp,k)=>{const key=sp.n>0?'c:'+sp.t:'e:'+sp.src+k;let el=have.get(key);
     if(el)have.delete(key);
     else{el=document.createElement('div');el.dataset.k=key;
-      el.innerHTML=sp.n>0?`<div class="mcard">${cardHTML(sp.t)}</div><span class="cnt"></span>`:`Sold out${sp.src==='m'?'<br>reserve open':''}`;}
+      el.innerHTML=sp.n>0?`<div class="face"><div class="mcard">${cardHTML(sp.t)}</div><span class="cnt"></span></div>`:`Sold out${sp.src==='m'?'<br>reserve open':''}`;}
     const at=prev?prev.nextSibling:box.firstChild,place=at&&at.classList&&at.classList.contains('mslot')?at:(at||before||null);
     if(el!==place)box.insertBefore(el,place===before?before||null:place);prev=el;
     if(el.className!==sp.cls)el.className=sp.cls;if(el.dataset.i!==String(sp.i))el.dataset.i=sp.i;
@@ -128,6 +129,8 @@ function marketCancel(){const d=mdrag;marketEnd();if(d.ghost)d.ghost.remove();}
 function marketEnd(){const d=mdrag;mdrag=null;d.el.style.opacity='';window.removeEventListener('pointermove',marketMove);window.removeEventListener('pointerup',marketUp);window.removeEventListener('pointercancel',marketCancel);}
 
 export function marketInit(){
+  // (checks: the card under the pointer is the one resting there, in the market and in the All cards spread)
+  if(CHECKS)for(const c of['#market','#allMarket','#reserve'])$(c).addEventListener('pointermove',e=>{const box=$(c);hoverCheck(c,box,e.clientX,e.clientY,()=>box.querySelectorAll('.mslot'),slotRest,()=>box.querySelector('.mslot:hover'));});
   const pick=e=>{if(!S||passing()||S.over)return;if(e.target.closest('#allTile')){openAll(true);return;}const s=e.target.closest('[data-src]');if(!s)return;
     const inAll=!!e.target.closest('#allc');pickFromMarket(s.dataset.src,+s.dataset.i);if(inAll&&UI.mode==='pay')openAll(false);};
   for(const c of['#market','#allMarket','#reserve']){$(c).addEventListener('click',e=>{if(mdragJustEnded){mdragJustEnded=false;return;}pick(e);});$(c).addEventListener('pointerdown',marketDown);}

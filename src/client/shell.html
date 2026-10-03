@@ -246,16 +246,16 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #mkt.hid{transform:translateX(30px);opacity:0;pointer-events:none}
 #market{display:grid;grid-template-columns:repeat(2,var(--mw));gap:10px 8px}
 #mkt .mslot{filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
-#mkt .mslot{transform-origin:100% 0} /* (a card under the pointer grows down and to the left, over the board: never up into the top bar) */
-#mkt.row .mslot:first-child{transform-origin:0 0} /* (a market in one row: its first card is beside the prompt, so it grows right, over the other cards) */
-#mkt .mslot:hover{transform:scale(1.9);z-index:6}
+#mkt .mslot>.face{transform-origin:100% 0} /* (a card under the pointer grows down and to the left, over the board: never up into the top bar) */
+#mkt.row .mslot:first-child>.face{transform-origin:0 0} /* (a market in one row: its first card is beside the prompt, so it grows right, over the other cards) */
+#mkt .mslot:hover{z-index:6}#mkt .mslot:hover>.face{transform:scale(1.9)}
 .mslot{position:relative;cursor:pointer;width:var(--mw);height:calc(var(--mw)*1.4);box-sizing:border-box;transition:transform .2s var(--ease);transform-origin:50% 0}
-.mslot .mcard{--cw:var(--mw)}
+.mslot .mcard{--cw:var(--mw)}.mslot>.face{position:absolute;inset:0;pointer-events:none;transition:transform .2s var(--ease)} /* (what a slot shows: it grows under the pointer, the slot itself stays at rest and alone takes the pointer, so the card underneath has priority) */
 .mslot.no{cursor:default}
 /* affordable cards are bright with a small tag; everything else sits back (static, no animation) */
 .mslot.dimc .mcard{filter:brightness(.55) saturate(.7)}
 .mslot.can .cface{box-shadow:0 0 0 2px #8fe3a8,0 .25em .6em rgba(0,0,0,.45)}
-.mslot.can::after{content:'Can buy';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);background:#8fe3a8;color:#0d2a18;font-size:9.5px;font-weight:800;letter-spacing:.04em;padding:1px 7px;border-radius:9px;white-space:nowrap;z-index:4;pointer-events:none}
+.mslot.can>.face::after{content:'Can buy';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);background:#8fe3a8;color:#0d2a18;font-size:9.5px;font-weight:800;letter-spacing:.04em;padding:1px 7px;border-radius:9px;white-space:nowrap;z-index:4;pointer-events:none}
 .mslot.chosen .cface{box-shadow:0 0 0 2px var(--gold2),0 0 20px rgba(233,178,74,.5)}
 .mslot.empty{border:1.5px dashed var(--line2);border-radius:9px;display:grid;place-items:center;color:var(--faint);font-size:10.5px;text-align:center;cursor:default;line-height:1.3;background:rgba(8,14,12,.45)}
 .alltile{width:var(--mw);height:calc(var(--mw)*1.4);box-sizing:border-box;border-radius:9px;border:1.5px solid var(--line2);background:rgba(10,18,15,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--text);font:800 12px var(--ui);cursor:pointer;text-align:center;line-height:1.2;padding:4px;position:relative;transition:border-color .15s,background .15s}
@@ -277,7 +277,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .allc-sect h3 span,.allc-head span{font-family:var(--ui);font-size:10.5px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
 .agrid{display:flex;flex-wrap:wrap;gap:22px 16px;--mw:112px}
 .agrid .mslot{filter:drop-shadow(0 8px 14px rgba(0,0,0,.5));animation:rise .3s var(--ease) backwards}
-.agrid .mslot:hover{transform:translateY(-4px)}
+.agrid .mslot:hover>.face{transform:translateY(-4px)}
 /* the overlay's close button is in its own heading row (never over the top bar's controls), which stays in view below the
    top bar while the lists scroll */
 .allc-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 -20px 14px;padding:calc(var(--allTop) + 6px) 20px 10px;background:rgba(4,9,7,.97)}
@@ -311,7 +311,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .zoomctl button{width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:17px;font-weight:700;display:grid;place-items:center}
 
 /* ---------- cards */
-#cards{position:absolute;inset:0;pointer-events:none;z-index:25}
+#cards,#cardhits{position:absolute;inset:0;pointer-events:none;z-index:25}.chit{position:absolute;left:0;top:0;width:var(--cw);height:calc(var(--cw)*1.4);transform-origin:50% 50%;pointer-events:auto;cursor:pointer;touch-action:none} /* (a card's hit area, where it rests: hand.js setHit) */
 /* purchase in progress: the card waits above the hand until it's paid for */
 #buySlot{position:absolute;left:0;top:0;z-index:24;--bw:92px;width:var(--bw);height:calc(var(--bw)*1.4);transform:translate3d(var(--bx,0),var(--by,0),0);transition:opacity .2s}
 /* a removal to choose (Scientist, Travel Log): the hand comes up (hand.js), this says what's asked just above it, and the
@@ -337,7 +337,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .mghost{pointer-events:none!important;z-index:300!important;filter:drop-shadow(0 12px 18px rgba(0,0,0,.55))}
 #mkt .mslot{touch-action:none}
 #allc .mslot{touch-action:pan-y}
-.card{position:absolute;left:0;top:0;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1);transform-origin:50% 50%;will-change:transform;pointer-events:auto;cursor:pointer;touch-action:none;transition:transform .32s var(--ease),opacity .3s}
+.card{position:absolute;left:0;top:0;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1);transform-origin:50% 50%;will-change:transform;pointer-events:none;touch-action:none;transition:transform .32s var(--ease),opacity .3s}
 .cface{position:absolute;inset:0;border-radius:.75em;background:var(--frame);box-shadow:0 .1em 0 rgba(255,255,255,.15) inset,0 .25em .6em rgba(0,0,0,.45),0 .1em .15em rgba(0,0,0,.5);overflow:hidden;transition:box-shadow .2s,filter .2s;color:#fff}
 .cface::after{content:"";position:absolute;inset:.28em;border-radius:.55em;border:.08em solid rgba(255,226,160,.55);pointer-events:none;box-shadow:inset 0 0 0 .06em rgba(0,0,0,.35)}
 .k-g{--frame:linear-gradient(155deg,#5aa56c,#23583a 60%,#18402a);--body:#132a1d;--acc:#6fcf8a}
@@ -518,8 +518,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   #prompt{--fw:34px}#feed{flex-direction:column;gap:5px}.fg .fcap{font-size:10px}
   #app{--row2:58px}
   #market{gap:7px}
-  #mkt .mslot:hover{transform:none}
-  .mslot.can::after{content:'';width:8px;height:8px;padding:0;bottom:-4px}
+  #mkt .mslot:hover>.face{transform:none}
+  .mslot.can>.face::after{content:'';width:8px;height:8px;padding:0;bottom:-4px}
   .alltile{font-size:9px;gap:2px;padding:2px}
   .alltile svg{width:16px;height:16px}
   .alltile small{font-size:8px}
@@ -583,7 +583,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
   <div id="playLbl">In play</div>
   <div id="buySlot" hidden><div class="bs-card"></div><div class="bs-ring"><b id="bsPaid">0</b><span>/</span><span id="bsCost">0</span></div><button class="bs-x" id="bsCancel" aria-label="Cancel purchase">✕</button></div>
   <div id="choice" hidden><div class="ct"></div><div class="cs"></div></div>
-  <div id="cards"></div>
+  <div id="cards"></div><div id="cardhits"></div>
   <svg id="arrow"></svg>
 </div>
 </div>

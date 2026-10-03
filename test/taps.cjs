@@ -55,6 +55,30 @@ const T = report('taps');
       T.ok('a tap on my explorer reaches it (the card is put down)', await p.waitForFunction(() => window.__ED.UI.mode !== 'card', null, { timeout: 3000 }).then(() => true, () => false));
     }
   }
+  // the market: a card under the pointer grows to be read; moving onto the next card's place reaches that card at once, even
+  // where the grown one covers it (the page's check fails otherwise: the card underneath has priority)
+  { await p.keyboard.press('Escape'); await settle(p);
+    const slots = await p.evaluate(() => [...document.querySelectorAll('#market .mslot')].map(e => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; }));
+    // (a pair side by side: the right one grows to the left over its neighbour)
+    const k = slots.findIndex((s, i) => i > 0 && Math.abs(s.y - slots[i - 1].y) < 2 && s.x > slots[i - 1].x);
+    T.ok('two market cards side by side', k > 0);
+    if (k > 0) { await p.mouse.move(slots[k].x, slots[k].y, { steps: 4 }); await p.waitForTimeout(400);
+      await p.mouse.move(slots[k - 1].x + slots[k - 1].w * .3, slots[k - 1].y, { steps: 6 }); await p.waitForTimeout(400);
+      T.ok('moving onto the next market card reaches it', await p.evaluate(i => document.querySelectorAll('#market .mslot')[i].matches(':hover'), k - 1)); } }
+  // the hand: a card under the pointer rises and its neighbours step aside; moving onto where the next card rests reaches it
+  { await p.mouse.move(5, 5); await p.keyboard.press('Escape'); await settle(p);
+    const rest = await p.evaluate(() => [...document.querySelectorAll('#cards .card')].filter(e => e.__rest).map(e => e.__rest).sort((a, b) => a.l - b.l));
+    T.ok('a hand of two cards or more', rest.length > 1);
+    if (rest.length > 1) { const a = rest[0], b2 = rest[1];
+      await p.mouse.move(a.l + a.w * .3, a.t + a.h * .6, { steps: 4 }); await settle(p);
+      await p.mouse.move(b2.l + b2.w * .6, b2.t + b2.h * .6, { steps: 6 }); await settle(p);
+      T.ok('moving onto the next hand card reaches it', await p.evaluate(() => !!window.__ED.UI.hover)); } }
+  // the All cards spread: a card hovered just above its lower edge (it lifts a little) stays the one under the pointer
+  { await p.mouse.move(5, 5); await p.click('#allTile'); await settle(p);
+    const r = await p.evaluate(() => { const e = document.querySelector('#allMarket .mslot'); if (!e) return null; const q = e.getBoundingClientRect(); return { x: q.left + q.width / 2, y: q.bottom - 2 }; });
+    T.ok('the All cards spread open', !!r);
+    if (r) { await p.mouse.move(r.x, r.y - 30, { steps: 3 }); await p.mouse.move(r.x, r.y, { steps: 4 }); await settle(p); await p.mouse.move(r.x + 2, r.y, { steps: 2 }); await settle(p); }
+    await p.keyboard.press('Escape'); await settle(p); }
   T.ok('no page errors', errs.length === 0, errs.join(' | '));
   await b.close(); srv.close(); T.done();
 })();
