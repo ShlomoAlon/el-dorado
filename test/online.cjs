@@ -14,6 +14,8 @@ const T = report('online');
   const srv = await startServer(), b = await chromium.launch(), pages = [];
   try {
     const open = async name => { const p = await openPage(b, name, { allow: /self-test/ }); pages.push(p); await p.goto(srv.url); await p.waitForFunction(() => window.__ED); return p; };
+    // a page whose section is over is closed (its errors are kept in pages): left open, it goes on drawing and slows the rest
+    const done = async (...ps) => { for (const q of ps) await q.context().close(); };
     const signIn = async (p, name) => {
       await p.click('#sMode label[data-v="online"]'); await p.waitForSelector('#devName', { state: 'visible' });
       await p.fill('#devName', name); await p.click('#devGo');
@@ -35,7 +37,7 @@ const T = report('online');
     { const W = await open('W'); await signIn(W, 'Walt'); const t0 = Date.now();
       await W.evaluate(() => __ED.joinRoom('ZZZZ'));
       const said = await wait(W, () => /no room/i.test(document.querySelector('#menu').textContent) && !/[?&]room=/.test(location.search), null, 3000);
-      T.ok('wrong room code: said within 3 s, and the code leaves the address', said, ((Date.now() - t0) / 1000).toFixed(1) + ' s; ' + await W.evaluate(() => (__ED.NET.status || '') + ' ' + location.search)); }
+      T.ok('wrong room code: said within 3 s, and the code leaves the address', said, ((Date.now() - t0) / 1000).toFixed(1) + ' s; ' + await W.evaluate(() => (__ED.NET.status || '') + ' ' + location.search)); await done(W); }
     // ---------- 0a. coming back: the screen is chosen from what this device knows at once (the server only adds), and a signed-in
     //      player's server check is one round trip, not two (every request here takes 1.5 s). Counted in round trips, not in
     //      time: the same reload is timed first with the server answering at once, and only what the slow requests add is
@@ -51,7 +53,7 @@ const T = report('online');
         const base = await reload(P); await slow(P); const ms = await reload(P); await P.unroute('**/api/**'); return { base, ms, added: ms - base }; };
       const U = await open('U'), out = await back(U, false), U2 = await open('U2'), inn = await back(U2, true);
       T.ok('coming back, signed out: the saved game shows without waiting for the server', out.added < RT, `${out.ms} ms with 1.5 s requests, ${out.base} ms without`);
-      T.ok('coming back, signed in: one round trip to the server, not two', inn.added < 2 * RT, `${inn.ms} ms with 1.5 s requests, ${inn.base} ms without`); }
+      T.ok('coming back, signed in: one round trip to the server, not two', inn.added < 2 * RT, `${inn.ms} ms with 1.5 s requests, ${inn.base} ms without`); await done(U, U2); }
     // ---------- 0b. the server out of reach: each request that fails says so, in the page's words (a failed refresh keeps
     //      what was loaded before, and says that too)
     { const V = await open('V'); await signIn(V, 'Vera');
@@ -68,7 +70,7 @@ const T = report('online');
       await V.click('#cGo');
       T.ok('Create room: its lobby at once, you seated, its code to come', await V.evaluate(() => new Promise(r => requestAnimationFrame(() => r(!document.querySelector('section[data-screen=room]').hidden && document.querySelectorAll('#rlSeats .seatrow:not(.open)').length === 1 && /…/.test(document.querySelector('#rlTitle').textContent))))));
       T.ok('Create room: the code arrives and the room connects', await wait(V, () => /^Room [A-Z0-9]{4,}$/.test(document.querySelector('#rlTitle').textContent) && __ED.NET.connected && __ED.NET.roomS && __ED.NET.roomS.seats.length === 1, null, 10000));
-      await V.unroute('**/api/rooms'); await V.click('#rlLeave'); }
+      await V.unroute('**/api/rooms'); await V.click('#rlLeave'); await done(V); }
     // ---------- 1. three people
     const A = await open('A'), B = await open('B'), C = await open('C');
     const ids = [await signIn(A, 'Alice'), await signIn(B, 'Bob'), await signIn(C, 'Cara')];
@@ -165,6 +167,7 @@ const T = report('online');
     T.ok('the game is kept as a replay', rep === 'eldorado-replay', res.replay);
     T.ok('game over: results shown', await wait(A, () => !!document.querySelector('#overlay #gNew')));
 
+    await done(B, C);
     // ---------- 2. a rated room with two AIs (added from the room lobby)
     await A.click('#gNew'); await wait(A, () => document.querySelector('#menu').open);
     const code2 = await mkRoom(A, { max: 3, turn: 60, course: 'first' });
@@ -235,6 +238,7 @@ const T = report('online');
     T.ok('two games at once: both reach their end', ends.every(Boolean));
     T.ok('two games at once: each page heard only its own room', (await Promise.all([Pa, Pb].map(P => P.evaluate(() => window.__alien)))).every(n => n === 0));
 
+    await done(Pa, Pb);
     // ---------- 3c. a whole game played online through the UI, as a quick person plays it: the same player as the local
     //      played games (test/playstep.cjs), every other move made while the last one is still on its way to the server
     {
@@ -263,6 +267,7 @@ const T = report('online');
       T.ok('a whole game online, played quickly through the UI', await P.evaluate(() => __ED.S.over) && !odd.length, steps + ' moves; ' + odd.join('; '));
       T.ok('online: the removal choice was reached, and moves were made while others were still on their way to the server', Object.keys(did).some(k => /^(\w[\w ]*: )?trash/.test(k)) && Object.keys(did).some(k => k.startsWith('ahead of the server')), JSON.stringify(did));
       console.log('     did: ' + JSON.stringify(did));
+      await done(P);
     }
 
     // ---------- 4. room lists and quick match

@@ -579,7 +579,9 @@ export class Room extends DurableObject {
   aiToMove() { return !this.S.over && !!this.S.players[this.S.cur].ai; }
   // someone is following the game: a person still racing with the page open. Otherwise the AIs play on without pauses.
   watched() { return this.S.players.some((p, i) => !p.ai && !p.resigned && !p.pieces.every(k => k === 'done') && this.online(this.owners[i])); }
-  async scheduleAI(ms) { this.settleClock(); const d = this.d; d.deadline = null; d.aiAt = Date.now() + (this.watched() ? ms : 0); await this.ctx.storage.setAlarm(d.aiAt); }
+  // an AI's move waits ms while someone watches (people follow what it did); on a test server (AI_PACE=0) it never waits:
+  // the pause is for people, and tests don't need it (owner, 2026-10-03)
+  async scheduleAI(ms) { this.settleClock(); const d = this.d; d.deadline = null; d.aiAt = Date.now() + (this.watched() && this.env.AI_PACE !== '0' ? ms : 0); await this.ctx.storage.setAlarm(d.aiAt); }
   /* AI seats play server-side, one action per alarm while people watch (so the table can follow), or AI_BATCH actions
      per alarm when nobody is racing with the page open. Counted, not timed: in a Worker the clock stands still while
      code runs (it moves on only at I/O), so a time budget never ran out and one alarm played the rest of the game,

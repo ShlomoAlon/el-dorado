@@ -124,12 +124,12 @@ for (const t of ['giant', 'plane']) { // (no village is in a Treasure Chest's re
   for (let g = 0; g < 12; g++) {
     const np = 2 + (g % 3), C = E.COURSES[g % E.COURSES.length];
     const { gs: g0, rec } = E.recNewGame({ course: C, seed: 1000 + g, fullRace: true, players: [...Array(np)].map((_, i) => ({ name: 'P' + i, color: ['#e5484d', '#efe9dc', '#9d7df7', '#ff9636'][i] })) }, 1000 + g);
-    gs = g0; const rnd = E.mulberry32(g + 7), mem = [{}, {}, {}, {}]; let steps = 0, undos = 0;
+    gs = g0; const rnd = E.mulberry32(g + 7); let steps = 0, undos = 0;
     while (!gs.over && steps++ < 20000) {
       const me = gs.cur;
       if (steps === 150 && np > 2) { E.recApply(gs, rec, (me + 1) % np, { t: 'resign' }); continue; }
       if (rnd() < .01) { E.recApply(gs, rec, me, { t: 'timeout' }); continue; }
-      const a = E.aiChoose(gs, 'raleigh', mem[me], rnd);
+      const a = E.botChoose(gs, { mode: 'heur', rnd }).a; // (any legal play will do: what's checked is the record; the cheapest player, 4x faster than raleigh)
       const before = JSON.stringify(gs), prevCur = gs.cur;
       const r = E.recApply(gs, rec, me, a); if (!r.ok) { E.recApply(gs, rec, me, { t: 'timeout' }); continue; }
       // sometimes undo (as the page does: bring back the earlier state), when the action drew nothing and the turn did not pass

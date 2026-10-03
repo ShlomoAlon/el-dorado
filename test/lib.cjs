@@ -21,11 +21,11 @@ function serveStatic() {
 }
 
 const freePort = () => new Promise(res => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
-/* wrangler dev on a free port, DEV_AUTH=1 (name-only sign-in and debug mode), BUGS_KEY set (bug reports can be read: bugs(id)),
+/* wrangler dev on a free port, DEV_AUTH=1 (name-only sign-in and debug mode), BUGS_KEY set (bug reports can be read: bugs(id)), AI_PACE=0 (AIs move without the pause people need),
    its own temporary storage (a fresh D1 and Durable Objects) */
 async function startServer() {
   const port = await freePort(), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eldorado-srv-'));
-  const p = spawn('npx', ['wrangler', 'dev', '--ip', '127.0.0.1', '--port', String(port), '--var', 'DEV_AUTH:1', '--var', 'BUGS_KEY:test-key', '--persist-to', dir],
+  const p = spawn('npx', ['wrangler', 'dev', '--ip', '127.0.0.1', '--port', String(port), '--var', 'DEV_AUTH:1', '--var', 'BUGS_KEY:test-key', '--var', 'AI_PACE:0', '--persist-to', dir],
     { cwd: ROOT, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; p.stdout.on('data', d => out += d); p.stderr.on('data', d => out += d);
   const url = `http://127.0.0.1:${port}/`, bugs = async id => (await fetch(url + 'api/bugs' + (id ? '?id=' + id : ''), { headers: { 'x-bugs-key': 'test-key' } })).json();
