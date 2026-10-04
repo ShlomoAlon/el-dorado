@@ -95,14 +95,14 @@ const STATE0 = [['none', 'Nowhere'], ['game', 'In a game'], ['room', 'In a room'
 const STATES = { [Symbol.iterator]: function* () { const nm = D.stateNames || {}; for (const [v, n] of STATE0) yield [v, nm[v] || n]; for (const v of D.moreStates || []) yield [v, nm[v] || v]; } };
 const stLabel = st => st === '*' ? 'Any state' : ([...STATES].find(([v]) => v === st) || [st, st])[1]; // (*: any state; a transition to it keeps the state)
 const NOLAY = ['board', 'viewer', 'site', '*']; // (no menu: the game, a replay, the way in, any menu (a rule for every menu: '*'))
-const NAMES = { setup: 'New game', online: 'Online', replays: 'Replays', room: 'Room lobby', board: 'Board', viewer: 'Replay viewer', main: 'Main menu', results: 'Results', site: 'Way in', title: 'Title', '*': 'Any menu' };
+const NAMES = { setup: 'New game', online: 'Online', replays: 'Replays', room: 'Room lobby', board: 'Board', viewer: 'Replay viewer', main: 'Main menu', results: 'Results', settings: 'Settings', site: 'Way in', title: 'Title', '*': 'Any menu' };
 const nameOf = m => (D.names && D.names[m]) || NAMES[m] || m; // (a menu renamed here: D.names)
 /* what a transition changes, read from its ends (never stored, so it can't disagree with them): the menu, the state, or both */
 function changes(a) { const [tm, ts] = a.to.split('@'), menu = a.from !== tm, state = ts !== '*' && a.states.some(s => s !== ts);
   return menu && state ? 'menu + state' : state ? 'state' : menu ? 'menu' : 'nothing'; }
 /* the default: one way in (owner, 2026-10-05: opening the site, reloading, or leaving and coming back always lands on the same
    menu, which looks different in each state), so the main menu has a box in every state and is where the menu opens in each */
-const SEED = { extra: ['main', 'results'], first: { none: 'main', game: 'main', room: 'main' },
+const SEED = { extra: ['main', 'results', 'settings'], first: { none: 'main', game: 'main', room: 'main' },
   nodes: [['site@*', -160, 230], ['main@none', 250, 60], ['main@game', 250, 230], ['main@room', 250, 400],
     ['setup@none', 540, 0], ['online@none', 540, 110], ['replays@none', 820, 0], ['viewer@none', 1100, 0],
     ['board@game', 540, 230], ['results@none', 820, 230], ['room@room', 540, 400], ['*@game', 820, 115]],
@@ -114,14 +114,19 @@ const SEED = { extra: ['main', 'results'], first: { none: 'main', game: 'main', 
     ['main', 'game', 'board@game', 'Back to game'], ['main', 'game', 'results@none', 'End game · Resign'], ['board', 'game', 'main@game', 'Menu'], ['board', 'game', 'results@none', 'The race is won'],
     ['results', 'none', 'main@none', 'Done'], ['results', 'none', 'viewer@none', 'Watch the replay'],
     ['main', 'room', 'room@room', 'Back to the room'], ['main', 'room', 'main@none', 'Leave the room'], ['room', 'room', 'main@room', 'Menu'], ['room', 'room', 'board@game', 'Start game (the host)'],
+    ['main', '*', 'settings@*', 'Settings'], ['settings', '*', 'main@*', 'Back'],
     ['*', 'game', 'board@game', 'Click beside the menu', 'A rule for every menu, only in a game: a click outside the menu goes back to the game']] };
 // a box for each place a transition starts or ends (each made below the others: drag it where it belongs)
 const boxFor = k => { if (!D.nodes.some(n => n.k === k)) D.nodes.push({ k, x: 0, y: Math.max(0, ...D.nodes.map(n => n.y)) + 100 }); };
+// a menu's own buttons, which change something on it and lead nowhere (owner, 2026-10-05: "buttons that aren't transitions ... like
+// settings"): its words, the states it is in, a note
+SEED.buttons = [['settings', 'Sound on / off'], ['settings', 'Remind me before ending a turn if I can still buy'], ['settings', 'Animation speed']];
 function seed() {
-  if (!D.nodes) { D.nodes = SEED.nodes.map(([k, x, y]) => ({ k, x, y }));
+  if (!D.nodes) { D.nodes = SEED.nodes.map(([k, x, y]) => ({ k, x, y })); D.buttons = SEED.buttons.map(([menu, label], i) => ({ id: 'sb' + i, menu, states: ['*'], label }));
     D.arrows = [...SEED.arrows.map(([from, st, to, label, note], i) => ({ id: 's' + i, from, states: [st], to, label, ...(note ? { note } : {}) })), ...(D.arrows || [])];
     for (const x of SEED.extra) if (!D.extra.includes(x)) D.extra.push(x);
     for (const [st, m] of Object.entries(SEED.first)) if (!D.first[st]) D.first[st] = m; }
+  if (!D.buttons) D.buttons = [];
   for (const a of D.arrows) { if (a.from.includes('@')) { const [m, st] = a.from.split('@'); a.from = m; a.states = [st]; } delete a.kind; delete a.el; } // (a transition from the flowchart before: one state, a kind)
   for (const a of D.arrows) { for (const st of a.states) boxFor(a.from + '@' + st); if (!a.to.endsWith('@*') || !D.nodes.some(n => n.k.startsWith(a.to.split('@')[0] + '@'))) boxFor(a.to); } }
 // where a transition from a state lands: its box, or for "the state stays the same", the menu's box in that state when it has one
@@ -154,6 +159,10 @@ function build() {
     for (const a of D.arrows) { if (a.from !== m || !(a.states.includes(vs) || a.states.includes('*')) || !a.label) continue; const ek = 'go:' + a.id; goes.add(ek); let el = byName(ek);
       if (!el) { el = document.createElement('button'); el.type = 'button'; el.className = 'btn'; el.dataset.edk = ek; s.appendChild(el); }
       if (el.textContent !== a.label && !el.isContentEditable) el.textContent = a.label; el.dataset.edGo = a.to; if (el.closest('section') !== s) s.appendChild(el); } }
+  for (const s of sections()) { if (!s.dataset.ed) continue; const m = s.dataset.screen;
+    for (const b of D.buttons) { if (b.menu !== m || !(b.states.includes(vs) || b.states.includes('*')) || !b.label) continue; const ek = 'bt:' + b.id; goes.add(ek); let el = byName(ek);
+      if (!el) { el = document.createElement('button'); el.type = 'button'; el.className = 'btn'; el.dataset.edk = ek; el.dataset.edGo = ''; s.appendChild(el); }
+      if (el.textContent !== b.label && !el.isContentEditable) el.textContent = b.label; if (el.closest('section') !== s) s.appendChild(el); } }
   for (const el of form.querySelectorAll('[data-ed-go]')) if (!goes.has(el.dataset.edk)) el.remove();
 }
 const arrowOf = ek => ek && ek.startsWith('go:') ? D.arrows.find(a => 'go:' + a.id === ek) : null;
@@ -181,7 +190,7 @@ addEventListener('click', e => { if (!editing() && e.target.closest && e.target.
 let note = '';
 function goTo(k) { const [m, st] = k.split('@'); if (NOLAY.includes(m)) { note = `That goes to the ${nameOf(m).toLowerCase()} (${stLabel(st).toLowerCase()}): not a menu.`; return panel(); }
   note = ''; if (st !== '*') edState = st === stateNow() ? null : st; /* (to a box for any state: the state stays) */ const menu = $('#menu'); if (!menu.open) { const mb = $('#menuBtn'); if (mb) mb.click(); } go(m); }
-addEventListener('click', e => { const g = e.target.closest('[data-ed-go]'); if (!g || editing()) return; e.preventDefault(); e.stopPropagation(); goTo(g.dataset.edGo); }, true);
+addEventListener('click', e => { const g = e.target.closest('[data-ed-go]'); if (!g || editing()) return; e.preventDefault(); e.stopPropagation(); if (g.dataset.edGo) goTo(g.dataset.edGo); }, true); // (a menu's own button: stays)
 
 /* ---------- laying the screen on show out on the grid ---------- */
 let editOn = false; const editing = () => editOn; // (Edit mode: off until the owner turns it on)
@@ -295,45 +304,55 @@ function layoutBody() {
     + ((n => n ? `<p>${btn('undel', `Bring back deleted blocks (${n})`)}</p>` : '')(Object.values(conf(sc).blocks).filter(x => x.del).length))
     + `<hr>${btn('reset', 'This screen back to the page\'s own')}`;
 }
-/* the flowchart drawn: boxes dragged to arrange, chosen by a click; in Connect mode a click on one box and then another draws a
-   transition between them. Each transition is drawn from each of its states' boxes (two between the same boxes side by side),
-   its words placed clear of the boxes and of the words already placed. The chart zooms (the wheel, − +, Fit) and pans (a drag
-   on its background) */
-const NW = 156, NH = 42;
-let fsel = null, connect = null, vb = null, focusT = null, copyText = null; // (fsel: { node } or { arrow }; connect: Connect mode, { from } once a first box is chosen; vb: the chart's view, none = all of it)
+/* the chart (owner, 2026-10-05): one box at a time in the middle, the boxes leading to it on its left and those it leads to on its
+   right, each arrow with its transitions' words; under them every box, in an order that never changes whatever is clicked (the
+   ones joined to the middle one marked). A click on a box centres it; a click on the centred one starts a transition from it, and
+   the next click on a box ends it there (anywhere else, it is dropped) */
+const NW = 156, NH = 42, COLX = [0, 400, 800], TRAY = 6;
+let fsel = null, connect = null, focus = null, focusT = null, copyText = null; // (fsel: { node } or { arrow }: shown in the directions; connect: a transition being drawn from the middle box; focus: the middle box)
 const opened = new Set(), openT = new Set(); // (the directions' tree, folded until opened (owner, 2026-10-05): menus and groups opened, transitions opened)
 const reveal = a => { opened.add('m:' + a.from); opened.add('g:' + a.from + ':' + [...a.states].sort().join(',')); }; // (a transition shown: its menu and group open)
 // (a rule for every menu is in the directions only: on the chart it would be lines from everywhere, owner 2026-10-05)
-const shownNodes = () => D.nodes.filter(n => n.k.split('@')[0] !== '*');
 const segs = () => { const out = []; for (const a of D.arrows) if (a.from !== '*') for (const st of a.states) { const f = a.from + '@' + st, [tm, ts] = a.to.split('@');
     // (from any state to "the state stays the same": to each box of that menu, there being no box for any state)
     const ts2 = st === '*' && ts === '*' && !D.nodes.some(n => n.k === a.to) ? D.nodes.filter(n => n.k.split('@')[0] === tm).map(n => n.k) : [landing(a, st)];
     for (const t of ts2) if (t && f !== t) out.push([a, f, t]); } return out; };
-const fitBox = () => { const xs = shownNodes().map(n => n.x), ys = shownNodes().map(n => n.y); return { x: Math.min(...xs) - 20, y: Math.min(...ys) - 20, w: Math.max(...xs) - Math.min(...xs) + NW + 150, h: Math.max(...ys) - Math.min(...ys) + NH + 50 }; };
+// the tray: every menu once, in the order the directions list them, never by what is clicked (owner, 2026-10-05: "you just need to
+// have the menus, and they start in any state")
+const trayMenus = () => menusOf().filter(m => m !== '*');
+const centre = () => { if (!focus || !trayMenus().includes(focus.split('@')[0])) focus = ((D.first.none || trayMenus()[0]) + '@*'); return focus; };
+// the transitions joining a box to the centre: for a menu in any state, those of every box of it
+const atCentre = (k, f) => { const m = k.split('@')[0], [fm, fs] = f.split('@'); return fs === '*' ? m === fm : k === f; };
 function flowSvg() {
-  const pos = Object.fromEntries(D.nodes.map(n => [n.k, n])), all = segs(), pairs = {}, v = vb || fitBox();
-  for (const s of all) { const p = [s[1], s[2]].sort().join('|'); (pairs[p] = pairs[p] || []).push(s); }
-  const edgeAt = (n, dx, dy) => { const t = Math.min((NW / 2 + 3) / Math.abs(dx || 1e-9), (NH / 2 + 3) / Math.abs(dy || 1e-9)); return [n.x + NW / 2 + dx * t, n.y + NH / 2 + dy * t]; };
-  let lines = '', labels = ''; const taken = []; // (the words placed so far: x, y, w, h)
-  for (const sg of all) { const [a, fk, tk] = sg, A = pos[fk], B = pos[tk]; if (!A || !B) continue;
-    const [p, q] = [fk, tk].sort().map(k => pos[k]), grp = pairs[[fk, tk].sort().join('|')], i = grp.indexOf(sg);
-    const ux = q.x - p.x, uy = q.y - p.y, ul = Math.hypot(ux, uy) || 1, nx = -uy / ul, ny = ux / ul, o = (i - (grp.length - 1) / 2) * 16;
-    const dx = B.x - A.x, dy = B.y - A.y, [x1, y1] = edgeAt(A, dx, dy), [x2, y2] = edgeAt(B, -dx, -dy);
-    const X1 = x1 + nx * o, Y1 = y1 + ny * o, X2 = x2 + nx * o, Y2 = y2 + ny * o, on = fsel && fsel.arrow === a.id, out = fsel && fsel.node === fk;
-    const cls = `ed-ar${changes(a).includes('state') ? ' st' : ''}${out ? ' out' : ''}${on ? ' on' : ''}`;
-    lines += `<g class="${cls}" data-arrow="${a.id}"><line x1="${X1}" y1="${Y1}" x2="${X2}" y2="${Y2}" class="hit"/><line x1="${X1}" y1="${Y1}" x2="${X2}" y2="${Y2}" marker-end="url(#edHead${on ? 'On' : ''})"/></g>`;
-    const words = a.label || '…', up = Math.abs(Y2 - Y1) > Math.abs(X2 - X1), w = words.length * 7.1 + 6, side = o >= 0 ? 1 : -1;
-    for (const f of [.5, .38, .62, .28, .72, .2, .8]) { const mx = X1 + (X2 - X1) * f, my = Y1 + (Y2 - Y1) * f;
-      const r = up ? { x: side > 0 ? mx + 5 : mx - 5 - w, y: my - 8, w, h: 14 } : { x: mx - w / 2, y: my - 8, w, h: 14 };
-      const hits = s => r.x < s.x + s.w && s.x < r.x + r.w && r.y < s.y + s.h && s.y < r.y + r.h;
-      if (f !== .8 && (taken.some(hits) || D.nodes.some(n => hits({ x: n.x, y: n.y, w: NW, h: NH })))) continue;
-      taken.push(r); labels += `<text class="${cls}" data-arrow="${a.id}" x="${r.x + w / 2}" y="${my + 3}">${esc(words)}${a.note ? ' ✎' : ''}</text>`; break; } }
-  const boxes = shownNodes().map(n => { const [m, st] = n.k.split('@'), first = st !== '*' && D.first[st] === m, on = (fsel && fsel.node === n.k) || (connect && connect.from === n.k);
-    return `<g class="ed-node ${st === '*' ? 'any' : st}${on ? ' on' : ''}${NOLAY.includes(m) ? ' nolay' : ''}" data-node="${esc(n.k)}" transform="translate(${n.x},${n.y})"><rect width="${NW}" height="${NH}" rx="8"/>`
-      + `<text x="10" y="18" class="m">${first ? '★ ' : ''}${esc(nameOf(m))}</text><text x="10" y="33" class="s">${esc(stLabel(st).toLowerCase())}</text></g>`; }).join('');
-  return `<svg class="ed-fc${connect ? ' connect' : ''}" viewBox="${v.x} ${v.y} ${v.w} ${v.h}"><defs>`
+  const f = centre(), [fm, fs] = f.split('@'), all = segs(), ins = new Map(), outs = new Map(); // (neighbour box → the transitions between it and the centre)
+  for (const [a, fk, tk] of all) { const fi = atCentre(fk, f), ti = atCentre(tk, f); if (ti && !fi) { if (!ins.has(fk)) ins.set(fk, []); ins.get(fk).push(a); } if (fi && !ti) { if (!outs.has(tk)) outs.set(tk, []); outs.get(tk).push(a); } }
+  const ms = trayMenus(), rank = k => ms.indexOf(k.split('@')[0]) * 10 + ['*', ...[...STATES].map(([v]) => v)].indexOf(k.split('@')[1]), byOrder = m => [...m.keys()].sort((p, q) => rank(p) - rank(q)), inK = byOrder(ins), outK = byOrder(outs);
+  const own = D.buttons.filter(b => b.menu === fm && (fs === '*' || b.states.includes(fs) || b.states.includes('*'))); // (the centre's own buttons, listed under it)
+  const colH = n => n * 70 - 28, H1 = Math.max(colH(inK.length), colH(outK.length), NH + 40 + 2 * (own.length * 16 + 20)), fy = H1 / 2 - NH / 2 - 14;
+  const box = (k, x, y, cls) => { const [m, st] = k.split('@'), first = st !== '*' && D.first[st] === m;
+    return `<g class="ed-node ${st === '*' ? 'any' : st}${cls}${NOLAY.includes(m) ? ' nolay' : ''}" data-node="${esc(k)}" transform="translate(${x},${y})"><rect width="${NW}" height="${NH}" rx="8"/>`
+      + `<text x="10" y="18" class="m">${first ? '★ ' : ''}${esc(nameOf(m))}</text><text x="10" y="33" class="s">${esc(stLabel(st).toLowerCase())}</text></g>`; };
+  let g = '';
+  const side = (keys, map, x, inward) => keys.forEach((k, i) => { const y = H1 / 2 - colH(keys.length) / 2 + i * 70, as = [...new Set(map.get(k))]; // (a transition to several boxes of the centre's menu: once)
+    const x1 = inward ? x + NW : COLX[1] + NW, x2 = inward ? COLX[1] : x, y1 = inward ? y + NH / 2 : fy + NH / 2, y2 = inward ? fy + NH / 2 : y + NH / 2, lx = inward ? x1 + 10 : x2 - 14, ly = y1 + (y2 - y1) * (lx - x1) / (x2 - x1); // (its words beside the outer box, where the lines are apart, running toward the centre)
+    const st = as.some(a => changes(a).includes('state')), on = as.some(a => fsel && fsel.arrow === a.id);
+    g += `<line class="ed-ln${st ? ' st' : ''}${on ? ' on' : ''}" x1="${x1}" y1="${y1}" x2="${x2 - 3}" y2="${y2}" marker-end="url(#edHead${on ? 'On' : ''})"/>`;
+    as.forEach((a, j) => { g += `<text class="ed-ar${st ? ' st' : ''}${fsel && fsel.arrow === a.id ? ' on' : ''}" data-arrow="${a.id}" x="${lx}" y="${ly - 5 - (as.length - 1 - j) * 15}" style="text-anchor:${inward ? 'start' : 'end'}">${esc(a.label || '…')}${a.note ? ' ✎' : ''}</text>`; });
+    g += box(k, x, y, ''); });
+  side(inK, ins, COLX[0], true); side(outK, outs, COLX[2], false);
+  g += box(f, COLX[1], fy, ' focus' + (connect ? ' linking' : ''));
+  own.forEach((b, i) => { g += `<text class="ed-own" data-button="${b.id}" x="${COLX[1]}" y="${fy + NH + 46 + i * 16}">▢ ${esc(b.label || '…')}</text>`; }); // (its own buttons, which lead nowhere)
+  // the centre's state: any, or one (the tabs under it)
+  [['*', 'any'], ...[...STATES].map(([v, n]) => [v, n.toLowerCase()])].reduce((x, [v, n]) => { const w = n.length * 6.6 + 14; g += `<g class="ed-st${v === fs ? ' on' : ''}" data-centre="${esc(fm + '@' + v)}" transform="translate(${x},${fy + NH + 8})"><rect width="${w}" height="18" rx="9"/><text x="${w / 2}" y="13">${esc(n)}</text></g>`; return x + w + 4; }, COLX[1] - 40);
+  if (!inK.length) g += `<text class="ed-none" x="${COLX[0] + NW / 2}" y="${fy + NH / 2 + 4}">nothing leads here</text>`;
+  if (!outK.length) g += `<text class="ed-none" x="${COLX[2] + NW / 2}" y="${fy + NH / 2 + 4}">leads nowhere yet</text>`;
+  // every menu, always in the same places: a click centres it (the centre's, and those joined to it, marked)
+  const ty = H1 + 70, step = (COLX[2] + NW) / TRAY, near = new Set([...inK, ...outK].map(k => k.split('@')[0])); g += `<line class="ed-sep" x1="0" y1="${ty - 30}" x2="${COLX[2] + NW}" y2="${ty - 30}"/>`;
+  ms.forEach((m, i) => { g += box(m + '@*', (i % TRAY) * step, ty + Math.floor(i / TRAY) * 56, m === fm ? ' tfocus' : near.has(m) ? ' tnear' : ' tray'); });
+  const H = ty + Math.ceil(ms.length / TRAY) * 56;
+  return `<svg class="ed-fc${connect ? ' connect' : ''}" viewBox="-10 -40 ${COLX[2] + NW + 20} ${H + 50}" preserveAspectRatio="xMidYMin meet"><defs>`
     + ['', 'On'].map(k => `<marker id="edHead${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="hd${k}"/></marker>`).join('')
-    + `<rect class="bg" x="${v.x - v.w}" y="${v.y - v.h}" width="${v.w * 3}" height="${v.h * 3}"/></defs>${lines}${boxes}${labels}</svg>`;
+    + `</defs><text class="ed-cap" x="${COLX[0]}" y="-18">Leads here</text><text class="ed-cap" x="${COLX[1]}" y="-18">${connect ? 'Click where it goes' : 'Click it to draw a transition'}</text><text class="ed-cap" x="${COLX[2]}" y="-18">Leads to</text>${g}</svg>`;
 }
 /* the flow as text, for the owner to paste to me: each menu, its boxes, its transitions grouped by the states they apply to, notes */
 function flowText() {
@@ -342,6 +361,7 @@ function flowText() {
     'The menu opens on: ' + [...STATES].map(([v, n]) => `${n} → ${D.first[v] ? nameOf(D.first[v]) : '(not set)'}`).join('; '), ''];
   for (const m of menusOf()) { const boxes = D.nodes.filter(n => n.k.split('@')[0] === m).map(n => n.k.split('@')[1]);
     out.push(`${nameOf(m)}${NOLAY.includes(m) ? ' (not a menu)' : ''}: in ${st(boxes)}`); if (D.mnotes && D.mnotes[m]) out.push(`  note: ${D.mnotes[m]}`);
+    for (const b of D.buttons.filter(x => x.menu === m)) { out.push(`  button (stays on this menu), when ${st(b.states)}: "${b.label || '…'}"`); if (b.note) out.push(`    note: ${b.note}`); }
     for (const a of D.arrows.filter(x => x.from === m)) { out.push(`  when ${st(a.states)}: "${a.label || '…'}" → ${to(a)} [${changes(a)}]`); if (a.note) out.push(`    note: ${a.note}`); }
     out.push(''); }
   return out.join('\n');
@@ -354,6 +374,10 @@ function flowBody() {
   const menus = [...new Set([...sections().map(s => s.dataset.screen), ...NOLAY, ...D.extra])], mOpts = (cur, any) => menus.filter(m => any || m !== '*').map(m => `<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(nameOf(m))}</option>`).join('');
   const others = m => menusOf().filter(x => x !== m).map(x => `<option value="${esc(x)}">${esc(nameOf(x))}</option>`).join('');
   const chips = a => [['*', 'Any state'], ...STATES].map(([v, n]) => btn('fl-tst', esc(n), a.states.includes(v), v, `data-id="${a.id}"`)).join('');
+  const bchips = b => [['*', 'Any state'], ...STATES].map(([v, n]) => btn('fl-bst', esc(n), b.states.includes(v), v, `data-id="${b.id}"`)).join('');
+  const brow = b => { const open = openT.has(b.id);
+    return `<div class="ed-dr" data-dbutton="${b.id}">${tw('t:' + b.id, open)}<input data-act="fl-bword" data-id="${b.id}" value="${esc(b.label)}" maxlength="48" placeholder="The button's words">${btn('fl-rmb', '×', false, b.id, 'title="Remove this button"')}`
+      + (open ? `<div class="ed-tx"><div class="ed-dh"><span>When in:</span>${bchips(b)}</div><textarea data-act="fl-bnote" data-id="${b.id}" rows="2" placeholder="A note">${esc(b.note || '')}</textarea></div>` : '') + `</div>`; };
   const trow = a => { const [tm, ts] = a.to.split('@'), on = fsel && fsel.arrow === a.id, open = openT.has(a.id);
     return `<div class="ed-dr${on ? ' on' : ''}" data-darrow="${a.id}">${tw('t:' + a.id, open)}<input data-act="fl-tword" data-id="${a.id}" value="${esc(a.label)}" maxlength="48" placeholder="What takes the player there">`
       + `<span>→</span><select data-act="fl-tto-m" data-id="${a.id}">${mOpts(tm)}</select><select data-act="fl-tto-s" data-id="${a.id}">${stOpts(ts, true, 'state stays the same')}</select>`
@@ -368,13 +392,14 @@ function flowBody() {
       + `<textarea data-act="fl-mnote" data-m="${esc(m)}" rows="1" placeholder="A note about this menu">${esc((D.mnotes || {})[m] || '')}</textarea>`
       + [...groups].map(([g, as]) => { const gk = 'g:' + m + ':' + g, gopen = opened.has(gk);
           return `<div class="ed-grp">${tw(gk, gopen)}<b>When ${esc(g.split(',').map(stLabel).join(' or ').toLowerCase())}</b>${gopen ? as.map(trow).join('') : ` <span class="ed-hint">${as.length}</span>`}</div>`; }).join('')
-      + `<div class="ed-dh">${btn('fl-addt', '+ Transition', false, m)}<select data-act="fl-copyall" data-m="${esc(m)}"><option value="">Copy all to…</option>${others(m)}</select>`
+      + (() => { const bs = D.buttons.filter(b => b.menu === m), bk = 'b:' + m, bopen = opened.has(bk); return bs.length ? `<div class="ed-grp">${tw(bk, bopen)}<b>Its own buttons</b>${bopen ? bs.map(brow).join('') : ` <span class="ed-hint">${bs.length}</span>`}</div>` : ''; })()
+      + `<div class="ed-dh">${btn('fl-addt', '+ Transition', false, m)}${btn('fl-addb', '+ Button', false, m, 'title="A button that stays on this menu (a setting, a toggle)"')}<select data-act="fl-copyall" data-m="${esc(m)}"><option value="">Copy all to…</option>${others(m)}</select>`
       + `<select data-act="fl-merge" data-m="${esc(m)}"><option value="">Merge into…</option>${others(m)}</select>${btn('fl-rmmenu', 'Remove menu', false, m)}</div></div>` : '';
     return `<div class="ed-dir" data-menu="${esc(m)}"><div class="ed-dh ed-mh">${tw('m:' + m, open)}<input class="ed-mname" data-act="fl-mname" data-m="${esc(m)}" value="${esc(nameOf(m))}" maxlength="32" title="The menu's name"><span class="ed-hint">${ts.length} out</span></div>${body}</div>`; }).join('');
   const add = `<div class="ed-dh ed-add"><span>+ Menu:</span><select id="flMenu">${mOpts('', true)}<option value="">New menu…</option></select><select id="flState">${stOpts('none', true, 'Any state')}</select>${btn('fl-add', 'Add')}</div>`
     + `<div class="ed-states"><b>States</b>${[...STATES].map(([v, n]) => `<div class="ed-dh"><input data-act="fl-sname" data-s="${esc(v)}" value="${esc(n)}" maxlength="32">${(D.moreStates || []).includes(v) ? btn('fl-rmstate', 'Remove', false, v) : '<span class="ed-hint">the page\'s</span>'}</div>`).join('')}<div class="ed-dh">${btn('fl-addstate', '+ State')}</div></div>`;
   // (two panes: the chart, never scrolled, and the directions, which alone scroll: owner, 2026-10-05)
-  const tools = `<div class="ed-ftools">${btn('fl-mode', connect ? '➝ Connecting: click a box, then another' : '➝ Connect', !!connect)}${btn('fl-zoom', '−', false, 'out', 'title="Zoom out"')}${btn('fl-zoom', '+', false, 'in', 'title="Zoom in"')}${btn('fl-zoom', 'Fit', false, 'fit')}`
+  const tools = `<div class="ed-ftools">${connect ? `<span class="ed-link">Drawing a transition from ${esc(nameOf(focus.split('@')[0]))}: click the box it goes to (anywhere else drops it)</span>` : ''}`
     + `${btn('fl-copy', 'Copy flow', false, '', 'title="The flow as text, to paste to Claude"')}${btn('fl-reset', 'Default flowchart')}</div>`;
   return `<div class="ed-chart">${tools}<div class="ed-flowwrap">${flowSvg()}</div>${note ? `<p class="ed-hint">${esc(note)}</p>` : ''}${copyText ? `<textarea class="ed-copy" readonly>${esc(copyText)}</textarea>` : ''}</div><div class="ed-dirs">${dirs}${add}</div>`;
 }
@@ -389,6 +414,7 @@ function mergeMenu(from, into) { // (everything of one menu becomes the other's:
     if (!D.screens[k] && D.screens[n.k]) D.screens[k] = D.screens[n.k]; delete D.screens[n.k];
     if (D.nodes.some(x => x.k === k)) D.nodes = D.nodes.filter(x => x !== n); else n.k = k; }
   for (const a of D.arrows) { if (a.from === from) a.from = into; const [tm, ts] = a.to.split('@'); if (tm === from) a.to = into + '@' + ts; }
+  for (const b of D.buttons) if (b.menu === from) b.menu = into;
   D.arrows = D.arrows.filter(a => !(a.from === into && a.to === into + '@*' && !a.label)); // (an empty loop the merge made)
   for (const [st, f] of Object.entries(D.first)) if (f === from) D.first[st] = into;
   D.extra = D.extra.filter(x => x !== from); if (D.mnotes && D.mnotes[from]) { D.mnotes[into] = [D.mnotes[into], D.mnotes[from]].filter(Boolean).join(' / '); delete D.mnotes[from]; } }
@@ -398,6 +424,7 @@ function splitMenu(m, st, name) { // (one state of a menu becomes a menu of its 
   if (n) n.k = nk; else boxFor(nk); if (D.screens[k]) { D.screens[nk] = D.screens[k]; delete D.screens[k]; } if (D.first[st] === m) D.first[st] = nm;
   for (const a of [...D.arrows]) { if (a.from === m && a.states.includes(st)) { if (a.states.length === 1) a.from = nm; else { a.states = a.states.filter(s => s !== st); D.arrows.push({ ...a, id: 'a' + Date.now().toString(36) + D.arrows.length, from: nm, states: [st] }); } }
     if (a.to === k) a.to = nk; }
+  for (const b of [...D.buttons]) if (b.menu === m && (b.states.includes(st) || b.states.includes('*'))) D.buttons.push({ ...b, id: 'b' + Date.now().toString(36) + D.buttons.length, menu: nm, states: [st] }); // (its own buttons: on the new menu too)
   return nm; }
 function copyTo(a, m) { const c = { ...a, id: 'a' + Date.now().toString(36) + D.arrows.length, from: m, states: [...a.states] }; D.arrows.push(c); for (const st of c.states) boxFor(m + '@' + st); return c; }
 function panel() {
@@ -412,7 +439,7 @@ function panel() {
   if (box.__h !== html) { const d0 = box.querySelector('.ed-dirs'), top = d0 ? d0.scrollTop : 0; box.__h = html; box.innerHTML = html; const d1 = box.querySelector('.ed-dirs'); if (d1) d1.scrollTop = top; } // (a redraw keeps the directions where they were scrolled)
   if (scrollDir && fsel) { scrollDir = false; const d = box.querySelector('.ed-dirs'), m = fsel.node && fsel.node.split('@')[0], r = box.querySelector(fsel.arrow ? `[data-darrow="${fsel.arrow}"]` : `[data-menu="${CSS.escape(m)}"]`);
     if (d && r) d.scrollTop = r.offsetTop - 8; } // (the directions scroll to the transition or the menu; the chart stays)
-  if (focusT) { const f = box.querySelector(`[data-act=fl-tword][data-id="${focusT}"]`); focusT = null; if (f) f.focus(); } // (a transition just drawn: its words to type)
+  if (focusT) { const f = box.querySelector(`input[data-id="${focusT}"]`); focusT = null; if (f) f.focus(); } // (a transition just drawn: its words to type)
   if (copyText) { const c = box.querySelector('textarea.ed-copy'); if (c && document.activeElement !== c) { c.focus(); c.select(); } }
   { const s = shown(); try { sessionStorage.setItem(AT, JSON.stringify({ sc: s ? s.dataset.screen : null, st: edState, tab, edit: editOn })); } catch (e) { /* expected: storage off */ } }
   box.classList.toggle('wide', tab === 'flow' && !mini); box.classList.toggle('flowtab', tab === 'flow' && !mini); box.classList.toggle('editing', editOn);
@@ -434,8 +461,6 @@ function act(t, a, v) {
   else if (a === 'reset') { delete D.screens[sc]; sel = null; unlay(s); }
   else if (a === 'fl-lay') { tab = 'layout'; fsel = null; goTo(v); return; }
   else if (a === 'fl-fold') { const k = v.startsWith('t:') ? v.slice(2) : v, set = v.startsWith('t:') ? openT : opened; if (set.has(k)) set.delete(k); else set.add(k); return panel(); }
-  else if (a === 'fl-mode') { connect = connect ? null : { from: null }; return panel(); }
-  else if (a === 'fl-zoom') { if (v === 'fit') vb = null; else { const w = vb || fitBox(), f = v === 'in' ? 1 / 1.25 : 1.25; vb = { x: w.x + w.w * (1 - f) / 2, y: w.y + w.h * (1 - f) / 2, w: w.w * f, h: w.h * f }; } return panel(); }
   else if (a === 'fl-copy') { const txt = flowText(); copyText = null;
     navigator.clipboard.writeText(txt).then(() => { note = 'The flow is copied: paste it to Claude.'; panel(); }, err => { copyText = txt; note = `Copying wasn't allowed here (${err.name}): select the text below and copy it.`; panel(); }); return; }
   else if (a === 'fl-first') { const [m, st] = v.split('@'); D.first[st] = D.first[st] === m ? undefined : m; }
@@ -451,7 +476,12 @@ function act(t, a, v) {
   else if (a === 'fl-rmstate') { if (D.nodes.some(x => x.k.endsWith('@' + v)) && !confirm(`Remove the state "${stLabel(v)}" and its boxes?`)) return;
     for (const x of D.nodes.filter(x => x.k.endsWith('@' + v))) removeBox(x.k); D.moreStates = D.moreStates.filter(x => x !== v); delete D.first[v]; fsel = null; }
   else if (a === 'fl-rmmenu') { if (!confirm(`Remove the menu "${nameOf(v)}", its boxes and its transitions?`)) return;
-    for (const x of D.nodes.filter(x => x.k.split('@')[0] === v)) removeBox(x.k); D.arrows = D.arrows.filter(x => x.from !== v); fsel = null; }
+    for (const x of D.nodes.filter(x => x.k.split('@')[0] === v)) removeBox(x.k); D.arrows = D.arrows.filter(x => x.from !== v); D.buttons = D.buttons.filter(x => x.menu !== v); fsel = null; }
+  else if (a === 'fl-addb') { const id = 'b' + Date.now().toString(36); D.buttons.push({ id, menu: v, states: ['*'], label: '' }); opened.add('m:' + v); opened.add('b:' + v); openT.add(id); focusT = id; }
+  else if (a === 'fl-rmb') { D.buttons = D.buttons.filter(x => x.id !== v); }
+  else if (a.startsWith('fl-b')) { const bt = D.buttons.find(x => x.id === t.dataset.id); if (!bt) return;
+    if (a === 'fl-bword') bt.label = v.trim().slice(0, 48); else if (a === 'fl-bnote') { if (v.trim()) bt.note = v.trim(); else delete bt.note; }
+    else if (a === 'fl-bst') { const st = new Set(bt.states); if (v === '*') bt.states = ['*']; else { st.delete('*'); if (st.has(v)) st.delete(v); else st.add(v); if (st.size) bt.states = [...st]; } } }
   else if (a.startsWith('fl-t')) { const ar = D.arrows.find(x => x.id === t.dataset.id); if (!ar) return; fsel = { arrow: ar.id };
     if (a === 'fl-tword') ar.label = v.trim().slice(0, 48);
     else if (a === 'fl-tnote') { if (v.trim()) ar.note = v.trim(); else delete ar.note; }
@@ -462,11 +492,11 @@ function act(t, a, v) {
   else if (a === 'fl-add') { let m = $('#flMenu').value; const st = $('#flState').value;
     if (!m) { m = (prompt('A name for the new menu (for example: settings)') || '').trim().toLowerCase().replace(/[^\w-]/g, '').slice(0, 24); if (!m) return; if (!D.extra.includes(m) && !sections().some(x => x.dataset.screen === m) && !NOLAY.includes(m)) D.extra.push(m); }
     boxFor(m + '@' + st); fsel = { node: m + '@' + st }; opened.add('m:' + m); scrollDir = true; }
-  else if (a === 'fl-reset') { if (!confirm('Back to the default flowchart? Your boxes and transitions go; layouts stay.')) return; D.nodes = null; D.arrows = null; D.first = {}; fsel = null; vb = null; seed(); }
+  else if (a === 'fl-reset') { if (!confirm('Back to the default flowchart? Your boxes and transitions go; layouts stay.')) return; D.nodes = null; D.arrows = null; D.first = {}; fsel = null; focus = null; seed(); }
   else if (a === 'fl-merge') { if (!v || v === t.dataset.m) return; mergeMenu(t.dataset.m, v); fsel = null; opened.add('m:' + v); }
   else if (a === 'fl-split') { const [m, st] = v.split('@'), n = (prompt(`A name for the menu "${nameOf(m)}" becomes ${stLabel(st).toLowerCase()}`, `${nameOf(m)} (${stLabel(st).toLowerCase()})`) || '').trim().slice(0, 32); if (!n) return;
     const nm = splitMenu(m, st, n); fsel = { node: nm + '@' + st }; scrollDir = true; }
-  else if (a === 'fl-copyall') { if (!v) return; for (const x of D.arrows.filter(y => y.from === t.dataset.m)) reveal(copyTo(x, v)); }
+  else if (a === 'fl-copyall') { if (!v) return; for (const x of D.arrows.filter(y => y.from === t.dataset.m)) reveal(copyTo(x, v)); for (const b of D.buttons.filter(y => y.menu === t.dataset.m)) D.buttons.push({ ...b, id: 'b' + Date.now().toString(36) + D.buttons.length, menu: v, states: [...b.states] }); opened.add('m:' + v); }
   else if (a === 'fl-copyt') { if (!v) return; const x = D.arrows.find(y => y.id === t.dataset.id); if (x) reveal(copyTo(x, v)); }
   else if (a === 'download') { const u = URL.createObjectURL(new Blob([JSON.stringify(D, null, 1)], { type: 'application/json' })), l = document.createElement('a');
     l.href = u; l.download = `eldorado-design-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000); return; }
@@ -481,7 +511,9 @@ box.addEventListener('change', e => { const t = e.target; if (t.matches('select[
 // words and notes kept as they are typed, without drawing the panel again (which would take the field from under the typing): a
 // click elsewhere in the panel draws it again before the field's change is told, and the words were lost (2026-10-05)
 box.addEventListener('input', e => { const t = e.target, v = t.value, a = t.dataset.act, ar = t.dataset.id && D.arrows.find(x => x.id === t.dataset.id);
-  if (a === 'fl-tword' && ar) ar.label = v.trim().slice(0, 48); else if (a === 'fl-tnote' && ar) { if (v.trim()) ar.note = v.trim(); else delete ar.note; }
+  const bt = t.dataset.id && D.buttons.find(x => x.id === t.dataset.id);
+  if (a === 'fl-bword' && bt) bt.label = v.trim().slice(0, 48); else if (a === 'fl-bnote' && bt) { if (v.trim()) bt.note = v.trim(); else delete bt.note; }
+  else if (a === 'fl-tword' && ar) ar.label = v.trim().slice(0, 48); else if (a === 'fl-tnote' && ar) { if (v.trim()) ar.note = v.trim(); else delete ar.note; }
   else if (a === 'fl-mnote') (D.mnotes || (D.mnotes = {}))[t.dataset.m] = v.trim(); else if (a === 'fl-mname' && v.trim()) (D.names || (D.names = {}))[t.dataset.m] = v.trim().slice(0, 32);
   else if (a === 'fl-sname' && v.trim()) (D.stateNames || (D.stateNames = {}))[t.dataset.s] = v.trim().slice(0, 32); else return;
   save(); });
@@ -490,28 +522,18 @@ box.addEventListener('pointerdown', e => { if (!e.target.closest('.ed-head') || 
   addEventListener('pointermove', mv); addEventListener('pointerup', up); });
 // a row of the directions, or a box's state in them, chosen by a click on it (not on its fields): the chart shows it
 box.addEventListener('click', e => { if (e.target.closest('button, select, input, textarea')) return; const r = e.target.closest('[data-darrow], [data-dir]'); if (!r) return;
-  fsel = r.dataset.darrow ? { arrow: r.dataset.darrow } : { node: r.dataset.dir }; panel(); });
-// the chart: in Connect mode a click on a box, then on another, draws a transition between them; otherwise a press on a box chooses
-// and drags it, on a transition chooses it, on the background drags the view (and a click there chooses nothing); the wheel zooms
+  fsel = r.dataset.darrow ? { arrow: r.dataset.darrow } : { node: r.dataset.dir }; if (r.dataset.dir && r.dataset.dir.split('@')[0] !== '*') focus = r.dataset.dir; panel(); }); // (a box chosen in the directions: centred)
+// the chart: a click on a box centres it; on the centred box, starts a transition from it, which the next click on a box ends there
+// (and a click anywhere else drops); on a transition's words, shows it in the directions
 box.addEventListener('pointerdown', e => { const svg = e.target.closest && e.target.closest('.ed-fc'); if (tab !== 'flow' || !svg) return; e.preventDefault();
-  const g = e.target.closest('.ed-node'), ar = e.target.closest('[data-arrow]'), k = svg.getScreenCTM().a; // (the chart is drawn scaled)
-  if (connect) { if (!g) return; const key = g.dataset.node; if (!connect.from) { connect.from = key; return panel(); }
-    if (key !== connect.from) { const [m, st] = connect.from.split('@'), id = 'a' + Date.now().toString(36); D.arrows.push({ id, from: m, states: [st], to: key, label: '' });
-      openT.add(id); reveal(D.arrows[D.arrows.length - 1]); fsel = { arrow: id }; scrollDir = true; focusT = id; save(); }
-    connect.from = null; return panel(); }
-  if (g) { const n = D.nodes.find(x => x.k === g.dataset.node), x0 = n.x, y0 = n.y, sx = e.clientX, sy = e.clientY; fsel = { node: n.k }; opened.add('m:' + n.k.split('@')[0]); scrollDir = true; panel();
-    const mv = ev => { n.x = Math.round((x0 + (ev.clientX - sx) / k) / 10) * 10; n.y = Math.round((y0 + (ev.clientY - sy) / k) / 10) * 10; panel(); },
-      up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); save(); panel(); };
-    addEventListener('pointermove', mv); addEventListener('pointerup', up); return; }
-  if (ar) { const x = D.arrows.find(y => y.id === ar.dataset.arrow); fsel = { arrow: x.id }; reveal(x); scrollDir = true; return panel(); }
-  const v0 = vb || fitBox(), sx = e.clientX, sy = e.clientY; let moved = false;
-  const mv = ev => { if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 3 && !moved) return; moved = true; vb = { ...v0, x: v0.x - (ev.clientX - sx) / k, y: v0.y - (ev.clientY - sy) / k }; panel(); },
-    up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); if (!moved) { fsel = null; panel(); } };
-  addEventListener('pointermove', mv); addEventListener('pointerup', up); });
-box.addEventListener('wheel', e => { const svg = e.target.closest && e.target.closest('.ed-fc'); if (tab !== 'flow' || !svg) return; e.preventDefault();
-  const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse()), v = vb || fitBox(), f = Math.exp(Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 120) / 600);
-  vb = { x: p.x - (p.x - v.x) * f, y: p.y - (p.y - v.y) * f, w: v.w * f, h: v.h * f }; panel(); }, { passive: false });
+  const g = e.target.closest('.ed-node'), ar = e.target.closest('[data-arrow]'), key = g && g.dataset.node, tabk = e.target.closest('[data-centre]');
+  if (tabk && !connect) { focus = tabk.dataset.centre; return panel(); } // (the centre's state)
+  if (connect) { connect = null; if (key && key !== focus) { const [m, st] = focus.split('@'), id = 'a' + Date.now().toString(36); D.arrows.push({ id, from: m, states: [st], to: key, label: '' }); for (const k of [m + '@' + st, key]) if (!k.endsWith('@*')) boxFor(k); // (a menu in the tray: the state stays the same)
+      openT.add(id); reveal(D.arrows[D.arrows.length - 1]); fsel = { arrow: id }; scrollDir = true; focusT = id; save(); } return panel(); }
+  if (key) { if (key === focus) connect = { from: key }; else { focus = key; fsel = { node: key }; opened.add('m:' + key.split('@')[0]); scrollDir = true; } return panel(); }
+  if (ar) { const x = D.arrows.find(y => y.id === ar.dataset.arrow); fsel = { arrow: x.id }; reveal(x); openT.add(x.id); scrollDir = true; return panel(); } });
 addEventListener('keydown', e => { if (tab === 'flow' && connect && e.key === 'Escape') { connect = null; panel(); } });
+addEventListener('pointerdown', e => { if (connect && !(e.target.closest && e.target.closest('.ed-fc'))) { connect = null; panel(); } }, true); // (anywhere outside the chart too: the chart's own clicks are decided above)
 // the menu's own screens change by its own clicks: the layout follows whichever is on show
 new MutationObserver(() => { if (!drag) layout(); }).observe($('#menu'), { attributes: true, subtree: true, attributeFilter: ['hidden', 'open'] });
 
@@ -529,14 +551,16 @@ const css = document.createElement('style'); css.textContent = `
 #edPanel.flowtab .ed-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 470px;gap:12px}
 #edPanel .ed-chart{display:flex;flex-direction:column;min-height:0;gap:4px}#edPanel .ed-chart p{margin:2px 0}#edPanel .ed-ftools{display:flex;flex-wrap:wrap;align-items:center}
 #edPanel .ed-flowwrap{flex:1;min-height:0;background:#0b120f;border-radius:10px;overflow:hidden}
-#edPanel .ed-fc{display:block;width:100%;height:100%;font:12px system-ui,sans-serif;user-select:none;touch-action:none;cursor:grab}#edPanel .ed-fc.connect .ed-node{cursor:crosshair}
-#edPanel .ed-node{cursor:grab}#edPanel .ed-node rect{fill:#16211c;stroke:#4a5a50;stroke-width:1.5}#edPanel .ed-node.game rect{fill:#13261b;stroke:#3f7a55}#edPanel .ed-node.room rect{fill:#141f2c;stroke:#46688c}#edPanel .ed-node.any rect{fill:#1d1c27;stroke:#7a74a8}
+#edPanel .ed-fc{display:block;width:100%;height:100%;font:12px system-ui,sans-serif;user-select:none}#edPanel .ed-fc.connect .ed-node{cursor:crosshair}
+#edPanel .ed-node.focus rect{stroke:#e9b24a;stroke-width:3}#edPanel .ed-node.focus.linking rect{stroke-dasharray:6 4}#edPanel .ed-node.tray{opacity:.55}#edPanel .ed-node.tnear rect{stroke:#8fc0a0}#edPanel .ed-node.tfocus rect{stroke:#e9b24a}
+#edPanel .ed-ln{stroke:#8aa196;stroke-width:1.6}#edPanel .ed-ln.st{stroke:#6fb3dd}#edPanel .ed-ln.on{stroke:#e9b24a;stroke-width:2.2}#edPanel .ed-sep{stroke:#2a3a32}
+#edPanel .ed-cap{fill:#98aa9f;font-size:12px;letter-spacing:.06em;text-transform:uppercase}#edPanel .ed-own{fill:#d6cfae;font-size:12px}#edPanel .ed-none{fill:#62756a;font-size:12px;text-anchor:middle;font-style:italic}
+#edPanel .ed-st{cursor:pointer}#edPanel .ed-st rect{fill:#16211c;stroke:#3a4a42}#edPanel .ed-st text{fill:#b8c4bd;font-size:11px;text-anchor:middle}#edPanel .ed-st.on rect{fill:#3a2f16;stroke:#e9b24a}#edPanel .ed-st.on text{fill:#f3d48a}
+#edPanel .ed-node{cursor:pointer}#edPanel .ed-node rect{fill:#16211c;stroke:#4a5a50;stroke-width:1.5}#edPanel .ed-node.game rect{fill:#13261b;stroke:#3f7a55}#edPanel .ed-node.room rect{fill:#141f2c;stroke:#46688c}#edPanel .ed-node.any rect{fill:#1d1c27;stroke:#7a74a8}
 #edPanel .ed-node.nolay rect{stroke-dasharray:4 3}#edPanel .ed-node.on rect{stroke:#e9b24a;stroke-width:2.5}
 #edPanel .ed-node .m{fill:#ecf1ec;font-weight:700;font-size:15px}#edPanel .ed-node .s{fill:#98aa9f;font-size:12px}
 #edPanel .ed-ar line{stroke:#8aa196;stroke-width:1.6;fill:none}#edPanel .ed-ar line.hit{stroke:transparent;stroke-width:12;cursor:pointer}
 #edPanel .ed-ar.st line:not(.hit){stroke:#6fb3dd}#edPanel text.ed-ar.st{fill:#bfe0f5}#edPanel .ed-ar.on line:not(.hit){stroke:#e9b24a;stroke-width:2.2}#edPanel .hd{fill:#8aa196}#edPanel .hdOn{fill:#e9b24a}
-#edPanel .ed-ar.out line:not(.hit){stroke-dasharray:7 5;animation:edFlow .7s linear infinite}@keyframes edFlow{to{stroke-dashoffset:-12}}
-@media (prefers-reduced-motion:reduce){#edPanel .ed-ar.out line:not(.hit){animation:none}}
 #edPanel text.ed-ar{fill:#dfe8e2;font-size:12.5px;text-anchor:middle;paint-order:stroke;stroke:#0b120f;stroke-width:4px;stroke-linejoin:round;cursor:pointer}#edPanel text.ed-ar.on{fill:#f3d48a}
 #edPanel .ed-dirs{overflow:auto;min-height:0;position:relative;border-left:1px solid #2a3a32;padding-left:8px}
 #edPanel .ed-dir{padding:6px 2px;border-bottom:1px solid #1e2a24}#edPanel .ed-mb{margin-left:22px}

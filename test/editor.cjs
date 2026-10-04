@@ -97,29 +97,38 @@ const T = report('editor');
   await p.click('#edPanel [data-tab=flow]');
   T.ok('the directions start folded', await p.evaluate(() => document.querySelectorAll('#edPanel .ed-dir').length > 5 && !document.querySelector('#edPanel .ed-mb')));
   T.ok('Flow takes the whole window', await p.evaluate(() => { const r = document.querySelector('#edPanel').getBoundingClientRect(); return r.left <= 13 && r.right >= innerWidth - 13 && r.bottom >= innerHeight - 13; }));
-  T.ok('the default flowchart: one Main menu in every state, where the menu opens in each', await p.evaluate(() => ['none', 'game', 'room'].every(st => !!document.querySelector(`#edPanel .ed-node[data-node="main@${st}"]`) && /★/.test(document.querySelector(`#edPanel .ed-node[data-node="main@${st}"] .m`).textContent)) && document.querySelectorAll('#edPanel g.ed-ar').length >= 20));
-  await p.click('#edPanel .ed-node[data-node="results@none"]');
-  T.ok('a box clicked in the chart is shown in the directions, the chart staying whole', await p.evaluate(() => { const r = document.querySelector('#edPanel .ed-dir[data-menu="results"]'), d = document.querySelector('#edPanel .ed-dirs'), a = r.getBoundingClientRect(), b = d.getBoundingClientRect();
-    const c = document.querySelector('#edPanel .ed-fc').getBoundingClientRect(), w = document.querySelector('#edPanel .ed-flowwrap').getBoundingClientRect(); return a.top >= b.top - 1 && a.top < b.bottom - 20 && d.scrollTop > 0 && c.top >= w.top - 1 && c.bottom <= w.bottom + 1; }));
+  T.ok('the chart starts on the Main menu, any state, with what leads to it and from it; every menu once below', await p.evaluate(() => !!document.querySelector('#edPanel .ed-node.focus[data-node="main@*"]')
+    && document.querySelectorAll('#edPanel .ed-node.tray, #edPanel .ed-node.tnear, #edPanel .ed-node.tfocus').length === document.querySelectorAll('#edPanel .ed-dir').length - 1 && document.querySelectorAll('#edPanel .ed-ln').length >= 10)); // (- 1: Any menu, listed only)
+  await p.click('#edPanel [data-centre="main@game"]');
+  T.ok('a state tab centres the menu in that state: the Main menu opens here in a game', await p.evaluate(() => /★/.test(document.querySelector('#edPanel .ed-node.focus[data-node="main@game"] .m').textContent)));
+  await p.click('#edPanel .ed-node[data-node="results@*"]');
+  T.ok('a menu clicked below is centred, and shown in the directions', await p.evaluate(() => { const r = document.querySelector('#edPanel .ed-dir[data-menu="results"]'), d = document.querySelector('#edPanel .ed-dirs'), a = r.getBoundingClientRect(), b = d.getBoundingClientRect();
+    return !!document.querySelector('#edPanel .ed-node.focus[data-node="results@*"]') && a.top >= b.top - 1 && a.top < b.bottom - 20 && d.scrollTop > 0; }));
   await p.click('#edPanel [data-dir="results@none"] [data-act=fl-lay]');
   T.ok('"Lay out" shows that menu, with its transitions\' buttons', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=results]'); return !!s && !s.hidden && /Done/.test(s.textContent) && /Watch the replay/.test(s.textContent); }));
   await p.reload(); await p.waitForSelector('#edPanel .ed-head'); await p.waitForTimeout(400);
   T.ok('a reload keeps the editor where it was (the menu on show, the tab)', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=results]'); return !!s && !s.hidden && document.querySelector('#edPanel [data-tab=layout]').classList.contains('on'); }));
   await p.click('#edPanel [data-tab=flow]');
-  // Connect: a click on one box, then another, draws a transition; its words typed; it applies in a second state too; a note
-  await p.click('#edPanel [data-act=fl-mode]'); await p.click('#edPanel .ed-node[data-node="replays@none"]'); await p.click('#edPanel .ed-node[data-node="results@none"]');
+  // a transition drawn: the centred box clicked, then another; its words typed; for two states of its menu; a note
+  await p.click('#edPanel .ed-node[data-node="replays@*"]'); await p.click('#edPanel .ed-node.focus[data-node="replays@*"]'); await p.click('#edPanel .ed-node[data-node="results@*"]');
   const tid = await p.evaluate(() => document.activeElement && document.activeElement.dataset.id);
-  T.ok('Connect: one box, then another, makes a transition, its words ready to type', !!tid);
-  await p.keyboard.type('See results'); await p.keyboard.press('Tab'); await p.keyboard.press('Escape');
+  T.ok('the centred box clicked, then another: a transition, its words ready to type', !!tid);
+  await p.keyboard.type('See results'); await p.keyboard.press('Tab');
   T.ok('its words in the chart', await p.evaluate(() => [...document.querySelectorAll('#edPanel text.ed-ar')].some(t => /See results/.test(t.textContent))));
-  await p.click(`#edPanel [data-act=fl-tst][data-id="${tid}"][data-v=game]`);
-  T.ok('a transition for two states of its menu: drawn from both boxes', await p.evaluate(id => !!document.querySelector('#edPanel .ed-node[data-node="replays@game"]') && document.querySelectorAll(`#edPanel g.ed-ar[data-arrow="${id}"]`).length === 2, tid));
+  await p.click(`#edPanel [data-act=fl-tst][data-id="${tid}"][data-v=none]`); await p.click(`#edPanel [data-act=fl-tst][data-id="${tid}"][data-v=game]`);
+  T.ok('a transition for two states of its menu: a box for each', await p.evaluate(id => !!document.querySelector('#edPanel [data-dir="replays@game"]') && !!document.querySelector('#edPanel [data-dir="replays@none"]') && [...document.querySelectorAll(`#edPanel [data-act=fl-tst][data-id="${id}"].on`)].length === 2, tid));
+  await p.click('#edPanel .ed-node.focus'); await p.click('#edPanel .ed-ftools');
+  T.ok('a transition being drawn is dropped by a click anywhere but a box', await p.evaluate(() => !document.querySelector('#edPanel .ed-fc.connect')));
   await p.fill(`#edPanel [data-act=fl-tnote][data-id="${tid}"]`, 'Try this'); await p.click('#edPanel .ed-ftools');
+  // a menu's own buttons: Settings has some in the default flowchart; one added to Results
+  await p.click('#edPanel .ed-node[data-node="settings@*"]');
+  T.ok('the default has a Settings menu, its own buttons listed under it when centred', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-own')].some(t => /Sound/.test(t.textContent))));
+  await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]'); await p.click('#edPanel [data-act=fl-addb][data-v="results"]'); await p.keyboard.type('Share the result'); await p.keyboard.press('Tab');
+  await p.click('#edPanel .ed-node[data-node="results@*"]');
+  T.ok('a button that stays on its menu, added and shown under it', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-own')].some(t => /Share the result/.test(t.textContent))));
   await p.click('#edPanel [data-act=fl-copy]'); await p.waitForTimeout(200);
   const copied = await p.evaluate(() => navigator.clipboard.readText().then(t => t, e => 'unreadable: ' + e.name));
-  T.ok('Copy flow: the flow as text, with its notes', /See results/.test(copied) && /note: Try this/.test(copied) && /Main menu/.test(copied), copied.split('\n').filter(l => /See results|Try this/.test(l)).join(' | ') || copied.slice(0, 300));
-  const w0 = await p.evaluate(() => document.querySelector('#edPanel .ed-fc').viewBox.baseVal.width); await p.click('#edPanel [data-act=fl-zoom][data-v=in]');
-  T.ok('the chart zooms', await p.evaluate(w0 => document.querySelector('#edPanel .ed-fc').viewBox.baseVal.width < w0, w0));
+  T.ok('Copy flow: the flow as text, with its notes', /See results/.test(copied) && /note: Try this/.test(copied) && /Main menu/.test(copied) && /button \(stays on this menu\).*Share the result/.test(copied), copied.split('\n').filter(l => /See results|Try this/.test(l)).join(' | ') || copied.slice(0, 300));
   const mb = () => p.evaluate(() => !!document.querySelector('#edPanel .ed-dir[data-menu="results"] .ed-mb'));
   const was = await mb(); await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]'); const now = await mb(); await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]');
   T.ok('a menu opens and folds in the directions', now !== was && (await mb()) === was);
