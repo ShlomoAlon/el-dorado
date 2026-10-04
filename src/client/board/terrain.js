@@ -5,6 +5,7 @@ import { R, hash, assert } from '../../engine.gen.js';
 import { MAP } from '../state.js';
 import { layout, xy } from './layout.js';
 import { $, sv } from '../dom.js';
+import { diag } from '../debug.js';
 export function hexPts(x,y,r){let s='';for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);s+=(x+r*Math.cos(a)).toFixed(1)+','+(y+r*Math.sin(a)).toFixed(1)+' ';}return s;}
 const TFILL={j:['#4a9b5f','#2a6a40'],w:['#4aa0dd','#2464a0'],v:['#f2cd6c','#d09632'],r:['#aeb2ad','#7a7f7b'],c:['#d4705a','#9a3e2d'],m:['#58615a','#2d332f'],s:['#e3d8b9','#b4a887'],g:['#ffe690','#e3a52b']};
 /* harder spaces are darker, like the printed tiles: [top,bottom] gradient per strength 1..4 */
@@ -150,9 +151,13 @@ let bakeDue=false;export const baking=()=>bakeDue;
 let terrainLevels=[],shownLevel=null;
 export const terrainHook={ready:null}; // (camera.js: shows the level that fits the view once the bake is done)
 const TILE=1024,BLEED=4,BUDGET=24e6; // (BUDGET: device pixels of the densest level, about 96 MB; the two others add a third)
+/* the bake's next chunk: a task of its own between frames, not one chunk a frame (on a slow GPU, or one the tests emulate, a
+   frame takes 30-50 ms, and a chunk a frame made the bake last seconds, the page never at rest meanwhile); each chunk stays
+   within 6 ms, so a frame due meanwhile still comes on time */
+const later=(()=>{const c=new MessageChannel(),q=[];c.port1.onmessage=()=>q.shift()();return f=>{q.push(f);c.port2.postMessage(0);};})();
 let dprWatch=null;
 function bake(parts,ims,m){
-  bakeDue=true; // (also when baked again: another screen's density, a lost canvas)
+  bakeDue=true;const t0=performance.now(); // (also when baked again: another screen's density, a lost canvas)
   const dpr=devicePixelRatio||1,{minX,minY,w:BW,h:BH}=layout(),top=Math.min(3.2*dpr,Math.sqrt(BUDGET/(BW*BH)));
   const imgs=parts.map(q=>{const i=new Image();i.src=q.url;return i;});
   Promise.all(imgs.map(i=>i.decode())).then(()=>{
@@ -172,12 +177,12 @@ function bake(parts,ims,m){
           c.addEventListener('contextrestored',()=>{if(drawnMap===m)bake(parts,[],m);});});
         parts.forEach((p,q)=>{if(p.x0<ox+cw/s&&p.x0+p.w>ox&&p.y0<oy+ch/s&&p.y0+p.h>oy)jobs.push(()=>g.drawImage(imgs[q],p.x0,p.y0,p.w,p.h));});}}
     const step=()=>{if(drawnMap!==m){for(const l of levels)l.el.remove();return;}const t=performance.now();while(jobs.length&&performance.now()-t<6)jobs.shift()();
-      if(jobs.length){requestAnimationFrame(step);return;}
+      if(jobs.length){later(step);return;}
       for(const l of terrainLevels)l.el.remove();terrainLevels=levels;shownLevel=null;for(const im of ims)im.remove(); // (baked: the vector images go)
       let px=0;for(const l of levels)for(const c of l.el.children)px+=c.width*c.height;
       assert(px<=BUDGET*1.4,`view: the baked terrain stays within its memory budget (${(px/1e6).toFixed(1)} MP)`);
-      bakeDue=false;if(terrainHook.ready)terrainHook.ready();};
-    requestAnimationFrame(step);
+      bakeDue=false;diag(`terrain baked in ${Math.round(performance.now()-t0)} ms`);if(terrainHook.ready)terrainHook.ready();};
+    later(step);
   },()=>assert(false,'view: the board\'s terrain images load'));
   // (another screen's pixel density: baked again for it)
   if(dprWatch)dprWatch.removeEventListener('change',dprWatch.f);dprWatch=matchMedia(`(resolution: ${dpr}dppx)`);dprWatch.f=()=>{if(drawnMap===m)bake(parts,[],m);};dprWatch.addEventListener('change',dprWatch.f);
