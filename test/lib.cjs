@@ -65,10 +65,11 @@ async function openPage(browser, name, opts = {}) {
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_CERT|ERR_TUNNEL|gsi|fonts/.test(m.text())) seen('console: ' + m.text()); });
   return page;
 }
-/* nothing finite is animating (card flights, explorer moves, fades); infinite effects (a low clock's pulse) don't count */
+/* nothing finite is animating (card flights, explorer moves, fades), and the board's terrain is baked (until then it is drawn
+   as vectors, and the swap to the baked tiles changes the board's elements); infinite effects (a low clock's pulse) don't count */
 // (two frames first: a change can start its animations a frame later, e.g. the hand after the game area was resized)
 const settle = (page, ms = 4000) => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
-  .then(() => page.waitForFunction(() => !document.getAnimations().some(a => a.playState === 'running' && a.effect && a.effect.getComputedTiming().endTime !== Infinity), null, { timeout: ms })).catch(() => { /* expected: something still animating after ms; each step's own check waits for what it needs */ });
+  .then(() => page.waitForFunction(() => !document.getAnimations().some(a => a.playState === 'running' && a.effect && a.effect.getComputedTiming().endTime !== Infinity) && !(window.__ED && window.__ED.baking()), null, { timeout: ms })).catch(() => { /* expected: something still animating after ms; each step's own check waits for what it needs */ });
 
 function report(title) {
   let fails = 0;
