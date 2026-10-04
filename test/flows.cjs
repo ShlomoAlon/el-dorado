@@ -123,6 +123,19 @@ const T = report('flows');
   await check('replay open', () => !!window.__ED.G.replay && !document.querySelector('#rdock').hidden);
   for (let k = 1; k <= 6; k++) { await p.keyboard.press('ArrowRight'); await until(k => window.__ED.G.replay.i === k, k, 3000); }
   await idle(); await check('replay steps', () => window.__ED.G.replay.i === 6);
+  // an explorer arriving at El Dorado while another player's stands there already (the fixture's move 197: player 1's
+  // explorer after player 3's), played by the replay itself as it plays on, no input near it: the one already there stays
+  // where it stood (its place in the row is its own: 2026-10-05, it jumped along the row, seen by the page's jump check)
+  { const at = await S(() => { const R = window.__ED.G.replay, d = k => JSON.parse(R.states[k]).players.map(p => p.pieces[0] === 'done');
+      for (let k = 1; k + 1 < R.states.length; k++) { const a = d(k), b = d(k + 1); if (a.some(x => x) && b.some((x, pl) => x && !a[pl] && a.some((y, q) => y && q > pl))) return k; } return -1; });
+    T.ok('the fixture has an arrival behind a later player\'s', at > 1, 'state ' + at);
+    if (at > 1) {
+      await S(i => { const r = document.querySelector('#rbR'); r.value = i; r.dispatchEvent(new Event('input')); }, at - 1); await until(i => window.__ED.G.replay.i === i, at - 1, 3000);
+      await idle(); const there = await S(() => [...document.querySelectorAll('#pieces .piece')].map(e => e.style.transform));
+      await p.waitForTimeout(500); await p.click('#rbGo'); // (play: one step 50 ms on, inside the click's moment; the arrival a step later, on its own)
+      await until(i => window.__ED.G.replay.i >= i, at + 1, 8000); await p.click('#rbGo'); await idle();
+      const done = await S(i => JSON.parse(window.__ED.G.replay.states[i]).players.map(p => p.pieces[0] === 'done'), at - 1);
+      T.ok('an arrival at El Dorado leaves the explorers already there where they stood', await S(([there, done]) => [...document.querySelectorAll('#pieces .piece')].every((e, pl) => !done[pl] || e.style.transform === there[pl]), [there, done]), 'arrived before: ' + done.map((x, pl) => x ? pl : null).filter(x => x !== null).join(',')); } }
   await check('replay: the strongest AI\'s turn from here', () => !!document.querySelector('#rside .rplan li') && /Fawcett/.test(document.querySelector('#rside').textContent), null, 15000);
   await p.click('#menuBtn');
   await check('replay exit resumes the game', () => !window.__ED.G.replay && !!window.__ED.S && !window.__ED.S.over && document.querySelectorAll('#cards .card').length > 0);

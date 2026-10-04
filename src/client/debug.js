@@ -58,20 +58,56 @@ function flashStep() {
 }
 /* checks: something from outside the page changed it, like a tap: a message from the server (another player acted, the game
    started). A change it makes is not the page's own flash */
+/* checks: transform jumps. The layout-shift check above can't see an element moved by its transform (the browser never counts
+   that as a shift), and this page moves nearly everything that way (the hand's cards, the explorers, the prompt's label): on
+   reload the board showed at the corner and jumped, seen by nothing (2026-10-04). So every write of a visible element's
+   transform through setStyle (dom.js) or an explorer's resting place (pieces.js) that moves it more than 2 px is judged once
+   that frame has run: moved by an animation or transition of its own, after the player's input (a click, a key, a drag, the
+   wheel), or in a declared layout change, it is fine; otherwise it jumped. (The camera's two layers have their own check:
+   camera.js) */
+const jumps = new Map(); let jumpsDue = false;
+// (when an animation or transition starts on an element: noted as it starts, since a fast one (the tests play them 20x
+// faster) is over before the frame is judged)
+if (CHECKS) { addEventListener('transitionrun', e => { e.target.__animAt = performance.now(); }, true);
+  const animate = Element.prototype.animate; Element.prototype.animate = function (...a) { this.__animAt = performance.now(); return animate.apply(this, a); }; }
+const at = t => { const m = new DOMMatrixReadOnly(t); return [m.m41, m.m42, Math.hypot(m.a, m.b)]; };
+export function movedTo(el, from, to) {
+  if (!CHECKS || from == null || from === to || !playAt(performance.now())) return;
+  let a, b; try { a = at(from); b = at(to); } catch (e) { if (e.name === 'SyntaxError') return; throw e; } // (a percentage: not a position the matrix can hold)
+  const dx = b[0] - a[0], dy = b[1] - a[1]; if (Math.hypot(dx, dy) < 2 && Math.abs(b[2] - a[2]) < .02) return;
+  if (!jumps.has(el)) jumps.set(el, [dx, dy, performance.now(), from, to]);
+  if (!jumpsDue) { jumpsDue = true; requestAnimationFrame(() => afterFrame(judgeJumps)); } // (two frames on: a transition's start is reported by then)
+}
+function judgeJumps() {
+  jumpsDue = false;
+  for (const [el, [dx, dy, t, from, to]] of jumps) {
+    // (the cheap answers first: nearly every move is an animation that has reported its start, or follows an input; only
+    // what is left asks the browser, which costs a style update; asking it for every move cost frames of 50 ms in tests)
+    if (el.__animAt >= t || lastInput > t - 400 || expected(t) || !el.isConnected || el.parentElement.id === 'cardhits') continue; // (#cardhits: the hand's hit areas, never drawn)
+    if (el.getAnimations().length || !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const who = el.id ? '#' + el.id : el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.split(' ')[0] : '');
+    assert(false, `view: nothing moves without an animation or a direct action (transform jump: ${who}${el.dataset.k ? ' ' + el.dataset.k : ''} by ${Math.round(dx)},${Math.round(dy)} (${from} → ${to}); log: ${lines.slice(-4).join(' / ')})`);
+  }
+  jumps.clear();
+}
 export function outsideEvent() { if (CHECKS) lastInput = performance.now(); }
+/* a player's own choice (choosing a card, cancelling one): made from a click or a key in play, so what it moves is a direct
+   action's; tests that make the choice in code (to find a playable card) count the same */
+export function directAction() { if (CHECKS) lastInput = performance.now(); }
 export function watchFlash() {
   if (!CHECKS) return; changeAt ??= performance.now(); flashEnd = performance.now() + 1000; if (flashOn) return;
   flashOn = true; flashAt = -1e9; leftAt = null; prevT = performance.now(); afterFrame(flashStep); // (flashSide: the level last seen)
 }
 export function checksInit(during) {
-  if (CHECKS) for (const t of ['pointerdown', 'keydown']) addEventListener(t, () => { lastInput = performance.now(); }, true);
+  if (CHECKS) for (const t of ['pointerdown', 'pointerup', 'keydown', 'wheel', 'input', 'change']) addEventListener(t, () => { lastInput = performance.now(); }, { capture: true, passive: true });
+  if (CHECKS) addEventListener('pointermove', e => { if (e.buttons) lastInput = performance.now(); }, { capture: true, passive: true }); // (a drag)
   if (!CHECKS) return; inPlay = during;
   // layout shifts: an element already on screen moving because something else changed (the owner's rule: nothing moves
   // without an animation or a direct action; animations move by transform, which never counts as a shift). Every shift
   // is kept, including those just after an input (the browser's own score leaves those out)
   if (window.PerformanceObserver && PerformanceObserver.supportedEntryTypes.includes('layout-shift'))
     new PerformanceObserver(list => { for (const e of list.getEntries()) for (const s of e.sources || []) {
-      const n = s.node, who = !n ? '?' : n.id ? '#' + n.id : n.nodeType === 1 ? n.tagName.toLowerCase() + (n.className && typeof n.className === 'string' ? '.' + n.className.split(' ')[0] : '') : (n.parentElement && n.parentElement.id ? '#' + n.parentElement.id + ' text' : 'text');
+      const n = s.node, who = !n ? '?' : n.id ? '#' + n.id : n.nodeType === 1 ? n.tagName.toLowerCase() + (n.className && typeof n.className === 'string' ? '.' + n.className.split(' ')[0] : '') + (n.closest('[id]') ? ' in #' + n.closest('[id]').id : '') + (n.textContent ? ' "' + n.textContent.slice(0, 20) + '"' : '') : (n.parentElement && n.parentElement.id ? '#' + n.parentElement.id + ' text' : 'text');
       const d = `${Math.round(s.currentRect.x - s.previousRect.x)},${Math.round(s.currentRect.y - s.previousRect.y)} size ${Math.round(s.currentRect.width - s.previousRect.width)}×${Math.round(s.currentRect.height - s.previousRect.height)}`;
       shifts.push({ who, d, input: e.hadRecentInput, play: playAt(e.startTime) }); diag(`shift ${who} by ${d}${e.hadRecentInput ? ' (after input)' : ''}`);
       if (playAt(e.startTime) && !e.hadRecentInput && !expected(e.startTime)) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ' by ' + d + '; ' + Math.round(e.startTime - expectedAt) + ' ms after the last expected change; log: ' + lines.filter(l => / (layout|market|fit)/.test(l)).slice(-5).join(' / ') + ')'); } })
