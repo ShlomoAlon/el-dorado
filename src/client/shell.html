@@ -286,7 +286,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #allClose{flex:none;width:36px;height:36px;font-size:17px}
 .sclose{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:rgba(0,0,0,.35);cursor:pointer;display:grid;place-items:center;font-size:15px;color:var(--muted)}
 .sclose:hover{color:var(--text)}
-#menu.closing{opacity:0;transition:opacity .16s}
+#menu.closing{opacity:0;transition:opacity .16s;pointer-events:none} /* (closing, it takes the pointer no more, as a closing overlay: what is under it answers at once, not once it is gone) */
 .acct.inroom #acProfile{display:none}.acct .acb{margin-left:auto;display:flex;gap:14px;white-space:nowrap}.acct>span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .scrim.plain{background:rgba(4,8,7,.7)}
 

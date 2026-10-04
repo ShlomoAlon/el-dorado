@@ -7,14 +7,14 @@ import { $, esc, setText, setHTML, setStyle, reduceMotion, EASE } from './dom.js
 import { S, UI, cur, hp, viewIdx, canAct, G, covered } from './state.js';
 import { geo, handTop } from './geometry.js';
 import { cardHTML, cardTitle } from './cards.js';
-import { render, after } from './frame.js';
+import { render, after, afterEach } from './frame.js';
 import { targetAt, setHot, hotTarget } from './board/overlays.js';
 import { startAim } from './aim.js';
 import { onHandCard, onPlayCard, cardUsable, isTargeted, isDisc, doMove, startDiscard, addDiscard, togglePick, playAction, targets } from './actions.js';
 import { replayNext } from './replay.js';
 import { sfx } from './sound.js';
 import { hoverCheck } from './hovercheck.js';
-import { CHECKS } from './debug.js';
+import { CHECKS, diag } from './debug.js';
 
 export const cardEls = new Map(); // card id → element
 let lastViewer = -1;
@@ -26,8 +26,7 @@ export function setT(el, x, y, rot, sc) { el.__t = { x, y, rot, sc }; setStyle(e
 /* a card's hit area (#cardhits): where it rests, which alone takes the pointer (hover, tap, drag). The card itself is only
    drawn: it rises, grows and flies without ever taking a neighbour's place under the pointer (owner, 2026-10-03: the card
    underneath has priority; the market's slots work the same way) */
-let hitsMoved = false, hitsN = 0; // (a hit area moved in this layout: what is under a still mouse may have changed; hitsN: layouts that moved one)
-function setHit(el, x, y, rot, sc, z) { const h = el.__hit; if (!h) return; const t = T(x, y, rot, sc); if (h.__stransform !== t) hitsMoved = true; setStyle(h, 'transform', t); setStyle(h, 'zIndex', z); }
+function setHit(el, x, y, rot, sc, z) { const h = el.__hit; if (!h) return; setStyle(h, 'transform', T(x, y, rot, sc)); setStyle(h, 'zIndex', z); }
 /* the card's box (cw × 1.4 cw, scaled about its centre) covering a screen rectangle */
 function rectT(rect, rot) { const cw = geo.cw, ch = cw * 1.4, A = geo.app, sc = rect.width / cw; return [rect.left - A.left - (cw - rect.width) / 2, rect.top - A.top - (ch - rect.height) / 2, rot || 0, sc]; }
 export const placeAt = (el, rect, rot) => setT(el, ...rectT(rect, rot));
@@ -68,7 +67,9 @@ function layoutCards() {
   buySlotBox.x = bx; buySlotBox.y = by; buySlotBox.w = bw; setStyle(bs, '--bw', bw + 'px'); setStyle(bs, '--bx', bx + 'px'); setStyle(bs, '--by', by + 'px');
   const tsc = bw / cw * .78, tw = cw * tsc; let tk = 0;
   hand.forEach((id, i) => {
-    const el = cardEls.get(id); if (!el || el.__enter || el.classList.contains('free')) return;
+    // (a card still entering, or dragged, is drawn where its flight or the drag puts it; its hit area rests in its place from the
+    // start: a hit area only ever where its card rests, never where it was made (the game area's corner, over the Menu button))
+    const el = cardEls.get(id); if (!el) return; const moving = el.__enter || el.classList.contains('free');
     const off = i - (n - 1) / 2;
     let x = W / 2 + off * step - cw / 2, y = handTop() + off * off * (phone ? 1.6 : 2.6), rot = off * (phone ? 2.4 : 3.2), sc = 1, z = 10 + i;
     // (where it rests, the hover aside: its place in the fan, or what choosing it does; checks: hovering is judged from it)
@@ -86,14 +87,13 @@ function layoutCards() {
     // whatever lifts a card (chosen, under the pointer, the removal choice), it rises no further than the turn buttons
     // above it: a card never covers End turn (the spending tray beside the buy slot is placed apart, above them)
     const B = geo.act; if (B && !(paying && UI.picks.includes(id)) && x < B.right && x + cw > B.left) y = Math.max(y, B.bottom + 6 + ch * (sc - 1) / 2 + Math.sin(Math.abs(rot) * Math.PI / 180) * cw * sc / 2); // (its drawn box: grown about its centre, and tilted)
-    setStyle(el, 'zIndex', z); setT(el, x, y, rot, sc);
+    if (!moving) { setStyle(el, 'zIndex', z); setT(el, x, y, rot, sc); }
   });
   // the play area: a small overlapping row left of the discard pile
   const psc = .46, pw = cw * psc, ph = ch * psc, baseX = W - 16 - pileW - 24 - pw, py = H - 16 - (phone ? 76 : 104) + ((phone ? 76 : 104) - ph);
-  play.forEach((id, i) => { const el = cardEls.get(id); if (!el || el.__enter) return; const k = play.length - 1 - i; setStyle(el, 'zIndex', 5 + i); setT(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc); setHit(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc, 5 + i); });
+  play.forEach((id, i) => { const el = cardEls.get(id); if (!el) return; const k = play.length - 1 - i; if (!el.__enter) { setStyle(el, 'zIndex', 5 + i); setT(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc); } setHit(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc, 5 + i); });
   setStyle($('#choice'), '--cb', Math.round(ch * 1.18 + 14 + 30) + 'px'); // (just above the raised hand and its tags)
   const lbl = $('#playLbl'); setStyle(lbl, 'opacity', play.length ? 1 : 0); setStyle(lbl, 'transform', `translate(${baseX + pw - W}px,${py - 18}px)`); // (its right end at the row's, which never moves: the row grows to the left, the label stays put)
-  if (hitsMoved) { hitsMoved = false; hitsN++; pointAgain(); }
 }
 
 /* ---------- the hand's view part ---------- */
@@ -120,7 +120,7 @@ function update() {
     el.__enter = true; entering.push(el); k++;
   }
   // (two frames later: the browser has drawn them at the deck once, so moving them now is a transition, not a jump)
-  if (entering.length) { const list = entering; entering = []; requestAnimationFrame(() => requestAnimationFrame(() => { for (const el of list) el.__enter = false; layoutCards(); })); }
+  if (entering.length) { const list = entering; entering = []; requestAnimationFrame(() => requestAnimationFrame(() => { for (const el of list) el.__enter = false; render(); })); } // (laid out in a frame, as every change is: never directly, which moved hit areas no frame had drawn)
   // what each card is doing: selected, picked to pay or keep, discarded for a space, dimmed (can't be used now), in play
   const act = S.turn.active, acting = canAct(), rn = G.replay && replayNext(), rx = rn && rn[1];
   for (const id of want) {
@@ -144,6 +144,8 @@ function update() {
   if (qb.hidden !== !q) qb.hidden = !q; $('#vp').classList.toggle('dim', !!q);
   if (q) { setHTML(qb.firstElementChild, `<b>${esc(CT[q.by].n)}</b> · remove up to ${plural(q.max, 'card')}`); setHTML(qb.lastElementChild, UI.picks.length ? `<b>${UI.picks.length}</b> of ${q.max} chosen · they leave the game` : 'Tap cards to choose · they leave the game'); } // (two fixed parts: a pick rewrites only the count)
   layoutCards();
+  // checks: a hit area takes the pointer only where its card rests: placed the frame it is made, never left where it was made
+  if (CHECKS) for (const [id, el] of cardEls) assert(!el.__hit || el.__hit.__stransform, `view: a card's hit area rests where its card does, never where it was made (${id})`);
   // piles
   setText($('#deckN'), pl.deck.length); setText($('#discN'), pl.discard.length);
   const dn = Math.min(3, pl.deck.length);
@@ -170,30 +172,34 @@ export function flyToDiscard(from) {
 }
 
 /* ---------- the card under the pointer ---------- */
-/* which card the pointer is over: worked out again at every move, from the hit area actually under it (the event's target),
-   never kept from an enter or a leave. (Set on entering a card only if that card was in the hand at that instant, and cleared
-   on leaving it, a dropped enter left the card under a resting pointer unraised until it left and came back: 2026-10-04.)
-   One place decides it, so nothing else sets it; a drag clears it, and a pointer that leaves the page leaves no card under it */
-const overCard = e => { const h = e.target && e.target.closest ? e.target.closest('.chit') : null, id = h && h.dataset.id;
+/* which card the pointer is over: derived from the hit area actually under it, never kept from an enter or a leave, and worked
+   out again at every move and after every frame that draws: whatever changed what is under a still mouse (the hand laid out
+   again, an overlay closed, the start screen gone, a card joining the hand) is drawn in a frame, and then asked. (Kept from
+   enter and leave, a dropped enter left a card under a resting mouse unraised, 2026-10-04; worked out again only for the
+   changes listed, a hand moving under it, any other change left it stale, 2026-10-05.) One place decides it; a drag clears
+   it, and a pointer that leaves the page leaves no card under it */
+const overCard = t => { const h = t && t.closest ? t.closest('.chit') : null, id = h && h.dataset.id;
   return id && !drag && !covered() && hp().hand.includes(id) ? id : null; };
-let pointer = null; // (the mouse's last place on the page; a touch has no place between taps)
-const pointAt = e => { pointer = e.pointerType === 'mouse' ? { x: e.clientX, y: e.clientY } : null; const id = overCard(e); if (UI.hover !== id) UI.hover = id; };
+let pointer = null, decided = 0; // (the mouse's last place on the page, a touch having none between taps; decided: times the hover was worked out)
+const setHover = (id, how) => { decided++; if (UI.hover !== id) { if (CHECKS) diag(`hover ${UI.hover} → ${id} (${how})`); UI.hover = id; } }; // (a change draws a frame, which asks again: the same answer, and it rests)
+const pointAt = e => { pointer = e.pointerType === 'mouse' ? { x: e.clientX, y: e.clientY } : null; decidedOn = e.target; setHover(overCard(e.target), e.type); };
 for (const t of ['pointermove', 'pointerover']) addEventListener(t, pointAt, { capture: true, passive: true });
-document.documentElement.addEventListener('pointerleave', () => { pointer = null; if (UI.hover) UI.hover = null; });
-/* and again when a hit area moved under a mouse that didn't (a card played, the hand closing up): the browser sends no event
-   for that, so once the frame's layout is done the hit area under the mouse is asked (measuring after the update: after).
-   Only when one moved: asked after every layout, the answer's own render laid the hand out again, without end */
-function pointAgain() { if (!pointer) return; after(() => { if (!pointer) return; const t = document.elementFromPoint(pointer.x, pointer.y); const id = overCard({ target: t }); if (UI.hover !== id) UI.hover = id; checkHover(pointer.x, pointer.y); }); }
+document.documentElement.addEventListener('pointerleave', () => { pointer = null; setHover(null); });
+let decidedOn = null; // (checks: what was under the pointer when the hover was last decided)
+const askAgain = how => { if (!pointer) return; const t = document.elementFromPoint(pointer.x, pointer.y); decidedOn = t; setHover(overCard(t), how + ', over ' + (t ? t.id || t.tagName.toLowerCase() + '.' + String(t.className && t.className.baseVal !== undefined ? t.className.baseVal : t.className).split(' ')[0] : 'nothing')); checkHover(pointer.x, pointer.y); };
+afterEach(() => askAgain('drawn'));
+// (and when something stops moving, which no frame of ours draws: a closing menu fading out, a card landing)
+for (const t of ['transitionend', 'transitioncancel', 'animationend', 'animationcancel']) addEventListener(t, () => askAgain(t), { capture: true, passive: true });
 /* ---------- pressing and dragging a card ---------- */
 const pastHand = y => y < geo.app.top + geo.app.height - geo.cw * 1.4 * 1.25; // dragged up out of the hand
 /* checks: the card under the pointer in the hand is the one whose resting place is there (hovercheck.js); while nothing is
    dragged and the hand is shown */
-/* Judged where the hover was last decided: at each move, and when the hand laid out again under a still mouse (pointAgain). A
-   move's judgement is dropped once the hand has been laid out again since: the page may stay idle for seconds before it draws
-   a frame, and by then the answer is pointAgain's (2026-10-05: a move made with the start screen open, judged 7.7 s later
-   against the hand dealt under it, before pointAgain had answered) */
-function checkHover(x, y) { if (!CHECKS) return; const n = hitsN, off = () => !!drag || !S || covered() || G.replay || hitsN !== n; if (off()) return;
-  hoverCheck('hand', $('#cardhits'), x, y, () => hp().hand.map(id => cardEls.get(id)).filter(Boolean), el => el.__rest, () => (UI.hover && cardEls.get(UI.hover)) || null, off); }
+/* Judged where the hover was decided, each time: a judgement is dropped once the hover has been worked out again since (the
+   page may draw nothing for seconds after a move; by the time it is judged, a later answer stands, judged in its turn) */
+function checkHover(x, y) { if (!CHECKS) return; const n = decided, off = () => !!drag || !S || covered() || G.replay || decided !== n; if (off()) return;
+  const idOf = el => [...cardEls].find(([, e]) => e === el)?.[0], where = id => !id ? 'none' : `${id} ${hp().hand.includes(id) ? 'in the hand' : hp().play.includes(id) ? 'in play' : 'elsewhere'}`;
+  hoverCheck('hand', $('#cardhits'), x, y, () => hp().hand.map(id => cardEls.get(id)).filter(Boolean), el => el.__rest, () => (UI.hover && cardEls.get(UI.hover)) || null, off,
+    (t, under) => `; the hit area's card ${where(t.closest('.chit') && t.closest('.chit').dataset.id)}, the resting card ${where(idOf(under))}; hover ${UI.hover}, covered ${covered()}, mode ${UI.mode}; decided over ${decidedOn ? (decidedOn.id ? '#' + decidedOn.id : decidedOn.tagName.toLowerCase() + '.' + String(decidedOn.className && decidedOn.className.baseVal !== undefined ? decidedOn.className.baseVal : decidedOn.className).split(' ')[0]) + (decidedOn.closest('[id]') ? ' in #' + decidedOn.closest('[id]').id : '') + ' (' + (decidedOn.getAnimations ? decidedOn.getAnimations({ subtree: false }).length : '?') + ' animations)' : 'nothing'}`); }
 if (CHECKS) addEventListener('pointermove', e => checkHover(e.clientX, e.clientY));
 function wire(el, id) {
   const hit = el.__hit; // (the pointer's: its events; the card: what is drawn and moved)

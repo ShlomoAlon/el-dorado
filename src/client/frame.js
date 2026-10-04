@@ -25,11 +25,15 @@ export function flush() {
   safe(frameMark, 'checks'); // (checks: what changed before this frame is judged apart from it)
   let slow = '', slowMs = 0; // (checks: the slowest part of this frame, named when the frame is slow)
   drawing = true; try { for (const p of parts) { const t = CHECKS ? performance.now() : 0; safe(() => p.update(), p.name); if (CHECKS) { const d = performance.now() - t; if (d > slowMs) { slowMs = d; slow = p.name; } } } } finally { drawing = false; }
-  const t2 = CHECKS ? performance.now() : 0; for (const f of afterQ.splice(0)) safe(f, 'after'); const t3 = CHECKS ? performance.now() : 0;
-  safe(frameMark, 'checks');
+  const t2 = CHECKS ? performance.now() : 0; for (const f of afterQ.splice(0)) safe(f, 'after'); for (const f of eachQ) safe(f, 'after'); const t3 = CHECKS ? performance.now() : 0;
+  safe(frameMark, 'checks'); drawnAt = innerWidth + '×' + innerHeight;
   if (CHECKS) { const t4 = performance.now(), ms = t4 - t1; if (ms > 8) diag(`update ${ms.toFixed(0)} ms (parts ${(t2 - t1).toFixed(0)}, slowest ${slow} ${slowMs.toFixed(0)}; after ${(t3 - t2).toFixed(0)}; checks ${(t4 - t3).toFixed(0)})`); }
 }
+let drawnAt = ''; // (the window's size when the page was last drawn: checks)
 export function after(f) { afterQ.push(f); render(); }
+/* f after every frame that draws, once its views are updated (measuring is free then), without asking for frames of its own:
+   for what is derived from the page as drawn (the card under a still mouse), so it is worked out again whatever changed */
+const eachQ = []; export function afterEach(f) { eachQ.push(f); }
 /* checks that measure the page run once the frame showing it has been drawn, in a task right after it: its layout is
    done then, so measuring costs nothing. (In after() they made the browser lay the page out early, inside the frame:
    up to 10 ms of a frame in the tests, which the player's browser never pays) */
@@ -51,6 +55,9 @@ export function freshInit(during) {
     // a frame is due: judged at the next check. Not for long: a page that always has a frame due is never judged, and never rests
     if (raf) { if (++due >= 40) { due = 0; assert(false, 'view: the page rests (a frame was due at every check for 10 s)'); } return; }
     due = 0;
+    // (the window resized since the page was last drawn: a change from outside, like an input, whose own frame is on its way
+    // (geometry.js's observer); what is under a still mouse may differ already. Judged at the next check)
+    if (drawnAt !== innerWidth + '×' + innerHeight) return;
     safe(frameMark, 'checks'); // (what came before this frame is judged as before)
     mo.observe(app, { subtree: true, childList: true, attributes: true, attributeOldValue: true, characterData: true, characterDataOldValue: true });
     flush();

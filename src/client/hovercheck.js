@@ -7,7 +7,7 @@ import { afterDrawn } from './frame.js';
 /* where: a name; box: the element that holds them (only a point where the page's topmost element is inside it is judged:
    under a menu or another panel the pointer isn't over these items at all); items(): the elements; rest(el): its resting box in page coordinates {l, t, w, h, z, rot?: degrees about its centre} (the topmost resting
    box under the pointer wins where they overlap, as in a fanned hand); hovered(): the highlighted element or null; off(): true while the rule doesn't apply (a drag) */
-export function hoverCheck(where, box, x, y, items, rest, hovered, off = () => false) {
+export function hoverCheck(where, box, x, y, items, rest, hovered, off = () => false, about = () => '') {
   afterDrawn(() => {
     // (whether the rule applies is decided when the page is judged, not when the pointer moved: a drag may have begun since)
     if (off()) return;
@@ -22,7 +22,7 @@ export function hoverCheck(where, box, x, y, items, rest, hovered, off = () => f
       const ex = r.w / 2 - Math.abs(lx), ey = r.h / 2 - Math.abs(ly); if (Math.abs(ex) < 1 && ey > -1 || Math.abs(ey) < 1 && ex > -1) return;
       if (ex > 0 && ey > 0) { under = e; uz = r.z; } }
     const h = hovered() || null, name = e => e ? (e.dataset.k || e.dataset.id || e.className.split(' ')[0]) : 'none';
-    assert(h === under, `view: the card under the pointer is the one whose resting place is there (a grown card never takes its neighbour's place: ${where}, ${name(h)} over ${name(under)}; at ${Math.round(x)},${Math.round(y)} the page has ${t ? (t.id ? '#' + t.id : t.tagName.toLowerCase() + '.' + (t.getAttribute('class') || '').split(' ')[0]) + (t.dataset && t.dataset.id ? ' ' + t.dataset.id : '') : 'nothing'}${under ? ', resting there: ' + name(under) : ''})`);
+    assert(h === under, `view: the card under the pointer is the one whose resting place is there (a grown card never takes its neighbour's place: ${where}, ${name(h)} over ${name(under)}; at ${Math.round(x)},${Math.round(y)} the page has ${t ? (t.id ? '#' + t.id : t.tagName.toLowerCase() + '.' + (t.getAttribute('class') || '').split(' ')[0]) + (t.dataset && t.dataset.id ? ' ' + t.dataset.id : '') : 'nothing'}${under ? ', resting there: ' + name(under) : ''}${about(t, under)})`);
   });
 }
 /* a slot laid out by CSS (the market, the All cards spread): it rests where the page lays it out (offset box: its own
