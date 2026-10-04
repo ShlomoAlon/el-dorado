@@ -12,6 +12,7 @@ const KEYS = {
   market: 'eldorado-mkt',       // market shown or hidden (market.js)
   sound: 'eldorado-sound',      // sound on or off (sound.js)
   history: 'eldorado-hist',     // history panel mode (feed.js)
+  design: 'eldorado-design',   // the design editor's mockup (editor/editor.js, ?edit only)
   rspeed: 'eldorado-rspeed2',   // replay speed (replay.js)
   rside: 'eldorado-rside',      // replay side panel (replay.js)
 };
