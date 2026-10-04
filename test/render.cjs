@@ -73,6 +73,12 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     // (1.8%: the terrain drawn again in regions, one a frame, misses 1.2-1.4%; the whole board at once missed 2.1-2.6%)
     ok('zooming in bursts misses few frames', all > 200 && pc <= 1.8, `${drop} of ${all} frames dropped (${pc.toFixed(1)}%)`);
     await p.close(); }
+  { // 2d. a zoom, then the board moved before every layer was drawn again at the new zoom (a small pan right after the zoom
+    // settles, as the owner does; the camera's own follow glide does the same): once it rests, nothing may stay a stretched
+    // picture (the explorers stayed soft until the next zoom, 2026-10-04). The page's rest check states it; this reaches it
+    const p = await open(); await p.mouse.move(600, 400); for (let i = 0; i < 8; i++) { await p.mouse.wheel(0, -120); await p.waitForTimeout(30); }
+    await p.waitForTimeout(275); await p.mouse.down(); await p.mouse.move(620, 410, { steps: 3 }); await p.mouse.up(); await p.waitForTimeout(1500);
+    ok('a pan right after a zoom: every layer drawn at the zoom shown once at rest', !p.errors.length, p.errors.join(' | ').slice(0, 200) || 'none waiting'); await p.close(); }
   { // 3. wheel latency
     const p = await open(); const cdp = await p.context().newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); await p.mouse.move(600, 420);
     await b.startTracing(p, { categories: ['latencyInfo', 'input', 'benchmark'] });

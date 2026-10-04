@@ -29,7 +29,7 @@ let shownT = ''; // (what #stage was last given: the browser reads a transform b
 function writeStage() { stage().style.transform = shownT = stageT(); }
 function bake() { baked = view.s; $('#bscale').style.transform = `scale(${baked})`; if (viewRaf) { cancelAnimationFrame(viewRaf); viewRaf = 0; } writeStage(); }
 function applyView() {
-  redrawRun++; // (a layer still to be drawn again waits for the next settle)
+  redrawRun++; draining = false; // (a layer still to be drawn again waits for the next settle)
   if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; writeStage(); }); // (a gesture's events, one write a frame)
   scheduleSettle();
 }
@@ -53,29 +53,37 @@ function growMark(id) {
   const d = r.getAttribute('data-d') === '1' ? 0 : 1, o = id === 'board' ? 1 : 0; r.setAttribute('data-d', d);
   r.setAttribute('x', o * layout().minX + Math.ceil(layout().w) + 4 + d); r.setAttribute('y', o * layout().minY + Math.ceil(layout().h) + 4 + d);
 }
+/* the layers still to be drawn again at the zoom shown: a bake marks them all, and what is owed stays owed until it's drawn.
+   (It lived in one run of redraw, and a pan or the camera's follow before the run ended dropped the rest for good: the
+   explorers, last in line, stayed a stretched picture until the next zoom; 2026-10-04) */
+const stale = new Set(); let draining = false; // (draining: a run is drawing them, one a frame)
 function redraw() {
   const run = ++redrawRun, W = geo.app.width, H = geo.app.height, mx = layout().minX, my = layout().minY;
-  const away = g => { const [x, y, w, h] = g.box, l = (x - mx) * view.s + view.x, t = (y - my) * view.s + view.y, r = l + w * view.s, b = t + h * view.s;
-    return r < 0 || b < 0 || l > W || t > H ? 1 : 0; };
-  const steps = [...terrainRegions].sort((a, b) => away(a) - away(b)).map(g => () => redrawRegion(g)).concat(['board', 'pieces', 'bfx'].map(id => () => growMark(id)));
-  const next = () => { if (run !== redrawRun) return; steps.shift()(); if (steps.length) requestAnimationFrame(next); };
+  const shown = g => { const [x, y, w, h] = g.box, l = (x - mx) * view.s + view.x, t = (y - my) * view.s + view.y; return l + w * view.s > 0 && t + h * view.s > 0 && l < W && t < H; };
+  // the explorers first (what the eye is on), then the terrain on screen, then the rest
+  const rank = L => L === 'pieces' ? 0 : typeof L === 'string' ? 2 : shown(L) ? 1 : 3;
+  draining = true; const next = () => { if (run !== redrawRun || !stale.size) { if (run === redrawRun) draining = false; return; } let L = null; for (const c of stale) if (!L || rank(c) < rank(L)) L = c;
+    stale.delete(L); if (typeof L === 'string') growMark(L); else redrawRegion(L); if (stale.size) requestAnimationFrame(next); else draining = false; };
   next();
 }
 function settle() {
-  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
+  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) { if (stale.size) redraw(); return; } // (a move at the same zoom: what is still owed goes on)
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); bake(); redraw();
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); bake(); for (const L of [...terrainRegions, 'board', 'pieces', 'bfx']) stale.add(L); redraw();
   });
 }
 /* checks: once the board is at rest (no gesture or glide, settled) */
 let restT = 0;
 function restCheck() {
-  if (cam.pointers || gliding) { restT = setTimeout(restCheck, 300); return; }
+  if (cam.pointers || gliding || draining) { restT = setTimeout(restCheck, 300); return; } // (draining: still being drawn, one a frame; owed is fine, dropped is not)
   // what a redraw of the board records: its live elements (the terrain is one image; overlays, labels and pieces are live).
   // A few hundred; the terrain drawn live was 2,271, 9 ms of the main thread per redraw at maximum zoom
   const n = document.querySelectorAll('#bscale *').length;
   assert(terrainLive || n <= LIVE_MAX, `view: the board is a few hundred live elements, its fixed terrain one image (${n})`);
+  // at rest, every layer of the board is drawn at the zoom it shows: none left a stretched picture (an explorer soft until
+  // the next zoom, 2026-10-04)
+  assert(!stale.size, `view: the board at rest is drawn at the zoom it shows: no layer left waiting to be drawn again (${stale.size} waiting)`);
 }
 const LIVE_MAX = 650; // (most seen: 531, four players; 2026-10-04)
 /* the part of the game area the board should fill: under the prompt, left of the market, above the hand */
