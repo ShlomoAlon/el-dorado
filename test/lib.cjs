@@ -4,7 +4,18 @@
 //   openPage(browser)  a page that collects every page error and console error
 //   settle(page)       wait until nothing on the page is animating (instead of fixed pauses)
 //   report()           ok(name, pass, detail) lines and a final summary
-const { chromium } = require('playwright');
+const pw = require('playwright');
+/* every browser the tests start draws on Chrome's GPU path, as players' browsers do (owner, 2026-10-04: measure what we ship).
+   This machine has no GPU, and on its own Chrome falls back to software for canvases, compositing and painting, a different
+   route with different costs (it made the baked board look slower than it is, and hid what costs frames on a GPU).
+   SwiftShader is software that runs the GPU's own code path, so the route is the shipped one (slower in absolute terms).
+   Each launch checks the GPU path is really on: a silent fallback would measure the wrong thing again */
+const GPU = ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--enable-gpu-compositing'];
+const gpuOn = async b => { const c = await b.newBrowserCDPSession(), f = (await c.send('SystemInfo.getInfo')).gpu.featureStatus; await c.detach();
+  for (const k of ['2d_canvas', 'gpu_compositing', 'rasterization']) if (!/^enabled/.test(f[k])) throw new Error(`the test browser is not on the GPU path: ${k} is ${f[k]}`); return b; };
+const chromium = { launch: async (o = {}) => gpuOn(await pw.chromium.launch({ ...o, args: [...GPU, ...(o.args || [])] })),
+  launchServer: (o = {}) => pw.chromium.launchServer({ ...o, args: [...GPU, ...(o.args || [])] }),
+  connect: async (...a) => gpuOn(await pw.chromium.connect(...a)) };
 const http = require('http'), fs = require('fs'), path = require('path'), net = require('net'), os = require('os');
 const { spawn } = require('child_process');
 const ROOT = path.join(__dirname, '..');
