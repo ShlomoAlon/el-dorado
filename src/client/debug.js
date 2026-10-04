@@ -76,13 +76,15 @@ export function movedTo(el, from, to) {
   let a, b; try { a = at(from); b = at(to); } catch (e) { if (e.name === 'SyntaxError') return; throw e; } // (a percentage: not a position the matrix can hold)
   const dx = b[0] - a[0], dy = b[1] - a[1]; if (Math.hypot(dx, dy) < 2 && Math.abs(b[2] - a[2]) < .02) return;
   if (!jumps.has(el)) jumps.set(el, [dx, dy, performance.now(), from, to]);
-  if (!jumpsDue) { jumpsDue = true; afterFrame(judgeJumps); }
+  if (!jumpsDue) { jumpsDue = true; requestAnimationFrame(() => afterFrame(judgeJumps)); } // (two frames on: a transition's start is reported by then)
 }
 function judgeJumps() {
   jumpsDue = false;
   for (const [el, [dx, dy, t, from, to]] of jumps) {
-    if (!el.isConnected || el.parentElement.id === 'cardhits' || !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue; // (#cardhits: the hand's hit areas, never drawn)
-    if (el.__animAt >= t || el.getAnimations().length || lastInput > t - 400 || expected(t)) continue;
+    // (the cheap answers first: nearly every move is an animation that has reported its start, or follows an input; only
+    // what is left asks the browser, which costs a style update; asking it for every move cost frames of 50 ms in tests)
+    if (el.__animAt >= t || lastInput > t - 400 || expected(t) || !el.isConnected || el.parentElement.id === 'cardhits') continue; // (#cardhits: the hand's hit areas, never drawn)
+    if (el.getAnimations().length || !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
     const who = el.id ? '#' + el.id : el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.split(' ')[0] : '');
     assert(false, `view: nothing moves without an animation or a direct action (transform jump: ${who}${el.dataset.k ? ' ' + el.dataset.k : ''} by ${Math.round(dx)},${Math.round(dy)} (${from} → ${to}); log: ${lines.slice(-4).join(' / ')})`);
   }
