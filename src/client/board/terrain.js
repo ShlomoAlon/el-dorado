@@ -147,7 +147,11 @@ export let terrainLive=false;
    again). Canvases, not image files: the browser may drop a decoded image to save memory; a canvas keeps its pixels */
 let terrainLevels=[],shownLevel=null;
 export const terrainHook={ready:null}; // (camera.js: shows the level that fits the view once the bake is done)
-const TILE=1024,BLEED=4,BUDGET=24e6; // (BUDGET: device pixels of the densest level, about 96 MB; the two others add a third)
+const TILE=1024,BLEED=4,BUDGET=24e6;
+/* the bake's next chunk: a task of its own between frames, not one chunk a frame (on a slow GPU, or one the tests emulate, a
+   frame takes 30-50 ms, and a chunk a frame made the bake last seconds, the page never at rest meanwhile); each chunk stays
+   within 6 ms, so a frame due meanwhile still comes on time */
+const later=(()=>{const c=new MessageChannel(),q=[];c.port1.onmessage=()=>q.shift()();return f=>{q.push(f);c.port2.postMessage(0);};})(); // (BUDGET: device pixels of the densest level, about 96 MB; the two others add a third)
 let dprWatch=null;
 function bake(parts,ims,m){
   const dpr=devicePixelRatio||1,{minX,minY,w:BW,h:BH}=layout(),top=Math.min(3.2*dpr,Math.sqrt(BUDGET/(BW*BH)));
@@ -169,12 +173,12 @@ function bake(parts,ims,m){
           c.addEventListener('contextrestored',()=>{if(drawnMap===m)bake(parts,[],m);});});
         parts.forEach((p,q)=>{if(p.x0<ox+cw/s&&p.x0+p.w>ox&&p.y0<oy+ch/s&&p.y0+p.h>oy)jobs.push(()=>g.drawImage(imgs[q],p.x0,p.y0,p.w,p.h));});}}
     const step=()=>{if(drawnMap!==m){for(const l of levels)l.el.remove();return;}const t=performance.now();while(jobs.length&&performance.now()-t<6)jobs.shift()();
-      if(jobs.length){requestAnimationFrame(step);return;}
+      if(jobs.length){later(step);return;}
       for(const l of terrainLevels)l.el.remove();terrainLevels=levels;shownLevel=null;for(const im of ims)im.remove(); // (baked: the vector images go)
       let px=0;for(const l of levels)for(const c of l.el.children)px+=c.width*c.height;
       assert(px<=BUDGET*1.4,`view: the baked terrain stays within its memory budget (${(px/1e6).toFixed(1)} MP)`);
       if(terrainHook.ready)terrainHook.ready();};
-    requestAnimationFrame(step);
+    later(step);
   },()=>assert(false,'view: the board\'s terrain images load'));
   // (another screen's pixel density: baked again for it)
   if(dprWatch)dprWatch.removeEventListener('change',dprWatch.f);dprWatch=matchMedia(`(resolution: ${dpr}dppx)`);dprWatch.f=()=>{if(drawnMap===m)bake(parts,[],m);};dprWatch.addEventListener('change',dprWatch.f);
