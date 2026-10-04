@@ -301,7 +301,8 @@ function layoutBody() {
    on its background) */
 const NW = 156, NH = 42;
 let fsel = null, connect = null, vb = null, focusT = null, copyText = null; // (fsel: { node } or { arrow }; connect: Connect mode, { from } once a first box is chosen; vb: the chart's view, none = all of it)
-const folded = new Set(), openT = new Set(); // (the directions' tree: menus and groups folded, transitions opened)
+const opened = new Set(), openT = new Set(); // (the directions' tree, folded until opened (owner, 2026-10-05): menus and groups opened, transitions opened)
+const reveal = a => { opened.add('m:' + a.from); opened.add('g:' + a.from + ':' + [...a.states].sort().join(',')); }; // (a transition shown: its menu and group open)
 // (a rule for every menu is in the directions only: on the chart it would be lines from everywhere, owner 2026-10-05)
 const shownNodes = () => D.nodes.filter(n => n.k.split('@')[0] !== '*');
 const segs = () => { const out = []; for (const a of D.arrows) if (a.from !== '*') for (const st of a.states) { const f = a.from + '@' + st, [tm, ts] = a.to.split('@');
@@ -358,14 +359,14 @@ function flowBody() {
       + `<span>→</span><select data-act="fl-tto-m" data-id="${a.id}">${mOpts(tm)}</select><select data-act="fl-tto-s" data-id="${a.id}">${stOpts(ts, true, 'state stays the same')}</select>`
       + `<span class="ed-tag ${changes(a).includes('state') ? 'st' : ''}">${changes(a)}</span>${btn('fl-rmt', '×', false, a.id, 'title="Remove this transition"')}`
       + (open ? `<div class="ed-tx"><div class="ed-dh"><span>When in:</span>${chips(a)}</div><textarea data-act="fl-tnote" data-id="${a.id}" rows="2" placeholder="A note">${esc(a.note || '')}</textarea><div class="ed-dh"><select data-act="fl-copyt" data-id="${a.id}"><option value="">Copy to…</option>${others(a.from)}</select></div></div>` : '') + `</div>`; };
-  const dirs = menusOf().map(m => { const open = !folded.has('m:' + m), lay = !NOLAY.includes(m), boxes = D.nodes.filter(n => n.k.split('@')[0] === m).map(n => n.k.split('@')[1]);
+  const dirs = menusOf().map(m => { const open = opened.has('m:' + m), lay = !NOLAY.includes(m), boxes = D.nodes.filter(n => n.k.split('@')[0] === m).map(n => n.k.split('@')[1]);
     const free = [['*', 'Any state'], ...STATES].filter(([v]) => !boxes.includes(v)), ts = D.arrows.filter(a => a.from === m), groups = new Map();
     for (const a of ts) { const g = [...a.states].sort().join(','); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(a); }
     const body = open ? `<div class="ed-mb"><div class="ed-dh ed-in">${boxes.map(st => { const k = m + '@' + st, on = fsel && fsel.node === k;
         return `<span class="ed-box${on ? ' on' : ''}" data-dir="${esc(k)}">${esc(stLabel(st))}${lay ? btn('fl-lay', 'Lay out', false, k) : ''}${lay && st !== '*' ? btn('fl-first', D.first[st] === m ? '★' : '☆', D.first[st] === m, k, `title="The menu opens here ${stLabel(st).toLowerCase()}"`) : ''}${boxes.length > 1 ? btn('fl-split', '⑂', false, k, 'title="Split off: this state becomes a menu of its own"') : ''}${btn('fl-rmbox', '×', false, k, 'title="Not in this state"')}</span>`; }).join('')}`
       + `${free.length ? `<select data-act="fl-addst" data-m="${esc(m)}"><option value="">+ in a state…</option>${free.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join('')}</select>` : ''}</div>`
       + `<textarea data-act="fl-mnote" data-m="${esc(m)}" rows="1" placeholder="A note about this menu">${esc((D.mnotes || {})[m] || '')}</textarea>`
-      + [...groups].map(([g, as]) => { const gk = 'g:' + m + ':' + g, gopen = !folded.has(gk);
+      + [...groups].map(([g, as]) => { const gk = 'g:' + m + ':' + g, gopen = opened.has(gk);
           return `<div class="ed-grp">${tw(gk, gopen)}<b>When ${esc(g.split(',').map(stLabel).join(' or ').toLowerCase())}</b>${gopen ? as.map(trow).join('') : ` <span class="ed-hint">${as.length}</span>`}</div>`; }).join('')
       + `<div class="ed-dh">${btn('fl-addt', '+ Transition', false, m)}<select data-act="fl-copyall" data-m="${esc(m)}"><option value="">Copy all to…</option>${others(m)}</select>`
       + `<select data-act="fl-merge" data-m="${esc(m)}"><option value="">Merge into…</option>${others(m)}</select>${btn('fl-rmmenu', 'Remove menu', false, m)}</div></div>` : '';
@@ -398,7 +399,7 @@ function splitMenu(m, st, name) { // (one state of a menu becomes a menu of its 
   for (const a of [...D.arrows]) { if (a.from === m && a.states.includes(st)) { if (a.states.length === 1) a.from = nm; else { a.states = a.states.filter(s => s !== st); D.arrows.push({ ...a, id: 'a' + Date.now().toString(36) + D.arrows.length, from: nm, states: [st] }); } }
     if (a.to === k) a.to = nk; }
   return nm; }
-function copyTo(a, m) { const c = { ...a, id: 'a' + Date.now().toString(36) + D.arrows.length, from: m, states: [...a.states] }; D.arrows.push(c); for (const st of c.states) boxFor(m + '@' + st); }
+function copyTo(a, m) { const c = { ...a, id: 'a' + Date.now().toString(36) + D.arrows.length, from: m, states: [...a.states] }; D.arrows.push(c); for (const st of c.states) boxFor(m + '@' + st); return c; }
 function panel() {
   const body = mini ? '' : tab === 'layout' ? layoutBody() : tab === 'flow' ? flowBody()
     : tab === 'options' ? AREAS.map(a => row(a.name, a.options.map(([id, n]) => btn('opt', n, (D.options[a.id] || 'a') === id, id, `data-area="${a.id}"`)).join(''))
@@ -432,7 +433,7 @@ function act(t, a, v) {
   else if (b && a === 'list') { const l = listIn(byName(sel)); if (l) { b.listk = name(l); b.list = v || undefined; } } else if (b && (a === 'hide' || a === 'fold')) b[a] = !b[a] || undefined; else if (b && a === 'bar') b.bar = v || undefined;
   else if (a === 'reset') { delete D.screens[sc]; sel = null; unlay(s); }
   else if (a === 'fl-lay') { tab = 'layout'; fsel = null; goTo(v); return; }
-  else if (a === 'fl-fold') { const k = v.startsWith('t:') ? v.slice(2) : v, set = v.startsWith('t:') ? openT : folded; if (set.has(k)) set.delete(k); else set.add(k); return panel(); }
+  else if (a === 'fl-fold') { const k = v.startsWith('t:') ? v.slice(2) : v, set = v.startsWith('t:') ? openT : opened; if (set.has(k)) set.delete(k); else set.add(k); return panel(); }
   else if (a === 'fl-mode') { connect = connect ? null : { from: null }; return panel(); }
   else if (a === 'fl-zoom') { if (v === 'fit') vb = null; else { const w = vb || fitBox(), f = v === 'in' ? 1 / 1.25 : 1.25; vb = { x: w.x + w.w * (1 - f) / 2, y: w.y + w.h * (1 - f) / 2, w: w.w * f, h: w.h * f }; } return panel(); }
   else if (a === 'fl-copy') { const txt = flowText(); copyText = null;
@@ -441,7 +442,7 @@ function act(t, a, v) {
   else if (a === 'fl-rmbox') { removeBox(v); fsel = null; }
   else if (a === 'fl-addst') { if (!v) return; const k = t.dataset.m + '@' + v; boxFor(k); fsel = { node: k }; }
   else if (a === 'fl-addt') { const m = v, st = (D.nodes.find(n => n.k.split('@')[0] === m) || { k: m + '@*' }).k.split('@')[1], id = 'a' + Date.now().toString(36);
-    D.arrows.push({ id, from: m, states: [st], to: m + '@*', label: '' }); openT.add(id); fsel = { arrow: id }; scrollDir = true; focusT = id; }
+    D.arrows.push({ id, from: m, states: [st], to: m + '@*', label: '' }); openT.add(id); reveal(D.arrows[D.arrows.length - 1]); fsel = { arrow: id }; scrollDir = true; focusT = id; }
   else if (a === 'fl-mname') { (D.names || (D.names = {}))[t.dataset.m] = v.trim().slice(0, 32) || nameOf(t.dataset.m); }
   else if (a === 'fl-mnote') { (D.mnotes || (D.mnotes = {}))[t.dataset.m] = v.trim(); }
   else if (a === 'fl-sname') { (D.stateNames || (D.stateNames = {}))[t.dataset.s] = v.trim().slice(0, 32) || stLabel(t.dataset.s); }
@@ -455,18 +456,18 @@ function act(t, a, v) {
     if (a === 'fl-tword') ar.label = v.trim().slice(0, 48);
     else if (a === 'fl-tnote') { if (v.trim()) ar.note = v.trim(); else delete ar.note; }
     else if (a === 'fl-tst') { const s = new Set(ar.states); if (v === '*') ar.states = ['*']; else { s.delete('*'); if (s.has(v)) s.delete(v); else s.add(v); if (s.size) ar.states = [...s]; } // (always at least one)
-      for (const st of ar.states) boxFor(ar.from + '@' + st); }
+      for (const st of ar.states) boxFor(ar.from + '@' + st); reveal(ar); } // (its group changed: shown in its new one)
     else if (a === 'fl-tto-m' || a === 'fl-tto-s') { const [tm, ts] = ar.to.split('@'), m = a === 'fl-tto-m' ? v : tm, st = a === 'fl-tto-s' ? v : ts; ar.to = m + '@' + st;
       if (st !== '*' || !D.nodes.some(n => n.k.startsWith(m + '@'))) boxFor(ar.to); } } // (a box it now goes to that wasn't there: made)
   else if (a === 'fl-add') { let m = $('#flMenu').value; const st = $('#flState').value;
     if (!m) { m = (prompt('A name for the new menu (for example: settings)') || '').trim().toLowerCase().replace(/[^\w-]/g, '').slice(0, 24); if (!m) return; if (!D.extra.includes(m) && !sections().some(x => x.dataset.screen === m) && !NOLAY.includes(m)) D.extra.push(m); }
-    boxFor(m + '@' + st); fsel = { node: m + '@' + st }; folded.delete('m:' + m); scrollDir = true; }
+    boxFor(m + '@' + st); fsel = { node: m + '@' + st }; opened.add('m:' + m); scrollDir = true; }
   else if (a === 'fl-reset') { if (!confirm('Back to the default flowchart? Your boxes and transitions go; layouts stay.')) return; D.nodes = null; D.arrows = null; D.first = {}; fsel = null; vb = null; seed(); }
-  else if (a === 'fl-merge') { if (!v || v === t.dataset.m) return; mergeMenu(t.dataset.m, v); fsel = null; folded.delete('m:' + v); }
+  else if (a === 'fl-merge') { if (!v || v === t.dataset.m) return; mergeMenu(t.dataset.m, v); fsel = null; opened.add('m:' + v); }
   else if (a === 'fl-split') { const [m, st] = v.split('@'), n = (prompt(`A name for the menu "${nameOf(m)}" becomes ${stLabel(st).toLowerCase()}`, `${nameOf(m)} (${stLabel(st).toLowerCase()})`) || '').trim().slice(0, 32); if (!n) return;
     const nm = splitMenu(m, st, n); fsel = { node: nm + '@' + st }; scrollDir = true; }
-  else if (a === 'fl-copyall') { if (!v) return; for (const x of D.arrows.filter(y => y.from === t.dataset.m)) copyTo(x, v); folded.delete('m:' + v); }
-  else if (a === 'fl-copyt') { if (!v) return; const x = D.arrows.find(y => y.id === t.dataset.id); if (x) copyTo(x, v); folded.delete('m:' + v); }
+  else if (a === 'fl-copyall') { if (!v) return; for (const x of D.arrows.filter(y => y.from === t.dataset.m)) reveal(copyTo(x, v)); }
+  else if (a === 'fl-copyt') { if (!v) return; const x = D.arrows.find(y => y.id === t.dataset.id); if (x) reveal(copyTo(x, v)); }
   else if (a === 'download') { const u = URL.createObjectURL(new Blob([JSON.stringify(D, null, 1)], { type: 'application/json' })), l = document.createElement('a');
     l.href = u; l.download = `eldorado-design-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000); return; }
   else if (a === 'import') { const f = document.createElement('input'); f.type = 'file'; f.accept = '.json,application/json';
@@ -496,13 +497,13 @@ box.addEventListener('pointerdown', e => { const svg = e.target.closest && e.tar
   const g = e.target.closest('.ed-node'), ar = e.target.closest('[data-arrow]'), k = svg.getScreenCTM().a; // (the chart is drawn scaled)
   if (connect) { if (!g) return; const key = g.dataset.node; if (!connect.from) { connect.from = key; return panel(); }
     if (key !== connect.from) { const [m, st] = connect.from.split('@'), id = 'a' + Date.now().toString(36); D.arrows.push({ id, from: m, states: [st], to: key, label: '' });
-      openT.add(id); folded.delete('m:' + m); fsel = { arrow: id }; scrollDir = true; focusT = id; save(); }
+      openT.add(id); reveal(D.arrows[D.arrows.length - 1]); fsel = { arrow: id }; scrollDir = true; focusT = id; save(); }
     connect.from = null; return panel(); }
-  if (g) { const n = D.nodes.find(x => x.k === g.dataset.node), x0 = n.x, y0 = n.y, sx = e.clientX, sy = e.clientY; fsel = { node: n.k }; folded.delete('m:' + n.k.split('@')[0]); scrollDir = true; panel();
+  if (g) { const n = D.nodes.find(x => x.k === g.dataset.node), x0 = n.x, y0 = n.y, sx = e.clientX, sy = e.clientY; fsel = { node: n.k }; opened.add('m:' + n.k.split('@')[0]); scrollDir = true; panel();
     const mv = ev => { n.x = Math.round((x0 + (ev.clientX - sx) / k) / 10) * 10; n.y = Math.round((y0 + (ev.clientY - sy) / k) / 10) * 10; panel(); },
       up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); save(); panel(); };
     addEventListener('pointermove', mv); addEventListener('pointerup', up); return; }
-  if (ar) { const x = D.arrows.find(y => y.id === ar.dataset.arrow); fsel = { arrow: x.id }; folded.delete('m:' + x.from); folded.delete('g:' + x.from + ':' + [...x.states].sort().join(',')); scrollDir = true; return panel(); }
+  if (ar) { const x = D.arrows.find(y => y.id === ar.dataset.arrow); fsel = { arrow: x.id }; reveal(x); scrollDir = true; return panel(); }
   const v0 = vb || fitBox(), sx = e.clientX, sy = e.clientY; let moved = false;
   const mv = ev => { if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 3 && !moved) return; moved = true; vb = { ...v0, x: v0.x - (ev.clientX - sx) / k, y: v0.y - (ev.clientY - sy) / k }; panel(); },
     up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); if (!moved) { fsel = null; panel(); } };

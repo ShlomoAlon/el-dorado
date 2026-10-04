@@ -95,6 +95,7 @@ const T = report('editor');
   // flow: full screen; the default flowchart; a box laid out; a reload keeps the editor where it was
   if (await p.$('#edPanel.editing')) await p.click('#edPanel [data-act=editmode]');
   await p.click('#edPanel [data-tab=flow]');
+  T.ok('the directions start folded', await p.evaluate(() => document.querySelectorAll('#edPanel .ed-dir').length > 5 && !document.querySelector('#edPanel .ed-mb')));
   T.ok('Flow takes the whole window', await p.evaluate(() => { const r = document.querySelector('#edPanel').getBoundingClientRect(); return r.left <= 13 && r.right >= innerWidth - 13 && r.bottom >= innerHeight - 13; }));
   T.ok('the default flowchart: one Main menu in every state, where the menu opens in each', await p.evaluate(() => ['none', 'game', 'room'].every(st => !!document.querySelector(`#edPanel .ed-node[data-node="main@${st}"]`) && /★/.test(document.querySelector(`#edPanel .ed-node[data-node="main@${st}"] .m`).textContent)) && document.querySelectorAll('#edPanel g.ed-ar').length >= 20));
   await p.click('#edPanel .ed-node[data-node="results@none"]');
@@ -119,14 +120,15 @@ const T = report('editor');
   T.ok('Copy flow: the flow as text, with its notes', /See results/.test(copied) && /note: Try this/.test(copied) && /Main menu/.test(copied), copied.split('\n').filter(l => /See results|Try this/.test(l)).join(' | ') || copied.slice(0, 300));
   const w0 = await p.evaluate(() => document.querySelector('#edPanel .ed-fc').viewBox.baseVal.width); await p.click('#edPanel [data-act=fl-zoom][data-v=in]');
   T.ok('the chart zooms', await p.evaluate(w0 => document.querySelector('#edPanel .ed-fc').viewBox.baseVal.width < w0, w0));
-  await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]');
-  T.ok('a menu folds in the directions', await p.evaluate(() => !document.querySelector('#edPanel .ed-dir[data-menu="results"] .ed-mb')));
+  const mb = () => p.evaluate(() => !!document.querySelector('#edPanel .ed-dir[data-menu="results"] .ed-mb'));
+  const was = await mb(); await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]'); const now = await mb(); await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]');
+  T.ok('a menu opens and folds in the directions', now !== was && (await mb()) === was);
   // merge, split, copy
-  await p.selectOption('#edPanel [data-act=fl-merge][data-m="viewer"]', 'replays');
+  await p.click('#edPanel [data-act=fl-fold][data-v="m:viewer"]'); await p.selectOption('#edPanel [data-act=fl-merge][data-m="viewer"]', 'replays');
   T.ok('a menu merged into another: its boxes and transitions are the other\'s', await p.evaluate(() => !document.querySelector('#edPanel .ed-dir[data-menu="viewer"]') && !document.querySelector('#edPanel .ed-node[data-node^="viewer@"]')));
-  answers.push('Room menu'); await p.click('#edPanel [data-act=fl-split][data-v="main@room"]');
+  answers.push('Room menu'); await p.click('#edPanel [data-act=fl-fold][data-v="m:main"]'); await p.click('#edPanel [data-act=fl-split][data-v="main@room"]');
   T.ok('a state split off as a menu of its own', await p.evaluate(() => !document.querySelector('#edPanel .ed-node[data-node="main@room"]') && [...document.querySelectorAll('#edPanel .ed-node .m')].some(t => /Room menu/.test(t.textContent))));
-  await p.selectOption('#edPanel [data-act=fl-copyall][data-m="setup"]', 'online');
+  await p.click('#edPanel [data-act=fl-fold][data-v="m:setup"]'); await p.selectOption('#edPanel [data-act=fl-copyall][data-m="setup"]', 'online');
   T.ok('transitions copied to another menu', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-dir[data-menu="online"] input[data-act=fl-tword]')].some(i => i.value === 'Start expedition')));
   // menus and states renamed, a state added
   await p.fill('#edPanel [data-menu="setup"] input.ed-mname', 'New game!'); await p.press('#edPanel [data-menu="setup"] input.ed-mname', 'Enter');
