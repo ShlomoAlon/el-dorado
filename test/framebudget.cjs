@@ -13,7 +13,7 @@ const T = report('framebudget'), BUDGET = 1000 / 70; // ms
 const arg = process.argv.slice(2), MOVES = arg.includes('--moves') ? +arg[arg.indexOf('--moves') + 1] : Infinity;
 const DETAIL = arg.includes('--detail'); // (each task over budget broken down: script (its slowest function), style, layout, paint)
 (async () => {
-  const srv = await serveStatic(), b = await chromium.launch(), t0 = Date.now();
+  const srv = await serveStatic(), b = await chromium.launch({ timing: true }), t0 = Date.now();
   const p = await openPage(b, 'framebudget', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25 });
   await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
   await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);

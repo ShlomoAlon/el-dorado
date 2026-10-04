@@ -12,8 +12,9 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
   g.drawImage(A, 0, 0); const da = g.getImageData(0, 0, A.width, A.height).data; g.drawImage(B, 0, 0); const db = g.getImageData(0, 0, A.width, A.height).data;
   let n = 0; for (let i = 0; i < da.length; i += 4) if (Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]) > 24) n++; return n; }, [a.toString('base64'), b.toString('base64')]);
 (async () => {
-  const b = await chromium.launch(); let fails = 0; const ok = (name, pass, detail) => { if (!pass) fails++; console.log(`${pass ? 'ok  ' : 'FAIL'} ${name}: ${detail}`); };
-  const errs = [], open = async () => { const p = await openPage(b, 'render', { viewport: { width: 1200, height: 800 } }); errs.push(p.errors); await p.goto('file://' + file); await p.waitForTimeout(700); await p.click('#sGo'); await p.waitForTimeout(1800); await p.waitForFunction(() => !window.__ED.baking()); return p; }; // (the terrain baked: lib.cjs settle)
+  // (two browsers: the GPU path for what is drawn and how sharp (steps 1-2), the software path for what takes time (2c, 3): lib.cjs)
+  const b = await chromium.launch({ gpu: true }), bt = await chromium.launch({ timing: true }); let fails = 0; const ok = (name, pass, detail) => { if (!pass) fails++; console.log(`${pass ? 'ok  ' : 'FAIL'} ${name}: ${detail}`); };
+  const errs = [], open = async (br = b) => { const p = await openPage(br, 'render', { viewport: { width: 1200, height: 800 } }); errs.push(p.errors); await p.goto('file://' + file); await p.waitForTimeout(700); await p.click('#sGo'); await p.waitForTimeout(1800); await p.waitForFunction(() => !window.__ED.baking()); return p; }; // (the terrain baked: lib.cjs settle)
   { // 1. grab changes nothing
     const p = await open(); await p.mouse.move(500, 420); await p.waitForTimeout(400); const a = await p.screenshot();
     await p.mouse.down(); for (let i = 1; i <= 10; i++) { await p.mouse.move(500 + i * 6, 420); await p.waitForTimeout(16); } for (let i = 9; i >= 0; i--) { await p.mouse.move(500 + i * 6, 420); await p.waitForTimeout(16); }
@@ -62,14 +63,14 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     // Chrome's own frame records (DroppedFrame: the frames DevTools marks dropped), which see the painting and the screen's
     // drawing, not only the page's thread: the page-thread measures saw none of the hitches he felt (2026-10-04). (At 4K this
     // machine, with no GPU, misses frames drawing the screen alone, so 4K is judged on his)
-    const p = await openPage(b, 'render', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25 }); errs.push(p.errors);
+    const p = await openPage(bt, 'render', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25 }); errs.push(p.errors);
     await p.goto('file://' + file); await p.waitForTimeout(700); await p.click('#sGo'); await p.waitForTimeout(2500); await p.mouse.move(690, 290); await p.waitForTimeout(300);
     const tr = require('path').join(require('os').tmpdir(), 'rd-' + process.pid + '.json');
-    await b.startTracing(p, { path: tr, categories: ['disabled-by-default-devtools.timeline.frame'] });
+    await bt.startTracing(p, { path: tr, categories: ['disabled-by-default-devtools.timeline.frame'] });
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     for (let burst = 0; burst < 16; burst++) { const dir = burst % 4 < 2 ? -1 : 1;
       for (let i = 0; i < 6; i++) { await p.mouse.wheel(0, dir * 120); await p.waitForTimeout(25 + rnd() * 25); } await p.waitForTimeout(300 + rnd() * 150); }
-    await p.waitForTimeout(800); await b.stopTracing();
+    await p.waitForTimeout(800); await bt.stopTracing();
     const ev = JSON.parse(require('fs').readFileSync(tr, 'utf8')); require('fs').unlinkSync(tr); const L = Array.isArray(ev) ? ev : ev.traceEvents;
     const all = L.filter(e => e.name === 'BeginFrame').length, drop = L.filter(e => e.name === 'DroppedFrame').length, pc = 100 * drop / Math.max(1, all);
     // (1.8%: the terrain drawn again in regions, one a frame, misses 1.2-1.4%; the whole board at once missed 2.1-2.6%)
@@ -82,14 +83,14 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     await p.waitForTimeout(275); await p.mouse.down(); await p.mouse.move(620, 410, { steps: 3 }); await p.mouse.up(); await p.waitForTimeout(1500);
     ok('a pan right after a zoom: every layer drawn at the zoom shown once at rest', !p.errors.length, p.errors.join(' | ').slice(0, 200) || 'none waiting'); await p.close(); }
   { // 3. wheel latency
-    const p = await open(); const cdp = await p.context().newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); await p.mouse.move(600, 420);
-    await b.startTracing(p, { categories: ['latencyInfo', 'input', 'benchmark'] });
+    const p = await open(bt); const cdp = await p.context().newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); await p.mouse.move(600, 420);
+    await bt.startTracing(p, { categories: ['latencyInfo', 'input', 'benchmark'] });
     for (let k = 0; k < 12; k++) { await p.waitForTimeout(k % 2 ? 200 : 900); await p.mouse.wheel(0, k % 3 ? -100 : 100); await p.waitForTimeout(80); }
-    await p.waitForTimeout(600); const ev = JSON.parse((await b.stopTracing()).toString()).traceEvents; const open2 = new Map(), lat = [];
+    await p.waitForTimeout(600); const ev = JSON.parse((await bt.stopTracing()).toString()).traceEvents; const open2 = new Map(), lat = [];
     for (const e of ev) { if (e.name !== 'EventLatency') continue; const k = e.id + (e.id2 ? JSON.stringify(e.id2) : ''); if (e.ph === 'b') open2.set(k, e.ts); else if (e.ph === 'e' && open2.has(k)) { lat.push((e.ts - open2.get(k)) / 1000); open2.delete(k); } }
     lat.sort((x, y) => x - y); const p95 = lat[Math.floor(lat.length * .95)] || 0;
     // the median is what's checked: over 24 events the slowest few swing between ~90 and ~240 ms from run to run, in old builds too
     const med = lat[lat.length >> 1] || 0; ok('wheel zoom latency (CPU ÷4)', med < 70, `median ${med.toFixed(0)} ms, p95 ${p95.toFixed(0)} ms over ${lat.length} events`); await p.close(); }
   const all = errs.flat(); ok('no page errors (assertions included)', !all.length, all.slice(0, 3).join(' | ') || 'none');
-  await b.close(); console.log(fails ? `render: ${fails} failing` : 'render ok'); process.exit(fails ? 1 : 0);
+  await b.close(); await bt.close(); console.log(fails ? `render: ${fails} failing` : "render ok"); process.exit(fails ? 1 : 0);
 })();

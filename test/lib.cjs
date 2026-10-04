@@ -4,7 +4,24 @@
 //   openPage(browser)  a page that collects every page error and console error
 //   settle(page)       wait until nothing on the page is animating (instead of fixed pauses)
 //   report()           ok(name, pass, detail) lines and a final summary
-const { chromium } = require('playwright');
+const pw = require('playwright');
+/* which drawing route a test's browser takes. This machine has no GPU, and on its own Chrome draws everything in software (canvases,
+   compositing, painting): another route than players' browsers take. SwiftShader is software that runs the GPU's own code
+   path: what happens there (which layers, what is composited, what is drawn again, in what order) is what happens on a GPU,
+   and it caught a hover race the software route hid; how long it takes is not (every GPU operation runs on this CPU, far
+   slower), and several browsers on it at once overload the machine. So (owner, 2026-10-04): the suite runs on the software
+   route, side by side; `run.mjs --gpu` runs the game's tests on the GPU route one at a time (GPU=1), at least every 5 commits
+   (the suite fails when it is due); a check that needs the GPU route always (the render test's sharpness: which layers Chrome
+   makes) asks for { gpu: true }; a check of time asks for { timing: true } and never gets the GPU route. Each GPU launch checks
+   the route is really on: a silent fallback would measure the wrong thing again. */
+const GPU = ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--enable-gpu-compositing'];
+const onGpu = o => !(o && o.timing) && (process.env.GPU === '1' || !!(o && o.gpu));
+const argsFor = o => { const { timing, gpu, ...rest } = o || {}; return { ...rest, args: [...(onGpu(o) ? GPU : []), ...(rest.args || [])] }; };
+const gpuOn = async (b, o) => { if (!onGpu(o)) return b; const c = await b.newBrowserCDPSession(), f = (await c.send('SystemInfo.getInfo')).gpu.featureStatus; await c.detach();
+  for (const k of ['2d_canvas', 'gpu_compositing', 'rasterization']) if (!/^enabled/.test(f[k])) throw new Error(`the test browser is not on the GPU path: ${k} is ${f[k]}`); return b; };
+const chromium = { launch: async (o = {}) => gpuOn(await pw.chromium.launch(argsFor(o)), o),
+  launchServer: (o = {}) => pw.chromium.launchServer(argsFor(o)),
+  connect: async (ws, o = {}) => gpuOn(await pw.chromium.connect(ws), o) };
 const http = require('http'), fs = require('fs'), path = require('path'), net = require('net'), os = require('os');
 const { spawn } = require('child_process');
 const ROOT = path.join(__dirname, '..');
@@ -66,7 +83,7 @@ async function openPage(browser, name, opts = {}) {
   return page;
 }
 /* nothing finite is animating (card flights, explorer moves, fades), and the board's terrain is baked (until then it is drawn
-   as vectors, and the swap to the baked tiles changes the board's elements); infinite effects (a low clock's pulse) don't count */
+   as vectors, and the swap to the baked tiles changes a few pixels' shading); infinite effects (a low clock's pulse) don't count */
 // (two frames first: a change can start its animations a frame later, e.g. the hand after the game area was resized)
 const settle = (page, ms = 4000) => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
   .then(() => page.waitForFunction(() => !document.getAnimations().some(a => a.playState === 'running' && a.effect && a.effect.getComputedTiming().endTime !== Infinity) && !(window.__ED && window.__ED.baking()), null, { timeout: ms })).catch(() => { /* expected: something still animating after ms; each step's own check waits for what it needs */ });

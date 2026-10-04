@@ -14,7 +14,7 @@ function summary(T) {
     anims: anims.length, notComposited: anims.filter(e => e.args.data.compositeFailed).length };
 }
 (async () => {
-  const b = await chromium.launch(), p = await openPage(b, 'frames', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true }), errs = p.errors; // (assertion failures count: openPage)
+  const b = await chromium.launch({ timing: true }), p = await openPage(b, 'frames', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true }), errs = p.errors; // (assertion failures count: openPage)
   await p.goto('file://' + path.join(__dirname, '..', 'public/index.html'));
   await p.waitForFunction(() => window.__ED && window.__ED.S); await p.click('#sGo');
   await p.waitForFunction(() => !window.__ED.UI.preview && !window.__ED.walking() && document.querySelectorAll('#cards .card').length === 4); await settle(p);

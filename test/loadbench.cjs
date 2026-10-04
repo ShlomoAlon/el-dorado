@@ -36,7 +36,7 @@ async function once(browser, P, warm) {
   return { paint, start: tStart, ready: tReady, click: tPlay - tClick, total: tPlay - READ_MS, errs };
 }
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ timing: true });
   for (const P of PROFILES) for (const warm of [false, true]) {
     const R = []; for (let i = 0; i < RUNS; i++) R.push(await once(browser, P, warm));
     const e = R.flatMap(r => r.errs);
