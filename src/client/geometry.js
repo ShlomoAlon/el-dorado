@@ -3,8 +3,7 @@
 import { $ } from './dom.js';
 import { diag, expectLayout, CHECKS } from './debug.js';
 import { assert } from '../engine.gen.js';
-import { render } from './frame.js';
-import { S, UI } from './state.js';
+import { render, changeGen } from './frame.js';
 export const geo = { app: { left: 0, top: 0, width: 0, height: 0 }, cw: 132, promptBottom: 0, recapFits: true, mktW: 0, actW: 0, act: null, deck: null, disc: null };
 const subs = [];
 /* f(sized): after every measurement; sized = the game area itself changed size */
@@ -28,17 +27,19 @@ export function measure() {
   geo.deck = rect($('#deckStack')); geo.disc = rect($('#discStack'));
   if (sized) expectLayout(); // (the game area changed size: what's in it moves, on purpose)
   const now = JSON.stringify(geo); if (CHECKS && now !== was) settles(sized, was, now);
-  if (now !== was) render(); // (anything measured changed: the views that read it lay themselves out again; none is left judging what matters)
+  if (now !== was) { ownRenders++; render(); } // (anything measured changed: the views that read it lay themselves out again; none is left judging what matters)
   return sized;
 }
 /* checks: the layout settles. A layout that measures itself and changes what it measured (a part hidden because of where it
    stands, which then stands elsewhere) flips between two states without end, the game area the same size and nothing else
-   changing all along: seen as the same two measurements coming back in turn, three times within a second, with the game and
-   the page's mode the same throughout (turns passing quickly change the prompt back and forth too, rightly) */
+   changing all along: seen as the same two measurements coming back in turn, three times within a second, with no change from
+   anywhere but this measuring in between (no render() but its own: turns passing quickly, or a hand revealed and hidden in
+   pass-and-play, change the prompt back and forth too, rightly) */
+let ownRenders = 0; // (render() calls made by measure itself: the others are changes from outside the layout)
 let flips = [];
 function settles(sized, was, now) {
   const t = performance.now(); if (sized) { flips = []; return; }
-  const st = S && `${S.log.length}|${S.cur}|${UI.mode}`; flips = flips.filter(f => t - f.t < 1000 && f.s === S && f.st === st); flips.push({ t, was, now, s: S, st });
+  const st = changeGen() - ownRenders; flips = flips.filter(f => t - f.t < 1000 && f.st === st); flips.push({ t, was, now, st });
   const n = flips.length, back = (i, j) => flips[i].now === flips[j].was && flips[i].was === flips[j].now;
   if (n >= 6 && back(n - 1, n - 2) && back(n - 2, n - 3) && back(n - 3, n - 4) && back(n - 4, n - 5) && back(n - 5, n - 6)) {
     flips = []; const d = (a, b) => Object.keys(JSON.parse(a)).filter(k => JSON.stringify(JSON.parse(a)[k]) !== JSON.stringify(JSON.parse(b)[k])).join(', ');
