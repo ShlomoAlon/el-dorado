@@ -1,7 +1,8 @@
 // Taps and hover on the board find the space from the board's geometry (as card drags do), not from which element is on
 // top. The case from the 2026-09-30 playtest: an explorer's figure stands up into the space above its own, so a tap in
 // that space (a highlighted target) used to land on the figure and do nothing.
-// Checks: a tap on a target a figure covers moves there; hovering it lights it; a tap on my explorer's space reaches it.
+// Checks: a tap on a target a figure covers moves there; hovering it lights it; a tap on my explorer's space reaches it;
+// the hand: hovering cards that are still being drawn.
 //   NODE_PATH=$(npm root -g) node test/taps.cjs
 const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
 const T = report('taps');
@@ -100,6 +101,21 @@ const T = report('taps');
     T.ok('the All cards spread open', !!r);
     if (r) { await p.mouse.move(r.x, r.y - 30, { steps: 3 }); await p.mouse.move(r.x, r.y, { steps: 4 }); await settle(p); await p.mouse.move(r.x + 2, r.y, { steps: 2 }); await settle(p); }
     await p.keyboard.press('Escape'); await settle(p); }
+  // cards being drawn: the mouse sweeps over where they will rest while they are still on their way from the deck (each card
+  // hovered rises, its neighbours step aside: every one of those moves is a transition, and the cards still arrive). After a
+  // reshuffle shown at length, too: the cards wait longer to be drawn
+  await p.evaluate(() => window.__ED.aiPace(.05)); // (the AIs' turns in between, without their pauses)
+  for (const shuffle of ['instant', 'riffle']) {
+    await p.mouse.move(5, 5); await p.waitForFunction(() => window.__ED.canAct() && window.__ED.UI.mode === 'idle', null, { timeout: 30000 }); await settle(p);
+    const drawn = await p.evaluate(v => { const E = window.__ED, P = E.S.players[E.S.cur]; E.UI.reshuffle = v;
+      if (v !== 'instant') { P.discard.push(...P.deck); P.deck = []; E.render(); } // (the deck run out: this turn's draw is a reshuffle)
+      E.act({ t: 'end', keep: [] }); return [...document.querySelectorAll('#cards .card')].filter(e => e.__enter).length; }, shuffle);
+    T.ok(`cards drawn (${shuffle})`, drawn > 0, `${drawn} on their way`);
+    const row = await p.evaluate(() => { const r = [...document.querySelectorAll('#cards .card')].filter(e => e.__rest).map(e => e.__rest); return r.length ? { x0: Math.min(...r.map(q => q.l)), x1: Math.max(...r.map(q => q.l + q.w)), y: r[0].t + r[0].h * .6 } : null; });
+    if (row) for (let k = 0; k < 3; k++) { await p.mouse.move(row.x0 + 4, row.y, { steps: 2 }); await p.mouse.move(row.x1 - 4, row.y, { steps: 12 }); }
+    await p.mouse.move(5, 5); await settle(p);
+    T.ok(`every drawn card arrives in the hand (${shuffle})`, await p.waitForFunction(() => [...document.querySelectorAll('#cards .card')].every(e => !e.__enter && e.getAnimations().length === 0), null, { timeout: 8000 }).then(() => true, () => false));
+  }
   T.ok('no page errors', errs.length === 0, errs.join(' | '));
   await b.close(); srv.close(); T.done();
 })();

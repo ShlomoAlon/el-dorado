@@ -8,8 +8,8 @@
    - Flow: which screens are there, and how does one get from one to another? Screens in three columns, one per state the
      player can be in (nowhere, in a game, in a room: always exactly one), buttons as arrows between screens of the same
      state, and the screen the menu opens on in each.
-   - Options: how it looks, as a few sets to flip between (cards, button colours, button shapes, headings); each set is
-     designed, not adjusted here.
+   - Options: how it looks, as a few sets to flip between (button colours, button shapes, headings); each set is
+     designed, not adjusted here. Also game features to try out (how a reshuffle shows): the page's own, off unless set here.
    - Export: the design downloaded as a file (and loaded from one) for the owner to send; it is built into the page
      properly afterwards. Nothing here ships as the page's own. */
 const ED = window.__ED, KEY = 'eldorado-design', $ = s => document.querySelector(s), form = $('#mform');
@@ -30,8 +30,10 @@ const AREAS = [
   { id: 'colors', name: 'Button colours', options: [['a', 'Current'], ['b', 'Brass'], ['c', 'Jungle']] },
   { id: 'shape', name: 'Button shape', options: [['a', 'Current'], ['b', 'Rounded'], ['c', 'Square']] },
   { id: 'heads', name: 'Headings', options: [['a', 'Current'], ['b', 'Serif'], ['c', 'Large serif']] },
+  // a game feature, not a look: the page's own setting (UI.reshuffle, hand.js), which only this sets until one is chosen
+  { id: 'reshuffle', name: 'Reshuffle', options: [['a', 'Current'], ['b', 'Cards fly over'], ['c', 'Fly over, riffle']], set: v => { ED.UI.reshuffle = { a: 'instant', b: 'gather', c: 'riffle' }[v]; } },
 ];
-const applyOptions = () => { for (const a of AREAS) document.documentElement.dataset['ed' + a.id] = D.options[a.id] || 'a'; ED.render(); };
+const applyOptions = () => { for (const a of AREAS) { const v = D.options[a.id] || 'a'; if (a.set) a.set(v); else document.documentElement.dataset['ed' + a.id] = v; } ED.render(); };
 
 /* ---------- the player's state, and the screens of each ---------- */
 const STATES = [['none', 'Nowhere'], ['game', 'In a game'], ['room', 'In a room']];

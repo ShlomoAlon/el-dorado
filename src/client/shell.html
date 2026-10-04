@@ -313,7 +313,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .zoomctl button{width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:17px;font-weight:700;display:grid;place-items:center}
 
 /* ---------- cards */
-#cards,#cardhits{position:absolute;inset:0;pointer-events:none;z-index:25}.chit{position:absolute;left:0;top:0;width:var(--cw);height:calc(var(--cw)*1.4);transform-origin:50% 50%;pointer-events:auto;cursor:pointer;touch-action:none} /* (a card's hit area, where it rests: hand.js setHit) */
+#cards,#cardhits{position:absolute;inset:0;pointer-events:none;z-index:25}.shuf{position:absolute;left:0;top:0}.shuf .mcard{position:absolute;inset:0;z-index:1} /* (a reshuffle's cards, only while they fly: hand.js reshuffled) */.chit{position:absolute;left:0;top:0;width:var(--cw);height:calc(var(--cw)*1.4);transform-origin:50% 50%;pointer-events:auto;cursor:pointer;touch-action:none} /* (a card's hit area, where it rests: hand.js setHit) */
 /* purchase in progress: the card waits above the hand until it's paid for */
 #buySlot{position:absolute;left:0;top:0;z-index:24;--bw:92px;width:var(--bw);height:calc(var(--bw)*1.4);transform:translate3d(var(--bx,0),var(--by,0),0);transition:opacity .2s}
 /* a removal to choose (Scientist, Travel Log): the hand comes up (hand.js), this says what's asked just above it, and the

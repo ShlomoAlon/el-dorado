@@ -122,16 +122,22 @@ function update() {
     else placeAt(el, geo.disc, 0);
     setTimeout(() => el.remove(), 380);
   }
-  // new cards: drawn from the deck (or, a new player's hand, from below), one after another
+  // new cards: drawn from the deck (or, a new player's hand, from below), one after another; after a reshuffle, once it is shown
+  const wait = reshuffled(pl, vi, switching); // (ms)
   let k = 0;
   for (const id of [...want, ...wantPlay]) {
     if (cardEls.has(id)) continue; const el = newCard(S,id);
     if (switching) setT(el, A.width / 2 - geo.cw / 2, A.height + 30, 0, 1); else placeAt(el, geo.deck, 0);
-    if (!reduceMotion) { el.style.transitionDelay = (switching ? k * 50 : k * 70) + 'ms'; setTimeout(() => { el.style.transitionDelay = ''; }, 420 + k * 70); }
-    el.__enter = true; entering.push(el); k++;
+    el.__enter = { wait: reduceMotion ? 0 : switching ? k * 50 : wait + k * 70 }; entering.push(el); k++; // (held: layoutCards leaves it where it starts)
+    if (el.__enter.wait) setStyle(el, 'visibility', 'hidden'); // (unseen until it leaves: face up on the deck, it hid the cards before it and the reshuffle)
   }
-  // (two frames later: the browser has drawn them at the deck once, so moving them now is a transition, not a jump)
-  if (entering.length) { const list = entering; entering = []; requestAnimationFrame(() => requestAnimationFrame(() => { for (const el of list) el.__enter = false; render(); })); } // (laid out in a frame, as every change is: never directly, which moved hit areas no frame had drawn)
+  // each one waits where it starts (its hit area already in its place: layoutCards) and is let go at its turn, after two
+  // frames at least: the browser has drawn it there once, so moving it is a transition, not a jump. (A wait set on the
+  // card's transition instead applied to every later move of the card too, until a timer cleared it: a hover during a
+  // reshuffle's wait restarted it, and a move made then jumped, 2026-10-05)
+  if (entering.length) { const list = entering; entering = []; requestAnimationFrame(() => requestAnimationFrame(() => {
+    const go = el => { el.__enter = false; setStyle(el, 'visibility', ''); render(); }; // (laid out in a frame, as every change is: never directly, which moved hit areas no frame had drawn)
+    for (const el of list) if (el.__enter && el.__enter.wait) setTimeout(go, el.__enter.wait, el); else go(el); })); }
   // what each card is doing: selected, picked to pay or keep, discarded for a space, dimmed (can't be used now), in play
   const act = S.turn.active, acting = canAct(), rn = G.replay && replayNext(), rx = rn && rn[1];
   for (const id of want) {
@@ -163,6 +169,44 @@ function update() {
   setHTML($('#deckStack'), dn ? (dn > 2 ? '<div class="back b3"></div>' : '') + (dn > 1 ? '<div class="back b2"></div>' : '') + '<div class="back"></div>' : '<div class="empty-slot"></div>');
   pileShow($('#discStack'), pl.discard.slice(-2)); // (its top card, and the one under it: what shows while a new top flies in)
 }
+/* a reshuffle: the deck ran out, and the discard pile became the deck (engine drawCards). Seen in the game, never told: the
+   bottom card of the pile on view left it for its owner's hand or deck, which nothing else does (a replay stepped back
+   undoes discards: not a reshuffle). How it shows is UI.reshuffle (owner, 2026-10-05: tried in the design editor, the
+   chosen one is then built in for good): 'instant', the deck simply full again; 'gather', the pile's cards fly over onto
+   the deck; 'riffle', and the deck is riffled. Only drawn (cards that exist only while they fly, the deck shown once they
+   land); the cards drawn from it wait for it, input never does. Returns that wait (ms) */
+let seen = null; // the pile on view at the last update: { vi, ids, at (the replay's step) }
+export const reshuffles = { n: 0 }; // (reshuffles seen: tests check their games reached one)
+function reshuffled(pl, vi, switching) {
+  const was = seen, at = G.replay ? G.replay.i : -1; seen = { vi, ids: pl.discard.slice(), at };
+  if (!was || switching || was.vi !== vi || !was.ids.length || (G.replay && at <= was.at)) return 0;
+  const b = was.ids[0]; if (pl.discard.includes(b) || !(pl.hand.includes(b) || pl.deck.includes(b))) return 0;
+  reshuffles.n++; diag(`reshuffle ${was.ids.length} (${UI.reshuffle})`);
+  if (UI.reshuffle === 'instant' || reduceMotion || !geo.disc || !geo.deck) return 0;
+  const A = geo.app, D = geo.disc, K = geo.deck, n = Math.min(6, was.ids.length), FLY = 420, GAP = 55;
+  const box = (r, html) => { const f = document.createElement('div'); f.className = 'shuf'; f.innerHTML = html;
+    f.style.width = r.width + 'px'; f.style.height = r.height + 'px'; f.style.setProperty('--cw', r.width + 'px'); f.style.transform = `translate(${r.left - A.left}px,${r.top - A.top}px)`; $('#cards').appendChild(f); return f; };
+  const gone = (f, a) => { const end = () => f.remove(); a.finished.then(end, end); }; // (cancelled: a page leaving the game; the card goes either way)
+  const dx = K.left - D.left, dy = K.top - D.top;
+  for (let i = 0; i < n; i++) { // bottom first: the top card, face up, turns over on its way
+    const top = i === n - 1, f = box(D, (top ? `<div class="mcard">${cardHTML(typeOf(S, was.ids[was.ids.length - 1]))}</div>` : '') + '<div class="back"></div>');
+    const a = f.animate([{ transform: 'none' }, { transform: `translate(${dx * .5}px,${dy * .5 - 46}px) rotate(${-10 + i * 3}deg) scale(1.06)`, offset: .5 }, { transform: `translate(${dx}px,${dy}px)` }],
+      { duration: FLY, delay: i * GAP, easing: EASE, fill: 'both', composite: 'add' });
+    gone(f, a);
+    if (top) f.firstElementChild.animate([{ opacity: 1 }, { opacity: 1, offset: .35 }, { opacity: 0, offset: .55 }, { opacity: 0 }], { duration: FLY, delay: i * GAP, fill: 'both' });
+  }
+  let t = FLY + (n - 1) * GAP;
+  if (UI.reshuffle === 'riffle') { // the deck split in two halves, which drop back into one, interleaved
+    // (both halves part toward the board: the deck sits at the game area's left edge)
+    const R = 520, half = (dx, dy, r) => { const f = box(K, '<div class="back"></div>'); f.style.opacity = 0; // (shown once the cards have landed)
+      f.animate([{ opacity: 1 }, { opacity: 1 }], { duration: R, delay: t, fill: 'forwards' }); gone(f, f.animate([{ transform: 'none' },
+      { transform: `translate(${dx * K.width}px,${dy * K.height}px) rotate(${r}deg)`, offset: .3 }, { transform: `translate(${dx * K.width * .92}px,${dy * K.height * .8}px) rotate(${r * .85}deg)`, offset: .55 },
+      { transform: 'none' }], { duration: R, delay: t, easing: EASE, fill: 'both', composite: 'add' })); };
+    half(.1, -.26, -10); half(.8, -.1, 12); t += R;
+  }
+  const end = t - 60; $('#deckStack').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 60, delay: end, fill: 'backwards' }); // (the deck shows once the cards are on it)
+  return t;
+}
 /* a pile's cards, bottom first, over its outline (the slot: always there, the cards cover it). One element per card, kept by
    its id (the outline is in the page's markup): a card that is still there keeps its element (the old top stays where it was, under the new one), so a new card
    never redraws the others */
@@ -173,7 +217,7 @@ function pileShow(box, ids) {
     if (box.children[i + 1] !== e) box.insertBefore(e, box.children[i + 1] || null); });
 }
 function setLeft(el, txt) { let b = el.querySelector('.left'); if (!txt) { if (b) b.remove(); return; } if (!b) { b = document.createElement('div'); b.className = 'left'; el.appendChild(b); } setText(b, txt); }
-function clear() { for (const [, el] of cardEls) { el.remove(); if (el.__hit) el.__hit.remove(); } cardEls.clear(); if (rhEl) setStyle(rhEl, 'display', 'none'); lastViewer = -1; entering = []; }
+function clear() { for (const [, el] of cardEls) { el.remove(); if (el.__hit) el.__hit.remove(); } cardEls.clear(); if (rhEl) setStyle(rhEl, 'display', 'none'); lastViewer = -1; entering = []; seen = null; }
 export const handPart = { name: 'hand',  update, reset: clear };
 
 /* a card bought (or taken) by the player on view flies from where it was bought onto their discard pile: the pile's top

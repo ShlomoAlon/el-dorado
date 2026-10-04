@@ -72,7 +72,8 @@ const T = report('editor');
   await p.click('#mform > section[data-screen=title] [data-ed-go]');
   T.ok('its button goes to the setup', await p.evaluate(() => !document.querySelector('#mform > section[data-screen=setup]').hidden && document.querySelector('#mform > section[data-screen=title]').hidden));
   // options in a game
-  await p.click('#edPanel [data-tab=options]'); await p.click('#edPanel [data-act=opt][data-area=colors][data-v=b]');
+  await p.click('#edPanel [data-tab=options]'); await p.click('#edPanel [data-act=opt][data-area=colors][data-v=b]'); await p.click('#edPanel [data-act=opt][data-area=reshuffle][data-v=c]');
+  T.ok('a game feature is the page\'s own setting, set from Options', await p.evaluate(() => window.__ED.UI.reshuffle === 'riffle'));
   await p.evaluate(() => document.querySelector('#sGo').click()); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open, null, { timeout: 8000 }); await settle(p);
   T.ok('an option shows in a game', await p.evaluate(() => document.documentElement.dataset.edcolors === 'b' && document.querySelectorAll('#cards .card').length > 0));
   await p.click('#edPanel [data-act=mini]'); T.ok('the panel shrinks to its title', !(await p.$('#edPanel .ed-body'))); await p.click('#edPanel [data-act=mini]');

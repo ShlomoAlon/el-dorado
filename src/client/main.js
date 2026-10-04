@@ -12,7 +12,7 @@ import { setupPanZoom, fit, fitCheck, cameraPart } from './board/camera.js';
 import { overlaysPart } from './board/overlays.js';
 import { piecesPart, walking } from './board/pieces.js';
 import { layout } from './board/layout.js';
-import { handPart } from './hand.js';
+import { handPart, reshuffles } from './hand.js';
 import { aimPart, aimInit } from './aim.js';
 import { marketPart, buySlotPart, marketInit, openAll, allShown } from './market.js';
 import { hudPart, hudInit } from './hud.js';
@@ -93,7 +93,7 @@ function onBoardHover(e) { if (!drag && !e.buttons && e.pointerType === 'mouse')
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, targets, walking, baking, diagLog, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiThink, buyOptions, coinVal, CT, // (aiThink: test/playstep.cjs lets an AI choose the person's moves, in the AI's worker, played through the calls below; the rest let it choose a purchase of its own)
+window.__ED = { NET, UI, G, reshuffles, targets, walking, baking, diagLog, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiThink, buyOptions, coinVal, CT, // (aiThink: test/playstep.cjs lets an AI choose the person's moves, in the AI's worker, played through the calls below; the rest let it choose a purchase of its own)
   render() { render(); flush(); },
   aiPace(k) { AIX.pace = k; }, fitCheck, // (test/play.cjs: the board check, judged at once on a settled page) // (test/play.cjs: shorter pauses between the AIs' moves)
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },

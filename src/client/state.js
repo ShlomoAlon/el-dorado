@@ -17,7 +17,8 @@ export function setMAP(m) { MAP = m; }
    forgot left the page stale until something else drew it). A value written again unchanged asks nothing; a list changed
    in place (UI.picks.push) is drawn by the render() its caller already makes */
 export const UI = new Proxy({ mode: 'idle', card: null, piece: 0, picks: [], revealed: null, hover: null, mktOpen: true, allFor: null,
-  buy: null, pending: null, max: 0, viewer: null, preview: false, lastReplay: null },
+  buy: null, pending: null, max: 0, viewer: null, preview: false, lastReplay: null,
+  reshuffle: 'instant' }, // (reshuffle: how a reshuffle shows, hand.js; set only by the design editor for now)
   { set: written });
 /* nothing selected: no card, no picks, no purchase or payment under way */
 export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = []; UI.buy = null; UI.pending = null; }

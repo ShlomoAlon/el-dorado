@@ -41,6 +41,8 @@ const CPU_MS = 100; // (measured 65 ms with the board's terrain as one image, 20
       await p.click('#sGo', { timeout: 20000 });
     } catch (e) { throw new Error(e.message.split('\n')[0] + ' — page: ' + await pageState()); }
     await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
+    // each way a reshuffle shows (UI.reshuffle: tried in the design editor) in a game of its own, the owner's screen the fullest
+    const shuffle = ['riffle', 'gather', 'instant', 'gather'][g % 4]; await p.evaluate(v => { window.__ED.UI.reshuffle = v; }, shuffle);
     await p.evaluate(() => window.__ED.aiPace(.05)); // (the AIs' pauses, 20x shorter: their moves and animations unchanged)
     const did = {}, unmapped = []; let steps = 0; const cpu = own && cpuMeter(srvB.process().pid);
     // (every other step goes on while an explorer is still walking, as a quick player does: animations never hold up input)
@@ -56,13 +58,15 @@ const CPU_MS = 100; // (measured 65 ms with the board's terrain as one image, 20
       }
     } catch (e) { unmapped.push('stopped: ' + e.message.split('\n')[0]); console.log(`     game ${g + 1} (${name}): stopped at step ${steps}: ${e.message.split('\n')[0]}; the page: ${await p.evaluate(() => { const E = window.__ED; return JSON.stringify({ mode: E.UI.mode, cur: E.S.cur, ai: !!E.S.players[E.S.cur].ai, canAct: E.canAct(), walking: E.walking(), over: !!E.S.over, log: E.diagLog().slice(-6) }); }).catch(x => 'unreadable: ' + x.message.split('\n')[0])}`); }
     const used = cpu && cpu(), actions = await p.evaluate(() => { const E = window.__ED, L = E.G.rec || E.UI.lastReplay; return L ? L.actions.length : 0; }); // (over: the record is kept as a replay)
+    const reshuffled = await p.evaluate(() => window.__ED.reshuffles.n);
     const over = await p.evaluate(() => !!window.__ED.S.over), round = await p.evaluate(() => window.__ED.S.round);
     const seen = await p.evaluate(() => window.__seen ? { modes: Object.keys(window.__seen.modes), labels: Object.keys(window.__seen.labels) } : { modes: [], labels: [] });
     await p.close(); if (own) { await own.close(); await srvB.close(); }
-    return { name, g, over, round, steps, did, modes: seen.modes, labels: seen.labels, unmapped, errors: p.errors, used, actions };
+    return { name, g, shuffle, reshuffled, over, round, steps, did, modes: seen.modes, labels: seen.labels, unmapped, errors: p.errors, used, actions };
   }));
   for (const r of results) {
     T.ok(`game ${r.g + 1} (${r.name}): played to the end through the UI`, r.over && !r.unmapped.length, `${r.steps} moves of the person's, round ${r.round}${r.unmapped.length ? '; ' + r.unmapped.join('; ') : ''}`);
+    if (!r.name.startsWith('pass')) T.ok(`game ${r.g + 1} (${r.name}): reached a reshuffle, shown as '${r.shuffle}'`, r.reshuffled > 0, `${r.reshuffled} seen`); // (pass-and-play: the hand drawn after one is the next person's to reveal)
     T.ok(`game ${r.g + 1} (${r.name}): no assertion failed, no page error`, !r.errors.length, r.errors.slice(0, 3).join(' | '));
     // (CPU is time: measured on the software route only; on the GPU route every GPU operation runs on this CPU: lib.cjs)
     if (r.used != null && process.env.GPU === '1') console.log(`     game ${r.g + 1} (${r.name}): CPU not judged on the GPU route (emulated: ${r.used.toFixed(1)} core-s)`);
