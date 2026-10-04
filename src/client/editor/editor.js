@@ -112,8 +112,9 @@ const SEED = { extra: ['main', 'results', 'settings', 'rules', 'leaderboard', 'p
     ['main', 'none', 'room@room', 'Play on this device', 'A room only this device is in: the same lobby as online'], ['main', 'none', 'online@none', 'Play online', 'Signed in first: otherwise it says to sign in', { signed: true }], ['main', 'none', 'replays@none', 'Replays'],
     ['online', 'none', 'main@none', 'Back'], ['online', 'none', 'room@room', 'Quick match'], ['online', 'none', 'room@room', 'Create a room'], ['online', 'none', 'room@room', 'Join with a code'],
     ['online', 'none', 'room@room', 'Join an open room'],
-    ['online', 'none', 'leaderboard@none', 'Leaderboard'], ['online', 'none', 'profile@none', 'Profile'], ['leaderboard', 'none', 'online@none', 'Back'],
-    ['leaderboard', 'none', 'profile@none', 'A player', 'Their profile'], ['profile', 'none', 'online@none', 'Back'],
+    // (Online is for finding and playing games online; the leaderboard and profiles are the Main menu's, owner 2026-10-05)
+    ['main', '*', 'leaderboard@*', 'Leaderboard'], ['main', '*', 'profile@*', 'Profile', null, { signed: true }], ['leaderboard', '*', 'main@*', 'Back'],
+    ['leaderboard', '*', 'profile@*', 'A player', 'Their profile'], ['profile', '*', 'main@*', 'Back'],
     // (no "resume" nor "rejoin": a game not finished is a game the player is still in, reached by Back to game, owner 2026-10-05)
     ['main', '*', 'rules@*', 'Rules'], ['rules', '*', 'main@*', 'Back'],
     ['results', 'none', 'room@room', 'Play again', 'The same players and course, in a new lobby'],
