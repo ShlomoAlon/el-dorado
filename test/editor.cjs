@@ -20,7 +20,8 @@ const T = report('editor');
   // the menu opens where the flowchart's ★ says (in every state: the Main menu, a menu the page hasn't got), its buttons the transitions'
   T.ok('the menu opens on the flowchart\'s ★: the Main menu, with its transitions\' buttons', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=main]'); return !!s && !s.hidden && /Play on this device/.test(s.textContent); }));
   await p.click('#mform > section[data-screen=main] [data-ed-go]:has-text("Play on this device")'); await p.waitForTimeout(200);
-  T.ok('a button a transition made goes where it leads (the new game screen)', await p.evaluate(() => !document.querySelector('#mform > section[data-screen=setup]').hidden && document.querySelector('#mform > section[data-screen=main]').hidden));
+  T.ok('a button a transition made goes where it leads (the game lobby)', await p.evaluate(() => !document.querySelector('#mform > section[data-screen=room]').hidden && document.querySelector('#mform > section[data-screen=main]').hidden));
+  await p.evaluate(() => document.querySelector('#sMode label[data-v="local"]').click()); await p.waitForTimeout(200); // (the page's own tab: its new-game screen, laid out below)
   T.ok('the screen on show is a grid', await p.evaluate(() => getComputedStyle(document.querySelector('#mform > section[data-screen=setup]')).display === 'grid'));
   T.ok('out of Edit mode, the menu works (a click is a click)', await p.evaluate(() => { document.querySelector('#sN label[data-v="4"]').click(); return document.querySelector('#sN input[value="4"]').checked; }));
   await p.click('#edPanel [data-act=editmode]');
@@ -101,6 +102,9 @@ const T = report('editor');
     && document.querySelectorAll('#edPanel .ed-node.tray, #edPanel .ed-node.tnear, #edPanel .ed-node.tfocus').length === document.querySelectorAll('#edPanel .ed-dir').length - 1 && document.querySelectorAll('#edPanel .ed-ln').length >= 10)); // (- 1: Any menu, listed only)
   await p.click('#edPanel [data-centre="main@game"]');
   T.ok('a menu in one state shows what applies there for any state too, its other end in that state (Settings in a game)', await p.evaluate(() => !!document.querySelector('#edPanel .ed-node[data-node="settings@game"]') && [...document.querySelectorAll('#edPanel text.ed-ar')].some(t => /^Settings/.test(t.textContent)) && [...document.querySelectorAll('#edPanel text.ed-ar')].some(t => /^Back$/.test(t.textContent))));
+  await p.click('#edPanel [data-centre="main@none"]');
+  T.ok('a menu in one state shows what arrives there from other states (the lobby\'s Leave, from in a room)', await p.evaluate(() => !!document.querySelector('#edPanel .ed-node[data-node="room@room"]') && [...document.querySelectorAll('#edPanel text.ed-ar')].some(t => /^Leave/.test(t.textContent))));
+  await p.click('#edPanel [data-centre="main@game"]');
   T.ok('a state tab centres the menu in that state: the Main menu opens here in a game', await p.evaluate(() => /★/.test(document.querySelector('#edPanel .ed-node.focus[data-node="main@game"] .m').textContent)));
   await p.click('#edPanel .ed-node[data-node="results@*"]');
   T.ok('a menu clicked below is centred, and shown in the directions', await p.evaluate(() => { const r = document.querySelector('#edPanel .ed-dir[data-menu="results"]'), d = document.querySelector('#edPanel .ed-dirs'), a = r.getBoundingClientRect(), b = d.getBoundingClientRect();
@@ -138,11 +142,11 @@ const T = report('editor');
   T.ok('a menu merged into another: its boxes and transitions are the other\'s', await p.evaluate(() => !document.querySelector('#edPanel .ed-dir[data-menu="viewer"]') && !document.querySelector('#edPanel .ed-node[data-node^="viewer@"]')));
   answers.push('Room menu'); await p.click('#edPanel [data-act=fl-fold][data-v="m:main"]'); await p.click('#edPanel [data-act=fl-split][data-v="main@room"]');
   T.ok('a state split off as a menu of its own', await p.evaluate(() => !document.querySelector('#edPanel .ed-node[data-node="main@room"]') && [...document.querySelectorAll('#edPanel .ed-node .m')].some(t => /Room menu/.test(t.textContent))));
-  await p.click('#edPanel [data-act=fl-fold][data-v="m:setup"]'); await p.selectOption('#edPanel [data-act=fl-copyall][data-m="setup"]', 'online');
-  T.ok('transitions copied to another menu', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-dir[data-menu="online"] input[data-act=fl-tword]')].some(i => i.value === 'Start expedition')));
+  await p.click('#edPanel [data-act=fl-fold][data-v="m:room"]'); await p.selectOption('#edPanel [data-act=fl-copyall][data-m="room"]', 'online');
+  T.ok('transitions copied to another menu', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-dir[data-menu="online"] input[data-act=fl-tword]')].some(i => i.value === 'Start game')));
   // menus and states renamed, a state added
-  await p.fill('#edPanel [data-menu="setup"] input.ed-mname', 'New game!'); await p.press('#edPanel [data-menu="setup"] input.ed-mname', 'Enter');
-  T.ok('a menu renamed: every box of it', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-node[data-node^="setup@"] .m')].every(t => /New game!/.test(t.textContent))));
+  await p.fill('#edPanel [data-menu="room"] input.ed-mname', 'Lobby!'); await p.press('#edPanel [data-menu="room"] input.ed-mname', 'Enter');
+  T.ok('a menu renamed: every box of it', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-node[data-node^="room@"] .m')].every(t => /Lobby!/.test(t.textContent))));
   answers.push('Watching a replay'); await p.click('#edPanel [data-act=fl-addstate]');
   T.ok('a state added, and offered for boxes', await p.evaluate(() => [...document.querySelectorAll('#flState option')].some(o => o.textContent === 'Watching a replay')));
   await p.click('#edPanel [data-tab=layout]'); await p.evaluate(() => { const l = document.querySelector('#sMode label[data-v="local"]'); l.click(); });

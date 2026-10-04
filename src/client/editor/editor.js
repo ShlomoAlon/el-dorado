@@ -95,7 +95,7 @@ const STATE0 = [['none', 'Nowhere'], ['game', 'In a game'], ['room', 'In a room'
 const STATES = { [Symbol.iterator]: function* () { const nm = D.stateNames || {}; for (const [v, n] of STATE0) yield [v, nm[v] || n]; for (const v of D.moreStates || []) yield [v, nm[v] || v]; } };
 const stLabel = st => st === '*' ? 'Any state' : ([...STATES].find(([v]) => v === st) || [st, st])[1]; // (*: any state; a transition to it keeps the state)
 const NOLAY = ['board', 'viewer', 'site', '*']; // (no menu: the game, a replay, the way in, any menu (a rule for every menu: '*'))
-const NAMES = { setup: 'New game', online: 'Online', replays: 'Replays', room: 'Room lobby', board: 'Board', viewer: 'Replay viewer', main: 'Main menu', results: 'Results', settings: 'Settings', site: 'Way in', title: 'Title', '*': 'Any menu' };
+const NAMES = { setup: 'New game', online: 'Online', replays: 'Replays', room: 'Game lobby', board: 'Board', viewer: 'Replay viewer', main: 'Main menu', results: 'Results', settings: 'Settings', site: 'Way in', title: 'Title', '*': 'Any menu' };
 const nameOf = m => (D.names && D.names[m]) || NAMES[m] || m; // (a menu renamed here: D.names)
 /* what a transition changes, read from its ends (never stored, so it can't disagree with them): the menu, the state, or both */
 function changes(a) { const [tm, ts] = a.to.split('@'), menu = a.from !== tm, state = ts !== '*' && a.states.some(s => s !== ts);
@@ -104,16 +104,17 @@ function changes(a) { const [tm, ts] = a.to.split('@'), menu = a.from !== tm, st
    menu, which looks different in each state), so the main menu has a box in every state and is where the menu opens in each */
 const SEED = { extra: ['main', 'results', 'settings'], first: { none: 'main', game: 'main', room: 'main' },
   nodes: [['site@*', -160, 230], ['main@none', 250, 60], ['main@game', 250, 230], ['main@room', 250, 400],
-    ['setup@none', 540, 0], ['online@none', 540, 110], ['replays@none', 820, 0], ['viewer@none', 1100, 0],
+    ['online@none', 540, 110], ['replays@none', 820, 0], ['viewer@none', 1100, 0],
     ['board@game', 540, 230], ['results@none', 820, 230], ['room@room', 540, 400], ['*@game', 820, 115]],
   arrows: [['site', '*', 'main@*', 'Open the site, or come back', 'Reloading keeps the player exactly where they were: this is a new visit, or a return after leaving'],
-    ['main', 'none', 'setup@none', 'Play on this device'], ['main', 'none', 'online@none', 'Play online'], ['main', 'none', 'replays@none', 'Replays'],
-    ['setup', 'none', 'main@none', 'Back'], ['setup', 'none', 'board@game', 'Start expedition'],
+    // (a game on this device is a room nobody else joins: the same lobby, the same choices (owner, 2026-10-05); one state at a time,
+    // so a new game or room is only reached from nowhere: a game or a room is left first)
+    ['main', 'none', 'room@room', 'Play on this device', 'A room only this device is in: the same lobby as online'], ['main', 'none', 'online@none', 'Play online'], ['main', 'none', 'replays@none', 'Replays'],
     ['online', 'none', 'main@none', 'Back'], ['online', 'none', 'room@room', 'Create room · Join · Quick match'],
     ['replays', 'none', 'main@none', 'Back'], ['replays', 'none', 'viewer@none', 'Open a game'], ['viewer', 'none', 'replays@none', 'Close'],
     ['main', 'game', 'board@game', 'Back to game'], ['main', 'game', 'results@none', 'End game · Resign'], ['board', 'game', 'main@game', 'Menu'], ['board', 'game', 'results@none', 'The race is won'],
     ['results', 'none', 'main@none', 'Done'], ['results', 'none', 'viewer@none', 'Watch the replay'],
-    ['main', 'room', 'room@room', 'Back to the room'], ['main', 'room', 'main@none', 'Leave the room'], ['room', 'room', 'main@room', 'Menu'], ['room', 'room', 'board@game', 'Start game (the host)'],
+    ['main', 'room', 'room@room', 'Back to the room'], ['main', 'room', 'main@none', 'Leave the room'], ['room', 'room', 'main@room', 'Menu'], ['room', 'room', 'board@game', 'Start game'], ['room', 'room', 'main@none', 'Leave'],
     ['main', '*', 'settings@*', 'Settings'], ['settings', '*', 'main@*', 'Back'],
     ['*', 'game', 'board@game', 'Click beside the menu', 'A rule for every menu, only in a game: a click outside the menu goes back to the game']] };
 // a box for each place a transition starts or ends (each made below the others: drag it where it belongs)
@@ -185,7 +186,7 @@ function show() { const m = $('#menu'), open = !!(m && m.open);
 const MODE = { setup: 'local', online: 'online', replays: 'replays' };
 function pick(sc) { const l = MODE[sc] && $(`#sMode label[data-v="${MODE[sc]}"]`); if (l) { edScreen = null; l.click(); } else edScreen = sc; }
 const go = sc => { pick(sc); foldOpen = false; sel = null; ED.render(); layout(); };
-addEventListener('click', e => { if (!editing() && e.target.closest && e.target.closest('#sMode')) edScreen = null; }, true);
+addEventListener('click', e => { if (!editing() && e.target.closest && e.target.closest('#sMode') && edScreen) { edScreen = null; queueMicrotask(layout); } }, true); // (the page's tab for the screen it is already on changes nothing of its own: the editor's screen let go of, shown again)
 // a box: its menu shown as it is in its state (the board and the replay viewer aren't menus: said, not shown)
 let note = '';
 function goTo(k) { const [m, st] = k.split('@'); if (NOLAY.includes(m)) { note = `That goes to the ${nameOf(m).toLowerCase()} (${stLabel(st).toLowerCase()}): not a menu.`; return panel(); }
@@ -327,7 +328,9 @@ function flowSvg() {
   const f = centre(), [fm, fs] = f.split('@'), all = segs(), ins = new Map(), outs = new Map(); // (neighbour box → the transitions between it and the centre)
   // (a menu in one state: every transition that applies there, those for any state included, each other end as it is in that state:
   // "you're able to go to settings in-game" (owner, 2026-10-05); a menu in any state: all of its transitions)
-  const pairs = fs === '*' ? all.map(([a, fk, tk]) => [a, fk, tk]) : D.arrows.filter(a => a.from !== '*' && (a.states.includes(fs) || a.states.includes('*'))).map(a => { const [tm, ts] = a.to.split('@'); return [a, a.from + '@' + fs, ts === '*' ? tm + '@' + fs : a.to]; });
+  // (out: those starting in this state; in: every one arriving here, from whatever state it starts in)
+  const pairs = fs === '*' ? all.map(([a, fk, tk]) => [a, fk, tk]) : D.arrows.filter(a => a.from !== '*').flatMap(a => { const [tm, ts] = a.to.split('@');
+    return (a.states.includes('*') ? [fs] : a.states).map(st => [a, a.from + '@' + st, ts === '*' ? tm + '@' + st : a.to]).filter(([, fk, tk]) => fk === f || tk === f); });
   for (const [a, fk, tk] of pairs) { const fi = atCentre(fk, f), ti = atCentre(tk, f); if (ti && !fi) { if (!ins.has(fk)) ins.set(fk, []); ins.get(fk).push(a); } if (fi && !ti) { if (!outs.has(tk)) outs.set(tk, []); outs.get(tk).push(a); } }
   const ms = trayMenus(), rank = k => ms.indexOf(k.split('@')[0]) * 10 + ['*', ...[...STATES].map(([v]) => v)].indexOf(k.split('@')[1]), byOrder = m => [...m.keys()].sort((p, q) => rank(p) - rank(q)), inK = byOrder(ins), outK = byOrder(outs);
   const own = D.buttons.filter(b => b.menu === fm && (fs === '*' || b.states.includes(fs) || b.states.includes('*'))); // (the centre's own buttons, listed under it)
