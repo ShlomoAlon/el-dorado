@@ -64,7 +64,9 @@ const CPU_MS = 100; // (measured 65 ms with the board's terrain as one image, 20
   for (const r of results) {
     T.ok(`game ${r.g + 1} (${r.name}): played to the end through the UI`, r.over && !r.unmapped.length, `${r.steps} moves of the person's, round ${r.round}${r.unmapped.length ? '; ' + r.unmapped.join('; ') : ''}`);
     T.ok(`game ${r.g + 1} (${r.name}): no assertion failed, no page error`, !r.errors.length, r.errors.slice(0, 3).join(' | '));
-    if (r.used != null) T.ok(`game ${r.g + 1} (${r.name}): the whole game's CPU within budget (${CPU_MS} ms per action)`, r.actions > 0 && r.used * 1000 <= CPU_MS * r.actions, `${r.used.toFixed(1)} core-s for ${r.actions} actions: ${(r.used * 1000 / r.actions).toFixed(0)} ms each, budget ${(CPU_MS * r.actions / 1000).toFixed(1)} core-s`);
+    // (CPU is time: measured on the software route only; on the GPU route every GPU operation runs on this CPU: lib.cjs)
+    if (r.used != null && process.env.GPU === '1') console.log(`     game ${r.g + 1} (${r.name}): CPU not judged on the GPU route (emulated: ${r.used.toFixed(1)} core-s)`);
+    else if (r.used != null) T.ok(`game ${r.g + 1} (${r.name}): the whole game's CPU within budget (${CPU_MS} ms per action)`, r.actions > 0 && r.used * 1000 <= CPU_MS * r.actions, `${r.used.toFixed(1)} core-s for ${r.actions} actions: ${(r.used * 1000 / r.actions).toFixed(0)} ms each, budget ${(CPU_MS * r.actions / 1000).toFixed(1)} core-s`);
     console.log(`     did: ${JSON.stringify(r.did)}\n     modes: ${r.modes.join(', ')}\n     buttons: ${r.labels.join(', ')}`);
   }
   console.log(`     ${GAMES} games in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
