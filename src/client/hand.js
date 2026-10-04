@@ -91,7 +91,7 @@ function layoutCards() {
   const psc = .46, pw = cw * psc, ph = ch * psc, baseX = W - 16 - pileW - 24 - pw, py = H - 16 - (phone ? 76 : 104) + ((phone ? 76 : 104) - ph);
   play.forEach((id, i) => { const el = cardEls.get(id); if (!el || el.__enter) return; const k = play.length - 1 - i; setStyle(el, 'zIndex', 5 + i); setT(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc); setHit(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc, 5 + i); });
   setStyle($('#choice'), '--cb', Math.round(ch * 1.18 + 14 + 30) + 'px'); // (just above the raised hand and its tags)
-  const lbl = $('#playLbl'); setStyle(lbl, 'opacity', play.length ? 1 : 0); setStyle(lbl, 'transform', `translate(${baseX - (play.length - 1) * pw * .42}px,${py - 18}px)`);
+  const lbl = $('#playLbl'); setStyle(lbl, 'opacity', play.length ? 1 : 0); setStyle(lbl, 'transform', `translate(${baseX + pw - W}px,${py - 18}px)`); // (its right end at the row's, which never moves: the row grows to the left, the label stays put)
 }
 
 /* ---------- the hand's view part ---------- */
