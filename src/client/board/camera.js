@@ -31,6 +31,9 @@ function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 
    'x2' toward twice the scale, held at the start (steps) so nothing moves */
 let ZEXP = ''; try { ZEXP = localStorage.getItem('zexp') || ''; } catch (e) { /* expected: storage blocked; no experiment */ }
 function kick() {
+  if (ZEXP === 'size') { const w = layout().w + 4, h = layout().h + 4; for (const id of ['bscale', 'pieces', 'bfx']) { const L = $('#' + id); let sp = L.querySelector(':scope > .zsp');
+      if (!sp) { sp = document.createElement('div'); sp.className = 'zsp'; sp.style.cssText = 'position:absolute;width:1px;height:1px;pointer-events:none'; L.prepend(sp); }
+      const d = sp.dataset.d === '1' ? 0 : 1; sp.dataset.d = d; sp.style.left = (w + d) + 'px'; sp.style.top = (h + d) + 'px'; } diag('kick size'); return; } // (a layer whose size changes gets its resolution chosen afresh, will-change or not: Chrome picture_layer_impl.cc)
   if (!ZEXP) return; const st = stage(), t = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
   const f = ZEXP === 'inplace' ? 1 : +ZEXP.slice(1), t2 = `translate3d(${view.x}px,${view.y}px,0) scale(${f * view.s / baked})`;
   diag(`kick ${ZEXP}`);
