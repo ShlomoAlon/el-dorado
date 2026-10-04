@@ -102,7 +102,10 @@ function checkLabels(B){
 }
 function btnWire(B,btns){
   if(!B.firstChild)B.innerHTML=SLOTS.map(s=>`<button type="button" class="btn bslot ${s}${s==='p'?' pri big':''}"></button>`).join('');
-  const on=btns.length>0;if(B.hidden===on)B.hidden=!on;
+  // (the slots keep their place and size with no button in them, the area too: never hidden, so what is measured from it
+  // (a chosen card's rise, the hand's width, the prompt's foot) is the same on every turn; a raised card dropped 37 px when the
+  // buttons came back on a phone, 2026-10-04)
+  const on=btns.length>0;
   if(CHECKS&&on&&!labelsChecked){labelsChecked=true;afterDrawn(()=>checkLabels(B));}
   for(const s of SLOTS){
     const el=B.querySelector('.'+s),here=btns.filter(x=>x.s===s),b=here[0];
