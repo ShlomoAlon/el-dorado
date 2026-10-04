@@ -10,7 +10,7 @@ import { after, frameDue } from '../frame.js';
 import { diag, diagLog, CHECKS } from '../debug.js';
 import { layout, xy } from './layout.js';
 import { walking } from './pieces.js';
-import { terrainLive } from './terrain.js';
+import { terrainLive, terrainRegions, redrawRegion } from './terrain.js';
 export const view = { s: 1, x: 0, y: 0 };
 /* userZoomed: the player moved the board (a resize then keeps their view); dragMoved: the current press became a drag
    (its click is not a tap) */
@@ -22,6 +22,7 @@ const hoverHooks = [];
 export function onViewMove(f) { hoverHooks.push(f); }
 const moved = () => { for (const f of hoverHooks) f(); };
 function applyView() {
+  redrawRun++; // (a layer still to be drawn again waits for the next settle)
   if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; });
   scheduleSettle();
 }
@@ -29,25 +30,35 @@ function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 
 /* the board's layers keep the will-change hint for good (a pan or zoom only moves and stretches the picture already drawn),
    so Chrome keeps the resolution it first drew them at: zoomed in, a third of the detail the zoom needs (2026-10-04). Chrome
    picks a layer's resolution afresh, hint or not, when the layer's size changes (cc picture_layer_impl.cc: "mainly to reset
-   the preserved scale for will-change:transform"), so once a zoom has been baked in, a one-pixel mark at each layer's far
-   corner moves a pixel out or back: each is drawn again, once, at the zoom it shows. (The mark is the layer's first child,
-   so it is painted into that layer and not into a sibling's) */
+   the preserved scale for will-change:transform"), so once a zoom has been baked in, each layer's size changes by a pixel
+   and it is drawn again, once, at the zoom it shows. One layer a frame, the terrain's regions on screen first: the whole
+   board drawn again at once cost frames at 4K (18% dropped zooming in bursts, 2026-10-04). A pan or zoom that starts
+   meanwhile stops the run (what's left stays a stretched picture until it settles again) */
 const NS = 'http://www.w3.org/2000/svg';
-let nudged = 0;
-function nudge() {
-  nudged ^= 1; const x = Math.ceil(layout().w) + 4 + nudged, y = Math.ceil(layout().h) + 4 + nudged;
-  // a shape in an SVG that paints into the layer (Chrome never lifts an SVG shape into a layer of its own): the board's own
-  // SVG; for the pieces and the effects, an SVG of no size of their own, in flow, first, so it paints with them
-  for (const id of ['board', 'pieces', 'bfx']) { const L = $('#' + id); let r = L.querySelector('rect.nudge');
-    if (!r) { r = document.createElementNS(NS, 'rect'); r.setAttribute('class', 'nudge'); r.setAttribute('width', 1); r.setAttribute('height', 1);
-      if (id === 'board') L.append(r); else { const sv = document.createElementNS(NS, 'svg'); sv.setAttribute('class', 'nudge'); sv.append(r); L.prepend(sv); } }
-    r.setAttribute('x', (id === 'board' ? layout().minX : 0) + x); r.setAttribute('y', (id === 'board' ? layout().minY : 0) + y); }
+let redrawRun = 0;
+// the other layers: a one-pixel shape in an SVG that paints into the layer (Chrome never lifts an SVG shape into a layer of
+// its own), moved a pixel: the board's own SVG (overlays and labels' layer); for the pieces and the effects, an SVG of their
+// own, in flow, first, so it paints with them
+function growMark(id) {
+  const L = $('#' + id); let r = L.querySelector('rect.nudge');
+  if (!r) { r = document.createElementNS(NS, 'rect'); r.setAttribute('class', 'nudge'); r.setAttribute('width', 1); r.setAttribute('height', 1);
+    if (id === 'board') L.append(r); else { const s = document.createElementNS(NS, 'svg'); s.setAttribute('class', 'nudge'); s.append(r); L.prepend(s); } }
+  const d = r.getAttribute('data-d') === '1' ? 0 : 1, o = id === 'board' ? 1 : 0; r.setAttribute('data-d', d);
+  r.setAttribute('x', o * layout().minX + Math.ceil(layout().w) + 4 + d); r.setAttribute('y', o * layout().minY + Math.ceil(layout().h) + 4 + d);
+}
+function redraw() {
+  const run = ++redrawRun, W = geo.app.width, H = geo.app.height, mx = layout().minX, my = layout().minY;
+  const away = g => { const [x, y, w, h] = g.box, l = (x - mx) * view.s + view.x, t = (y - my) * view.s + view.y, r = l + w * view.s, b = t + h * view.s;
+    return r < 0 || b < 0 || l > W || t > H ? 1 : 0; };
+  const steps = [...terrainRegions].sort((a, b) => away(a) - away(b)).map(g => () => redrawRegion(g)).concat(['board', 'pieces', 'bfx'].map(id => () => growMark(id)));
+  const next = () => { if (run !== redrawRun) return; steps.shift()(); if (steps.length) requestAnimationFrame(next); };
+  next();
 }
 function settle() {
   if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; nudge();
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; redraw();
   });
 }
 /* checks: once the board is at rest (no gesture or glide, settled) */

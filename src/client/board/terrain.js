@@ -120,12 +120,23 @@ function asImage(svg){
   const used=body=>{const ids=new Set();for(const x of body.matchAll(/url\(#([^)]+)\)|href="#([^"]+)"/g))ids.add(x[1]||x[2]);return '<defs>'+[...ids].map(i=>defs.get(i)||'').join('')+'</defs>';};
   for(const u of terrainUrls)URL.revokeObjectURL(u);terrainUrls=[];
   const byTile=new Map(),rest=[];for(const g of L.terrain.children){const t=g.dataset&&g.dataset.tile;if(t==null){rest.push(g);continue;}if(!byTile.has(t))byTile.set(t,[]);byTile.get(t).push(g);}
-  const parts=[...[...L.plates.children].map(g=>[g]),...byTile.values(),[...rest,L.city]];
-  const live=[L.plates,L.terrain,L.city],ims=parts.map(els=>{
+  let parts=[...[...L.plates.children].map(g=>[g]),...byTile.values(),[...rest,L.city]];
+  const live=[L.plates,L.terrain,L.city];parts=parts.map(els=>{
     let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const e of els){const b=e.getBBox();if(!b.width&&!b.height)continue;x0=Math.min(x0,b.x);y0=Math.min(y0,b.y);x1=Math.max(x1,b.x+b.width);y1=Math.max(y1,b.y+b.height);}
     x0-=PAD;y0-=PAD;const w=x1+PAD-x0,h=y1+PAD-y0;
     const url=URL.createObjectURL(new Blob([`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${x0} ${y0} ${w} ${h}">${(body=>used(body)+body)(els.map(ser).join(''))}</svg>`],{type:'image/svg+xml'}));terrainUrls.push(url);
-    const im=sv('image',{href:url,x:x0,y:y0,width:w,height:h});svg.insertBefore(im,L.plates);return im;});
+    return{url,x0,y0,w,h};});
+  // the images go into regions, a grid of layers of their own (.treg), each with every part that reaches into it, in the
+  // terrain's order, clipped to its rectangle: a region is drawn again on its own (camera.js), a fraction of the board's
+  // drawing, so the repaint after a zoom is spread over frames. Neighbours overlap by OV, identical there: no seam can show
+  for(const g of terrainRegions)g.remove();terrainRegions=[];
+  const{minX,minY,w:BW,h:BH}=layout(),ims=[];let at=svg;
+  for(let r=0;r<RROWS;r++)for(let c=0;c<RCOLS;c++){
+    const x=minX+c*BW/RCOLS-OV,y=minY+r*BH/RROWS-OV,w=BW/RCOLS+2*OV,h=BH/RROWS+2*OV,inside=parts.filter(q=>q.x0<x+w&&q.x0+q.w>x&&q.y0<y+h&&q.y0+q.h>y);
+    if(!inside.length)continue;
+    const g=sv('svg',{class:'treg'});g.box=[x,y,w,h];g.grown=0;g.style.left=(x-minX)+'px';g.style.top=(y-minY)+'px';regionBox(g);
+    for(const q of inside)ims.push(sv('image',{href:q.url,x:q.x0,y:q.y0,width:q.w,height:q.h},g));
+    at.after(g);at=g;terrainRegions.push(g);}
   terrainLive=true;
   // (never silently live for good: a part that fails, or doesn't come within 8 s, is a failure)
   Promise.all(ims.map(im=>new Promise((ok,no)=>{im.addEventListener('load',ok,{once:true});im.addEventListener('error',no,{once:true});})))
@@ -135,6 +146,13 @@ function asImage(svg){
 }
 /* the terrain still drawn live, its image on its way (asImage): the board's live elements include it until then */
 export let terrainLive=false;
+/* the terrain's regions (asImage), and the one call that has a region drawn again: its size grows by a pixel or back
+   (its view box with it, so nothing in it moves), and Chrome draws a layer whose size changed afresh at the zoom it shows
+   (camera.js) */
+export let terrainRegions=[];
+const RCOLS=4,RROWS=2,OV=3;
+function regionBox(g){const[x,y,w,h]=g.box,d=g.grown;g.setAttribute('width',w+d);g.setAttribute('height',h+d);g.setAttribute('viewBox',`${x} ${y} ${w+d} ${h+d}`);}
+export function redrawRegion(g){g.grown^=1;regionBox(g);}
 /* gradients, patterns and icons the board's shapes use: the same for every course */
 function drawDefs(svg){
   const defs=sv('defs',null,svg);
