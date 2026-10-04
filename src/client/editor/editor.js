@@ -4,7 +4,8 @@
    - Layout: where does each thing go on this screen? Blocks moved on a fixed grid, a third, half or the whole width, hidden,
      tucked behind "More options", or put in the screen's top or bottom bar (each stays at its edge while the content
      scrolls under it), or deleted; any text changed (a double-click, then type); a list that scrolls shown whole or cut to
-     its first few, so the screen scrolls instead. How anything looks is not chosen here.
+     its first few, so the screen scrolls instead; a button made one of the page's own kinds (Main, Plain, Link). How
+     anything looks is not chosen here.
    - Flow: which screens are there, and how does one get from one to another? Screens in three columns, one per state the
      player can be in (nowhere, in a game, in a room: always exactly one), buttons as arrows between screens of the same
      state, and the screen the menu opens on in each.
@@ -17,6 +18,11 @@ const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || null;
 const fresh = () => ({ v: 4, options: {}, screens: {}, extra: [], first: {}, states: {} });
 const D = (d => d && d.v === 4 ? d : fresh())(load()); // (a design from an older editor: started afresh)
 const COLS = 6, WIDTHS = [[2, 'Third'], [3, 'Half'], [6, 'Full']];
+/* a button's kind: one of the page's own (its looks are designed, not chosen here): Main (gold), Plain, Link (underlined words) */
+const KINDS = [['pri', 'Main'], ['plain', 'Plain'], ['link', 'Link']];
+const kindOf = el => el.classList.contains('linkbtn') ? 'link' : el.classList.contains('pri') ? 'pri' : 'plain';
+function setKind(el, k) { if (!el.matches('button')) return; if (el.__kind === undefined) el.__kind = [kindOf(el), el.classList.contains('big')]; // (the page's own: back when unset)
+  const [k0, big] = el.__kind; k = k || k0; el.classList.toggle('btn', k !== 'link'); el.classList.toggle('pri', k === 'pri'); el.classList.toggle('linkbtn', k === 'link'); el.classList.toggle('big', big && k !== 'link'); }
 
 /* every change is kept (in this browser) and can be undone: Ctrl+Z, Ctrl+Shift+Z, as in any editor */
 const snap = () => JSON.stringify(D); let last = snap(), undos = [], redos = [];
@@ -87,6 +93,7 @@ function layout() {
     el.style.gridColumn = `${b.c} / span ${b.w}`; el.style.gridRow = String(b.r + 1); el.classList.add('ed-item'); el.classList.toggle('ed-inbar', !!b.bar); // (row 1: the top bar's)
     const off = b.del || ((b.hide || (b.fold && !foldOpen)) && !editing()); el.style.display = off ? 'none' : '';
     if (b.listk) { const l = byName(b.listk); if (l) { if (b.list) l.dataset.edList = b.list; else delete l.dataset.edList; } }
+    setKind(el, b.kind);
     el.classList.toggle('ed-hidden', !!b.hide); el.classList.toggle('ed-folded', !!b.fold); el.classList.toggle('ed-sel', editing() && k === sel); }
   // text changed here (a leaf's words; a button made here keeps its words as its label)
   for (const [k, t] of Object.entries(c.text || {})) { const el = byName(k); if (el && !el.isContentEditable && !el.children.length && el.textContent !== t) el.textContent = t; }
@@ -108,7 +115,7 @@ function layout() {
   panel(); placeGlass();
 }
 function unlay(s) { if (!s.classList.contains('ed-laid')) return; s.classList.remove('ed-laid', 'ed-on'); for (const p of ['display', 'gridTemplateColumns', 'gridAutoRows', 'gap', 'position']) s.style[p] = '';
-  s.querySelectorAll('.ed-item').forEach(el => { el.style.gridColumn = el.style.gridRow = ''; if (el.classList.contains('ed-hidden') || el.classList.contains('ed-folded')) el.style.display = ''; el.classList.remove('ed-item', 'ed-hidden', 'ed-folded', 'ed-sel'); });
+  s.querySelectorAll('.ed-item').forEach(el => { setKind(el, null); el.style.gridColumn = el.style.gridRow = ''; if (el.classList.contains('ed-hidden') || el.classList.contains('ed-folded')) el.style.display = ''; el.classList.remove('ed-item', 'ed-hidden', 'ed-folded', 'ed-sel'); });
   for (const bar of s.querySelectorAll(':scope > .ed-bar')) { for (const el of [...bar.children]) { const [p, n] = el.__home || [s, null]; el.style.order = ''; p.insertBefore(el, n && n.parentElement === p ? n : null); } bar.remove(); }
   s.querySelectorAll('[data-ed-list]').forEach(el => { delete el.dataset.edList; });
   s.querySelectorAll('.ed-row').forEach(el => el.classList.remove('ed-row')); s.querySelectorAll('.ed-inbar').forEach(el => el.classList.remove('ed-inbar')); const g = s.querySelector(':scope > .ed-grid'); if (g) g.remove(); }
@@ -174,9 +181,10 @@ function layoutBody() {
   return `<p>Screen <b>${esc(sc)}</b> (${STATES.find(([v]) => v === stateOf(sc))[1].toLowerCase()})</p>`
     + (b ? (b.bar ? `<p class="ed-hint">In the ${b.bar} bar: drag it left or right (or use the arrows) to order the bar.</p>` : row('Width', WIDTHS.map(([v, n]) => btn('w', n, b.w === v, v)).join('')))
       + row('Place', btn('bar', 'On the screen', !b.bar, '') + btn('bar', 'Top bar', b.bar === 'top', 'top') + btn('bar', 'Bottom bar', b.bar === 'bottom', 'bottom'))
+      + ((el => el && el.matches('button') ? row('Button', KINDS.map(([v, n]) => btn('kind', n, (b.kind || el.__kind[0]) === v, v)).join('')) : '')(byName(sel)))
       + row('', btn('hide', 'Hidden', b.hide) + btn('fold', 'In More options', b.fold) + btn('del', 'Delete'))
       + ((l => l ? row('List', [['', 'Scrolls'], ['all', 'Shows all'], ['3', 'First 3'], ['5', 'First 5'], ['10', 'First 10']].map(([v, n]) => btn('list', n, (b.list || '') === v, v)).join('')) : '')(byName(sel) && listIn(byName(sel))))
-      : (editing() ? '<p class="ed-hint">Drag a block to move it; drag its right edge to make it a third, half or the whole width. Click a block to choose it. Double-click any text to change it. Arrows move the chosen block, Delete deletes it, Ctrl+Z undoes. Stop editing to use the menu.</p>' : '<p class="ed-hint">Press Edit (top of this panel) to lay this screen out; until then the menu works as usual.</p>'))
+      : (editing() ? '<p class="ed-hint">Drag a block to move it; drag its right edge to make it a third, half or the whole width. Click a block to choose it. Double-click any text to change it. A chosen button can be made Main, Plain or Link. Arrows move the chosen block, Delete deletes it, Ctrl+Z undoes. Stop editing to use the menu.</p>' : '<p class="ed-hint">Press Edit (top of this panel) to lay this screen out; until then the menu works as usual.</p>'))
     + ((n => n ? `<p>${btn('undel', `Bring back deleted blocks (${n})`)}</p>` : '')(Object.values(conf(sc).blocks).filter(x => x.del).length))
     + `<hr>${btn('reset', 'This screen back to the page\'s own')}`;
 }
@@ -207,6 +215,7 @@ function act(t, a, v) {
   else if (a === 'opt') D.options[t.dataset.area] = v;
   else if (a === 'openmenu') { const m = $('#menuBtn'); if (m) m.click(); }
   else if (b && a === 'w') { b.w = +v; fit(b); }
+  else if (b && a === 'kind') { const el = byName(sel); b.kind = el && el.__kind[0] === v ? undefined : v; }
   else if (b && a === 'del') { if (b.go) { const el = byName(sel); if (el) el.remove(); delete conf(sc).blocks[sel]; } else b.del = true; sel = null; }
   else if (a === 'undel') { for (const x of Object.values(conf(sc).blocks)) delete x.del; }
   else if (b && a === 'list') { const l = listIn(byName(sel)); if (l) { b.listk = name(l); b.list = v || undefined; } } else if (b && (a === 'hide' || a === 'fold')) b[a] = !b[a] || undefined; else if (b && a === 'bar') b.bar = v || undefined;

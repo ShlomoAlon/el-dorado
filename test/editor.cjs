@@ -47,6 +47,16 @@ const T = report('editor');
   const h = await p.evaluate(() => { const e = document.querySelector('#mform > section[data-screen=setup] .sub'), r = e.getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; });
   await p.mouse.dblclick(h.x, h.y); await p.keyboard.type('A new line of words'); await p.keyboard.press('Enter');
   T.ok('text is changed by a double-click and typing', await p.evaluate(() => document.querySelector('#mform > section[data-screen=setup] .sub').textContent === 'A new line of words'));
+  // a button's kind: the Start button chosen, made a link, then Plain, then back to Main (its own: nothing kept)
+  { await p.evaluate(() => document.querySelector('#sGo').scrollIntoView({ block: 'center' }));
+    const r = await p.evaluate(() => { const q = document.querySelector('#sGo').getBoundingClientRect(); return { x: q.left + 20, y: q.top + q.height / 2 }; });
+    await p.mouse.click(r.x, r.y); const cls = () => p.evaluate(() => document.querySelector('#sGo').className);
+    await p.click('#edPanel [data-act=kind][data-v=link]'); const asLink = await cls();
+    await p.click('#edPanel [data-act=kind][data-v=plain]'); const asPlain = await cls();
+    await p.click('#edPanel [data-act=kind][data-v=pri]'); const back = await cls();
+    T.ok("a button's kind is changed (Link, Plain, Main)", /linkbtn/.test(asLink) && !/\bbtn\b/.test(asLink) && /\bbtn\b/.test(asPlain) && !/pri|linkbtn/.test(asPlain) && /\bbtn pri big\b|pri/.test(back) && /big/.test(back), [asLink, asPlain, back].join(' → '));
+    await p.click('#edPanel [data-act=kind][data-v=link]'); await p.keyboard.press('Escape');
+    await p.evaluate(() => document.querySelector('#mform').scrollTop = 0); }
   // Delete: the chosen block is gone (also while editing); undo brings it back
   bl = await blocks(); const dk = bl[1].k; await p.mouse.click(bl[1].x, bl[1].y); await p.keyboard.press('Delete');
   const gone = await p.evaluate(k => getComputedStyle(document.querySelector(`[data-edk="${CSS.escape(k)}"]`)).display === 'none', dk); await p.keyboard.press('Control+z');
@@ -78,7 +88,7 @@ const T = report('editor');
   T.ok('an option shows in a game', await p.evaluate(() => document.documentElement.dataset.edcolors === 'b' && document.querySelectorAll('#cards .card').length > 0));
   await p.click('#edPanel [data-act=mini]'); T.ok('the panel shrinks to its title', !(await p.$('#edPanel .ed-body'))); await p.click('#edPanel [data-act=mini]');
   await p.click('#edPanel [data-tab=export]'); const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#edPanel [data-act=download]')]);
-  const txt = require('fs').readFileSync(await dl.path(), 'utf8'); T.ok('the design downloads as a file', /"title"/.test(txt) && /"bar": "bottom"/.test(txt) && /"bar": "top"/.test(txt), dl.suggestedFilename());
+  const txt = require('fs').readFileSync(await dl.path(), 'utf8'); T.ok('the design downloads as a file', /"title"/.test(txt) && /"kind": "link"/.test(txt) && /"bar": "bottom"/.test(txt) && /"bar": "top"/.test(txt), dl.suggestedFilename());
   const p2 = await openPage(b, 'no edit'); const reqs = []; p2.on('request', q => reqs.push(q.url())); await p2.goto(srv.url); await p2.waitForFunction(() => window.__ED && document.querySelector('#menu').open); await p2.waitForTimeout(800);
   T.ok('without ?edit the editor is never fetched', !reqs.some(u => /\/ed\.[0-9a-f]+\.js/.test(u)) && !(await p2.$('#edPanel')));
   T.ok('no page errors (assertions included)', !p.errors.length && !p2.errors.length, [...p.errors, ...p2.errors].slice(0, 3).join(' | '));
