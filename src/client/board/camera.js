@@ -8,7 +8,6 @@ import { S, MAP, UI, G, cur, canAct, passing } from '../state.js';
 import { geo, onGeo, measure, handTop } from '../geometry.js';
 import { after, frameDue } from '../frame.js';
 import { diag, diagLog, CHECKS } from '../debug.js';
-import { load, store } from '../store.js';
 import { layout, xy } from './layout.js';
 import { walking } from './pieces.js';
 import { terrainLive } from './terrain.js';
@@ -23,81 +22,21 @@ const hoverHooks = [];
 export function onViewMove(f) { hoverHooks.push(f); }
 const moved = () => { for (const f of hoverHooks) f(); };
 function applyView() {
-  if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0;
-    // zooming in: the stretched picture softens as it grows, so it is redrawn sharp mid-gesture, as often as the machine
-    // affords without dropping below 60 fps (owner, 2026-10-04): each 15% of growth, at most every 100 ms, while redraws
-    // prove free (midCheck); once one costs a frame, only when the zoom lands
-    if (!midLoaded) midNext();
-    const redraw = midOk && !midWatch && view.s / baked > 1.15 && performance.now() - lastBake > 100; if (redraw) { snap(); bake(); } // (on whole pixels: see bake)
-    placeStage(); if (redraw) { sharpen(); midCheck(); } });
+  if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; });
   scheduleSettle();
 }
 function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 250); if (CHECKS) { clearTimeout(restT); restT = setTimeout(restCheck, 700); } }
-/* at rest the board's layer sits on whole device pixels: the layer is a finished picture, and one placed between pixels is
-   blended by the graphics card and looks soft (owner, 2026-10-03, on a 4K screen); half a device pixel at most, unseen */
-const snap = () => { const d = devicePixelRatio; view.x = Math.round(view.x * d) / d; view.y = Math.round(view.y * d) / d; };
-/* the zoom baked into the board (#bscale), and the board redrawn sharp at it: Chrome keeps a will-change layer at the
-   resolution it chose before (so the baked zoom stayed soft, owner 2026-10-03), and picks it again only when the hint goes
-   and comes back: one frame without it, for every layer the zoom scales (the board's, and the pieces' and effects' inside
-   it). The caller writes the stage's transform in the same frame (its scale relative to the new bake), then sharpens */
-let lastBake = 0;
-/* what a mid-zoom redraw costs, measured: its tiles are drawn off the main thread but can still make a frame late a few
-   frames on, so every frame of the next 300 ms is watched. A frame more than 25 ms after the last (60 fps slipping): the
-   redraw cost a frame; then no more mid-zoom redraws this zoom, and the next zooms skip them too: 4, then 16, 64, up to 256
-   zooms while redraws keep costing, so a slow machine soon almost never tries again (owner, 2026-10-04: remember it, retry
-   rarely). A free redraw quarters the count, so trust comes back slowly. Kept across visits, per screen size (what a redraw
-   costs depends on its pixels): a reload doesn't start the trial over */
-const midKey = () => `${innerWidth * devicePixelRatio | 0}x${innerHeight * devicePixelRatio | 0}`;
-const midSaved = () => { const v = (load('midzoom') || '').split(' '); return v[0] === midKey() ? +v[1] : null; }; // (null: this screen not measured yet)
-let midOk = true, midWatch = false, midSkip = 0, midBack = 0, midLoaded = false;
-const midSave = () => store('midzoom', `${midKey()} ${midBack}`);
-function midCheck(calibrating) {
-  midWatch = true; let last = 0, end = 0;
-  const f = t => { if (!last) { last = t; end = t + 300; requestAnimationFrame(f); return; }
-    if (t - last > 25) { midWatch = false; midOk = false; midBack = Math.min(256, calibrating ? 64 : midBack ? midBack * 4 : 4); midSkip = midBack; midSave(); diag(`${calibrating ? 'the test redraw' : 'a mid-zoom redraw'} cost a frame (${(t - last).toFixed(0)} ms): the next ${midSkip} zooms redraw only when they land`); return; }
-    last = t; if (t < end) requestAnimationFrame(f); else { midWatch = false; if (midBack || calibrating) { midBack = midBack >= 16 ? midBack / 4 : 0; midSave(); } } };
-  requestAnimationFrame(f);
-}
-// (a zoom has landed: the next one may redraw mid-gesture, unless redraws are being skipped)
-function midNext() { if (!midLoaded) { midLoaded = true; midBack = midSkip = midSaved() || 0; } if (midSkip > 0) { midSkip--; midOk = false; } else midOk = true; }
-/* a screen not measured yet is measured before its first zoom (owner, 2026-10-04: a slow machine shouldn't have to hitch to
-   be found out): once the board is shown and still, one test redraw (the same picture: nothing visible changes) and its
-   frames watched as a mid-zoom redraw's are. A late frame there is unseen, nothing moving; it marks the machine slow (64
-   zooms without mid-zoom redraws, then the slow retries) */
-function midCalibrate() {
-  if (midSaved() !== null) return;
-  setTimeout(() => { if (cam.pointers || gliding || walking() || midWatch || midSaved() !== null) { midCalibrate(); return; }
-    midLoaded = true; sharpen(); midCheck(true); }, 1500);
-}
-function bake() {
-  // (a redraw keeps the pixel alignment it was drawn at: one made between pixels, mid-zoom, stayed misaligned once the zoom
-  // landed on whole pixels, and the whole board came out soft though drawn at the right resolution; 2026-10-04)
-  if (CHECKS) { const d = devicePixelRatio, off = v => Math.abs(v * d - Math.round(v * d)); assert(off(view.x) < .01 && off(view.y) < .01, `view: the board is redrawn on whole device pixels (at ${view.x}, ${view.y})`); }
-  diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; lastBake = performance.now(); $('#bscale').style.transform = `scale(${baked})`;
-}
-/* the sharp redraw, as Chrome documents it: the will-change hint taken away and given back a frame later, and Chrome draws
-   the layer anew at the resolution its scale needs. One owner for the hint: each request takes it away and only the latest
-   gives it back, two frames on (a frame drawn without it), so two redraws close together can't cancel each other */
-let sharpGen = 0;
-function sharpen() { const g = ++sharpGen, ls = [stage(), $('#pieces'), $('#bfx')]; for (const e of ls) e.style.willChange = 'auto';
-  requestAnimationFrame(() => requestAnimationFrame(() => { if (g === sharpGen) for (const e of ls) e.style.willChange = ''; })); }
-function placeStage() { stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; }
 function settle() {
-  if (cam.pointers || gliding) { scheduleSettle(); return; }
+  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    snap(); const redraw = Math.abs(view.s / baked - 1) >= .005; if (redraw) bake(); midNext();
-    placeStage(); if (redraw) sharpen(); // (made anew once its new place and scale are written: it takes the resolution they need)
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
   });
 }
-/* checks: once the board is at rest (no gesture or glide, settled), its layer sits on whole device pixels, read from the
-   transform it has (whoever wrote it) */
+/* checks: once the board is at rest (no gesture or glide, settled) */
 let restT = 0;
 function restCheck() {
   if (cam.pointers || gliding) { restT = setTimeout(restCheck, 300); return; }
-  const m = stage().style.transform.match(/translate3d\(([-\d.e]+)px,\s*([-\d.e]+)px/), d = devicePixelRatio; if (!m) return;
-  const off = v => Math.abs(v * d - Math.round(v * d));
-  assert(off(+m[1]) < .01 && off(+m[2]) < .01, `view: the board at rest sits on whole device pixels (at ${m[1]}, ${m[2]} css px, ${d} device px each)`);
   // what a redraw of the board records: its live elements (the terrain is one image; overlays, labels and pieces are live).
   // A few hundred; the terrain drawn live was 2,271, 9 ms of the main thread per redraw at maximum zoom
   const n = document.querySelectorAll('#bscale *').length;
@@ -134,10 +73,9 @@ export function fit(anim) {
   }
   cam.fitZoomed = view.s > whole * 1.01;
   // not animated: drawn sharp at this scale right away (no blurry frame, no later redraw once it's on screen)
-  if (anim) glide(); else { snap(); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; }
+  if (anim) glide(); else { baked = view.s; $('#bscale').style.transform = `scale(${baked})`; }
   applyView(); cam.userZoomed = false;
   document.documentElement.classList.add('boardready'); // the game area may show now (with its fonts): never an unfitted board
-  midCalibrate();
 }
 /* fit once the frame's updates are in (the prompt's height and the market's width are part of the fit); anim: glide there */
 export const fitSoon = anim => after(() => { measure(); fit(anim); });
