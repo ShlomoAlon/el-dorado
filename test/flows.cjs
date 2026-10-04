@@ -41,7 +41,8 @@ const T = report('flows');
   T.ok('a playable card', !!pick);
   // (hand.js keeps no id on the element: find the card by its position in the hand)
   const handIdx = await S(id => window.__ED.S.players[window.__ED.S.cur].hand.indexOf(id), pick.id);
-  const cardPos = async i => { await settle(p); return p.evaluate(i => { const els = [...document.querySelectorAll('#cards .card:not(.inplay)')];
+  // (measured with no card under the mouse: a card under it rises and its neighbours step aside, drawn away from where they rest)
+  const cardPos = async i => { await p.mouse.move(5, 5); await settle(p); return p.evaluate(i => { const els = [...document.querySelectorAll('#cards .card:not(.inplay)')];
     // the hand's cards sit left to right in hand order
     const byX = els.map(e => ({ e, r: e.getBoundingClientRect() })).sort((a, b) => a.r.left - b.r.left); if (!byX[i]) throw new Error('card ' + i + ' of ' + els.length + ': ' + els.map(e => e.className).join()); const r = byX[i].r; return { x: r.left + r.width * .5, y: r.top + r.height * .25 }; }, i); };
   // (pressed as a person taps: the pointer comes to rest on the card first (it rises), then a press of 150 ms)
