@@ -55,6 +55,24 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     walk(snaps.length && snaps[snaps.length - 1].args.snapshot, 0);
     ok('zoomed in fully, the board is drawn at the resolution it needs', out.some(([n]) => n === 'treg') && out.some(([n]) => n === 'pieces') && out.every(([, r]) => r >= .95), out.map(([n, r]) => `${n} ${(100 * r).toFixed(0)}%`).join(', ') || 'no board layers in the trace');
     await p.close(); }
+  { // 2c. frames the screen misses while zooming the way the owner does: bursts of wheel notches with short pauses, zooming
+    // again just as the last zoom's repaint starts (the settle comes at 250 ms), in and out, at his laptop's size. Counted from
+    // Chrome's own frame records (DroppedFrame: the frames DevTools marks dropped), which see the painting and the screen's
+    // drawing, not only the page's thread: the page-thread measures saw none of the hitches he felt (2026-10-04). (At 4K this
+    // machine, with no GPU, misses frames drawing the screen alone, so 4K is judged on his)
+    const p = await openPage(b, 'render', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25 }); errs.push(p.errors);
+    await p.goto('file://' + file); await p.waitForTimeout(700); await p.click('#sGo'); await p.waitForTimeout(2500); await p.mouse.move(690, 290); await p.waitForTimeout(300);
+    const tr = require('path').join(require('os').tmpdir(), 'rd-' + process.pid + '.json');
+    await b.startTracing(p, { path: tr, categories: ['disabled-by-default-devtools.timeline.frame'] });
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let burst = 0; burst < 16; burst++) { const dir = burst % 4 < 2 ? -1 : 1;
+      for (let i = 0; i < 6; i++) { await p.mouse.wheel(0, dir * 120); await p.waitForTimeout(25 + rnd() * 25); } await p.waitForTimeout(300 + rnd() * 150); }
+    await p.waitForTimeout(800); await b.stopTracing();
+    const ev = JSON.parse(require('fs').readFileSync(tr, 'utf8')); require('fs').unlinkSync(tr); const L = Array.isArray(ev) ? ev : ev.traceEvents;
+    const all = L.filter(e => e.name === 'BeginFrame').length, drop = L.filter(e => e.name === 'DroppedFrame').length, pc = 100 * drop / Math.max(1, all);
+    // (1.8%: the terrain drawn again in regions, one a frame, misses 1.2-1.4%; the whole board at once missed 2.1-2.6%)
+    ok('zooming in bursts misses few frames', all > 200 && pc <= 1.8, `${drop} of ${all} frames dropped (${pc.toFixed(1)}%)`);
+    await p.close(); }
   { // 3. wheel latency
     const p = await open(); const cdp = await p.context().newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); await p.mouse.move(600, 420);
     await b.startTracing(p, { categories: ['latencyInfo', 'input', 'benchmark'] });
