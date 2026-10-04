@@ -26,11 +26,28 @@ function applyView() {
   scheduleSettle();
 }
 function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 250); if (CHECKS) { clearTimeout(restT); restT = setTimeout(restCheck, 700); } }
+/* the board's layers keep the will-change hint for good (a pan or zoom only moves and stretches the picture already drawn),
+   so Chrome keeps the resolution it first drew them at: zoomed in, a third of the detail the zoom needs (2026-10-04). Chrome
+   picks a layer's resolution afresh, hint or not, when the layer's size changes (cc picture_layer_impl.cc: "mainly to reset
+   the preserved scale for will-change:transform"), so once a zoom has been baked in, a one-pixel mark at each layer's far
+   corner moves a pixel out or back: each is drawn again, once, at the zoom it shows. (The mark is the layer's first child,
+   so it is painted into that layer and not into a sibling's) */
+const NS = 'http://www.w3.org/2000/svg';
+let nudged = 0;
+function nudge() {
+  nudged ^= 1; const x = Math.ceil(layout().w) + 4 + nudged, y = Math.ceil(layout().h) + 4 + nudged;
+  // a shape in an SVG that paints into the layer (Chrome never lifts an SVG shape into a layer of its own): the board's own
+  // SVG; for the pieces and the effects, an SVG of no size of their own, in flow, first, so it paints with them
+  for (const id of ['board', 'pieces', 'bfx']) { const L = $('#' + id); let r = L.querySelector('rect.nudge');
+    if (!r) { r = document.createElementNS(NS, 'rect'); r.setAttribute('class', 'nudge'); r.setAttribute('width', 1); r.setAttribute('height', 1);
+      if (id === 'board') L.append(r); else { const sv = document.createElementNS(NS, 'svg'); sv.setAttribute('class', 'nudge'); sv.append(r); L.prepend(sv); } }
+    r.setAttribute('x', (id === 'board' ? layout().minX : 0) + x); r.setAttribute('y', (id === 'board' ? layout().minY : 0) + y); }
+}
 function settle() {
   if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; nudge();
   });
 }
 /* checks: once the board is at rest (no gesture or glide, settled) */
