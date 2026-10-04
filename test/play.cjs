@@ -18,7 +18,7 @@ const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
 // Measured 2026-10-03: 202 ms per action (33.5 core-s for 166 actions, 43.8 for 217), with animations 20x faster; 131 once
 // the explorers and the board's effects kept their own layers. Lower it as the game gets cheaper; never raise it to pass:
 // find what got slower
-const CPU_MS = 160;
+const CPU_MS = 100; // (measured 65 ms with the board's terrain as one image, 2026-10-04: about 1.5x)
 
 
 (async () => {

@@ -42,8 +42,8 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     else { const ls = +((tr.stage.match(/scale\(([\d.]+)\)/) || [])[1] || 1), bs = +((tr.bscale.match(/scale\(([\d.]+)\)/) || [])[1] || 1);
       ok('zoom baked in once it settles', Math.abs(ls - 1) <= .01 && bs > 1.2, `layer scale ${ls}, board scale ${bs} (${info})`);
       // the bake is a sharp redraw: the settled board is (nearly) as sharp as one drawn afresh (owner, 2026-10-03: a little
-      // softer at most); seen only where the layer rests on whole pixels (otherwise the screenshot redraws it)
-      ok('the settled zoom is as sharp as a fresh redraw', sa >= sc * .9, `edge energy settled ${sa.toFixed(2)}, fresh ${sc.toFixed(2)}`); }
+      // softer at most; 97% since 2026-10-04, when it measured equal); seen only where the layer rests on whole pixels (otherwise the screenshot redraws it)
+      ok('the settled zoom is as sharp as a fresh redraw', sa >= sc * .97, `edge energy settled ${sa.toFixed(2)}, fresh ${sc.toFixed(2)}`); }
     await p.close(); }
   { // 3. wheel latency
     const p = await open(); const cdp = await p.context().newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); await p.mouse.move(600, 420);
@@ -53,7 +53,7 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     for (const e of ev) { if (e.name !== 'EventLatency') continue; const k = e.id + (e.id2 ? JSON.stringify(e.id2) : ''); if (e.ph === 'b') open2.set(k, e.ts); else if (e.ph === 'e' && open2.has(k)) { lat.push((e.ts - open2.get(k)) / 1000); open2.delete(k); } }
     lat.sort((x, y) => x - y); const p95 = lat[Math.floor(lat.length * .95)] || 0;
     // the median is what's checked: over 24 events the slowest few swing between ~90 and ~240 ms from run to run, in old builds too
-    const med = lat[lat.length >> 1] || 0; ok('wheel zoom latency (CPU ÷4)', med < 80, `median ${med.toFixed(0)} ms, p95 ${p95.toFixed(0)} ms over ${lat.length} events`); await p.close(); }
+    const med = lat[lat.length >> 1] || 0; ok('wheel zoom latency (CPU ÷4)', med < 70, `median ${med.toFixed(0)} ms, p95 ${p95.toFixed(0)} ms over ${lat.length} events`); await p.close(); }
   const all = errs.flat(); ok('no page errors (assertions included)', !all.length, all.slice(0, 3).join(' | ') || 'none');
   await b.close(); console.log(fails ? `render: ${fails} failing` : 'render ok'); process.exit(fails ? 1 : 0);
 })();

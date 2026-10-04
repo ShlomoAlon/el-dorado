@@ -27,7 +27,7 @@ function cardArt(t){
 const ART = new Map(), artImgs = [];
 const artUrl = t => { let u = ART.get(t); if (!u) { u = URL.createObjectURL(new Blob([cardArt(t)], { type: 'image/svg+xml' })); ART.set(t, u); } return u; };
 export function artLoad() { for (const t of Object.keys(CT)) { const i = new Image(); i.src = artUrl(t); artImgs.push(i); } return Promise.all(artImgs.map(i => i.decode())); }
-const CARD_MAX = 30;
+const CARD_MAX = 26; // (the largest card face, a 5-icon card: 26; a card type's face is fixed, so any growth is a change of design)
 let artChecked = false;
 // (checks: every card art shown is loaded: a card never appears without its art, filled in a frame later)
 function checkArt() { artChecked = false; for (const i of document.querySelectorAll('.c-art img')) if (i.checkVisibility({ visibilityProperty: true, opacityProperty: true })) assert(i.complete && i.naturalWidth > 0, 'view: a card\'s art is loaded before the card shows'); }

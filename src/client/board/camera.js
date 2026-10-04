@@ -54,7 +54,7 @@ function restCheck() {
   const n = document.querySelectorAll('#bscale *').length;
   assert(terrainLive || n <= LIVE_MAX, `view: the board is a few hundred live elements, its fixed terrain one image (${n})`);
 }
-const LIVE_MAX = 800;
+const LIVE_MAX = 650; // (most seen: 531, four players; 2026-10-04)
 /* the part of the game area the board should fill: under the prompt, left of the market, above the hand */
 function safeRect() {
   const W = geo.app.width, H = geo.app.height, phone = W < 600;
