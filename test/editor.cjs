@@ -87,9 +87,16 @@ const T = report('editor');
   T.ok('a new box, and an arrow drawn from it', await p.evaluate(() => !!document.querySelector('#edPanel .ed-node[data-node="help@none"]') && [...document.querySelectorAll('#edPanel text.ed-ar')].some(t => t.textContent === 'Back to the title')));
   // the directions: the arrow's tag says what it changes; made to go to Settings in any state, it changes the menu only
   T.ok('the directions list each transition, tagged with what it changes', await p.evaluate(() => { const r = [...document.querySelectorAll('#edPanel [data-dir="help@none"] .ed-dr')].find(x => x.querySelector('input').value === 'Back to the title'); return !!r && r.querySelector('.ed-tag').textContent === 'menu'; }));
-  await p.click('#edPanel .ed-node[data-node="setup@game"]');
-  T.ok('a box clicked in the chart is shown in the directions', await p.evaluate(() => { const r = document.querySelector('#edPanel .ed-dir.on'), d = document.querySelector('#edPanel .ed-dirs'); if (!r) return false;
-    const a = r.getBoundingClientRect(); return r.dataset.dir === 'setup@game' && a.top >= 0 && a.top < innerHeight - 40 && !!d; }));
+  await p.click('#edPanel .ed-node[data-node="results@none"]');
+  T.ok('a box clicked in the chart is shown in the directions', await p.evaluate(() => { const r = document.querySelector('#edPanel .ed-ds.on'), d = document.querySelector('#edPanel .ed-dirs'); if (!r) return false;
+    const a = r.getBoundingClientRect(), b = d.getBoundingClientRect(); return r.dataset.dir === 'results@none' && a.top >= b.top - 1 && a.top < b.bottom - 20 && d.scrollTop > 0; }));
+  T.ok('the chart stays whole while the directions scroll', await p.evaluate(() => { const c = document.querySelector('#edPanel .ed-fc').getBoundingClientRect(), w = document.querySelector('#edPanel .ed-flowwrap').getBoundingClientRect(); return c.top >= w.top - 1 && c.bottom <= w.bottom + 1 && document.querySelector('#edPanel').scrollTop === 0; }));
+  // menus and states renamed, a state added
+  await p.fill('#edPanel [data-menu="setup"] input.ed-mname', 'Main menu'); await p.press('#edPanel [data-menu="setup"] input.ed-mname', 'Enter');
+  T.ok('a menu renamed: every box of it', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-node[data-node^="setup@"] .m')].every(t => /Main menu/.test(t.textContent))));
+  answers.push('Watching a replay'); await p.click('#edPanel [data-act=fl-addstate]');
+  T.ok('the directions: one entry per menu, a part for each state it is in', await p.evaluate(() => document.querySelectorAll('#edPanel .ed-dir[data-menu="setup"]').length === 1 && document.querySelectorAll('#edPanel .ed-dir[data-menu="setup"] .ed-ds').length === 2));
+  T.ok('a state added, and offered for boxes', await p.evaluate(() => [...document.querySelectorAll('#flState option')].some(o => o.textContent === 'Watching a replay')));
   await p.selectOption('#edPanel [data-dir="help@none"] [data-act=fl-nstate]', '*');
   T.ok('a box made any state', await p.evaluate(() => !!document.querySelector('#edPanel .ed-node[data-node="help@*"]') && !document.querySelector('#edPanel .ed-node[data-node="help@none"]')));
   { const id = await p.evaluate(() => document.querySelector('#edPanel [data-dir="setup@game"] .ed-dr[data-darrow]').dataset.darrow);

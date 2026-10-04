@@ -43,12 +43,25 @@ const undo = () => { if (!undos.length) return; redos.push(last); restore(undos.
 /* ---------- options: sets to flip between ---------- */
 const AREAS = [
   { id: 'colors', name: 'Look', options: [['a', 'Current'], ['b', 'Brass'], ['c', 'Jungle'], ['d', 'Water']] },
-  { id: 'shape', name: 'Button shape', options: [['a', 'Current'], ['b', 'Rounded'], ['c', 'Square']] },
-  { id: 'heads', name: 'Headings', options: [['a', 'Current'], ['b', 'Serif'], ['c', 'Large serif']] },
   // a game feature, not a look: the page's own setting (UI.reshuffle, hand.js), which only this sets until one is chosen
   { id: 'reshuffle', name: 'Reshuffle', options: [['a', 'Current'], ['b', 'Cards fly over'], ['c', 'Fly over, riffle']], set: v => { ED.UI.reshuffle = { a: 'instant', b: 'gather', c: 'riffle' }[v]; } },
 ];
-const applyOptions = () => { for (const a of AREAS) { const v = D.options[a.id] || 'a'; if (a.set) a.set(v); else document.documentElement.dataset['ed' + a.id] = v; } ED.render(); };
+/* each look tuned: a few rows, each changing one part (the CSS below), each look remembering its own; its first choice is the
+   look's own (owner, 2026-10-05: options to play with, to decide which to go with) */
+const LOOKS = { b: { acc: ['Polished gold', 'Aged bronze', 'Copper'], hd: 'serif', orn: 'frame', cor: 'brass', pri: 'metal', bg: 'tint' },
+  c: { acc: ['Lime', 'Emerald', 'Orchid'], hd: 'italic', orn: 'tex', cor: 'leaf', pri: 'solid', bg: 'tint' },
+  d: { acc: ['Signal cyan', 'Deep teal', 'Coral'], hd: 'caps', orn: 'frame', cor: 'sharp', pri: 'flat', bg: 'tint' } };
+const TUNE = [{ id: 'acc', name: 'Accent' }, { id: 'hd', name: 'Headings', options: [['serif', 'Serif'], ['italic', 'Italic serif'], ['caps', 'Capitals']] },
+  { id: 'orn', name: 'Ornament', options: [['plain', 'Plain'], ['tex', 'Textured'], ['frame', 'Framed']] },
+  { id: 'cor', name: 'Corners', options: [['soft', 'Soft'], ['round', 'Round'], ['sharp', 'Sharp']] },
+  { id: 'pri', name: 'Main button', options: [['metal', 'Metal'], ['solid', 'Solid'], ['flat', 'Flat'], ['outline', 'Outlined']] },
+  { id: 'bg', name: 'Board backdrop', options: [['tint', 'Tinted'], ['plain', 'Neutral']] }];
+const tuneOpts = (look, t) => t.id === 'acc' ? LOOKS[look].acc.map((n, i) => [String(i + 1), n]) : [['own', "Look's own"], ...t.options.filter(([v]) => v !== LOOKS[look][t.id])];
+const tuned = (look, t) => { const v = D.options[look + '.' + t.id] || (t.id === 'acc' ? '1' : 'own'); return v === 'own' ? LOOKS[look][t.id] : v; };
+function applyOptions() { const h = document.documentElement.dataset, look = D.options.colors || 'a';
+  for (const a of AREAS) { const v = D.options[a.id] || 'a'; if (a.set) a.set(v); else h['ed' + a.id] = v; }
+  if (LOOKS[look]) { h.edlook = look; for (const t of TUNE) h['ed' + t.id] = tuned(look, t); } else { delete h.edlook; for (const t of TUNE) delete h['ed' + t.id]; }
+  ED.render(); }
 
 /* ---------- the flowchart: menus in states, and the arrows between them (owner, 2026-10-05) ----------
    The player is always in one state (nowhere, in a game, in a room). A box is a menu as it is in one state: the start menu
@@ -57,17 +70,19 @@ const applyOptions = () => { for (const a of AREAS) { const v = D.options[a.id] 
    state or both. The board and the replay viewer are boxes too, with no menu to lay out. The default flowchart is a proposal
    (owner: "design a flowchart that you think makes sense"), not the page as it is: a menu it names that the page hasn't got
    is a blank screen to lay out, a button the page hasn't got is made on its menu, one it has is the page's own (el) */
-const STATES = [['none', 'Nowhere'], ['game', 'In a game'], ['room', 'In a room']];
-const stLabel = st => st === '*' ? 'Any state' : (STATES.find(([v]) => v === st) || [st, st])[1]; // (*: a box for any state; an arrow to one keeps the state)
+/* the states: the page's three (renamable here) and any added here (a state only the design has: laid out from the flowchart) */
+const STATE0 = [['none', 'Nowhere'], ['game', 'In a game'], ['room', 'In a room']];
+const STATES = { [Symbol.iterator]: function* () { const nm = D.stateNames || {}; for (const [v, n] of STATE0) yield [v, nm[v] || n]; for (const v of D.moreStates || []) yield [v, nm[v] || v]; } };
+const stLabel = st => st === '*' ? 'Any state' : ([...STATES].find(([v]) => v === st) || [st, st])[1]; // (*: a box for any state; an arrow to one keeps the state)
 /* what an arrow changes, read from its two ends (never stored, so it can't disagree with them): the menu, the state, or both */
 function changes(a) { const [m1, s1] = a.from.split('@'), [m2, s2] = a.to.split('@'), menu = m1 !== m2, state = s2 !== '*' && s1 !== s2;
   return menu && state ? 'menu + state' : state ? 'state' : menu ? 'menu' : 'nothing'; }
 const NOLAY = ['board', 'viewer']; // (no menu: the game, a replay)
 const NAMES = { setup: 'Start menu', online: 'Online', replays: 'Replays', room: 'Room lobby', board: 'Board', viewer: 'Replay viewer', title: 'Title', results: 'Results' };
-const nameOf = m => NAMES[m] || m;
+const nameOf = m => (D.names && D.names[m]) || NAMES[m] || m; // (a menu renamed here: D.names)
 const SEED = { extra: ['title', 'results'], first: { none: 'title', game: 'setup', room: 'room' },
-  nodes: [['title@none', 0, 100], ['setup@none', 300, 0], ['online@none', 300, 100], ['replays@none', 300, 200], ['viewer@none', 300, 300],
-    ['board@game', 600, 0], ['setup@game', 900, 0], ['room@room', 600, 200], ['results@none', 900, 200]],
+  nodes: [['title@none', 0, 100], ['setup@none', 280, 0], ['online@none', 280, 100], ['replays@none', 280, 200], ['viewer@none', 280, 300],
+    ['board@game', 560, 0], ['setup@game', 840, 0], ['room@room', 560, 200], ['results@none', 840, 200]],
   arrows: [['title@none', 'setup@none', 'Play on this device'], ['title@none', 'online@none', 'Play online'], ['title@none', 'replays@none', 'Replays'],
     ['setup@none', 'title@none', 'Back'], ['online@none', 'title@none', 'Back'], ['replays@none', 'title@none', 'Back'],
     ['setup@none', 'board@game', 'Start expedition', '#sGo'], ['online@none', 'room@room', 'Create room · Join · Quick match', '#cGo'],
@@ -262,7 +277,7 @@ function flowSvg() {
     const X1 = x1 + nx * o, Y1 = y1 + ny * o, X2 = x2 + nx * o, Y2 = y2 + ny * o, on = fsel && fsel.arrow === a.id, ch = changes(a), out = fsel && fsel.node === a.from, cls = `ed-ar ${a.kind}${a.el ? ' own' : ''}${ch.includes('state') ? ' st' : ''}${out ? ' out' : ''}${on ? ' on' : ''}`;
     lines += `<g class="${cls}" data-arrow="${a.id}"><line x1="${X1}" y1="${Y1}" x2="${X2}" y2="${Y2}" class="hit"/><line x1="${X1}" y1="${Y1}" x2="${X2}" y2="${Y2}" marker-end="url(#edHead${on ? 'On' : ''})"/></g>`;
     // its words: beside an upright arrow, on a level one; slid along it to the first place clear of every box and word already placed
-    const up = Math.abs(Y2 - Y1) > Math.abs(X2 - X1), w = a.label.length * 6.2 + 6, side = o >= 0 ? 1 : -1;
+    const up = Math.abs(Y2 - Y1) > Math.abs(X2 - X1), w = a.label.length * 7.1 + 6, side = o >= 0 ? 1 : -1;
     for (const f of [.5, .38, .62, .28, .72, .2, .8]) { const mx = X1 + (X2 - X1) * f, my = Y1 + (Y2 - Y1) * f;
       const r = up ? { x: side > 0 ? mx + 5 : mx - 5 - w, y: my - 8, w, h: 14 } : { x: mx - w / 2, y: my - 8, w, h: 14 };
       const hits = q => r.x < q.x + q.w && q.x < r.x + r.w && r.y < q.y + q.h && q.y < r.y + r.h;
@@ -271,7 +286,7 @@ function flowSvg() {
   const boxes = D.nodes.map(n => { const [m, st] = n.k.split('@'), first = D.first[st] === m, on = fsel && fsel.node === n.k;
     return `<g class="ed-node ${st}${on ? ' on' : ''}${NOLAY.includes(m) ? ' nolay' : ''}" data-node="${esc(n.k)}" transform="translate(${n.x},${n.y})"><rect width="${NW}" height="${NH}" rx="8"/>`
       + `<text x="10" y="18" class="m">${first ? '★ ' : ''}${esc(nameOf(m))}</text><text x="10" y="33" class="s">${esc(stLabel(st).toLowerCase())}</text></g>`; }).join('');
-  return `<svg class="ed-fc" viewBox="-10 -10 ${W} ${H}" width="${W}" height="${H}"><defs>`
+  return `<svg class="ed-fc" viewBox="-10 -10 ${W} ${H}"><defs>`
     + ['', 'On'].map(k => `<marker id="edHead${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="hd${k}"/></marker>`).join('')
     + `</defs>${lines}${boxes}${labels}</svg>`;
 }
@@ -281,29 +296,38 @@ let scrollDir = false;
 const stOpts = (cur, withAny, anyName) => [...(withAny ? [['*', anyName]] : []), ...STATES].map(([v, n]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${esc(n)}</option>`).join('');
 function flowBody() {
   const menus = [...new Set([...sections().map(s => s.dataset.screen), ...NOLAY, ...D.extra])], mOpts = cur => menus.map(m => `<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(nameOf(m))}</option>`).join('');
-  const dirs = [...D.nodes].sort((p, q) => p.y - q.y || p.x - q.x).map(n => { const [m, st] = n.k.split('@'), lay = !NOLAY.includes(m), on = fsel && fsel.node === n.k;
-    const rows = D.arrows.filter(a => a.from === n.k).map(a => { const [tm, ts] = a.to.split('@'), ar = fsel && fsel.arrow === a.id;
-      return `<div class="ed-dr${ar ? ' on' : ''}" data-darrow="${a.id}"><select data-act="fl-akind" data-id="${a.id}"><option value="button"${a.kind === 'button' ? ' selected' : ''}>Button</option><option value="event"${a.kind === 'event' ? ' selected' : ''}>Event</option></select>`
-        + `<input data-act="fl-aword" data-id="${a.id}" value="${esc(a.label)}" maxlength="48"> → <select data-act="fl-ato-m" data-id="${a.id}">${mOpts(tm)}</select> · <select data-act="fl-ato-s" data-id="${a.id}">${stOpts(ts, true, 'state stays the same')}</select>`
-        + `<span class="ed-tag ${changes(a).includes('state') ? 'st' : ''}">${changes(a)}</span>${btn('fl-rmarrow', '×', false, a.id, 'title="Remove this transition"')}</div>`; }).join('');
-    return `<div class="ed-dir${on ? ' on' : ''}" data-dir="${esc(n.k)}"><div class="ed-dh"><b>${D.first[st] === m ? '★ ' : ''}${esc(nameOf(m))}</b><select data-act="fl-nstate" data-k="${esc(n.k)}">${stOpts(st, true, 'Any state')}</select>`
-      + `${lay ? btn('fl-lay', 'Lay out', false, n.k) : ''}${btn('fl-link', '+ Button', false, n.k, 'data-kind="button" title="Then click the box it goes to"')}${btn('fl-link', '+ Event', false, n.k, 'data-kind="event" title="Then click the box it leads to"')}`
-      + `${lay && st !== '*' ? btn('fl-first', D.first[st] === m ? '★ Opens here' : '☆ Open here', D.first[st] === m, n.k, `title="The menu opens on this one ${stLabel(st).toLowerCase()}"`) : ''}${btn('fl-rmnode', 'Remove', false, n.k)}</div>${rows || '<div class="ed-dr none">No way out yet</div>'}</div>`; }).join('');
-  const add = `<div class="ed-dh">+ Box: <select id="flMenu">${mOpts('')}<option value="">New menu…</option></select><select id="flState">${stOpts('none', true, 'Any state')}</select>${btn('fl-add', 'Add')}</div>`;
-  return `<div class="ed-flowwrap">${flowSvg()}</div>`
-    + (linking ? `<p class="ed-link">Click the box this ${linking.kind === 'button' ? 'button' : 'event'} goes to. ${btn('fl-cancel', 'Cancel')}</p>` : `<p class="ed-hint">A box is a menu in a state (or in any state); an arrow is a button on it (solid) or something that happens (dashed); blue changes the state. Drag boxes to arrange them; click one to find it below.</p>`)
-    + (note ? `<p class="ed-hint">${esc(note)}</p>` : '') + `<div class="ed-dirs">${dirs}${add}</div><hr>${btn('fl-reset', 'Back to the default flowchart')}`;
+  // one entry per menu (owner, 2026-10-05), its ways out grouped by the state it is in: each group is one box of the chart
+  const rowsOf = k => D.arrows.filter(a => a.from === k).map(a => { const [tm, ts] = a.to.split('@'), ar = fsel && fsel.arrow === a.id;
+    return `<div class="ed-dr${ar ? ' on' : ''}" data-darrow="${a.id}"><select data-act="fl-akind" data-id="${a.id}"><option value="button"${a.kind === 'button' ? ' selected' : ''}>Button</option><option value="event"${a.kind === 'event' ? ' selected' : ''}>Event</option></select>`
+      + `<input data-act="fl-aword" data-id="${a.id}" value="${esc(a.label)}" maxlength="48"><span>→</span><select data-act="fl-ato-m" data-id="${a.id}">${mOpts(tm)}</select><span>·</span><select data-act="fl-ato-s" data-id="${a.id}">${stOpts(ts, true, 'state stays the same')}</select>`
+      + `<span class="ed-tag ${changes(a).includes('state') ? 'st' : ''}">${changes(a)}</span>${btn('fl-rmarrow', '×', false, a.id, 'title="Remove this transition"')}</div>`; }).join('');
+  const byMenu = new Map(); for (const n of [...D.nodes].sort((p, q) => p.y - q.y || p.x - q.x)) { const m = n.k.split('@')[0]; if (!byMenu.has(m)) byMenu.set(m, []); byMenu.get(m).push(n.k); }
+  const dirs = [...byMenu].map(([m, ks]) => { const lay = !NOLAY.includes(m), free = [['*', 'Any state'], ...STATES].filter(([v]) => !ks.includes(m + '@' + v));
+    const groups = ks.map(k => { const st = k.split('@')[1], on = fsel && fsel.node === k;
+      return `<div class="ed-ds${on ? ' on' : ''}" data-dir="${esc(k)}"><div class="ed-dh"><select data-act="fl-nstate" data-k="${esc(k)}" title="The state this part is for">${stOpts(st, true, 'Any state')}</select>`
+        + `${lay ? btn('fl-lay', 'Lay out', false, k) : ''}${btn('fl-link', '+ Button', false, k, 'data-kind="button" title="Then click the box it goes to"')}${btn('fl-link', '+ Event', false, k, 'data-kind="event" title="Then click the box it leads to"')}`
+        + `${lay && st !== '*' ? btn('fl-first', D.first[st] === m ? '★ Opens here' : '☆ Open here', D.first[st] === m, k, `title="The menu opens on this one ${stLabel(st).toLowerCase()}"`) : ''}${btn('fl-rmnode', '×', false, k, 'title="Remove this state from the menu"')}</div>`
+        + `${rowsOf(k) || '<div class="ed-dr none">No way out yet</div>'}</div>`; }).join('');
+    return `<div class="ed-dir" data-menu="${esc(m)}"><div class="ed-dh ed-mh"><input class="ed-mname" data-act="fl-mname" data-m="${esc(m)}" value="${esc(nameOf(m))}" maxlength="32" title="The menu's name">`
+      + `${free.length ? `<select data-act="fl-addst" data-m="${esc(m)}"><option value="">+ in another state…</option>${free.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join('')}</select>` : ''}</div>${groups}</div>`; }).join('');
+  const add = `<div class="ed-dh"><span>+ Box:</span><select id="flMenu">${mOpts('')}<option value="">New menu…</option></select><select id="flState">${stOpts('none', true, 'Any state')}</select>${btn('fl-add', 'Add')}</div>`
+    + `<div class="ed-states"><b>States</b>${[...STATES].map(([v, n]) => `<div class="ed-dh"><input data-act="fl-sname" data-s="${esc(v)}" value="${esc(n)}" maxlength="32">${(D.moreStates || []).includes(v) ? btn('fl-rmstate', 'Remove', false, v) : '<span class="ed-hint">the page\'s</span>'}</div>`).join('')}<div class="ed-dh">${btn('fl-addstate', '+ State')}</div></div>`;
+  // (two panes: the chart, always whole, and the directions, which alone scroll: owner, 2026-10-05)
+  return `<div class="ed-chart">${linking ? `<p class="ed-link">Click the box this ${linking.kind === 'button' ? 'button' : 'event'} goes to. ${btn('fl-cancel', 'Cancel')}</p>` : `<p class="ed-hint">A box is a menu in a state (or in any state); an arrow is a button on it (solid) or something that happens (dashed); blue changes the state. Drag boxes to arrange them; click one to find it in the directions.</p>`}`
+    + `<div class="ed-flowwrap">${flowSvg()}</div>${note ? `<p class="ed-hint">${esc(note)}</p>` : ''}<p>${btn('fl-reset', 'Back to the default flowchart')}</p></div><div class="ed-dirs">${dirs}${add}</div>`;
 }
 function panel() {
   const body = mini ? '' : tab === 'layout' ? layoutBody() : tab === 'flow' ? flowBody()
-    : tab === 'options' ? AREAS.map(a => row(a.name, a.options.map(([id, n]) => btn('opt', n, (D.options[a.id] || 'a') === id, id, `data-area="${a.id}"`)).join(''))).join('')
+    : tab === 'options' ? AREAS.map(a => row(a.name, a.options.map(([id, n]) => btn('opt', n, (D.options[a.id] || 'a') === id, id, `data-area="${a.id}"`)).join(''))
+        + (a.id === 'colors' && LOOKS[D.options.colors] ? `<div class="ed-tune">${TUNE.map(t => { const k = D.options.colors + '.' + t.id, cur = D.options[k] || (t.id === 'acc' ? '1' : 'own');
+          return row(t.name, tuneOpts(D.options.colors, t).map(([v, n]) => btn('opt', n, cur === v, v, `data-area="${k}"`)).join('')); }).join('')}</div>` : '')).join('')
     : `<p>Your design is kept in this browser as you go. To send it to me, download it and attach the file.</p>${row('', btn('download', 'Download design') + btn('import', 'Load a design file…'))}${row('', btn('clear', 'Start over'))}`;
   const html = `<div class="ed-head"><b>Design</b><button data-act="editmode" class="ed-edit${editOn ? ' on' : ''}" title="${editOn ? 'Stop editing: the menu works again' : 'Edit the menu on show: clicks move and choose its blocks'}">${editOn ? '■ Stop editing' : '✎ Edit'}</button><span>${mini ? '' : ['layout', 'flow', 'options', 'export'].map(t => `<button data-tab="${t}" class="${tab === t ? 'on' : ''}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}`
     + `${btn('undo', '↶', false, '', `title="Undo (Ctrl+Z)" ${undos.length ? '' : 'disabled'}`)}${btn('redo', '↷', false, '', `title="Redo (Ctrl+Shift+Z)" ${redos.length ? '' : 'disabled'}`)}${btn('mini', mini ? '▾' : '▴', false, '', `title="${mini ? 'Open' : 'Shrink it out of the way'}"`)}</span></div>${mini ? '' : `<div class="ed-body">${body}</div>`}`;
-  if (box.__h !== html) { box.__h = html; box.innerHTML = html; }
+  if (box.__h !== html) { const d0 = box.querySelector('.ed-dirs'), top = d0 ? d0.scrollTop : 0; box.__h = html; box.innerHTML = html; const d1 = box.querySelector('.ed-dirs'); if (d1) d1.scrollTop = top; } // (a redraw keeps the directions where they were scrolled)
   if (scrollDir && fsel) { scrollDir = false; const d = box.querySelector('.ed-dirs'), r = box.querySelector(fsel.arrow ? `[data-darrow="${fsel.arrow}"]` : `[data-dir="${CSS.escape(fsel.node)}"]`);
-    if (d && r) { const h = box.querySelector('.ed-head'); box.scrollTop += r.getBoundingClientRect().top - box.getBoundingClientRect().top - (h ? h.offsetHeight : 0) - 8; } } // (the panel scrolls, its title bar staying) // (the list's own scroll only: the page stays where it is)
-  box.classList.toggle('wide', tab === 'flow' && !mini); box.classList.toggle('editing', editOn);
+    if (d && r) { const m = r.closest('.ed-dir'), fits = m && r.offsetTop + r.offsetHeight - m.offsetTop <= d.clientHeight; d.scrollTop = (fits ? m.offsetTop : r.offsetTop) - 8; } } // (the directions scroll, to the menu's name when the part fits below it; the chart stays) // (the list's own scroll only: the page stays where it is)
+  box.classList.toggle('wide', tab === 'flow' && !mini); box.classList.toggle('flowtab', tab === 'flow' && !mini); box.classList.toggle('editing', editOn);
   box.style.left = at.x === null ? '' : at.x + 'px'; box.style.right = at.x === null ? '12px' : ''; box.style.top = at.y + 'px';
 }
 function act(t, a, v) {
@@ -330,6 +354,15 @@ function act(t, a, v) {
     if (a === 'fl-akind') ar.kind = v; else if (a === 'fl-aword') ar.label = v.trim().slice(0, 48) || ar.label;
     else { const [tm, ts] = ar.to.split('@'), nk = a === 'fl-ato-m' ? v + '@' + ts : tm + '@' + v, from = D.nodes.find(x => x.k === ar.from);
       if (!D.nodes.some(x => x.k === nk)) D.nodes.push({ k: nk, x: from.x + 300, y: Math.max(...D.nodes.map(x => x.y)) + 100 }); ar.to = nk; } } // (a box it now goes to that wasn't there: made)
+  else if (a === 'fl-addst') { if (!v) return; const k = t.dataset.m + '@' + v, near = D.nodes.filter(x => x.k.startsWith(t.dataset.m + '@'));
+    if (!D.nodes.some(x => x.k === k)) D.nodes.push({ k, x: near.length ? near[0].x : 20, y: Math.max(...D.nodes.map(x => x.y)) + 100 }); fsel = { node: k }; scrollDir = true; }
+  else if (a === 'fl-mname') { (D.names || (D.names = {}))[t.dataset.m] = v.trim().slice(0, 32) || nameOf(t.dataset.m); }
+  else if (a === 'fl-sname') { (D.stateNames || (D.stateNames = {}))[t.dataset.s] = v.trim().slice(0, 32) || stLabel(t.dataset.s); }
+  else if (a === 'fl-addstate') { const n = (prompt('A name for the new state (for example: watching a replay)') || '').trim().slice(0, 32); if (!n) return;
+    const id = 'st' + Date.now().toString(36); (D.moreStates || (D.moreStates = [])).push(id); (D.stateNames || (D.stateNames = {}))[id] = n; }
+  else if (a === 'fl-rmstate') { if (D.nodes.some(x => x.k.endsWith('@' + v)) && !confirm(`Remove the state "${stLabel(v)}" and its boxes?`)) return;
+    for (const x of D.nodes.filter(x => x.k.endsWith('@' + v))) { D.arrows = D.arrows.filter(r => r.from !== x.k && r.to !== x.k); delete D.screens[x.k]; }
+    D.nodes = D.nodes.filter(x => !x.k.endsWith('@' + v)); D.moreStates = D.moreStates.filter(x => x !== v); delete D.first[v]; fsel = null; }
   else if (a === 'fl-nstate') { const k = t.dataset.k, [m, st] = k.split('@'), nk = m + '@' + v; if (nk === k) return;
     if (D.nodes.some(x => x.k === nk)) { note = `There is already a box for ${nameOf(m)} · ${stLabel(v).toLowerCase()}.`; return panel(); }
     D.nodes.find(x => x.k === k).k = nk; for (const ar of D.arrows) { if (ar.from === k) ar.from = nk; if (ar.to === k) ar.to = nk; }
@@ -361,7 +394,8 @@ box.addEventListener('pointerdown', e => { if (tab !== 'flow' || !e.target.close
     const w = (prompt(kind === 'button' ? "The button's words" : 'What happens (for example: the game ends)') || '').trim().slice(0, 48);
     if (w && to !== from) { const id = 'a' + Date.now().toString(36); D.arrows.push({ id, from, to, label: w, kind }); fsel = { arrow: id }; save(); } return panel(); }
   if (g) { const n = D.nodes.find(x => x.k === g.dataset.node), x0 = n.x, y0 = n.y, sx = e.clientX, sy = e.clientY; fsel = { node: n.k }; scrollDir = true; panel();
-    const mv = ev => { n.x = Math.max(0, Math.round((x0 + ev.clientX - sx) / 10) * 10); n.y = Math.max(0, Math.round((y0 + ev.clientY - sy) / 10) * 10); panel(); },
+    const k = e.target.closest('svg').getScreenCTM().a; // (the chart is drawn scaled to fit its pane)
+    const mv = ev => { n.x = Math.max(0, Math.round((x0 + (ev.clientX - sx) / k) / 10) * 10); n.y = Math.max(0, Math.round((y0 + (ev.clientY - sy) / k) / 10) * 10); panel(); },
       up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); save(); panel(); };
     addEventListener('pointermove', mv); addEventListener('pointerup', up); return; }
   fsel = ar ? { arrow: ar.dataset.arrow } : null; linking = null; scrollDir = !!ar; panel(); });
@@ -378,24 +412,26 @@ const css = document.createElement('style'); css.textContent = `
 #edPanel button,#edPanel select{font:inherit;color:inherit;background:#22302a;border:1px solid #4a5a50;border-radius:7px;padding:2px 7px;margin:2px;cursor:pointer}
 #edPanel button.on{background:#e9b24a;color:#2a1c05;border-color:#e9b24a}#edPanel button:disabled{opacity:.35;cursor:default}
 #edPanel .ed-r{display:flex;justify-content:space-between;align-items:center;gap:6px;margin:4px 0}#edPanel .ed-r span{display:flex;flex-wrap:wrap;justify-content:flex-end}
-#edPanel .ed-flowwrap{overflow:auto;max-height:min(470px,60vh);background:#0b120f;border-radius:10px;padding:6px}
-#edPanel .ed-fc{display:block;font:12px system-ui,sans-serif;user-select:none;touch-action:none}
+#edPanel .ed-flowwrap{flex:1;min-height:0;background:#0b120f;border-radius:10px;padding:6px}
+#edPanel .ed-fc{display:block;width:100%;height:100%;font:12px system-ui,sans-serif;user-select:none;touch-action:none}
+#edPanel.flowtab{height:calc(100vh - 24px);max-height:none;overflow:hidden;display:flex;flex-direction:column}#edPanel.flowtab .ed-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:12px}
+#edPanel .ed-chart{display:flex;flex-direction:column;min-height:0}#edPanel .ed-chart p{margin:4px 0}
 #edPanel .ed-node{cursor:grab}#edPanel .ed-node rect{fill:#16211c;stroke:#4a5a50;stroke-width:1.5}#edPanel .ed-node.game rect{fill:#13261b;stroke:#3f7a55}#edPanel .ed-node.room rect{fill:#141f2c;stroke:#46688c}
 #edPanel .ed-node.nolay rect{stroke-dasharray:4 3}#edPanel .ed-node.on rect{stroke:#e9b24a;stroke-width:2.5}
-#edPanel .ed-node .m{fill:#ecf1ec;font-weight:700;font-size:13px}#edPanel .ed-node .s{fill:#98aa9f;font-size:11px}
+#edPanel .ed-node .m{fill:#ecf1ec;font-weight:700;font-size:15px}#edPanel .ed-node .s{fill:#98aa9f;font-size:12px}
 #edPanel .ed-ar line{stroke:#8aa196;stroke-width:1.6;fill:none}#edPanel .ed-ar.event line:not(.hit){stroke-dasharray:5 4}#edPanel .ed-ar line.hit{stroke:transparent;stroke-width:12;cursor:pointer}
 #edPanel .ed-ar.on line:not(.hit){stroke:#e9b24a;stroke-width:2.2}#edPanel .hd{fill:#8aa196}#edPanel .hdOn{fill:#e9b24a}
 #edPanel .ed-ar.st line:not(.hit){stroke:#6fb3dd}#edPanel text.ed-ar.st{fill:#bfe0f5}
 #edPanel .ed-ar.out line:not(.hit){stroke-dasharray:7 5;animation:edFlow .7s linear infinite}@keyframes edFlow{to{stroke-dashoffset:-12}}
 @media (prefers-reduced-motion:reduce){#edPanel .ed-ar.out line:not(.hit){animation:none}}
-#edPanel .ed-dirs{margin-top:8px;border-top:1px solid #2a3a32}#edPanel.wide .ed-head{position:sticky;top:0;z-index:2;background:#101915}
-#edPanel .ed-dir{padding:6px 4px;border-bottom:1px solid #1e2a24;border-radius:6px}#edPanel .ed-dir.on{background:rgba(233,178,74,.08);outline:1px solid rgba(233,178,74,.5)}
-#edPanel .ed-dh{display:flex;align-items:center;gap:6px;flex-wrap:wrap}#edPanel .ed-dh b{min-width:120px}
+#edPanel .ed-dirs{overflow:auto;min-height:0;position:relative;border-left:1px solid #2a3a32;padding-left:8px}#edPanel .ed-dirs input{width:150px}#edPanel .ed-dirs input.ed-mname{width:130px;font-weight:700;font-size:13px}#edPanel .ed-dh b{min-width:12px}#edPanel .ed-states{margin-top:10px;padding-top:8px;border-top:1px solid #2a3a32}
+#edPanel .ed-dir{padding:8px 4px;border-bottom:1px solid #1e2a24}#edPanel .ed-ds{margin:6px 0 0 10px;padding:4px 6px;border-left:2px solid #2e3e36;border-radius:4px}#edPanel .ed-ds.on{background:rgba(233,178,74,.08);border-left-color:#e9b24a}
+#edPanel .ed-dh{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 #edPanel .ed-dr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0 0 18px;font-size:12px;padding:2px 4px;border-radius:5px}#edPanel .ed-dr.on{background:rgba(233,178,74,.14)}#edPanel .ed-dr.none{color:#7d8c84;font-style:italic}
 #edPanel .ed-dirs select,#edPanel .ed-dirs input,#edPanel .ed-dh select{background:#0b120f;color:#ecf1ec;border:1px solid #3a4a42;border-radius:5px;font:inherit;font-size:12px;padding:2px 4px}#edPanel .ed-dirs input{width:180px}
 #edPanel .ed-tag{font-size:11px;padding:1px 6px;border-radius:8px;background:#22302a;color:#b8c4bd}#edPanel .ed-tag.st{background:#173247;color:#bfe0f5}
-#edPanel .ed-link{color:#f3d48a}
-#edPanel text.ed-ar{fill:#dfe8e2;font-size:11px;text-anchor:middle;paint-order:stroke;stroke:#0b120f;stroke-width:4px;stroke-linejoin:round;cursor:pointer}#edPanel text.ed-ar.event{font-style:italic;fill:#b8c4bd}#edPanel text.ed-ar.on{fill:#f3d48a}
+#edPanel .ed-link{color:#f3d48a}#edPanel .ed-tune{margin:2px 0 10px 12px;padding-left:10px;border-left:2px solid #3a4a42}
+#edPanel text.ed-ar{fill:#dfe8e2;font-size:12.5px;text-anchor:middle;paint-order:stroke;stroke:#0b120f;stroke-width:4px;stroke-linejoin:round;cursor:pointer}#edPanel text.ed-ar.event{font-style:italic;fill:#b8c4bd}#edPanel text.ed-ar.on{fill:#f3d48a}
 section.ed-on .ed-item{outline:1px dashed #e9b24a88;outline-offset:2px;cursor:move;position:relative}section.ed-on .ed-item:hover{outline:1px solid #e9b24a}
 #edPanel .ed-edit{font-weight:700;padding:3px 10px}#edPanel .ed-edit.on{background:#d9534f;border-color:#d9534f;color:#fff}#edPanel.editing .ed-head{background:#3a2a0c}
 section.ed-on .ed-sel{outline:2px solid #e9b24a!important}section.ed-on .ed-hidden{opacity:.25}section.ed-on .ed-folded{opacity:.6;outline-style:dotted!important}
@@ -408,158 +444,77 @@ section.ed-on [contenteditable]{outline:2px solid #7ec4f5!important;cursor:text;
 .ed-bar-bottom{bottom:-26px;margin:0 -26px -26px;border-top:1px solid rgba(233,178,74,.35);box-shadow:0 -8px 18px rgba(0,0,0,.35)}
 .ed-bar-top{top:-26px;grid-row:1;margin:-26px -26px 0;border-bottom:1px solid rgba(233,178,74,.35);box-shadow:0 8px 18px rgba(0,0,0,.35);justify-content:flex-start}
 section.ed-on .ed-bar{outline:1px dashed #e9b24a;outline-offset:-3px}
-/* the look: b brass (gold), c jungle, d water: the board's three terrains, each a whole look of its own (below) */
-/* b: the whole "expedition kit" (owner, 2026-10-05: the full look of the D2-A mock-up, 681ed0a: leather panels framed in brass, serif
-   section titles, brass buttons, the game's chrome to match), not only its buttons */
-html[data-edcolors=b]{--leather:#1c1610;--leather2:#251c13;--brass:#b98d4b;--brassHi:#efcd8a;--brassDk:#5a4020;
-  --glass:linear-gradient(180deg,rgba(40,30,20,.95),rgba(26,20,13,.95));--glass2:linear-gradient(180deg,rgba(54,41,26,.96),rgba(34,26,17,.96));
-  --line:rgba(214,170,100,.14);--line2:rgba(214,170,100,.34);--muted:#b3a58c;--faint:#7c6f58}
-html[data-edcolors=b] .glass{border-color:rgba(199,154,82,.5);box-shadow:inset 0 1px 0 rgba(255,228,170,.1),0 8px 22px rgba(0,0,0,.4)}
-html[data-edcolors=b] #menu{background:rgba(8,6,4,.76)}
-html[data-edcolors=b] .modal{background:radial-gradient(120% 80% at 50% 0%,#2a2016 0%,#1b150e 60%,#15100b 100%);border:1px solid var(--brass);border-radius:14px;
-  box-shadow:inset 0 0 0 5px #17120c,inset 0 0 0 6px rgba(199,154,82,.35),0 30px 80px rgba(0,0,0,.65)}
-html[data-edcolors=b] .modal h2{color:var(--brassHi)}
-html[data-edcolors=b] .field>label{font-family:var(--display);font-size:17px;letter-spacing:0;text-transform:none;color:var(--brassHi);font-weight:400;margin-bottom:10px;display:flex;align-items:center;gap:10px}
-html[data-edcolors=b] .field>label::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(199,154,82,.45),transparent)}
-html[data-edcolors=b] .field>label.chk::after{display:none}
-html[data-edcolors=b] .btn{background:linear-gradient(180deg,#34281a,#221a11);border:1px solid var(--brass);border-radius:9px;color:#f1e6cf;box-shadow:inset 0 1px 0 rgba(255,230,180,.16),inset 0 -1px 0 rgba(0,0,0,.35),0 2px 0 #0b0805,0 6px 14px rgba(0,0,0,.35)}
-html[data-edcolors=b] .btn:hover{background:linear-gradient(180deg,#403120,#2a2015);border-color:var(--brassHi)}
-html[data-edcolors=b] .btn.pri{background:linear-gradient(180deg,#f6d88f 0%,#dcac55 45%,#b98434 100%);border-color:#7a5620;color:#2a1b06;box-shadow:inset 0 1px 0 rgba(255,250,225,.75),inset 0 -2px 0 rgba(110,70,20,.45),0 2px 0 #3a2807,0 6px 14px rgba(0,0,0,.4)}
-html[data-edcolors=b] .btn.pri:hover{background:linear-gradient(180deg,#fbe3a6 0%,#e4b867 45%,#c38e3c 100%)}
-html[data-edcolors=b] .btn.big{border-radius:10px}
-html[data-edcolors=b] .seg{background:#120e09;border-color:rgba(199,154,82,.28);border-radius:9px;box-shadow:inset 0 2px 4px rgba(0,0,0,.5)}
-html[data-edcolors=b] .seg label{border-radius:6px}
-html[data-edcolors=b] .seg button.on,html[data-edcolors=b] .seg label:has(input:checked){background:linear-gradient(180deg,#3d2f1e,#2b2115);color:var(--brassHi);box-shadow:inset 0 0 0 1px var(--brass),inset 0 1px 0 rgba(255,230,180,.15)}
-html[data-edcolors=b] #sMode{background:none;border:0;box-shadow:none;border-bottom:1px solid rgba(199,154,82,.35);border-radius:0;padding:0;gap:0}
-html[data-edcolors=b] #sMode label{font-family:var(--display);font-weight:400;font-size:17px;border-radius:0;padding:9px 4px 10px;color:var(--muted)}
-html[data-edcolors=b] #sMode label:has(input:checked){background:none;box-shadow:inset 0 -2px 0 var(--brassHi);color:var(--brassHi)}
-html[data-edcolors=b] .clist button,html[data-edcolors=b] .clist label,html[data-edcolors=b] .rlist button,html[data-edcolors=b] .boxrow,html[data-edcolors=b] .rrow,html[data-edcolors=b] .seatrow,html[data-edcolors=b] .pst{background:#16110b;border-color:rgba(199,154,82,.2)}
-html[data-edcolors=b] .clist button.on,html[data-edcolors=b] .clist label:has(input:checked){border-color:var(--brass);background:linear-gradient(180deg,rgba(199,154,82,.16),rgba(199,154,82,.06));box-shadow:inset 0 0 0 1px rgba(239,205,138,.25)}
-html[data-edcolors=b] .clist .dtag{text-transform:none;letter-spacing:0;font-size:11.5px;font-style:italic;font-family:var(--display);border:0;padding:0}
-html[data-edcolors=b] .prow input,html[data-edcolors=b] select.who{background-color:#120e09;border-color:rgba(199,154,82,.3)}
-html[data-edcolors=b] select.who option,html[data-edcolors=b] select.who optgroup{background:#1c1610}
-html[data-edcolors=b] .ingame{border-color:var(--brass);background:linear-gradient(180deg,rgba(199,154,82,.14),rgba(199,154,82,.05))}
-html[data-edcolors=b] .ingame #igTxt{font-family:var(--display)}
-html[data-edcolors=b] .aitag{font-family:var(--display);font-weight:400;letter-spacing:0;font-size:11px;border-color:rgba(199,154,82,.6);color:var(--brassHi)}
-html[data-edcolors=b] .sws label:has(input:checked){border-color:var(--brassHi)}
-html[data-edcolors=b] .modal.menu{scrollbar-color:rgba(199,154,82,.35) transparent}
-html[data-edcolors=b] #vp{background:radial-gradient(ellipse 80% 70% at 45% 42%,#1b2a1e 0%,#101a14 55%,#0a0f0b 100%)}
-html[data-edcolors=b] .brand{color:var(--brassHi)}
-html[data-edcolors=b] #roundLbl{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px;color:var(--muted)}
-html[data-edcolors=b] .tbtn{border-radius:9px;color:#f1e6cf}
-html[data-edcolors=b] .tbtn.on{border-color:var(--brassHi);color:var(--brassHi);box-shadow:inset 0 0 0 1px rgba(239,205,138,.35),inset 0 1px 0 rgba(255,228,170,.15),0 8px 22px rgba(0,0,0,.4)}
-html[data-edcolors=b] .pchip{border-radius:9px}
-html[data-edcolors=b] .pchip .dot{box-shadow:0 0 0 1.5px #0b0805,0 0 0 2.5px rgba(199,154,82,.6)}
-html[data-edcolors=b] .zoomctl button{border-radius:9px;color:var(--brassHi)}
-html[data-edcolors=b] #prompt{border-radius:10px;color:#eadfc8}
-html[data-edcolors=b] #prompt b{color:var(--brassHi)}
-html[data-edcolors=b] #hist{background:linear-gradient(180deg,rgba(38,29,19,.97),rgba(25,19,13,.97));border-radius:10px}
-html[data-edcolors=b] .ht+.ht{border-top:1px dashed rgba(199,154,82,.22)}
-html[data-edcolors=b] .hwho{font-family:var(--display);font-weight:400;font-size:13px}
-html[data-edcolors=b] .hwho span{font-family:var(--ui)}
-html[data-edcolors=b] .fend .fpill{border-color:rgba(199,154,82,.45);background:rgba(199,154,82,.08);color:#f1e6cf;border-radius:6px}
-html[data-edcolors=b] .pile .lbl{border-radius:7px}
-html[data-edcolors=b] #playLbl{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px}
-html[data-edcolors=b] #banner .s{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:16px}
-html[data-edcolors=b] #banner{border-radius:12px}
-html[data-edcolors=b] .allc-sect h3 span,html[data-edcolors=b] .allc-head span{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px}
-html[data-edcolors=b] #rdock,html[data-edcolors=b] #rside,html[data-edcolors=b] #lside{background:#17120c;border-color:rgba(199,154,82,.3)}
-html[data-edcolors=b] #rdock button{background:linear-gradient(180deg,#34281a,#221a11);border-color:rgba(199,154,82,.55);border-radius:8px}
-html[data-edcolors=b] #rdock .rgrp button.pri{background:linear-gradient(180deg,#f6d88f,#dcac55 45%,#b98434);border-color:#7a5620}
-html[data-edcolors=b] #rdock .rspd{border-color:rgba(199,154,82,.45)}
-html[data-edcolors=b] #rdock .rspd button+button{border-left-color:rgba(199,154,82,.3)}
-html[data-edcolors=b] .sclose,html[data-edcolors=b] .bs-x{border-color:var(--brass);background:#1c1610}
-/* c: jungle, a field notebook (owner, 2026-10-05: each look designed, not a recolouring): moss-dark panels with a faint leaf-vein
-   grain, leaf-shaped corners, cream italic serif headings over a dashed vine rule, a fresh lime main button */
-html[data-edcolors=c]{--glass:rgba(18,34,24,.94);--glass2:rgba(26,46,33,.95);--line:rgba(196,226,170,.12);--line2:rgba(196,226,170,.28);--muted:#a9bba0;--faint:#6f8468;--text:#eef0df}
-html[data-edcolors=c] .glass{border-color:rgba(160,200,130,.28);border-radius:16px 5px 16px 5px;box-shadow:0 10px 26px rgba(0,0,0,.4)}
-html[data-edcolors=c] #menu{background:rgba(4,10,6,.72)}
-html[data-edcolors=c] .modal{background:radial-gradient(140% 90% at 0% 0%,rgba(150,190,90,.11),transparent 55%),repeating-linear-gradient(115deg,rgba(220,255,200,.016) 0 2px,transparent 2px 11px),linear-gradient(180deg,#16291d,#0f1d15);border:1px solid rgba(170,205,140,.35);border-radius:28px 28px 28px 8px;box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(230,255,210,.06)}
-html[data-edcolors=c] .modal h2{font-family:var(--display);font-style:italic;font-weight:400;color:#f1ead0;letter-spacing:0}
-html[data-edcolors=c] .field>label{font-family:var(--display);font-style:italic;font-weight:400;font-size:17px;text-transform:none;letter-spacing:0;color:#e9e2c4;display:flex;align-items:center;gap:10px;margin-bottom:10px}
-html[data-edcolors=c] .field>label::after{content:"";flex:1;border-bottom:1px dashed rgba(170,205,140,.35)}
-html[data-edcolors=c] .field>label.chk::after{display:none}
-html[data-edcolors=c] .btn{background:#1d3626;border:1px solid rgba(170,205,140,.35);border-radius:16px 4px 16px 4px;color:#eef0df;box-shadow:0 2px 0 #08120c}
-html[data-edcolors=c] .btn:hover{background:#244430;border-color:rgba(190,225,160,.6)}
-html[data-edcolors=c] .btn.pri{background:linear-gradient(180deg,#c9e37f,#8cbf4a);border-color:#5f8f2c;color:#13240b;border-radius:18px 5px 18px 5px;box-shadow:0 2px 0 #2f4d14,0 8px 18px rgba(120,180,60,.22)}
-html[data-edcolors=c] .btn.pri:hover{background:linear-gradient(180deg,#d5eb90,#98c956)}
-html[data-edcolors=c] .seg{background:#0d1a12;border-color:rgba(170,205,140,.25);border-radius:14px 4px 14px 4px}
-html[data-edcolors=c] .seg label{border-radius:11px 3px 11px 3px}
-html[data-edcolors=c] .seg button.on,html[data-edcolors=c] .seg label:has(input:checked){background:#2a4a33;color:#f1ead0;box-shadow:inset 0 0 0 1px rgba(198,225,122,.6)}
-html[data-edcolors=c] #sMode{background:none;border:0;box-shadow:none;gap:6px;padding:0}
-html[data-edcolors=c] #sMode label{font-family:var(--display);font-style:italic;font-weight:400;font-size:17px;color:#a9bba0;border-radius:14px 4px 14px 4px}
-html[data-edcolors=c] #sMode label:has(input:checked){background:rgba(198,225,122,.12);color:#e6f0b8;box-shadow:inset 0 0 0 1px rgba(198,225,122,.45)}
-html[data-edcolors=c] .clist button,html[data-edcolors=c] .clist label,html[data-edcolors=c] .rlist button,html[data-edcolors=c] .boxrow,html[data-edcolors=c] .rrow,html[data-edcolors=c] .seatrow,html[data-edcolors=c] .pst{background:rgba(10,22,14,.7);border-color:rgba(170,205,140,.18);border-radius:14px 4px 14px 4px}
-html[data-edcolors=c] .clist button.on,html[data-edcolors=c] .clist label:has(input:checked){border-color:#a9cf62;background:rgba(169,207,98,.1)}
-html[data-edcolors=c] .clist .dtag{font-family:var(--display);font-style:italic;text-transform:none;letter-spacing:0;border:0;padding:0}
-html[data-edcolors=c] .prow input,html[data-edcolors=c] select.who{background-color:#0d1a12;border-color:rgba(170,205,140,.25);border-radius:12px 4px 12px 4px}
-html[data-edcolors=c] select.who option,html[data-edcolors=c] select.who optgroup{background:#0f1d15}
-html[data-edcolors=c] .ingame{border-color:#a9cf62;background:rgba(169,207,98,.08)}
-html[data-edcolors=c] .aitag{font-family:var(--display);font-style:italic;font-weight:400;text-transform:none;letter-spacing:0;color:#d6e8a0;border-color:rgba(169,207,98,.5)}
-html[data-edcolors=c] .modal.menu{scrollbar-color:rgba(170,205,140,.35) transparent}
-html[data-edcolors=c] #vp{background:radial-gradient(ellipse 85% 75% at 45% 40%,#173322 0%,#0e1f15 55%,#08120c 100%)}
-html[data-edcolors=c] .brand{color:#f1ead0;font-style:italic}
-html[data-edcolors=c] #roundLbl{font-family:var(--display);font-style:italic;text-transform:none;letter-spacing:0;font-size:14px;color:#a9bba0}
-html[data-edcolors=c] .tbtn,html[data-edcolors=c] .pchip,html[data-edcolors=c] .zoomctl button,html[data-edcolors=c] .pile .lbl,html[data-edcolors=c] #rdock button{border-radius:14px 4px 14px 4px}
-html[data-edcolors=c] .tbtn.on{border-color:#a9cf62;color:#e6f0b8}
-html[data-edcolors=c] #prompt{border-radius:20px 6px 20px 6px;color:#eef0df}
-html[data-edcolors=c] #prompt b{color:#d6e8a0}
-html[data-edcolors=c] #hist{border-radius:18px 6px 18px 6px}
-html[data-edcolors=c] .ht+.ht{border-top:1px dashed rgba(170,205,140,.22)}
-html[data-edcolors=c] .hwho{font-family:var(--display);font-style:italic;font-weight:400}
-html[data-edcolors=c] #playLbl{font-family:var(--display);font-style:italic;text-transform:none;letter-spacing:0;font-size:14px}
-html[data-edcolors=c] #banner{border-radius:22px 6px 22px 6px}
-html[data-edcolors=c] #banner .s{font-family:var(--display);font-style:italic;text-transform:none;letter-spacing:0}
-html[data-edcolors=c] #rdock .rgrp button.pri{background:linear-gradient(180deg,#c9e37f,#8cbf4a);color:#13240b;border-color:#5f8f2c}
-/* d: water, a river chart: ink-blue panels with faint depth-contour rings, thin double rules like a navigation chart, small
-   capitals for labels, crisp square buttons, a signal-cyan main button */
-html[data-edcolors=d]{--glass:rgba(10,20,34,.95);--glass2:rgba(16,30,50,.96);--line:rgba(150,200,240,.12);--line2:rgba(150,200,240,.28);--muted:#93aac0;--faint:#5e7690;--text:#e6eef6}
-html[data-edcolors=d] .glass{border-color:rgba(150,200,240,.3);border-radius:4px;box-shadow:0 0 0 3px rgba(10,20,34,.92),0 0 0 4px rgba(150,200,240,.14),0 10px 24px rgba(0,0,0,.45)}
-html[data-edcolors=d] #menu{background:rgba(3,8,14,.74)}
-html[data-edcolors=d] .modal{background:repeating-radial-gradient(circle at 88% 12%,transparent 0 26px,rgba(140,190,235,.05) 26px 27px),linear-gradient(180deg,#0f1f33,#0a1626);border:1px solid rgba(150,200,240,.4);border-radius:4px;box-shadow:inset 0 0 0 4px #0a1626,inset 0 0 0 5px rgba(150,200,240,.2),0 30px 80px rgba(0,0,0,.6)}
-html[data-edcolors=d] .modal h2{font-family:var(--ui);font-weight:800;text-transform:uppercase;letter-spacing:.18em;font-size:20px;color:#dbe9f6}
-html[data-edcolors=d] .field>label{font-family:var(--ui);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.2em;color:#7fc4e8;display:flex;align-items:center;gap:10px;margin-bottom:10px}
-html[data-edcolors=d] .field>label::after{content:"";flex:1;height:3px;border-top:1px solid rgba(127,196,232,.32);border-bottom:1px solid rgba(127,196,232,.14)}
-html[data-edcolors=d] .field>label.chk::after{display:none}
-html[data-edcolors=d] .btn{background:transparent;border:1px solid rgba(150,200,240,.45);border-radius:3px;color:#dbe9f6;box-shadow:none;letter-spacing:.03em}
-html[data-edcolors=d] .btn:hover{background:rgba(127,196,232,.1);border-color:#7fc4e8}
-html[data-edcolors=d] .btn.pri{background:#3fd0e0;border-color:#3fd0e0;color:#04202a;border-radius:3px;box-shadow:0 0 0 3px #0a1626,0 0 0 4px rgba(63,208,224,.5)}
-html[data-edcolors=d] .btn.pri:hover{background:#62dcea}
-html[data-edcolors=d] .seg{background:#081321;border-color:rgba(150,200,240,.25);border-radius:3px}
-html[data-edcolors=d] .seg label{border-radius:2px}
-html[data-edcolors=d] .seg button.on,html[data-edcolors=d] .seg label:has(input:checked){background:rgba(63,208,224,.14);color:#bff3f9;box-shadow:inset 0 -2px 0 #3fd0e0}
-html[data-edcolors=d] #sMode{background:none;border:0;box-shadow:none;border-bottom:1px solid rgba(150,200,240,.25);border-radius:0;padding:0;gap:0}
-html[data-edcolors=d] #sMode label{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.18em;border-radius:0;color:#93aac0;padding:10px 4px}
-html[data-edcolors=d] #sMode label:has(input:checked){background:none;color:#bff3f9;box-shadow:inset 0 -2px 0 #3fd0e0}
-html[data-edcolors=d] .clist button,html[data-edcolors=d] .clist label,html[data-edcolors=d] .rlist button,html[data-edcolors=d] .boxrow,html[data-edcolors=d] .rrow,html[data-edcolors=d] .seatrow,html[data-edcolors=d] .pst{background:rgba(8,18,32,.8);border-color:rgba(150,200,240,.18);border-radius:3px}
-html[data-edcolors=d] .clist button.on,html[data-edcolors=d] .clist label:has(input:checked){border-color:#3fd0e0;background:rgba(63,208,224,.07);box-shadow:inset 3px 0 0 #3fd0e0}
-html[data-edcolors=d] .clist .dtag{text-transform:uppercase;letter-spacing:.14em;font-size:10px;border-radius:2px}
-html[data-edcolors=d] .prow input,html[data-edcolors=d] select.who{background-color:#081321;border-color:rgba(150,200,240,.3);border-radius:3px}
-html[data-edcolors=d] select.who option,html[data-edcolors=d] select.who optgroup{background:#0a1626}
-html[data-edcolors=d] .ingame{border-color:#3fd0e0;background:rgba(63,208,224,.06)}
-html[data-edcolors=d] .aitag{text-transform:uppercase;letter-spacing:.14em;font-size:9.5px;color:#7fc4e8;border-color:rgba(127,196,232,.5);border-radius:2px}
-html[data-edcolors=d] .modal.menu{scrollbar-color:rgba(150,200,240,.35) transparent}
-html[data-edcolors=d] #vp{background:radial-gradient(ellipse 85% 75% at 45% 40%,#13263b 0%,#0b1828 55%,#060d17 100%)}
-html[data-edcolors=d] .brand{color:#dbe9f6;font-family:var(--ui);font-weight:800;text-transform:uppercase;letter-spacing:.16em;font-size:15px}
-html[data-edcolors=d] #roundLbl{letter-spacing:.2em;color:#7fc4e8}
-html[data-edcolors=d] .tbtn,html[data-edcolors=d] .pchip,html[data-edcolors=d] .zoomctl button,html[data-edcolors=d] .pile .lbl,html[data-edcolors=d] #rdock button{border-radius:3px}
-html[data-edcolors=d] .tbtn.on{border-color:#3fd0e0;color:#bff3f9}
-html[data-edcolors=d] #prompt{border-radius:3px;color:#e6eef6}
-html[data-edcolors=d] #prompt b{color:#7fe3ee}
-html[data-edcolors=d] #hist{border-radius:3px}
-html[data-edcolors=d] .ht+.ht{border-top:1px solid rgba(150,200,240,.14)}
-html[data-edcolors=d] .hwho{text-transform:uppercase;letter-spacing:.1em;font-size:12px}
-html[data-edcolors=d] #playLbl{letter-spacing:.2em;color:#7fc4e8}
-html[data-edcolors=d] #banner{border-radius:3px}
-html[data-edcolors=d] #banner .s{letter-spacing:.2em;color:#7fc4e8}
-html[data-edcolors=d] #rdock .rgrp button.pri{background:#3fd0e0;color:#04202a;border-color:#3fd0e0}
-/* button shape: b rounded, c square */
-html[data-edshape=b] .btn,html[data-edshape=b] #menu button{border-radius:999px}
-html[data-edshape=c] .btn,html[data-edshape=c] #menu button{border-radius:3px}
-/* headings: b serif, c large serif */
-html[data-edheads=b] #menu h2,html[data-edheads=b] #menu .field>label{font-family:var(--display,'Young Serif',serif);letter-spacing:0;text-transform:none}
-html[data-edheads=c] #menu h2{font-family:var(--display,'Young Serif',serif);font-size:2.1em;text-align:center}
-html[data-edheads=c] #menu .field>label{font-family:var(--display,'Young Serif',serif);font-size:1.1em;letter-spacing:0;text-transform:none}
+/* ---------- the looks (owner, 2026-10-05): b brass (the D2-A expedition kit, 681ed0a), c jungle (a field notebook), d water (a river
+   chart). Each look is its tokens (colours, its texture, its rule line) and its defaults for the tuning rows (editor.js LOOKS);
+   the rows (accent, headings, ornament, corners, main button, board backdrop) each change one part, whatever the look */
+html[data-edcolors=b]{--k-text:#f1e6cf;--k-muted:#b3a58c;--k-faint:#7c6f58;--k-panA:#2a2016;--k-panB:#15100b;--k-frame:#b98d4b;--k-line:rgba(199,154,82,.35);--k-acc:#efcd8a;
+  --k-btnA:#34281a;--k-btnB:#221a11;--k-btnH:#403120;--k-priA:#f6d88f;--k-priM:#dcac55;--k-priB:#b98434;--k-priInk:#2a1b06;--k-priEdge:#7a5620;--k-field:#120e09;--k-row:#16110b;
+  --k-sel:rgba(199,154,82,.16);--k-vpA:#1b2a1e;--k-vpB:#101a14;--k-vpC:#0a0f0b;--k-rule:1px solid;--k-tex:radial-gradient(120% 80% at 50% 0%,rgba(255,220,160,.07),transparent 60%)}
+html[data-edcolors=b][data-edacc="2"]{--k-frame:#a8763e;--k-line:rgba(168,118,62,.38);--k-acc:#e0ae72;--k-priA:#e9b47a;--k-priM:#c4874a;--k-priB:#8d5a26;--k-priEdge:#5e3a16;--k-sel:rgba(168,118,62,.16)}
+html[data-edcolors=b][data-edacc="3"]{--k-frame:#c07a50;--k-line:rgba(192,122,80,.38);--k-acc:#f2b48c;--k-priA:#f5c2a0;--k-priM:#d98a5c;--k-priB:#a85a34;--k-priInk:#2a1006;--k-priEdge:#6e3418;--k-sel:rgba(192,122,80,.16)}
+html[data-edcolors=c]{--k-text:#eef0df;--k-muted:#a9bba0;--k-faint:#6f8468;--k-panA:#16291d;--k-panB:#0f1d15;--k-frame:rgba(170,205,140,.45);--k-line:rgba(170,205,140,.3);--k-acc:#d6e8a0;
+  --k-btnA:#1d3626;--k-btnB:#1a3122;--k-btnH:#244430;--k-priA:#d5eb90;--k-priM:#b4d76a;--k-priB:#8cbf4a;--k-priInk:#13240b;--k-priEdge:#5f8f2c;--k-field:#0d1a12;--k-row:rgba(10,22,14,.7);
+  --k-sel:rgba(169,207,98,.1);--k-vpA:#173322;--k-vpB:#0e1f15;--k-vpC:#08120c;--k-rule:1px dashed;
+  --k-tex:repeating-linear-gradient(115deg,rgba(220,255,200,.018) 0 2px,transparent 2px 11px),radial-gradient(140% 90% at 0% 0%,rgba(150,190,90,.11),transparent 55%)}
+html[data-edcolors=c][data-edacc="2"]{--k-acc:#9fe8c2;--k-priA:#8fe6b8;--k-priM:#5fd39a;--k-priB:#2e9e66;--k-priInk:#05200f;--k-priEdge:#1d6b44;--k-sel:rgba(95,211,154,.1)}
+html[data-edcolors=c][data-edacc="3"]{--k-acc:#f0b8f0;--k-priA:#f2c2f2;--k-priM:#dc96dd;--k-priB:#b768c0;--k-priInk:#2a0d2e;--k-priEdge:#7e3e86;--k-sel:rgba(220,150,221,.1)}
+html[data-edcolors=d]{--k-text:#e6eef6;--k-muted:#93aac0;--k-faint:#5e7690;--k-panA:#0f1f33;--k-panB:#0a1626;--k-frame:rgba(150,200,240,.45);--k-line:rgba(127,196,232,.3);--k-acc:#7fc4e8;
+  --k-btnA:rgba(16,30,50,.35);--k-btnB:rgba(16,30,50,.35);--k-btnH:rgba(127,196,232,.1);--k-priA:#62dcea;--k-priM:#3fd0e0;--k-priB:#2fb8c8;--k-priInk:#04202a;--k-priEdge:#3fd0e0;--k-field:#081321;
+  --k-row:rgba(8,18,32,.8);--k-sel:rgba(63,208,224,.08);--k-vpA:#13263b;--k-vpB:#0b1828;--k-vpC:#060d17;--k-rule:3px double;
+  --k-tex:repeating-radial-gradient(circle at 88% 12%,transparent 0 26px,rgba(140,190,235,.05) 26px 27px)}
+html[data-edcolors=d][data-edacc="2"]{--k-acc:#6fd6c8;--k-priA:#59c9bb;--k-priM:#2fa39a;--k-priB:#23857d;--k-priInk:#02201d;--k-priEdge:#2fa39a;--k-sel:rgba(47,163,154,.1)}
+html[data-edcolors=d][data-edacc="3"]{--k-acc:#ffb39c;--k-priA:#ffa58a;--k-priM:#ff8a6b;--k-priB:#e86f50;--k-priInk:#2a0c04;--k-priEdge:#ff8a6b;--k-sel:rgba(255,138,107,.1)}
+/* corners: buttons, panels, small parts (rows, fields, segments) */
+html[data-edcor=brass]{--k-rb:9px;--k-rp:14px;--k-rs:8px}html[data-edcor=leaf]{--k-rb:16px 4px 16px 4px;--k-rp:28px 28px 28px 8px;--k-rs:14px 4px 14px 4px}
+html[data-edcor=soft]{--k-rb:12px;--k-rp:18px;--k-rs:10px}html[data-edcor=round]{--k-rb:999px;--k-rp:24px;--k-rs:14px}html[data-edcor=sharp]{--k-rb:3px;--k-rp:4px;--k-rs:2px}
+/* the parts every look styles, from its tokens */
+html[data-edlook]{--glass:linear-gradient(180deg,color-mix(in srgb,var(--k-panA) 95%,transparent),color-mix(in srgb,var(--k-panB) 95%,transparent));--glass2:linear-gradient(180deg,var(--k-btnH),var(--k-panA));
+  --line:var(--k-line);--line2:var(--k-line);--muted:var(--k-muted);--faint:var(--k-faint)}
+html[data-edlook] #menu{background:rgba(4,6,8,.74)}
+html[data-edlook] .modal{background:var(--k-tex),linear-gradient(180deg,var(--k-panA),var(--k-panB));border:1px solid var(--k-frame);border-radius:var(--k-rp);box-shadow:0 30px 80px rgba(0,0,0,.6);color:var(--k-text)}
+html[data-edlook] .glass{border-color:var(--k-line);border-radius:var(--k-rs);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 22px rgba(0,0,0,.4)}
+html[data-edlook] .modal h2,html[data-edlook] .brand{color:var(--k-acc)}
+html[data-edlook] .field>label{color:var(--k-acc);display:flex;align-items:center;gap:10px;margin-bottom:10px}
+html[data-edlook] .field>label::after{content:"";flex:1;border-bottom:var(--k-rule) var(--k-line)}html[data-edlook] .field>label.chk::after{display:none}
+html[data-edlook] .btn{background:linear-gradient(180deg,var(--k-btnA),var(--k-btnB));border:1px solid var(--k-line);border-radius:var(--k-rb);color:var(--k-text);box-shadow:0 2px 0 rgba(0,0,0,.45)}
+html[data-edlook] .btn:hover{background:var(--k-btnH);border-color:var(--k-acc)}
+html[data-edlook] .seg{background:var(--k-field);border-color:var(--k-line);border-radius:var(--k-rs)}html[data-edlook] .seg label{border-radius:var(--k-rs)}
+html[data-edlook] .seg button.on,html[data-edlook] .seg label:has(input:checked){background:var(--k-sel);color:var(--k-acc);box-shadow:inset 0 0 0 1px var(--k-acc)}
+html[data-edlook] #sMode{background:none;border:0;box-shadow:none;border-bottom:1px solid var(--k-line);border-radius:0;padding:0;gap:0}
+html[data-edlook] #sMode label{border-radius:0;padding:9px 4px 10px;color:var(--k-muted)}
+html[data-edlook] #sMode label:has(input:checked){background:none;box-shadow:inset 0 -2px 0 var(--k-acc);color:var(--k-acc)}
+html[data-edlook] .clist button,html[data-edlook] .clist label,html[data-edlook] .rlist button,html[data-edlook] .boxrow,html[data-edlook] .rrow,html[data-edlook] .seatrow,html[data-edlook] .pst{background:var(--k-row);border-color:var(--k-line);border-radius:var(--k-rs)}
+html[data-edlook] .clist button.on,html[data-edlook] .clist label:has(input:checked){border-color:var(--k-acc);background:var(--k-sel)}
+html[data-edlook] .prow input,html[data-edlook] select.who{background-color:var(--k-field);border-color:var(--k-line);border-radius:var(--k-rs)}
+html[data-edlook] select.who option,html[data-edlook] select.who optgroup{background:var(--k-panB)}
+html[data-edlook] .ingame{border-color:var(--k-acc);background:var(--k-sel)}html[data-edlook] .aitag{color:var(--k-acc);border-color:var(--k-line)}
+html[data-edlook] .sws label:has(input:checked){border-color:var(--k-acc)}html[data-edlook] .modal.menu{scrollbar-color:var(--k-line) transparent}
+html[data-edlook] .tbtn,html[data-edlook] .pchip,html[data-edlook] .zoomctl button,html[data-edlook] .pile .lbl,html[data-edlook] #rdock button{border-radius:var(--k-rb)}
+html[data-edlook] .tbtn.on{border-color:var(--k-acc);color:var(--k-acc)}html[data-edlook] .zoomctl button{color:var(--k-acc)}
+html[data-edlook] #prompt,html[data-edlook] #banner{border-radius:var(--k-rp);color:var(--k-text)}html[data-edlook] #prompt b{color:var(--k-acc)}
+html[data-edlook] #hist{background:linear-gradient(180deg,var(--k-panA),var(--k-panB));border-radius:var(--k-rp)}html[data-edlook] .ht+.ht{border-top:1px dashed var(--k-line)}
+html[data-edlook] .fend .fpill{border-color:var(--k-line);background:var(--k-sel);color:var(--k-text)}
+html[data-edlook] #rdock .rspd{border-color:var(--k-line)}html[data-edlook] .sclose,html[data-edlook] .bs-x{border-color:var(--k-line);background:var(--k-panB)}
+/* ornament: plain (flat panels), textured (the look's grain), framed (the grain and an inner frame) */
+html[data-edlook][data-edorn=plain] .modal{background:linear-gradient(180deg,var(--k-panA),var(--k-panB))}
+html[data-edlook][data-edorn=frame] .modal{box-shadow:inset 0 0 0 5px var(--k-panB),inset 0 0 0 6px var(--k-line),0 30px 80px rgba(0,0,0,.65)}
+html[data-edlook][data-edorn=frame] .glass{box-shadow:0 0 0 3px var(--k-panB),0 0 0 4px var(--k-line),0 10px 24px rgba(0,0,0,.45)}
+/* the main button: metal (polished, lit from above), solid, flat (a ring around it), outlined */
+html[data-edlook] .btn.pri,html[data-edlook] #rdock .rgrp button.pri{color:var(--k-priInk);border-color:var(--k-priEdge)}
+html[data-edlook][data-edpri=metal] .btn.pri,html[data-edlook][data-edpri=metal] #rdock .rgrp button.pri{background:linear-gradient(180deg,var(--k-priA),var(--k-priM) 45%,var(--k-priB));box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.22),0 2px 0 rgba(0,0,0,.55),0 6px 14px rgba(0,0,0,.4)}
+html[data-edlook][data-edpri=solid] .btn.pri,html[data-edlook][data-edpri=solid] #rdock .rgrp button.pri{background:linear-gradient(180deg,var(--k-priA),var(--k-priB));box-shadow:0 2px 0 rgba(0,0,0,.5),0 8px 18px rgba(0,0,0,.3)}
+html[data-edlook][data-edpri=flat] .btn.pri,html[data-edlook][data-edpri=flat] #rdock .rgrp button.pri{background:var(--k-priM);border-color:var(--k-priM);box-shadow:0 0 0 3px var(--k-panB),0 0 0 4px var(--k-priM)}
+html[data-edlook][data-edpri=outline] .btn.pri,html[data-edlook][data-edpri=outline] #rdock .rgrp button.pri{background:var(--k-sel);border:1.5px solid var(--k-priM);color:var(--k-priA);box-shadow:none}
+html[data-edlook] .btn.pri:hover{filter:brightness(1.08)}
+/* headings: serif, italic serif, spaced capitals */
+html[data-edlook]:is([data-edhd=serif],[data-edhd=italic]) :is(.modal h2,.field>label,#sMode label,.brand,#roundLbl,.hwho,#playLbl,#banner .s,.aitag,.clist .dtag){font-family:var(--display,'Young Serif',serif);font-weight:400;text-transform:none;letter-spacing:0}
+html[data-edlook][data-edhd=italic] :is(.modal h2,.field>label,#sMode label,.brand,#roundLbl,.hwho,#playLbl,#banner .s,.aitag,.clist .dtag){font-style:italic}
+html[data-edlook]:is([data-edhd=serif],[data-edhd=italic]) :is(.field>label,#sMode label){font-size:17px}html[data-edlook]:is([data-edhd=serif],[data-edhd=italic]) #roundLbl{font-size:14px}
+html[data-edlook][data-edhd=caps] :is(.modal h2,.field>label,#sMode label,.brand,#roundLbl,#playLbl,#banner .s,.aitag,.clist .dtag){font-family:var(--ui,system-ui,sans-serif);font-style:normal;text-transform:uppercase;letter-spacing:.18em;font-weight:700}
+html[data-edlook][data-edhd=caps] .modal h2{font-size:20px;font-weight:800}html[data-edlook][data-edhd=caps] :is(.field>label,#sMode label){font-size:11.5px}
+html[data-edlook][data-edhd=caps] .brand{font-size:15px;font-weight:800;letter-spacing:.16em}html[data-edlook][data-edhd=caps] .hwho{text-transform:uppercase;letter-spacing:.1em;font-size:12px}
+/* the board's backdrop: the look's tint behind the board, or the page's own */
+html[data-edlook][data-edbg=tint] #vp{background:radial-gradient(ellipse 85% 75% at 45% 40%,var(--k-vpA) 0%,var(--k-vpB) 55%,var(--k-vpC) 100%)}
 `;
 document.head.appendChild(css);
 applyOptions(); layout();
