@@ -4,7 +4,7 @@
 import { R, hash, assert } from '../../engine.gen.js';
 import { MAP } from '../state.js';
 import { layout, xy } from './layout.js';
-import { $, sv, spriteDefs } from '../dom.js';
+import { $, sv } from '../dom.js';
 export function hexPts(x,y,r){let s='';for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);s+=(x+r*Math.cos(a)).toFixed(1)+','+(y+r*Math.sin(a)).toFixed(1)+' ';}return s;}
 const TFILL={j:['#4a9b5f','#2a6a40'],w:['#4aa0dd','#2464a0'],v:['#f2cd6c','#d09632'],r:['#aeb2ad','#7a7f7b'],c:['#d4705a','#9a3e2d'],m:['#58615a','#2d332f'],s:['#e3d8b9','#b4a887'],g:['#ffe690','#e3a52b']};
 /* harder spaces are darker, like the printed tiles: [top,bottom] gradient per strength 1..4 */
@@ -64,7 +64,7 @@ export function buildBoard(){
   for(const[t,hs]of byTile){const g=sv('g',null,L.plates);const inner=MAP.tiles[t].end?'#3a2a0b':'#0f1a14';for(const h of hs){const{x,y}=xy(h.k);sv('polygon',{points:hexPts(x,y,R+.6),fill:inner},g);}}
   // hexes
   for(const h of MAP.hexes.values()){
-    const g=sv('g',null,L.terrain),{x,y}=xy(h.k);
+    const g=sv('g',{'data-tile':h.tile},L.terrain),{x,y}=xy(h.k);
     const pts=hexPts(x,y,R-1.4);
     const vt=h.type==='g'?h.sym:h.type; // El Dorado's finishing spaces look like the terrain they need (water or jungle)
     sv('polygon',{points:pts,fill:'url(#gr-'+vt+(TSHADE[vt]?Math.min(4,h.val):'')+')'},g);
@@ -105,20 +105,33 @@ export function buildBoard(){
   asImage(svg);
   return true;
 }
-/* the terrain never changes during a game, so it is drawn as one image (an SVG image: still vector, sharp at any zoom):
-   recorded as one element instead of ~2,000 whenever the board is redrawn (a zoom settling: about 9 ms of the main thread
-   at maximum zoom, a hitch when zooming restarts on a slow CPU; owner 2026-10-04). Drawn live first and swapped once the
-   image has loaded, under the live shapes: never a frame without the terrain */
-let terrainUrl=null;
+/* the terrain never changes during a game, so it is baked into images (SVG images: still vector, sharp at any zoom): a redraw
+   of the board (a zoom settling) records a few dozen elements instead of ~2,000 (about 9 ms of the main thread at maximum
+   zoom, a hitch when zooming restarts on a slow CPU; owner 2026-10-04). Not one image but one per board piece and pass, each
+   cropped to what it holds: drawing a tile of the screen replays only the parts under it (one image for the whole terrain
+   made every tile replay all of it, about 40% more drawing). The parts stack in the order the terrain is drawn (every
+   piece's shadow, then every rim, every inner plate, the hexes piece by piece, the seams and the city), so overlaps come out
+   as before. Drawn live first and swapped once every part has loaded, under the live shapes: never a frame without terrain */
+let terrainUrls=[];
 function asImage(svg){
-  const live=[L.plates,L.terrain,L.city],m=drawnMap,{minX,minY,w,h}=layout(),ser=e=>new XMLSerializer().serializeToString(e);
-  if(terrainUrl)URL.revokeObjectURL(terrainUrl);
-  const url=terrainUrl=URL.createObjectURL(new Blob([`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${minX} ${minY} ${w} ${h}">${ser(DEFS)}${spriteDefs()}${live.map(ser).join('')}</svg>`],{type:'image/svg+xml'}));
-  const im=sv('image',{href:url,x:minX,y:minY,width:w,height:h});svg.insertBefore(im,L.plates);terrainLive=true;
-  im.addEventListener('load',()=>{if(drawnMap!==m)return;requestAnimationFrame(()=>{for(const g of live)g.remove();terrainLive=false;});},{once:true});
-  // (never silently live for good: an image that fails, or doesn't come within 4 s, is a failure)
-  im.addEventListener('error',()=>assert(false,'view: the board\'s terrain image loads'),{once:true});
-  setTimeout(()=>{if(drawnMap===m)assert(!terrainLive,'view: the board\'s terrain image loads within 4 s');},4000);
+  const m=drawnMap,ser=e=>new XMLSerializer().serializeToString(e),PAD=4;
+  // (each part carries only the definitions it names: the gradients, patterns and icons its shapes use, not all 9 KB of them)
+  const defs=new Map();for(const d of[...DEFS.children,...document.querySelector('body > svg defs').children])if(d.id)defs.set(d.id,ser(d));
+  const used=body=>{const ids=new Set();for(const x of body.matchAll(/url\(#([^)]+)\)|href="#([^"]+)"/g))ids.add(x[1]||x[2]);return '<defs>'+[...ids].map(i=>defs.get(i)||'').join('')+'</defs>';};
+  for(const u of terrainUrls)URL.revokeObjectURL(u);terrainUrls=[];
+  const byTile=new Map(),rest=[];for(const g of L.terrain.children){const t=g.dataset&&g.dataset.tile;if(t==null){rest.push(g);continue;}if(!byTile.has(t))byTile.set(t,[]);byTile.get(t).push(g);}
+  const parts=[...[...L.plates.children].map(g=>[g]),...byTile.values(),[...rest,L.city]];
+  const live=[L.plates,L.terrain,L.city],ims=parts.map(els=>{
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const e of els){const b=e.getBBox();if(!b.width&&!b.height)continue;x0=Math.min(x0,b.x);y0=Math.min(y0,b.y);x1=Math.max(x1,b.x+b.width);y1=Math.max(y1,b.y+b.height);}
+    x0-=PAD;y0-=PAD;const w=x1+PAD-x0,h=y1+PAD-y0;
+    const url=URL.createObjectURL(new Blob([`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${x0} ${y0} ${w} ${h}">${(body=>used(body)+body)(els.map(ser).join(''))}</svg>`],{type:'image/svg+xml'}));terrainUrls.push(url);
+    const im=sv('image',{href:url,x:x0,y:y0,width:w,height:h});svg.insertBefore(im,L.plates);return im;});
+  terrainLive=true;
+  // (never silently live for good: a part that fails, or doesn't come within 8 s, is a failure)
+  Promise.all(ims.map(im=>new Promise((ok,no)=>{im.addEventListener('load',ok,{once:true});im.addEventListener('error',no,{once:true});})))
+    .then(()=>{if(drawnMap!==m)return;requestAnimationFrame(()=>{for(const g of live)g.remove();terrainLive=false;});},()=>assert(false,'view: the board\'s terrain images load'));
+  // (8 s: the parts load in about 0.3 s, 2 s on a CPU slowed 6x; the timer rule, 1.5x that and 5 s)
+  setTimeout(()=>{if(drawnMap===m)assert(!terrainLive,'view: the board\'s terrain images load within 8 s');},8000);
 }
 /* the terrain still drawn live, its image on its way (asImage): the board's live elements include it until then */
 export let terrainLive=false;
