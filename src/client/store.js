@@ -14,6 +14,7 @@ const KEYS = {
   history: 'eldorado-hist',     // history panel mode (feed.js)
   rspeed: 'eldorado-rspeed2',   // replay speed (replay.js)
   rside: 'eldorado-rside',      // replay side panel (replay.js)
+  midzoom: 'eldorado-midzoom',  // how far this machine trusts redraws while zooming, per screen size (board/camera.js)
 };
 export function load(k) {
   try { return localStorage.getItem(KEYS[k]); }
