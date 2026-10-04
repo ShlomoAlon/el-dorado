@@ -128,7 +128,7 @@ function asImage(svg){
     return{url,x0,y0,w,h};});
   // the images, drawn as they are (one layer) until the terrain is baked into pixels (bake, below)
   const ims=parts.map(q=>{const im=sv('image',{href:q.url,x:q.x0,y:q.y0,width:q.w,height:q.h});svg.insertBefore(im,L.plates);return im;});
-  terrainLive=true;
+  terrainLive=true;bakeDue=true;
   // (never silently live for good: a part that fails, or doesn't come within 8 s, is a failure)
   Promise.all(ims.map(im=>new Promise((ok,no)=>{im.addEventListener('load',ok,{once:true});im.addEventListener('error',no,{once:true});})))
     .then(()=>{if(drawnMap!==m)return;requestAnimationFrame(()=>{for(const g of live)g.remove();terrainLive=false;bake(parts,ims,m);});},()=>assert(false,'view: the board\'s terrain images load'));
@@ -137,6 +137,8 @@ function asImage(svg){
 }
 /* the terrain still drawn live, its image on its way (asImage): the board's live elements include it until then */
 export let terrainLive=false;
+/* the terrain is drawn but not yet baked (asImage, then bake): what a test waits for before calling the board at rest */
+let bakeDue=false;export const baking=()=>bakeDue;
 /* the terrain baked into pixels, like a photo (owner, 2026-10-04): a picture that is already pixels is only stretched by
    the GPU when the board zooms or pans, so a zoom draws nothing and stays sharp up to the picture's own resolution. Drawn
    as vectors, every zoom needed the terrain drawn again, which cost frames (and on Safari, pieces settling apart). Baked once
@@ -177,7 +179,7 @@ function bake(parts,ims,m){
       for(const l of terrainLevels)l.el.remove();terrainLevels=levels;shownLevel=null;for(const im of ims)im.remove(); // (baked: the vector images go)
       let px=0;for(const l of levels)for(const c of l.el.children)px+=c.width*c.height;
       assert(px<=BUDGET*1.4,`view: the baked terrain stays within its memory budget (${(px/1e6).toFixed(1)} MP)`);
-      if(terrainHook.ready)terrainHook.ready();};
+      bakeDue=false;if(terrainHook.ready)terrainHook.ready();};
     later(step);
   },()=>assert(false,'view: the board\'s terrain images load'));
   // (another screen's pixel density: baked again for it)

@@ -9,7 +9,7 @@ const file = args.find(a => a.endsWith('.html')) || path.join(__dirname, '..', '
 const CPU = +(opt('--cpu') || 4), [W, H] = (opt('--size') || '1440x900').split('x').map(Number), PROFILE = args.includes('--profile');
 
 (async () => {
-  const b = await chromium.launch(); const p = await openPage(b, 'perf', { viewport: { width: W, height: H } });
+  const b = await chromium.launch({ timing: true }); const p = await openPage(b, 'perf', { viewport: { width: W, height: H } });
   const cdp = await p.context().newCDPSession(p);
   await p.goto('file://' + path.resolve(file)); await p.waitForTimeout(700);
   await p.click('#sGo'); await p.waitForTimeout(1800);

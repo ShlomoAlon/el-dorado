@@ -25,9 +25,9 @@ const res = await Promise.all([
   ['engine', 'node test/engine.test.mjs' + (full ? '' : ' --quick'), full ? 120 : 50],
   ['layout', 'node test/layout.cjs' + (full ? '' : ' --quick'), full ? 130 : 60],
   ['flows', 'node test/flows.cjs', 40],
-  ['taps', 'node test/taps.cjs', 15],
+  ['taps', 'node test/taps.cjs', 21], // (GPU path: 16 s alone, slower beside the others: lib.cjs)
   ['play', 'node test/play.cjs' + (full ? ' --games 6' : ''), full ? 180 : 80], // whole games through the UI, every assertion on (coverage)
-  ['menus', 'node test/menus.cjs', 20],
+  ['menus', 'node test/menus.cjs', 31], // (GPU path: 24 s alone)
   ['worker', 'npx wrangler deploy --dry-run --outdir /tmp/wdry', 20],
   ...(online ? [['online', 'node test/online.cjs', 290]] : []),
 ].map(run));

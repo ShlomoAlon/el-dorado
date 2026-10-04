@@ -49,7 +49,10 @@ export function freshInit(during) {
   const check = () => {
     if (!during()) { due = 0; return; }
     // a frame is due: judged at the next check. Not for long: a page that always has a frame due is never judged, and never rests
-    if (raf) { if (++due >= 40) { due = 0; assert(false, 'view: the page rests (a frame was due at every check for 10 s)'); } return; }
+    // (an animation running, a card's flight or an explorer's walk, is a page at work, not one that can't rest: on a slow GPU
+    // a game of fast AIs animates without pause; a frame that asks for another with nothing new is caught below, every time)
+    if (raf) { if (document.getAnimations().some(a => a.playState === 'running' && a.effect && a.effect.getComputedTiming().endTime !== Infinity)) { due = 0; return; }
+      if (++due >= 40) { due = 0; assert(false, 'view: the page rests (a frame was due at every check for 10 s)'); } return; }
     due = 0;
     safe(frameMark, 'checks'); // (what came before this frame is judged as before)
     mo.observe(app, { subtree: true, childList: true, attributes: true, attributeOldValue: true, characterData: true, characterDataOldValue: true });
