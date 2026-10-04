@@ -145,7 +145,7 @@ export let terrainLive=false;
    drawn a part at a time, a few milliseconds a frame). All three stay on the GPU; the one that fits the zoom is shown,
    the others kept at opacity 0 (never removed: a removed picture is dropped from the GPU and costs an upload to show
    again). Canvases, not image files: the browser may drop a decoded image to save memory; a canvas keeps its pixels */
-export let terrainLevels=[];let shownLevel=null;
+let terrainLevels=[],shownLevel=null;
 export const terrainHook={ready:null}; // (camera.js: shows the level that fits the view once the bake is done)
 const TILE=1024,BLEED=4,BUDGET=24e6; // (BUDGET: device pixels of the densest level, about 96 MB; the two others add a third)
 let dprWatch=null;
