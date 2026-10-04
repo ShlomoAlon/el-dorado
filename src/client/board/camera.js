@@ -21,16 +21,24 @@ const hoverHooks = [];
 /* things drawn over the board in screen space (the hover tip) hide when the board moves */
 export function onViewMove(f) { hoverHooks.push(f); }
 const moved = () => { for (const f of hoverHooks) f(); };
+/* the board's layer has the will-change hint only while it moves (Chrome's own advice: add it before, remove it after): with
+   it, a pan or zoom only moves and stretches the picture already drawn (smooth); without it at rest, Chrome draws the board
+   at the resolution its zoom needs. Kept on for good, it never redrew at a higher one: at maximum zoom the board showed a
+   third of the detail it needed (31% on the owner's screen, 39% at 4K; 2026-10-04) */
+let moving = false;
+const still = () => { if (moving) { moving = false; stage().style.willChange = ''; } };
 function applyView() {
-  if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; });
+  if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; const t = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`, st = stage();
+    if (st.style.transform === t) return; // (the view didn't move: nothing written, no hint)
+    if (!moving) { moving = true; st.style.willChange = 'transform'; } st.style.transform = t; });
   scheduleSettle();
 }
 function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 250); if (CHECKS) { clearTimeout(restT); restT = setTimeout(restCheck, 700); } }
 function settle() {
-  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
+  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) { still(); return; }
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; still();
   });
 }
 /* checks: once the board is at rest (no gesture or glide, settled) */
