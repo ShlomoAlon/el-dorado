@@ -26,11 +26,21 @@ function applyView() {
   scheduleSettle();
 }
 function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 250); if (CHECKS) { clearTimeout(restT); restT = setTimeout(restCheck, 700); } }
+/* EXPERIMENT (branch only): once settled, a short animation on the board's layer makes Chrome draw it again at the largest
+   scale that animation reaches (it keeps a will-change layer's resolution otherwise): 'inplace' to the same transform,
+   'x2' toward twice the scale, held at the start (steps) so nothing moves */
+let ZEXP = ''; try { ZEXP = localStorage.getItem('zexp') || ''; } catch (e) { /* expected: storage blocked; no experiment */ }
+function kick() {
+  if (!ZEXP) return; const st = stage(), t = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
+  const f = ZEXP === 'inplace' ? 1 : +ZEXP.slice(1), t2 = `translate3d(${view.x}px,${view.y}px,0) scale(${f * view.s / baked})`;
+  diag(`kick ${ZEXP}`);
+  st.animate([{ transform: t }, { transform: t2 }], { duration: 120, easing: 'steps(1, end)' });
+}
 function settle() {
-  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
+  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) { kick(); return; }
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; kick();
   });
 }
 /* checks: once the board is at rest (no gesture or glide, settled) */
