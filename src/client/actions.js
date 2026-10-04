@@ -18,7 +18,7 @@ import { feedWatch } from './feed.js';
 import { sfx, sfxEvent } from './sound.js';
 import { aiKick, aiReset } from './ai.js';
 import { netAct, netPlay, reconnect } from './online.js';
-import { diag } from './debug.js';
+import { diag, directAction } from './debug.js';
 
 /* a different game is on show (a new deal, a loaded save, a replay, an online game): the old one's AI moves are off, its
    board and elements go, the new board is drawn and fitted */
@@ -145,6 +145,7 @@ let buyFrom=null;const takeBuyFrom=()=>{const r=buyFrom;buyFrom=null;return r&&D
 export function confirmBuy(){const r=document.querySelector('#buySlot .mcard').getBoundingClientRect();buyFrom={left:r.left,top:r.top,width:r.width,height:r.height,at:Date.now()};act({t:'buy',type:UI.buy.t,cards:UI.picks.slice()});}
 /* drop the selection. A removal still to choose (Scientist, Travel Log) stays asked: nothing else can happen before it */
 export function cancelMode(){
+  directAction();
   UI.card=null;UI.picks=[];UI.buy=null;UI.pending=null;UI.mode=S.turn.pending?'trashPick':'idle';render();
 }
 /* what the player to act could buy right now with the cards in hand ([{src, i, t}]: the engine's rule) */
@@ -167,6 +168,7 @@ export function undo(){
 export const canUndo=()=>online()?NET.canUndo:recCanUndo(G.rec);
 
 export function onHandCard(id){
+  directAction();
   if(S.over||passing()||!canAct())return; // (an explorer still walking holds nothing up: animation follows the state, never gates input)
   switch(UI.mode){
     case 'pay':case 'endTurn':{togglePick(id);return;}

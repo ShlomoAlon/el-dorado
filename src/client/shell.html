@@ -305,10 +305,11 @@ svg.nudge{display:block;width:1px;height:1px;margin-bottom:-1px;overflow:visible
 .back.b3{transform:translate(6px,-6px);opacity:.8}
 .empty-slot{position:absolute;inset:0;border-radius:8px;border:1.5px dashed var(--line2)}
 #discStack .mcard{--cw:74px;position:absolute;inset:0}
-#actBtns{position:absolute;right:16px;bottom:calc(16px + 104px + 34px);z-index:13;display:grid;grid-template-columns:repeat(2,minmax(0,var(--bslotW,88px)));grid-template-areas:'s2 s3' 'p p';gap:8px} /* fixed slots (hud.js btnWire); Undo's slot (s3) is on the right, above End turn's edge, since it's the button most often alone */
+#actBtns{position:absolute;right:16px;bottom:calc(16px + 104px + 34px);z-index:13;pointer-events:none;display:grid;grid-template-columns:repeat(2,minmax(0,var(--bslotW,88px)));grid-template-areas:'s2 s3' 'p p';gap:8px} /* fixed slots (hud.js btnWire); Undo's slot (s3) is on the right, above End turn's edge, since it's the button most often alone */
+.bslot{pointer-events:auto} /* (the area keeps its size empty: only its buttons take a tap) */
 .bslot.s3{grid-area:s3}.bslot.s2{grid-area:s2}.bslot.p{grid-area:p}.bslot{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bslot:not(.p){padding-inline:10px}.bslot.off{visibility:hidden;transition:none}.bslot.p{padding-block:9px} /* (the big one: as tall as the others; its words fit, hud.js checkLabels) */
 .btn[disabled]{opacity:.35;pointer-events:none}
-#playLbl{position:absolute;left:0;top:0;z-index:11;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);pointer-events:none;transition:opacity .2s}
+#playLbl{position:absolute;right:0;top:0;z-index:11;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);pointer-events:none;transition:opacity .2s}
 .zoomctl{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:12}
 .zoomctl button{width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:17px;font-weight:700;display:grid;place-items:center}
 
