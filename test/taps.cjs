@@ -29,6 +29,27 @@ const T = report('taps');
       return null; });
   }
   T.ok('a target with an explorer just below it', !!setup);
+  // a hand card under the mouse rises and grows: a tap on its risen top, above where it rests, chooses it (ledger #54); the page's
+  // check fails if the press goes anywhere else
+  // (first, while the person's hand is whole: their turn, just dealt)
+  { await p.mouse.move(5, 5); await settle(p);
+    // (where cards rest is where their hit areas are, always: measured from those, not from cards that may still be flying in)
+    // (a card a tap chooses: one that can move an explorer; a coin card can't be chosen, and rightly nothing happens)
+    const c = await p.evaluate(() => { const E = window.__ED, hs = [...document.querySelectorAll('#cardhits .chit:not(.risen)')].filter(h => E.S.players[E.S.cur].hand.includes(h.dataset.id))
+      .map(h => ({ id: h.dataset.id, r: h.getBoundingClientRect() })).sort((a, b) => a.r.left - b.r.left);
+      const can = id => { E.onHandCard(id); E.render(); const ok = E.UI.mode === 'card' && E.UI.card === id; E.cancelMode(); E.render(); return ok; };
+      const m = hs.filter(h => can(h.id)).sort((a, b) => Math.abs(hs.indexOf(a) - hs.length / 2) - Math.abs(hs.indexOf(b) - hs.length / 2))[0];
+      return m && !E.S.players[E.S.cur].ai ? { id: m.id, x: m.r.left + m.r.width / 2, y: m.r.top + m.r.height * .6, rested: Math.min(...hs.map(h => h.r.top)) } : null; });
+    T.ok('a hand card to rise', !!c);
+    if (c) { await p.mouse.move(c.x, c.y); await settle(p);
+      const up = await p.evaluate(() => window.__ED.UI.hover), risen = await p.evaluate(() => { const r = [...document.querySelectorAll('#cards .card:not(.inplay)')].map(e => e.getBoundingClientRect()).sort((a, b) => a.top - b.top)[0]; return { x: r.left + r.width / 2, top: r.top }; }); // (the card drawn highest: the risen one)
+      T.ok('the card under the mouse rises above where every card rests', up === c.id && risen.top < c.rested - 8, `hovered ${up}, its top ${Math.round(risen.top)} (the highest resting top ${Math.round(c.rested)})`);
+      await p.mouse.click(risen.x, (risen.top + c.rested) / 2, { delay: 80 }); // (between its risen top and every resting place: over its risen part only)
+      T.ok('a tap on its risen top chooses it', await p.waitForFunction(id => window.__ED.UI.mode === 'card' && window.__ED.UI.card === id, c.id, { timeout: 3000 }).then(() => true, () => false), await p.evaluate(() => `mode ${window.__ED.UI.mode} ${window.__ED.UI.card}; ` + window.__ED.diagLog().filter(l => / (hover|press|TMPE)/.test(l)).slice(-6).join(' / ')));
+      // (and back to the setup's choice: a card whose targets include the space the steps below tap)
+      await p.evaluate(k => { const E = window.__ED; E.cancelMode(); E.render(); if (!k) return;
+        for (const id of E.S.players[E.S.cur].hand) { E.onHandCard(id); E.render(); if (E.targets().has(k)) return; E.cancelMode(); E.render(); } }, setup && setup.k);
+      await p.mouse.move(5, 5); await settle(p); } }
   if (setup) {
     await p.waitForFunction(() => !window.__ED.walking(), null, { timeout: 10000 }); await settle(p);
     // just below the target's centre: inside the space, and inside the figure's box that stands up into it

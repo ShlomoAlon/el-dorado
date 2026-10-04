@@ -7,7 +7,9 @@ import { afterDrawn } from './frame.js';
 /* where: a name; box: the element that holds them (only a point where the page's topmost element is inside it is judged:
    under a menu or another panel the pointer isn't over these items at all); items(): the elements; rest(el): its resting box in page coordinates {l, t, w, h, z, rot?: degrees about its centre} (the topmost resting
    box under the pointer wins where they overlap, as in a fanned hand); hovered(): the highlighted element or null; off(): true while the rule doesn't apply (a drag) */
-export function hoverCheck(where, box, x, y, items, rest, hovered, off = () => false, about = () => '') {
+/* (drawn(el): where the highlighted item is drawn beyond its resting place, the hand's risen card: over no resting place, the
+   pointer there is on it) */
+export function hoverCheck(where, box, x, y, items, rest, hovered, off = () => false, about = () => '', drawn = () => null) {
   afterDrawn(() => {
     // (whether the rule applies is decided when the page is judged, not when the pointer moved: a drag may have begun since)
     if (off()) return;
@@ -21,7 +23,10 @@ export function hoverCheck(where, box, x, y, items, rest, hovered, off = () => f
       // point is not judged; the bug this guards is a card taking tens of pixels of its neighbour's place)
       const ex = r.w / 2 - Math.abs(lx), ey = r.h / 2 - Math.abs(ly); if (Math.abs(ex) < 1 && ey > -1 || Math.abs(ey) < 1 && ex > -1) return;
       if (ex > 0 && ey > 0) { under = e; uz = r.z; } }
-    const h = hovered() || null, name = e => e ? (e.dataset.k || e.dataset.id || e.className.split(' ')[0]) : 'none';
+    const hd = hovered(), d = !under && hd && drawn(hd);
+    if (d) { const cx = d.l + d.w / 2, cy = d.t + d.h / 2, a = -(d.rot || 0) * Math.PI / 180, dx = x - cx, dy = y - cy;
+      if (Math.abs(dx * Math.cos(a) - dy * Math.sin(a)) < d.w / 2 - 1 && Math.abs(dx * Math.sin(a) + dy * Math.cos(a)) < d.h / 2 - 1) under = hd; }
+    const h = hd || null, name = e => e ? (e.dataset.k || e.dataset.id || e.className.split(' ')[0]) : 'none';
     assert(h === under, `view: the card under the pointer is the one whose resting place is there (a grown card never takes its neighbour's place: ${where}, ${name(h)} over ${name(under)}; at ${Math.round(x)},${Math.round(y)} the page has ${t ? (t.id ? '#' + t.id : t.tagName.toLowerCase() + '.' + (t.getAttribute('class') || '').split(' ')[0]) + (t.dataset && t.dataset.id ? ' ' + t.dataset.id : '') : 'nothing'}${under ? ', resting there: ' + name(under) : ''}${about(t, under)})`);
   });
 }

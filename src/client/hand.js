@@ -26,6 +26,12 @@ export function setT(el, x, y, rot, sc) { el.__t = { x, y, rot, sc }; setStyle(e
 /* a card's hit area (#cardhits): where it rests, which alone takes the pointer (hover, tap, drag). The card itself is only
    drawn: it rises, grows and flies without ever taking a neighbour's place under the pointer (owner, 2026-10-03: the card
    underneath has priority; the market's slots work the same way) */
+/* the risen card's hit area: one, made once; a press on it is a press on the card's own (its handlers, its pointer capture) */
+let rhEl = null;
+function risenHit() { if (rhEl) return rhEl; rhEl = document.createElement('div'); rhEl.className = 'chit risen'; rhEl.style.zIndex = 1; rhEl.style.display = 'none';
+  rhEl.addEventListener('pointerdown', e => { const el = cardEls.get(rhEl.dataset.id), h = el && el.__hit; if (!h) return;
+    const f = new PointerEvent('pointerdown', e); h.dispatchEvent(f); if (f.defaultPrevented) e.preventDefault(); });
+  $('#cardhits').appendChild(rhEl); return rhEl; }
 function setHit(el, x, y, rot, sc, z) { const h = el.__hit; if (!h) return; setStyle(h, 'transform', T(x, y, rot, sc)); setStyle(h, 'zIndex', z); }
 /* the card's box (cw × 1.4 cw, scaled about its centre) covering a screen rectangle */
 function rectT(rect, rot) { const cw = geo.cw, ch = cw * 1.4, A = geo.app, sc = rect.width / cw; return [rect.left - A.left - (cw - rect.width) / 2, rect.top - A.top - (ch - rect.height) / 2, rot || 0, sc]; }
@@ -65,7 +71,7 @@ function layoutCards() {
   // the purchase slot above the hand, the spending tray to its right
   const bw = Math.round(cw * (phone ? .78 : .72)), bx = W / 2 - bw / 2, by = H - ch * 1.02 - 14 - bw * 1.4 - 26, bs = $('#buySlot');
   buySlotBox.x = bx; buySlotBox.y = by; buySlotBox.w = bw; setStyle(bs, '--bw', bw + 'px'); setStyle(bs, '--bx', bx + 'px'); setStyle(bs, '--by', by + 'px');
-  const tsc = bw / cw * .78, tw = cw * tsc; let tk = 0;
+  const tsc = bw / cw * .78, tw = cw * tsc; let tk = 0, risenAt = null;
   hand.forEach((id, i) => {
     // (a card still entering, or dragged, is drawn where its flight or the drag puts it; its hit area rests in its place from the
     // start: a hit area only ever where its card rests, never where it was made (the game area's corner, over the Menu button))
@@ -88,7 +94,12 @@ function layoutCards() {
     // above it: a card never covers End turn (the spending tray beside the buy slot is placed apart, above them)
     const B = geo.act; if (B && !(paying && UI.picks.includes(id)) && x < B.right && x + cw > B.left) y = Math.max(y, B.bottom + 6 + ch * (sc - 1) / 2 + Math.sin(Math.abs(rot) * Math.PI / 180) * cw * sc / 2); // (its drawn box: grown about its centre, and tilted)
     if (!moving) { setStyle(el, 'zIndex', z); setT(el, x, y, rot, sc); }
+    if (i === hi && !moving) risenAt = [id, x, y, rot, sc];
   });
+  // the hovered card's own hit area where it is drawn, risen and grown: under every resting place (a neighbour's resting place
+  // keeps priority where they overlap), the card's own above them (ledger #54: its top drew over nothing that took the pointer)
+  const rh = risenHit(); if (risenAt) { const [id, x, y, rot, sc] = risenAt; rh.dataset.id = id; setStyle(rh, 'transform', T(x, y, rot, sc)); setStyle(rh, 'display', ''); }
+  else setStyle(rh, 'display', 'none');
   // the play area: a small overlapping row left of the discard pile
   const psc = .46, pw = cw * psc, ph = ch * psc, baseX = W - 16 - pileW - 24 - pw, py = H - 16 - (phone ? 76 : 104) + ((phone ? 76 : 104) - ph);
   play.forEach((id, i) => { const el = cardEls.get(id); if (!el) return; const k = play.length - 1 - i; if (!el.__enter) { setStyle(el, 'zIndex', 5 + i); setT(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc); } setHit(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc, 5 + i); });
@@ -162,7 +173,7 @@ function pileShow(box, ids) {
     if (box.children[i + 1] !== e) box.insertBefore(e, box.children[i + 1] || null); });
 }
 function setLeft(el, txt) { let b = el.querySelector('.left'); if (!txt) { if (b) b.remove(); return; } if (!b) { b = document.createElement('div'); b.className = 'left'; el.appendChild(b); } setText(b, txt); }
-function clear() { for (const [, el] of cardEls) { el.remove(); if (el.__hit) el.__hit.remove(); } cardEls.clear(); lastViewer = -1; entering = []; }
+function clear() { for (const [, el] of cardEls) { el.remove(); if (el.__hit) el.__hit.remove(); } cardEls.clear(); if (rhEl) setStyle(rhEl, 'display', 'none'); lastViewer = -1; entering = []; }
 export const handPart = { name: 'hand',  update, reset: clear };
 
 /* a card bought (or taken) by the player on view flies from where it was bought onto their discard pile: the pile's top
@@ -181,7 +192,10 @@ export function flyToDiscard(from) {
 const overCard = t => { const h = t && t.closest ? t.closest('.chit') : null, id = h && h.dataset.id;
   return id && !drag && !covered() && hp().hand.includes(id) ? id : null; };
 let pointer = null, decided = 0; // (the mouse's last place on the page, a touch having none between taps; decided: times the hover was worked out)
-const setHover = (id, how) => { decided++; if (UI.hover !== id) { if (CHECKS) diag(`hover ${UI.hover} → ${id} (${how})`); UI.hover = id; } }; // (a change draws a frame, which asks again: the same answer, and it rests)
+const setHover = (id, how) => { decided++; if (UI.hover === id) return;
+  if (CHECKS) { diag(`hover ${UI.hover} → ${id} (${how})`);
+    if (pointer && !drag && !covered() && onRisen(pointer.x, pointer.y)) assert(false, `view: the card drawn under the pointer is the card under it (${UI.hover}, drawn risen beyond every card's resting place, lost the pointer to ${id || 'nothing'} at ${Math.round(pointer.x)},${Math.round(pointer.y)}: ${how})`); }
+  UI.hover = id; }; // (a change draws a frame, which asks again: the same answer, and it rests)
 const pointAt = e => { pointer = e.pointerType === 'mouse' ? { x: e.clientX, y: e.clientY } : null; decidedOn = e.target; setHover(overCard(e.target), e.type); };
 for (const t of ['pointermove', 'pointerover']) addEventListener(t, pointAt, { capture: true, passive: true });
 document.documentElement.addEventListener('pointerleave', () => { pointer = null; setHover(null); });
@@ -199,8 +213,16 @@ const pastHand = y => y < geo.app.top + geo.app.height - geo.cw * 1.4 * 1.25; //
 function checkHover(x, y) { if (!CHECKS) return; const n = decided, off = () => !!drag || !S || covered() || G.replay || decided !== n; if (off()) return;
   const idOf = el => [...cardEls].find(([, e]) => e === el)?.[0], where = id => !id ? 'none' : `${id} ${hp().hand.includes(id) ? 'in the hand' : hp().play.includes(id) ? 'in play' : 'elsewhere'}`;
   hoverCheck('hand', $('#cardhits'), x, y, () => hp().hand.map(id => cardEls.get(id)).filter(Boolean), el => el.__rest, () => (UI.hover && cardEls.get(UI.hover)) || null, off,
-    (t, under) => `; the hit area's card ${where(t.closest('.chit') && t.closest('.chit').dataset.id)}, the resting card ${where(idOf(under))}; hover ${UI.hover}, covered ${covered()}, mode ${UI.mode}; decided over ${decidedOn ? (decidedOn.id ? '#' + decidedOn.id : decidedOn.tagName.toLowerCase() + '.' + String(decidedOn.className && decidedOn.className.baseVal !== undefined ? decidedOn.className.baseVal : decidedOn.className).split(' ')[0]) + (decidedOn.closest('[id]') ? ' in #' + decidedOn.closest('[id]').id : '') + ' (' + (decidedOn.getAnimations ? decidedOn.getAnimations({ subtree: false }).length : '?') + ' animations)' : 'nothing'}`); }
+    (t, under) => `; the hit area's card ${where(t.closest('.chit') && t.closest('.chit').dataset.id)}, the resting card ${where(idOf(under))}; hover ${UI.hover}, covered ${covered()}, mode ${UI.mode}; decided over ${decidedOn ? (decidedOn.id ? '#' + decidedOn.id : decidedOn.tagName.toLowerCase() + '.' + String(decidedOn.className && decidedOn.className.baseVal !== undefined ? decidedOn.className.baseVal : decidedOn.className).split(' ')[0]) + (decidedOn.closest('[id]') ? ' in #' + decidedOn.closest('[id]').id : '') + ' (' + (decidedOn.getAnimations ? decidedOn.getAnimations({ subtree: false }).length : '?') + ' animations)' : 'nothing'}`, drawnBox); }
 if (CHECKS) addEventListener('pointermove', e => checkHover(e.clientX, e.clientY));
+/* checks: the card drawn under the pointer is the card under it. Where the hovered card is drawn (risen and grown) beyond every
+   card's resting place, it is the only card there: the pointer there is on it, and a press there is on it (ledger #54: a tap
+   on a raised card's top did nothing, and a mouse moving onto that top lowered the card from under it). Where it covers a
+   neighbour's resting place, the neighbour has priority (owner, 2026-10-03), so only the part over no resting place is judged */
+const inBox = (x, y, r) => { const cx = r.l + r.w / 2, cy = r.t + r.h / 2, a = -(r.rot || 0) * Math.PI / 180, dx = x - cx, dy = y - cy;
+  return Math.abs(dx * Math.cos(a) - dy * Math.sin(a)) < r.w / 2 - 1 && Math.abs(dx * Math.sin(a) + dy * Math.cos(a)) < r.h / 2 - 1; };
+const drawnBox = el => { const t = el.__t, cw = geo.cw, ch = cw * 1.4, A = geo.app; return t && { l: A.left + t.x + cw * (1 - t.sc) / 2, t: A.top + t.y + ch * (1 - t.sc) / 2, w: cw * t.sc, h: ch * t.sc, rot: t.rot }; };
+const onRisen = (x, y) => { const el = UI.hover && cardEls.get(UI.hover), b = el && drawnBox(el); return !!b && inBox(x, y, b) && ![...cardEls.values()].some(c => c.__rest && inBox(x, y, c.__rest)); };
 function wire(el, id) {
   const hit = el.__hit; // (the pointer's: its events; the card: what is drawn and moved)
   hit.addEventListener('pointerdown', e => {
