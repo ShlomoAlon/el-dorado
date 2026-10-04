@@ -325,7 +325,10 @@ const centre = () => { if (!focus || !trayMenus().includes(focus.split('@')[0]))
 const atCentre = (k, f) => { const m = k.split('@')[0], [fm, fs] = f.split('@'); return fs === '*' ? m === fm : k === f; };
 function flowSvg() {
   const f = centre(), [fm, fs] = f.split('@'), all = segs(), ins = new Map(), outs = new Map(); // (neighbour box → the transitions between it and the centre)
-  for (const [a, fk, tk] of all) { const fi = atCentre(fk, f), ti = atCentre(tk, f); if (ti && !fi) { if (!ins.has(fk)) ins.set(fk, []); ins.get(fk).push(a); } if (fi && !ti) { if (!outs.has(tk)) outs.set(tk, []); outs.get(tk).push(a); } }
+  // (a menu in one state: every transition that applies there, those for any state included, each other end as it is in that state:
+  // "you're able to go to settings in-game" (owner, 2026-10-05); a menu in any state: all of its transitions)
+  const pairs = fs === '*' ? all.map(([a, fk, tk]) => [a, fk, tk]) : D.arrows.filter(a => a.from !== '*' && (a.states.includes(fs) || a.states.includes('*'))).map(a => { const [tm, ts] = a.to.split('@'); return [a, a.from + '@' + fs, ts === '*' ? tm + '@' + fs : a.to]; });
+  for (const [a, fk, tk] of pairs) { const fi = atCentre(fk, f), ti = atCentre(tk, f); if (ti && !fi) { if (!ins.has(fk)) ins.set(fk, []); ins.get(fk).push(a); } if (fi && !ti) { if (!outs.has(tk)) outs.set(tk, []); outs.get(tk).push(a); } }
   const ms = trayMenus(), rank = k => ms.indexOf(k.split('@')[0]) * 10 + ['*', ...[...STATES].map(([v]) => v)].indexOf(k.split('@')[1]), byOrder = m => [...m.keys()].sort((p, q) => rank(p) - rank(q)), inK = byOrder(ins), outK = byOrder(outs);
   const own = D.buttons.filter(b => b.menu === fm && (fs === '*' || b.states.includes(fs) || b.states.includes('*'))); // (the centre's own buttons, listed under it)
   const colH = n => n * 70 - 28, H1 = Math.max(colH(inK.length), colH(outK.length), NH + 40 + 2 * (own.length * 16 + 20)), fy = H1 / 2 - NH / 2 - 14;

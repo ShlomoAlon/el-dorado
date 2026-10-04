@@ -100,6 +100,7 @@ const T = report('editor');
   T.ok('the chart starts on the Main menu, any state, with what leads to it and from it; every menu once below', await p.evaluate(() => !!document.querySelector('#edPanel .ed-node.focus[data-node="main@*"]')
     && document.querySelectorAll('#edPanel .ed-node.tray, #edPanel .ed-node.tnear, #edPanel .ed-node.tfocus').length === document.querySelectorAll('#edPanel .ed-dir').length - 1 && document.querySelectorAll('#edPanel .ed-ln').length >= 10)); // (- 1: Any menu, listed only)
   await p.click('#edPanel [data-centre="main@game"]');
+  T.ok('a menu in one state shows what applies there for any state too, its other end in that state (Settings in a game)', await p.evaluate(() => !!document.querySelector('#edPanel .ed-node[data-node="settings@game"]') && [...document.querySelectorAll('#edPanel text.ed-ar')].some(t => /^Settings/.test(t.textContent)) && [...document.querySelectorAll('#edPanel text.ed-ar')].some(t => /^Back$/.test(t.textContent))));
   T.ok('a state tab centres the menu in that state: the Main menu opens here in a game', await p.evaluate(() => /★/.test(document.querySelector('#edPanel .ed-node.focus[data-node="main@game"] .m').textContent)));
   await p.click('#edPanel .ed-node[data-node="results@*"]');
   T.ok('a menu clicked below is centred, and shown in the directions', await p.evaluate(() => { const r = document.querySelector('#edPanel .ed-dir[data-menu="results"]'), d = document.querySelector('#edPanel .ed-dirs'), a = r.getBoundingClientRect(), b = d.getBoundingClientRect();
