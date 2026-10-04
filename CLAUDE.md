@@ -230,8 +230,10 @@ Follow these in new code and fix toward them:
   on anything over the board (re-blurred every frame it moves); no infinite animations on SVG board elements (repaint the board).
   Prefer the standard, well-trodden way; if it's slow, find out why and fix the cause (or tell the owner) instead of adding workarounds.
   Board rendering changes must also pass `NODE_PATH=$(npm root -g) node test/render.cjs` (grab changes nothing, sharp after zoom, wheel latency).
-  Pan/zoom is Leaflet-style (researched; owner approved 2026-09-27): #stage is permanently `will-change: transform`,
-  gestures only change its transform, and once zooming stops the scale is baked into #bscale (one sharp redraw);
+  Pan/zoom (owner, 2026-10-04, replacing the permanent will-change of 2026-09-27): the terrain is baked once into tiled
+  canvases at three densities (terrain.js), which a zoom only stretches, like a photo; #stage has no will-change, so the small
+  live layers (explorers, labels, overlays) are drawn again at each zoom by Chrome's own rules; gestures only change #stage's
+  transform, and once zooming stops the scale is baked into #bscale;
   board text is HTML (#blabels*), wheel deltas normalised as d3-zoom, Safari pinch via gesture events.
   The brief blur while zooming in, before the bake, is accepted by the owner — don't trade smoothness for it.
 - View code (docs/FRONTEND_REFACTOR.md): anything that changes state calls `render()`; each view part updates in the next frame
