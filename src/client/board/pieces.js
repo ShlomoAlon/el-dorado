@@ -10,6 +10,7 @@ import { render } from '../frame.js';
 import { meepleSVG } from '../meeple.js';
 import { view } from './camera.js';
 import { layout, xy } from './layout.js';
+import { movedTo } from '../debug.js';
 
 export const STEP = 260; // ms per space (the step sounds are timed to it: sound.js)
 const els = new Map(); // 'player-explorer' → { el, pin, shadow, tf }
@@ -41,7 +42,7 @@ function piecePos(pl, i) {
 /* an explorer is walking (the view's own: the walks it has started and not finished) */
 export const walking = () => moving.size > 0;
 const stopAnims = P => { P.walk = null; for (const a of P.anims.splice(0)) a.cancel(); moving.delete(P); };
-function rest(P, t) { if (P.tf === t) return; P.tf = t; P.el.style.transform = t; }
+function rest(P, t) { if (P.tf === t) return; movedTo(P.el, P.tf, t); P.tf = t; P.el.style.transform = t; }
 function update() {
   if (!S) return;
   S.players.forEach((p, pl) => p.pieces.forEach((k, i) => {

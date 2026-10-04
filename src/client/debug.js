@@ -58,13 +58,41 @@ function flashStep() {
 }
 /* checks: something from outside the page changed it, like a tap: a message from the server (another player acted, the game
    started). A change it makes is not the page's own flash */
+/* checks: transform jumps. The layout-shift check above can't see an element moved by its transform (the browser never counts
+   that as a shift), and this page moves nearly everything that way (the hand's cards, the explorers, the prompt's label): on
+   reload the board showed at the corner and jumped, seen by nothing (2026-10-04). So every write of a visible element's
+   transform through setStyle (dom.js) or an explorer's resting place (pieces.js) that moves it more than 2 px is judged once
+   that frame has run: moved by an animation or transition of its own, after the player's input (a click, a key, a drag, the
+   wheel), or in a declared layout change, it is fine; otherwise it jumped. (The camera's two layers have their own check:
+   camera.js) */
+const jumps = new Map(); let jumpsDue = false;
+const at = t => { const m = new DOMMatrixReadOnly(t); return [m.m41, m.m42, Math.hypot(m.a, m.b)]; };
+export function movedTo(el, from, to) {
+  if (!CHECKS || from == null || from === to || !playAt(performance.now())) return;
+  let a, b; try { a = at(from); b = at(to); } catch (e) { if (e.name === 'SyntaxError') return; throw e; } // (a percentage: not a position the matrix can hold)
+  const dx = b[0] - a[0], dy = b[1] - a[1]; if (Math.hypot(dx, dy) < 2 && Math.abs(b[2] - a[2]) < .02) return;
+  if (!jumps.has(el)) jumps.set(el, [dx, dy, performance.now(), from, to]);
+  if (!jumpsDue) { jumpsDue = true; afterFrame(judgeJumps); }
+}
+function judgeJumps() {
+  jumpsDue = false;
+  for (const [el, [dx, dy, t, from, to]] of jumps) {
+    if (!el.isConnected || !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    if (el.getAnimations().length || lastInput > t - 400 || expected(t)) continue;
+    const who = el.id ? '#' + el.id : el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.split(' ')[0] : '');
+    const r = el.getBoundingClientRect(), top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2), seen = !!top && (el.contains(top) || top.contains(el));
+    assert(false, `view: nothing moves without an animation or a direct action (transform jump: ${who}${el.dataset.k ? ' ' + el.dataset.k : ''} by ${Math.round(dx)},${Math.round(dy)} (${from} → ${to}); on top there: ${top ? (top.id ? '#' + top.id : top.tagName.toLowerCase() + '.' + String(top.className).split(' ')[0]) : 'nothing'}${seen ? '' : ' (covered)'}; log: ${lines.slice(-4).join(' / ')})`);
+  }
+  jumps.clear();
+}
 export function outsideEvent() { if (CHECKS) lastInput = performance.now(); }
 export function watchFlash() {
   if (!CHECKS) return; changeAt ??= performance.now(); flashEnd = performance.now() + 1000; if (flashOn) return;
   flashOn = true; flashAt = -1e9; leftAt = null; prevT = performance.now(); afterFrame(flashStep); // (flashSide: the level last seen)
 }
 export function checksInit(during) {
-  if (CHECKS) for (const t of ['pointerdown', 'keydown']) addEventListener(t, () => { lastInput = performance.now(); }, true);
+  if (CHECKS) for (const t of ['pointerdown', 'pointerup', 'keydown', 'wheel']) addEventListener(t, () => { lastInput = performance.now(); }, { capture: true, passive: true });
+  if (CHECKS) addEventListener('pointermove', e => { if (e.buttons) lastInput = performance.now(); }, { capture: true, passive: true }); // (a drag)
   if (!CHECKS) return; inPlay = during;
   // layout shifts: an element already on screen moving because something else changed (the owner's rule: nothing moves
   // without an animation or a direct action; animations move by transform, which never counts as a shift). Every shift
