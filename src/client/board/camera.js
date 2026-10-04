@@ -21,9 +21,16 @@ const hoverHooks = [];
 /* things drawn over the board in screen space (the hover tip) hide when the board moves */
 export function onViewMove(f) { hoverHooks.push(f); }
 const moved = () => { for (const f of hoverHooks) f(); };
+/* the board's picture is the product of two transforms: its scale baked into #bscale and its position (and what's left of the
+   scale) on #stage. They are written here and only here, the bake always both at once: one written without the other showed
+   the board at the wrong place for a frame (on reload: zoomed, at the corner, then a jump; 2026-10-04) */
+const stageT = () => `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
+let shownT = ''; // (what #stage was last given: the browser reads a transform back reformatted)
+function writeStage() { stage().style.transform = shownT = stageT(); }
+function bake() { baked = view.s; $('#bscale').style.transform = `scale(${baked})`; if (viewRaf) { cancelAnimationFrame(viewRaf); viewRaf = 0; } writeStage(); }
 function applyView() {
   redrawRun++; // (a layer still to be drawn again waits for the next settle)
-  if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; });
+  if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; writeStage(); }); // (a gesture's events, one write a frame)
   scheduleSettle();
 }
 function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 250); if (CHECKS) { clearTimeout(restT); restT = setTimeout(restCheck, 700); } }
@@ -58,7 +65,7 @@ function settle() {
   if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; redraw();
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); bake(); redraw();
   });
 }
 /* checks: once the board is at rest (no gesture or glide, settled) */
@@ -101,8 +108,8 @@ export function fit(anim) {
   }
   cam.fitZoomed = view.s > whole * 1.01;
   // not animated: drawn sharp at this scale right away (no blurry frame, no later redraw once it's on screen)
-  if (anim) glide(); else { baked = view.s; $('#bscale').style.transform = `scale(${baked})`; }
-  applyView(); cam.userZoomed = false;
+  applyView(); if (anim) glide(); else bake(); cam.userZoomed = false;
+  if (!anim) assert(shownT === stageT(), `view: the board is shown where the camera puts it: its position written with its scale, in the same frame (${shownT || 'none'})`);
   document.documentElement.classList.add('boardready'); // the game area may show now (with its fonts): never an unfitted board
 }
 /* fit once the frame's updates are in (the prompt's height and the market's width are part of the fit); anim: glide there */
