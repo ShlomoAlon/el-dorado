@@ -151,10 +151,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #vp::after{content:"";position:absolute;inset:0;pointer-events:none;will-change:transform;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45) 100%)}
 #grab{position:absolute;inset:0;pointer-events:none}#grab.on{pointer-events:auto;cursor:grabbing} /* (the grabbing cursor while the board is dragged: on a layer of its own over the board, so only it is restyled; on #vp, cursor being inherited, every board element was) */
 /* the board layer: always composited (see applyView); #bscale carries the scale baked in once a zoom settles */
-#stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+#stage{position:absolute;left:0;top:0;transform-origin:0 0} /* (no will-change: the board's live layers are drawn again at each zoom by Chrome's own rules; the terrain is baked: camera.js) */
 #bscale{position:relative;transform-origin:0 0}
 #tlevels,.tlevel{position:absolute;left:0;top:0;pointer-events:none}.tlevel canvas{position:absolute} /* (the terrain baked into tiles, a level per density: terrain.js) */
-svg.nudge{display:block;width:1px;height:1px;margin-bottom:-1px;overflow:visible;pointer-events:none} rect.nudge{fill:rgba(0,0,0,.01)} /* (camera.js: moved a pixel to have a board layer drawn again at its zoom. Painted, faintly: a box that paints nothing adds nothing to its layer; a gradient, not a flat colour: Chrome lifts a flat-coloured box into a layer of its own, and the layer around it then never changes size) */
 #board{display:block;overflow:visible}
 #board2{position:absolute;left:0;top:0;overflow:visible}
 #blabels,#blabels2{position:absolute;left:0;top:0;pointer-events:none}.blabel{position:absolute;white-space:nowrap;line-height:1}
@@ -166,7 +165,7 @@ svg.nudge{display:block;width:1px;height:1px;margin-bottom:-1px;overflow:visible
 .bl-badge.tgt .bl-halo{stroke:var(--gold2);stroke-width:3}
 .bl-badge.hot .bl-halo{stroke-width:5;animation:none}
 /* explorers (board/pieces.js): HTML over the board, in board units; a move is a compositor animation */
-#pieces,#bfx{position:absolute;left:0;top:0;pointer-events:none;will-change:transform} /* (each a layer of its own, always: an explorer's walk is composited, and without them Chrome splits the board into new layers for each walk and merges them after, drawing the whole board again twice a move) */
+#pieces,#bfx{position:absolute;left:0;top:0;pointer-events:none;transform:translateZ(0)} /* (each a layer of its own, always: an explorer's walk is composited, and without them Chrome splits the board into new layers for each walk and merges them after, drawing the whole board again twice a move) */
 .piece{position:absolute;left:0;top:0;width:0;height:0}
 .piece>div{position:absolute}.piece svg{display:block;overflow:visible}
 .psel{opacity:0}.piece.sel .psel{opacity:1}
