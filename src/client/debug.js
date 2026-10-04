@@ -35,6 +35,10 @@ const expected = t => t >= expectedAt - 600 && t <= Math.max(expectedAt + 600, e
 let flashEnd = 0, flashOn = false, flashSide = null, flashAt = 0, leftAt = null, flashLeft = 0, lastInput = -1e9, flashBy = '', prevT = 0;
 // (how dark: the layers that cover the game, [data-dims], by their opacity; the board stepped back, [data-fades], by how faded it is)
 let darkBy = ''; // (which layer was darkest: named in a failure)
+// (the first change the page made since the darkness was last settled: the dimming starts there, where the page decided it, a
+// frame or more before it shows; an answer the player gives after that is what undid it, not a flash: a quick player, in the
+// tests 20 ms later, answered a removal before the board's stepping back had shown)
+let changeAt = null;
 let dimmers = null; // (the layers that can dim the game: fixed in the page's markup, found once)
 const darkness = () => { let l = 0; darkBy = ''; for (const e of dimmers || (dimmers = [...document.querySelectorAll('[data-dims],[data-fades]')])) { if (!e.isConnected || !e.checkVisibility()) continue; const o = +getComputedStyle(e).opacity, d = e.hasAttribute('data-dims') ? o : 1 - o; if (d > l) { l = d; darkBy = '#' + e.id; } } return l; };
 // (a change is the player's if a tap, a key or a server message came after the dimming started to move: two events, two changes)
@@ -43,7 +47,7 @@ const darkness = () => { let l = 0; darkBy = ''; for (const e of dimmers || (dim
 const afterFrame = f => requestAnimationFrame(() => { const c = new MessageChannel(); c.port1.onmessage = f; c.port2.postMessage(0); });
 function flashStep() {
   const t = performance.now(), l = darkness(), side = l >= .6;
-  if (l >= .9 || l <= .1) leftAt = null; else if (leftAt === null) leftAt = t; // (when it left a settled level)
+  if (l >= .9 || l <= .1) { leftAt = null; changeAt = null; } else if (leftAt === null) leftAt = changeAt ?? t; // (when it left a settled level: from the page change that started it, not the first frame that showed it)
   if (flashSide !== null && side !== flashSide) {
     if (t - flashAt < 450 && !(lastInput > flashLeft)) assert(false, 'view: the screen never flashes (the dimming over the game ' + (side ? 'dropped and came back' : 'came and went') + ' within ' + Math.round(t - flashAt) + ' ms, with no input between; dimmed by ' + (side ? darkBy : flashBy) + ')');
     flashAt = prevT; flashLeft = leftAt === null ? t : leftAt; flashBy = darkBy || flashBy; } // (from the last frame still on the old side: a
@@ -56,7 +60,7 @@ function flashStep() {
    started). A change it makes is not the page's own flash */
 export function outsideEvent() { if (CHECKS) lastInput = performance.now(); }
 export function watchFlash() {
-  if (!CHECKS) return; flashEnd = performance.now() + 1000; if (flashOn) return;
+  if (!CHECKS) return; changeAt ??= performance.now(); flashEnd = performance.now() + 1000; if (flashOn) return;
   flashOn = true; flashAt = -1e9; leftAt = null; prevT = performance.now(); afterFrame(flashStep); // (flashSide: the level last seen)
 }
 export function checksInit(during) {
