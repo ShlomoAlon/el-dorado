@@ -26,7 +26,8 @@ export function setT(el, x, y, rot, sc) { el.__t = { x, y, rot, sc }; setStyle(e
 /* a card's hit area (#cardhits): where it rests, which alone takes the pointer (hover, tap, drag). The card itself is only
    drawn: it rises, grows and flies without ever taking a neighbour's place under the pointer (owner, 2026-10-03: the card
    underneath has priority; the market's slots work the same way) */
-function setHit(el, x, y, rot, sc, z) { const h = el.__hit; if (!h) return; setStyle(h, 'transform', T(x, y, rot, sc)); setStyle(h, 'zIndex', z); }
+let hitsMoved = false; // (a hit area moved in this layout: what is under a still mouse may have changed)
+function setHit(el, x, y, rot, sc, z) { const h = el.__hit; if (!h) return; const t = T(x, y, rot, sc); if (h.__stransform !== t) hitsMoved = true; setStyle(h, 'transform', t); setStyle(h, 'zIndex', z); }
 /* the card's box (cw × 1.4 cw, scaled about its centre) covering a screen rectangle */
 function rectT(rect, rot) { const cw = geo.cw, ch = cw * 1.4, A = geo.app, sc = rect.width / cw; return [rect.left - A.left - (cw - rect.width) / 2, rect.top - A.top - (ch - rect.height) / 2, rot || 0, sc]; }
 export const placeAt = (el, rect, rot) => setT(el, ...rectT(rect, rot));
@@ -92,6 +93,7 @@ function layoutCards() {
   play.forEach((id, i) => { const el = cardEls.get(id); if (!el || el.__enter) return; const k = play.length - 1 - i; setStyle(el, 'zIndex', 5 + i); setT(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc); setHit(el, baseX - k * pw * .42 - (cw - pw) / 2, py - (ch - ph) / 2, 0, psc, 5 + i); });
   setStyle($('#choice'), '--cb', Math.round(ch * 1.18 + 14 + 30) + 'px'); // (just above the raised hand and its tags)
   const lbl = $('#playLbl'); setStyle(lbl, 'opacity', play.length ? 1 : 0); setStyle(lbl, 'transform', `translate(${baseX + pw - W}px,${py - 18}px)`); // (its right end at the row's, which never moves: the row grows to the left, the label stays put)
+  if (hitsMoved) { hitsMoved = false; pointAgain(); }
 }
 
 /* ---------- the hand's view part ---------- */
@@ -167,6 +169,21 @@ export function flyToDiscard(from) {
   after(() => { const c = $('#discStack .mcard:last-child'); if (c) flyIn(c, from, { duration: 700, lift: true, raise: $('#discPile') }); });
 }
 
+/* ---------- the card under the pointer ---------- */
+/* which card the pointer is over: worked out again at every move, from the hit area actually under it (the event's target),
+   never kept from an enter or a leave. (Set on entering a card only if that card was in the hand at that instant, and cleared
+   on leaving it, a dropped enter left the card under a resting pointer unraised until it left and came back: 2026-10-04.)
+   One place decides it, so nothing else sets it; a drag clears it, and a pointer that leaves the page leaves no card under it */
+const overCard = e => { const h = e.target && e.target.closest ? e.target.closest('.chit') : null, id = h && h.dataset.id;
+  return id && !drag && !covered() && hp().hand.includes(id) ? id : null; };
+let pointer = null; // (the mouse's last place on the page; a touch has no place between taps)
+const pointAt = e => { pointer = e.pointerType === 'mouse' ? { x: e.clientX, y: e.clientY } : null; const id = overCard(e); if (UI.hover !== id) UI.hover = id; };
+for (const t of ['pointermove', 'pointerover']) addEventListener(t, pointAt, { capture: true, passive: true });
+document.documentElement.addEventListener('pointerleave', () => { pointer = null; if (UI.hover) UI.hover = null; });
+/* and again when a hit area moved under a mouse that didn't (a card played, the hand closing up): the browser sends no event
+   for that, so once the frame's layout is done the hit area under the mouse is asked (measuring after the update: after).
+   Only when one moved: asked after every layout, the answer's own render laid the hand out again, without end */
+function pointAgain() { if (!pointer) return; after(() => { if (!pointer) return; const t = document.elementFromPoint(pointer.x, pointer.y); const id = overCard({ target: t }); if (UI.hover !== id) UI.hover = id; }); }
 /* ---------- pressing and dragging a card ---------- */
 const pastHand = y => y < geo.app.top + geo.app.height - geo.cw * 1.4 * 1.25; // dragged up out of the hand
 /* checks: the card under the pointer in the hand is the one whose resting place is there (hovercheck.js); while nothing is
@@ -175,8 +192,6 @@ if (CHECKS) addEventListener('pointermove', e => { const off = () => !!drag || !
   hoverCheck('hand', $('#cardhits'), e.clientX, e.clientY, () => hp().hand.map(id => cardEls.get(id)).filter(Boolean), el => el.__rest, () => (UI.hover && cardEls.get(UI.hover)) || null, off); });
 function wire(el, id) {
   const hit = el.__hit; // (the pointer's: its events; the card: what is drawn and moved)
-  hit.addEventListener('pointerenter', () => { if (drag || covered()) return; if (hp().hand.includes(id)) UI.hover = id; });
-  hit.addEventListener('pointerleave', () => { if (UI.hover === id) UI.hover = null; });
   hit.addEventListener('pointerdown', e => {
     if (S.over || covered() || e.button > 0 || !canAct()) return;
     const inHand = cur().hand.includes(id), isAct = S.turn.active && S.turn.active.id === id;
