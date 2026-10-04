@@ -22,7 +22,7 @@ export function hoverCheck(where, box, x, y, items, rest, hovered, off = () => f
       const ex = r.w / 2 - Math.abs(lx), ey = r.h / 2 - Math.abs(ly); if (Math.abs(ex) < 1 && ey > -1 || Math.abs(ey) < 1 && ex > -1) return;
       if (ex > 0 && ey > 0) { under = e; uz = r.z; } }
     const h = hovered() || null, name = e => e ? (e.dataset.k || e.dataset.id || e.className.split(' ')[0]) : 'none';
-    assert(h === under, `view: the card under the pointer is the one whose resting place is there (a grown card never takes its neighbour's place: ${where}, ${name(h)} over ${name(under)}; at ${Math.round(x)},${Math.round(y)} the page has ${t ? (t.id ? '#' + t.id : t.tagName.toLowerCase() + '.' + (t.getAttribute('class') || '').split(' ')[0]) : 'nothing'})`);
+    assert(h === under, `view: the card under the pointer is the one whose resting place is there (a grown card never takes its neighbour's place: ${where}, ${name(h)} over ${name(under)}; at ${Math.round(x)},${Math.round(y)} the page has ${t ? (t.id ? '#' + t.id : t.tagName.toLowerCase() + '.' + (t.getAttribute('class') || '').split(' ')[0]) + (t.dataset && t.dataset.id ? ' ' + t.dataset.id : '') : 'nothing'}${under ? ', resting there: ' + name(under) : ''})`);
   });
 }
 /* a slot laid out by CSS (the market, the All cards spread): it rests where the page lays it out (offset box: its own
