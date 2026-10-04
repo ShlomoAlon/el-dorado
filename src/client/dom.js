@@ -1,5 +1,6 @@
 /* DOM helpers shared by every view module. The set* helpers skip writes that change nothing: writing the same value
    again still costs the browser a style recalculation. */
+import { movedTo } from './debug.js';
 export const $ = s => document.querySelector(s);
 export const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -8,7 +9,7 @@ export function sv(tag, attrs, parent) { const e = document.createElementNS(SVGN
 export const overlayUp = () => { const m = document.getElementById('menu'), sc = document.querySelector('#overlay .scrim'); return (m.open && !m.classList.contains('closing')) || (!!sc && !sc.classList.contains('closing')); };
 export const setText = (e, t) => { t = String(t); if (e.__tx !== t) { e.__tx = t; e.textContent = t; } };
 export const setHTML = (e, h) => { if (e.__h !== h) { e.__h = h; e.innerHTML = h; } };
-export const setStyle = (e, p, v) => { v = String(v); const k = '__s' + p; if (e[k] !== v) { e[k] = v; if (p.startsWith('--')) e.style.setProperty(p, v); else e.style[p] = v; } };
+export const setStyle = (e, p, v) => { v = String(v); const k = '__s' + p; if (e[k] !== v) { if (p === 'transform') movedTo(e, e[k], v); e[k] = v; if (p.startsWith('--')) e.style.setProperty(p, v); else e.style[p] = v; } };
 export const show = (e, on) => { if (e.hidden === on) e.hidden = !on; };
 /* the address bar's parameters (?room=, ?replay=): set (a value) or remove (null) only those given, keeping the rest (?debug) */
 export function setQuery(set) {
