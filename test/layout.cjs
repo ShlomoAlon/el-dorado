@@ -111,8 +111,22 @@ const CHECK = () => {
     if (errs.length) { fails++; out.push(`FAIL ${w}×${h} page errors: ${errs.join('; ')}`); }
     await p.close(); if (out.length) console.log(out.join('\n'));
   };
+  /* every height between the sizes above, as a person dragging the window's edge passes through them: the fixed sizes reach
+     only the layouts that happen at those sizes (a market that measured its own position flipped between shown and hidden
+     at heights near 386 and 437, at no size listed: 2026-10-05). The page's own checks judge each height (the layout
+     settles, nothing moves without a cause); in play and in a replay, its side columns narrowing the game area */
+  const sweep = async ([w, replay]) => {
+    const name = `${w} wide, ${replay ? 'a replay' : 'play'}, heights 560 to 260`, p = await openPage(b, name, { viewport: { width: w, height: 560 } });
+    await p.goto(url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
+    await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(p);
+    if (replay) { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForFunction(() => window.__ED.G.replay); await settle(p); }
+    if (!(await p.evaluate(() => window.__ED.UI.mktOpen))) await p.click('#mktBtn'); // (the market open: what the heights decide)
+    for (let h = 560; h >= 260 && !p.errors.length; h -= 2) { await p.setViewportSize({ width: w, height: h }); await p.evaluate(() => new Promise(r => setTimeout(r, 60))); } checks++;
+    if (p.errors.length) { fails++; console.log(`FAIL ${name}: ${p.errors[0].split('\n')[0]}`); } await p.close();
+  };
   // a few sizes at a time (each page waits on its own animations: parallel pages don't slow each other much)
-  const queue = SIZES.slice(); await Promise.all([...Array(4)].map(async () => { while (queue.length) await one(queue.shift()); }));
+  const queue = [...SIZES.map(s => () => one(s)), () => sweep([1000, false]), () => sweep([700, true])];
+  await Promise.all([...Array(4)].map(async () => { while (queue.length) await queue.shift()(); }));
   await b.close(); srv.close();
   console.log(fails ? `layout: ${fails} failing of ${checks} checks` : `layout ok: ${checks} checks at ${SIZES.length} sizes`);
   process.exit(fails ? 1 : 0);

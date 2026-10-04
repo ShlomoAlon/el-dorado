@@ -1,8 +1,10 @@
 /* Sizes and positions the views need, measured only when something resized (ResizeObserver callbacks run after layout,
    so reading there is free). Views read these instead of measuring the DOM while they update. */
 import { $ } from './dom.js';
-import { diag, expectLayout } from './debug.js';
+import { diag, expectLayout, CHECKS } from './debug.js';
+import { assert } from '../engine.gen.js';
 import { render } from './frame.js';
+import { S, UI } from './state.js';
 export const geo = { app: { left: 0, top: 0, width: 0, height: 0 }, cw: 132, promptBottom: 0, recapFits: true, mktW: 0, actW: 0, act: null, deck: null, disc: null };
 const subs = [];
 /* f(sized): after every measurement; sized = the game area itself changed size */
@@ -25,8 +27,22 @@ export function measure() {
   { const r = rect($('#actBtns')); geo.act = r.width ? { left: r.left - a.left, right: r.right - a.left, bottom: r.bottom - a.top } : null; } // (the turn buttons, in the game area: what a chosen card may not rise into)
   geo.deck = rect($('#deckStack')); geo.disc = rect($('#discStack'));
   if (sized) expectLayout(); // (the game area changed size: what's in it moves, on purpose)
-  if (JSON.stringify(geo) !== was) render(); // (anything measured changed: the views that read it lay themselves out again; none is left judging what matters)
+  const now = JSON.stringify(geo); if (CHECKS && now !== was) settles(sized, was, now);
+  if (now !== was) render(); // (anything measured changed: the views that read it lay themselves out again; none is left judging what matters)
   return sized;
+}
+/* checks: the layout settles. A layout that measures itself and changes what it measured (a part hidden because of where it
+   stands, which then stands elsewhere) flips between two states without end, the game area the same size and nothing else
+   changing all along: seen as the same two measurements coming back in turn, three times within a second, with the game and
+   the page's mode the same throughout (turns passing quickly change the prompt back and forth too, rightly) */
+let flips = [];
+function settles(sized, was, now) {
+  const t = performance.now(); if (sized) { flips = []; return; }
+  const st = S && `${S.log.length}|${S.cur}|${UI.mode}`; flips = flips.filter(f => t - f.t < 1000 && f.s === S && f.st === st); flips.push({ t, was, now, s: S, st });
+  const n = flips.length, back = (i, j) => flips[i].now === flips[j].was && flips[i].was === flips[j].now;
+  if (n >= 6 && back(n - 1, n - 2) && back(n - 2, n - 3) && back(n - 3, n - 4) && back(n - 4, n - 5) && back(n - 5, n - 6)) {
+    flips = []; const d = (a, b) => Object.keys(JSON.parse(a)).filter(k => JSON.stringify(JSON.parse(a)[k]) !== JSON.stringify(JSON.parse(b)[k])).join(', ');
+    assert(false, `view: the layout settles (measured again, it changes back and forth with the game area the same size: ${d(was, now)})`); }
 }
 export function watchGeometry() {
   measure(); for (const f of subs) f(true);

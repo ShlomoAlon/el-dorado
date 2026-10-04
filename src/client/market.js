@@ -26,7 +26,7 @@ export function openAll(open){UI.allFor=open?allKey():null;if(open)$('#allc').sc
 /* size the market column so it always ends above the turn buttons and the discard pile: smaller cards, and more columns
    when that isn't enough (measured when the game area or the buttons change size, never while updating) */
 function sizeMarket(){
-  const mk=$('#mkt'),W=geo.app.width,H=geo.app.height,phone=W<600,top=mk.offsetTop,ab=$('#actBtns'),at=geo.app.top;
+  const mk=$('#mkt'),W=geo.app.width,H=geo.app.height,phone=W<600,top=parseFloat(getComputedStyle(mk).top),ab=$('#actBtns'),at=geo.app.top;
   let avail=H-(parseFloat(getComputedStyle(ab).bottom)||0)-150-top; // room for up to three stacked buttons below
   if(avail<60)avail=ab.getBoundingClientRect().top-at-top-12; // very short screens: just stay above the current ones
   avail=Math.min(avail,$('#discPile').getBoundingClientRect().top-at-top-10); // and above the discard pile
