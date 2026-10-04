@@ -153,7 +153,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* the board layer: always composited (see applyView); #bscale carries the scale baked in once a zoom settles */
 #stage{position:absolute;left:0;top:0;transform-origin:0 0} /* (no will-change: the board's live layers are drawn again at each zoom by Chrome's own rules; the terrain is baked: camera.js) */
 #bscale{position:relative;transform-origin:0 0}
-#tlevels,.tlevel{position:absolute;left:0;top:0;pointer-events:none}.tlevel canvas{position:absolute} /* (the terrain baked into tiles, a level per density: terrain.js) */
+#tlevels,.tlevel{position:absolute;left:0;top:0;pointer-events:none}.tlevel canvas{position:absolute;will-change:transform} /* (the terrain baked into tiles, a level per density: terrain.js; each tile a layer of its own, always, so a zoom only stretches it: painted into the board's layer instead, every frame of a pinch repainted the tiles on a phone, 2026-10-04) */
 #board{display:block;overflow:visible}
 #board2{position:absolute;left:0;top:0;overflow:visible}
 #blabels,#blabels2{position:absolute;left:0;top:0;pointer-events:none}.blabel{position:absolute;white-space:nowrap;line-height:1}
