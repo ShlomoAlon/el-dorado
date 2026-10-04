@@ -33,7 +33,7 @@ const undo = () => { if (!undos.length) return; redos.push(last); restore(undos.
 
 /* ---------- options: sets to flip between ---------- */
 const AREAS = [
-  { id: 'colors', name: 'Look', options: [['a', 'Current'], ['b', 'Brass (whole look)'], ['c', 'Jungle (whole look)']] },
+  { id: 'colors', name: 'Look', options: [['a', 'Current'], ['b', 'Brass (whole look)'], ['c', 'Jungle (whole look)'], ['d', 'Water (whole look)']] },
   { id: 'shape', name: 'Button shape', options: [['a', 'Current'], ['b', 'Rounded'], ['c', 'Square']] },
   { id: 'heads', name: 'Headings', options: [['a', 'Current'], ['b', 'Serif'], ['c', 'Large serif']] },
   // a game feature, not a look: the page's own setting (UI.reshuffle, hand.js), which only this sets until one is chosen
@@ -271,7 +271,7 @@ section.ed-on [contenteditable]{outline:2px solid #7ec4f5!important;cursor:text;
 .ed-bar-bottom{bottom:-26px;margin:0 -26px -26px;border-top:1px solid rgba(233,178,74,.35);box-shadow:0 -8px 18px rgba(0,0,0,.35)}
 .ed-bar-top{top:-26px;grid-row:1;margin:-26px -26px 0;border-bottom:1px solid rgba(233,178,74,.35);box-shadow:0 8px 18px rgba(0,0,0,.35);justify-content:flex-start}
 section.ed-on .ed-bar{outline:1px dashed #e9b24a;outline-offset:-3px}
-/* the look: b brass, c jungle (each the whole look, below) */
+/* the look: b brass (gold), c jungle, d water: the board's three terrains, each the whole look (below) */
 /* b: the whole "expedition kit" (owner, 2026-10-05: the full look of the D2-A mock-up, 681ed0a: leather panels framed in brass, serif
    section titles, brass buttons, the game's chrome to match), not only its buttons */
 html[data-edcolors=b]{--leather:#1c1610;--leather2:#251c13;--brass:#b98d4b;--brassHi:#efcd8a;--brassDk:#5a4020;
@@ -392,6 +392,66 @@ html[data-edcolors=c] #rdock .rgrp button.pri{background:linear-gradient(180deg,
 html[data-edcolors=c] #rdock .rspd{border-color:rgba(90,178,128,.45)}
 html[data-edcolors=c] #rdock .rspd button+button{border-left-color:rgba(90,178,128,.3)}
 html[data-edcolors=c] .sclose,html[data-edcolors=c] .bs-x{border-color:var(--brass);background:#0e1d15}
+/* d: the whole look in water (owner, 2026-10-05: the board's three terrains, gold, jungle and water, as three looks): deep-river
+   panels framed in blue, the main button bright water */
+html[data-edcolors=d]{--leather:#0d1724;--leather2:#13233a;--brass:#4a8cc0;--brassHi:#9fd2f2;--brassDk:#1d3f62;
+  --glass:linear-gradient(180deg,rgba(16,30,47,.95),rgba(10,19,31,.95));--glass2:linear-gradient(180deg,rgba(22,41,62,.96),rgba(14,26,40,.96));
+  --line:rgba(110,165,215,.14);--line2:rgba(110,165,215,.34);--muted:#9db3c6;--faint:#5f7487}
+html[data-edcolors=d] .glass{border-color:rgba(90,150,205,.5);box-shadow:inset 0 1px 0 rgba(200,232,255,.1),0 8px 22px rgba(0,0,0,.4)}
+html[data-edcolors=d] #menu{background:rgba(3,6,10,.76)}
+html[data-edcolors=d] .modal{background:radial-gradient(120% 80% at 50% 0%,#152a42 0%,#0e1c2c 60%,#0a1522 100%);border:1px solid var(--brass);border-radius:14px;
+  box-shadow:inset 0 0 0 5px #08121d,inset 0 0 0 6px rgba(90,150,205,.35),0 30px 80px rgba(0,0,0,.65)}
+html[data-edcolors=d] .modal h2{color:var(--brassHi)}
+html[data-edcolors=d] .field>label{font-family:var(--display);font-size:17px;letter-spacing:0;text-transform:none;color:var(--brassHi);font-weight:400;margin-bottom:10px;display:flex;align-items:center;gap:10px}
+html[data-edcolors=d] .field>label::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(90,150,205,.45),transparent)}
+html[data-edcolors=d] .field>label.chk::after{display:none}
+html[data-edcolors=d] .btn{background:linear-gradient(180deg,#1b3149,#111f31);border:1px solid var(--brass);border-radius:9px;color:#e1eef8;box-shadow:inset 0 1px 0 rgba(200,232,255,.16),inset 0 -1px 0 rgba(0,0,0,.35),0 2px 0 #030a12,0 6px 14px rgba(0,0,0,.35)}
+html[data-edcolors=d] .btn:hover{background:linear-gradient(180deg,#223d5a,#172d45);border-color:var(--brassHi)}
+html[data-edcolors=d] .btn.pri{background:linear-gradient(180deg,#a9dcfa 0%,#4fa8e0 45%,#2a72ad 100%);border-color:#18456e;color:#041a2e;box-shadow:inset 0 1px 0 rgba(225,242,255,.75),inset 0 -2px 0 rgba(20,60,100,.45),0 2px 0 #06213a,0 6px 14px rgba(0,0,0,.4)}
+html[data-edcolors=d] .btn.pri:hover{background:linear-gradient(180deg,#bfe6fc 0%,#62b6e8 45%,#357fba 100%)}
+html[data-edcolors=d] .btn.big{border-radius:10px}
+html[data-edcolors=d] .seg{background:#07101a;border-color:rgba(90,150,205,.28);border-radius:9px;box-shadow:inset 0 2px 4px rgba(0,0,0,.5)}
+html[data-edcolors=d] .seg label{border-radius:6px}
+html[data-edcolors=d] .seg button.on,html[data-edcolors=d] .seg label:has(input:checked){background:linear-gradient(180deg,#1e3a57,#142a40);color:var(--brassHi);box-shadow:inset 0 0 0 1px var(--brass),inset 0 1px 0 rgba(200,232,255,.15)}
+html[data-edcolors=d] #sMode{background:none;border:0;box-shadow:none;border-bottom:1px solid rgba(90,150,205,.35);border-radius:0;padding:0;gap:0}
+html[data-edcolors=d] #sMode label{font-family:var(--display);font-weight:400;font-size:17px;border-radius:0;padding:9px 4px 10px;color:var(--muted)}
+html[data-edcolors=d] #sMode label:has(input:checked){background:none;box-shadow:inset 0 -2px 0 var(--brassHi);color:var(--brassHi)}
+html[data-edcolors=d] .clist button,html[data-edcolors=d] .clist label,html[data-edcolors=d] .rlist button,html[data-edcolors=d] .boxrow,html[data-edcolors=d] .rrow,html[data-edcolors=d] .seatrow,html[data-edcolors=d] .pst{background:#0b1624;border-color:rgba(90,150,205,.2)}
+html[data-edcolors=d] .clist button.on,html[data-edcolors=d] .clist label:has(input:checked){border-color:var(--brass);background:linear-gradient(180deg,rgba(90,150,205,.16),rgba(90,150,205,.06));box-shadow:inset 0 0 0 1px rgba(160,210,242,.25)}
+html[data-edcolors=d] .clist .dtag{text-transform:none;letter-spacing:0;font-size:11.5px;font-style:italic;font-family:var(--display);border:0;padding:0}
+html[data-edcolors=d] .prow input,html[data-edcolors=d] select.who{background-color:#07101a;border-color:rgba(90,150,205,.3)}
+html[data-edcolors=d] select.who option,html[data-edcolors=d] select.who optgroup{background:#0d1724}
+html[data-edcolors=d] .ingame{border-color:var(--brass);background:linear-gradient(180deg,rgba(90,150,205,.14),rgba(90,150,205,.05))}
+html[data-edcolors=d] .ingame #igTxt{font-family:var(--display)}
+html[data-edcolors=d] .aitag{font-family:var(--display);font-weight:400;letter-spacing:0;font-size:11px;border-color:rgba(90,150,205,.6);color:var(--brassHi)}
+html[data-edcolors=d] .sws label:has(input:checked){border-color:var(--brassHi)}
+html[data-edcolors=d] .modal.menu{scrollbar-color:rgba(90,150,205,.35) transparent}
+html[data-edcolors=d] #vp{background:radial-gradient(ellipse 80% 70% at 45% 42%,#15283a 0%,#0c1a26 55%,#060d14 100%)}
+html[data-edcolors=d] .brand{color:var(--brassHi)}
+html[data-edcolors=d] #roundLbl{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px;color:var(--muted)}
+html[data-edcolors=d] .tbtn{border-radius:9px;color:#e1eef8}
+html[data-edcolors=d] .tbtn.on{border-color:var(--brassHi);color:var(--brassHi);box-shadow:inset 0 0 0 1px rgba(160,210,242,.35),inset 0 1px 0 rgba(200,232,255,.15),0 8px 22px rgba(0,0,0,.4)}
+html[data-edcolors=d] .pchip{border-radius:9px}
+html[data-edcolors=d] .pchip .dot{box-shadow:0 0 0 1.5px #030a12,0 0 0 2.5px rgba(90,150,205,.6)}
+html[data-edcolors=d] .zoomctl button{border-radius:9px;color:var(--brassHi)}
+html[data-edcolors=d] #prompt{border-radius:10px;color:#d6e6f2}
+html[data-edcolors=d] #prompt b{color:var(--brassHi)}
+html[data-edcolors=d] #hist{background:linear-gradient(180deg,rgba(15,29,45,.97),rgba(10,20,32,.97));border-radius:10px}
+html[data-edcolors=d] .ht+.ht{border-top:1px dashed rgba(90,150,205,.22)}
+html[data-edcolors=d] .hwho{font-family:var(--display);font-weight:400;font-size:13px}
+html[data-edcolors=d] .hwho span{font-family:var(--ui)}
+html[data-edcolors=d] .fend .fpill{border-color:rgba(90,150,205,.45);background:rgba(90,150,205,.08);color:#e1eef8;border-radius:6px}
+html[data-edcolors=d] .pile .lbl{border-radius:7px}
+html[data-edcolors=d] #playLbl{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px}
+html[data-edcolors=d] #banner .s{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:16px}
+html[data-edcolors=d] #banner{border-radius:12px}
+html[data-edcolors=d] .allc-sect h3 span,html[data-edcolors=d] .allc-head span{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px}
+html[data-edcolors=d] #rdock,html[data-edcolors=d] #rside,html[data-edcolors=d] #lside{background:#08121d;border-color:rgba(90,150,205,.3)}
+html[data-edcolors=d] #rdock button{background:linear-gradient(180deg,#1b3149,#111f31);border-color:rgba(90,150,205,.55);border-radius:8px}
+html[data-edcolors=d] #rdock .rgrp button.pri{background:linear-gradient(180deg,#a9dcfa,#4fa8e0 45%,#2a72ad);border-color:#18456e}
+html[data-edcolors=d] #rdock .rspd{border-color:rgba(90,150,205,.45)}
+html[data-edcolors=d] #rdock .rspd button+button{border-left-color:rgba(90,150,205,.3)}
+html[data-edcolors=d] .sclose,html[data-edcolors=d] .bs-x{border-color:var(--brass);background:#0d1724}
 /* button shape: b rounded, c square */
 html[data-edshape=b] .btn,html[data-edshape=b] #menu button{border-radius:999px}
 html[data-edshape=c] .btn,html[data-edshape=c] #menu button{border-radius:3px}
