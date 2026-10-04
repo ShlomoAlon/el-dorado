@@ -111,10 +111,11 @@ const SEED = { extra: ['main', 'results', 'settings', 'rules', 'leaderboard', 'p
     // so a new game or room is only reached from nowhere: a game or a room is left first)
     ['main', 'none', 'room@room', 'Play on this device', 'A room only this device is in: the same lobby as online'], ['main', 'none', 'online@none', 'Play online'], ['main', 'none', 'replays@none', 'Replays'],
     ['online', 'none', 'main@none', 'Back'], ['online', 'none', 'room@room', 'Quick match'], ['online', 'none', 'room@room', 'Create a room'], ['online', 'none', 'room@room', 'Join with a code'],
-    ['online', 'none', 'room@room', 'Join an open room'], ['online', 'none', 'board@game', 'Rejoin', 'Only when a game of yours is in progress'],
+    ['online', 'none', 'room@room', 'Join an open room'],
     ['online', 'none', 'leaderboard@none', 'Leaderboard'], ['online', 'none', 'profile@none', 'Profile'], ['leaderboard', 'none', 'online@none', 'Back'],
     ['leaderboard', 'none', 'profile@none', 'A player', 'Their profile'], ['profile', 'none', 'online@none', 'Back'],
-    ['main', 'none', 'board@game', 'Resume saved game', 'Only when a game on this device was left unfinished'], ['main', '*', 'rules@*', 'Rules'], ['rules', '*', 'main@*', 'Back'],
+    // (no "resume" nor "rejoin": a game not finished is a game the player is still in, reached by Back to game, owner 2026-10-05)
+    ['main', '*', 'rules@*', 'Rules'], ['rules', '*', 'main@*', 'Back'],
     ['results', 'none', 'room@room', 'Play again', 'The same players and course, in a new lobby'],
     ['replays', 'none', 'main@none', 'Back'], ['replays', 'none', 'viewer@none', 'Open a game'], ['viewer', 'none', 'replays@none', 'Close'],
     ['main', 'game', 'board@game', 'Back to game'], ['main', 'game', 'results@none', 'End game · Resign'], ['board', 'game', 'main@game', 'Menu'], ['board', 'game', 'results@none', 'The race is won'],
