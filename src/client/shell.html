@@ -151,7 +151,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #vp::after{content:"";position:absolute;inset:0;pointer-events:none;will-change:transform;background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45) 100%)}
 #grab{position:absolute;inset:0;pointer-events:none}#grab.on{pointer-events:auto;cursor:grabbing} /* (the grabbing cursor while the board is dragged: on a layer of its own over the board, so only it is restyled; on #vp, cursor being inherited, every board element was) */
 /* the board layer: always composited (see applyView); #bscale carries the scale baked in once a zoom settles */
-#stage{position:absolute;left:0;top:0;transform-origin:0 0} /* (will-change only while it moves: camera.js) */
+#stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 #bscale{position:relative;transform-origin:0 0}
 #board{display:block;overflow:visible}
 #board2{position:absolute;left:0;top:0;overflow:visible}
@@ -164,7 +164,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .bl-badge.tgt .bl-halo{stroke:var(--gold2);stroke-width:3}
 .bl-badge.hot .bl-halo{stroke-width:5;animation:none}
 /* explorers (board/pieces.js): HTML over the board, in board units; a move is a compositor animation */
-#pieces,#bfx{position:absolute;left:0;top:0;pointer-events:none;transform:translateZ(0)} /* (layers of their own, so a walk redraws only them; no will-change: drawn anew at each zoom's resolution, camera.js) */ /* (each a layer of its own, always: an explorer's walk is composited, and without them Chrome splits the board into new layers for each walk and merges them after, drawing the whole board again twice a move) */
+#pieces,#bfx{position:absolute;left:0;top:0;pointer-events:none;will-change:transform} /* (each a layer of its own, always: an explorer's walk is composited, and without them Chrome splits the board into new layers for each walk and merges them after, drawing the whole board again twice a move) */
 .piece{position:absolute;left:0;top:0;width:0;height:0}
 .piece>div{position:absolute}.piece svg{display:block;overflow:visible}
 .psel{opacity:0}.piece.sel .psel{opacity:1}

@@ -21,24 +21,16 @@ const hoverHooks = [];
 /* things drawn over the board in screen space (the hover tip) hide when the board moves */
 export function onViewMove(f) { hoverHooks.push(f); }
 const moved = () => { for (const f of hoverHooks) f(); };
-/* the board's layer has the will-change hint only while it moves (Chrome's own advice: add it before, remove it after): with
-   it, a pan or zoom only moves and stretches the picture already drawn (smooth); without it at rest, Chrome draws the board
-   at the resolution its zoom needs. Kept on for good, it never redrew at a higher one: at maximum zoom the board showed a
-   third of the detail it needed (31% on the owner's screen, 39% at 4K; 2026-10-04) */
-let moving = false;
-const still = () => { if (moving) { moving = false; stage().style.willChange = ''; } };
 function applyView() {
-  if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; const t = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`, st = stage();
-    if (st.style.transform === t) return; // (the view didn't move: nothing written, no hint)
-    if (!moving) { moving = true; st.style.willChange = 'transform'; } st.style.transform = t; });
+  if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; });
   scheduleSettle();
 }
 function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 250); if (CHECKS) { clearTimeout(restT); restT = setTimeout(restCheck, 700); } }
 function settle() {
-  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) { still(); return; }
+  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; still();
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
   });
 }
 /* checks: once the board is at rest (no gesture or glide, settled) */
@@ -49,10 +41,6 @@ function restCheck() {
   // A few hundred; the terrain drawn live was 2,271, 9 ms of the main thread per redraw at maximum zoom
   const n = document.querySelectorAll('#bscale *').length;
   assert(terrainLive || n <= LIVE_MAX, `view: the board is a few hundred live elements, its fixed terrain one image (${n})`);
-  // at rest no layer of the board keeps a will-change hint: with one, Chrome keeps the resolution it first drew at, and the
-  // board stays soft at any closer zoom (a third of the detail at the most, 2026-10-04)
-  const kept = ['stage', 'bscale', 'pieces', 'bfx'].filter(id => { const e = document.getElementById(id); return e && getComputedStyle(e).willChange !== 'auto'; });
-  assert(!kept.length, `view: the board at rest is drawn at its zoom's resolution: no will-change hint on it (${kept.join(', ')})`);
 }
 const LIVE_MAX = 650; // (most seen: 531, four players; 2026-10-04)
 /* the part of the game area the board should fill: under the prompt, left of the market, above the hand */
