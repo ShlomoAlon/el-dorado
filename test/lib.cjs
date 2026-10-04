@@ -5,18 +5,18 @@
 //   settle(page)       wait until nothing on the page is animating (instead of fixed pauses)
 //   report()           ok(name, pass, detail) lines and a final summary
 const pw = require('playwright');
-/* a test's browser draws on Chrome's GPU path, as players' browsers do (owner, 2026-10-04: measure what we ship). This machine
-   has no GPU, and on its own Chrome falls back to software for canvases, compositing and painting: another route, which hid a
-   hover race and made the baked board look slower than it is. SwiftShader is software that runs the GPU's own code path:
-   what happens (which layers, what is composited, what is drawn again, in what order) is what happens on a GPU. How long it
-   takes is not: every GPU operation runs on this CPU, far slower and not by a fixed factor. So a test that judges time
-   (a frame budget, a long task, latency, dropped frames) asks for { timing: true } and gets the software path, whose times
-   track a real machine's more closely; every other test gets the GPU path (owner's choice, 2026-10-04). Each GPU launch checks
-   the GPU path is really on: a silent fallback would measure the wrong thing again. (SOFT=1: everything on the software path,
-   to tell what the emulated GPU causes from what the page does; never the suite's) */
+/* which drawing route a test's browser takes. This machine has no GPU, and on its own Chrome draws everything in software (canvases,
+   compositing, painting): another route than players' browsers take. SwiftShader is software that runs the GPU's own code
+   path: what happens there (which layers, what is composited, what is drawn again, in what order) is what happens on a GPU,
+   and it caught a hover race the software route hid; how long it takes is not (every GPU operation runs on this CPU, far
+   slower), and several browsers on it at once overload the machine. So (owner, 2026-10-04): the suite runs on the software
+   route, side by side; `run.mjs --gpu` runs the game's tests on the GPU route one at a time (GPU=1), at least every 5 commits
+   (the suite fails when it is due); a check that needs the GPU route always (the render test's sharpness: which layers Chrome
+   makes) asks for { gpu: true }; a check of time asks for { timing: true } and never gets the GPU route. Each GPU launch checks
+   the route is really on: a silent fallback would measure the wrong thing again. */
 const GPU = ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--enable-gpu-compositing'];
-const onGpu = o => !process.env.SOFT && !(o && o.timing);
-const argsFor = o => { const { timing, ...rest } = o || {}; return { ...rest, args: [...(onGpu(o) ? GPU : []), ...(rest.args || [])] }; };
+const onGpu = o => !(o && o.timing) && (process.env.GPU === '1' || !!(o && o.gpu));
+const argsFor = o => { const { timing, gpu, ...rest } = o || {}; return { ...rest, args: [...(onGpu(o) ? GPU : []), ...(rest.args || [])] }; };
 const gpuOn = async (b, o) => { if (!onGpu(o)) return b; const c = await b.newBrowserCDPSession(), f = (await c.send('SystemInfo.getInfo')).gpu.featureStatus; await c.detach();
   for (const k of ['2d_canvas', 'gpu_compositing', 'rasterization']) if (!/^enabled/.test(f[k])) throw new Error(`the test browser is not on the GPU path: ${k} is ${f[k]}`); return b; };
 const chromium = { launch: async (o = {}) => gpuOn(await pw.chromium.launch(argsFor(o)), o),

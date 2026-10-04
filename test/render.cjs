@@ -13,7 +13,7 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
   let n = 0; for (let i = 0; i < da.length; i += 4) if (Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]) > 24) n++; return n; }, [a.toString('base64'), b.toString('base64')]);
 (async () => {
   // (two browsers: the GPU path for what is drawn and how sharp (steps 1-2), the software path for what takes time (2c, 3): lib.cjs)
-  const b = await chromium.launch(), bt = await chromium.launch({ timing: true }); let fails = 0; const ok = (name, pass, detail) => { if (!pass) fails++; console.log(`${pass ? 'ok  ' : 'FAIL'} ${name}: ${detail}`); };
+  const b = await chromium.launch({ gpu: true }), bt = await chromium.launch({ timing: true }); let fails = 0; const ok = (name, pass, detail) => { if (!pass) fails++; console.log(`${pass ? 'ok  ' : 'FAIL'} ${name}: ${detail}`); };
   const errs = [], open = async (br = b) => { const p = await openPage(br, 'render', { viewport: { width: 1200, height: 800 } }); errs.push(p.errors); await p.goto('file://' + file); await p.waitForTimeout(700); await p.click('#sGo'); await p.waitForTimeout(1800); await p.waitForFunction(() => !window.__ED.baking()); return p; }; // (the terrain baked: lib.cjs settle)
   { // 1. grab changes nothing
     const p = await open(); await p.mouse.move(500, 420); await p.waitForTimeout(400); const a = await p.screenshot();
