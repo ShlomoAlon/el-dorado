@@ -17,12 +17,14 @@ const T = report('flows');
   const idle = async () => { await until(() => !window.__ED.walking(), null, 10000); await settle(p); };
   const center = async sel => { const r = await p.evaluate(s => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, sel); if (!r) throw new Error('not found: ' + sel); return r; };
   // seat 2 is an AI (Fawcett: the network, fetched from /ai/first.<hash>.bin when it first moves) for the AI-turn step. The order
-  // around the table is dealt at random: a new page until the person moves first (the steps below start with their turn)
+  // around the table and the hands are dealt at random: a new page until the person moves first (the steps below start with
+  // their turn) with a hand that can pay with both kinds of coin after the move (two half coins, one of them played to move,
+  // and a whole one: the buy step's total changes width)
   for (let k = 0; ; k++) {
     await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     await p.selectOption('select[name=who1]', 'fawcett'); await settle(p);
-    if (!(await S(() => window.__ED.S.players[window.__ED.S.cur].ai))) break;
-    if (k === 30) { T.ok('a deal where the person moves first', false); break; }
+    if (await S(() => { const E = window.__ED, P = E.S.players[E.S.cur], half = P.hand.filter(id => E.coinVal(E.S, id) % 1 !== 0).length; return !P.ai && half >= 2 && half < P.hand.length; })) break;
+    if (k === 30) { T.ok('a deal where the person moves first, with half and whole coins in hand', false); break; }
   }
   // 1. Start: the start screen's background is the game itself, so nothing on the board changes
   await S(() => { window.__mut = 0; new MutationObserver(l => { window.__mut += l.length; }).observe(document.querySelector('#stage'), { subtree: true, childList: true, attributes: true, characterData: true }); });
@@ -70,14 +72,23 @@ const T = report('flows');
   const canBuy = await S(() => !!document.querySelector('#market .mslot.can')); T.ok('buy: an affordable card in the market', canBuy);
   if (canBuy) {
     const disc0 = await S(() => window.__ED.S.players[window.__ED.S.cur].discard.length);
-    await p.click('#market .mslot.can');
+    // (the dearest card it can afford: a payment of more than one card, so the total passes a width change)
+    await p.click(await S(() => { const E = window.__ED, c = e => E.CT[e.dataset.k.slice(2)].cost, best = [...document.querySelectorAll('#market .mslot.can')].sort((a, b) => c(b) - c(a))[0]; return `#market .mslot.can[data-k="${best.dataset.k}"]`; }));
     await check('buying: the card waits above the hand', () => window.__ED.UI.mode === 'pay' && !document.querySelector('#buySlot').hidden);
+    // (the first card by a tap; the rest chosen in code so the total changes width (a half coin onto a whole total, a whole coin
+    // onto a half), once the tap's input window is over: the page's
+    // layout-shift check excuses what follows a real tap for 500 ms, and which coins an AI pays with is up to the deal, so a
+    // total that changes width ("1" to "1½") was reached by luck only)
+    const paid = [];
     for (let k = 0; k < 4 && await S(() => window.__ED.UI.mode === 'pay'); k++) {
       await settle(p); const n = await S(() => document.querySelectorAll('#cards .card:not(.inplay):not(.pick)').length); if (!n) break;
-      const q = await S(() => { const e = document.querySelector('#cards .card:not(.inplay):not(.pick)'); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * .3 }; });
-      const picks = await S(() => window.__ED.UI.picks.length); await p.mouse.click(q.x, q.y);
+      const picks = await S(() => window.__ED.UI.picks.length);
+      if (!k) { const q = await S(() => { const e = document.querySelector('#cards .card:not(.inplay):not(.pick)'); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * .3 }; }); await p.mouse.click(q.x, q.y); }
+      else { await p.waitForTimeout(600); await S(() => { const E = window.__ED, ids = E.S.players[E.S.cur].hand.filter(id => !E.UI.picks.includes(id)); const t = E.UI.picks.reduce((a, id) => a + E.coinVal(E.S, id), 0), half = t % 1 === 0; E.onHandCard(ids.find(id => (E.coinVal(E.S, id) % 1 !== 0) === half) || ids[0]); E.render(); }); }
       await until(k => window.__ED.UI.mode !== 'pay' || window.__ED.UI.picks.length > k, picks, 3000);
+      await settle(p); paid.push(await S(() => document.querySelector('#bsPaid').textContent));
     }
+    T.ok('buy: the total paid changed width while paying (a half coin after a whole one, or the reverse)', new Set(paid.map(t => t.length)).size > 1, paid.join(' → '));
     await check('bought: the card is in the discard pile', d => window.__ED.S.turn.bought && window.__ED.S.players[window.__ED.S.cur].discard.length === d + 1, disc0);
   }
   // 7. end the turn (the buy nudge and the keep-cards step, if they come)

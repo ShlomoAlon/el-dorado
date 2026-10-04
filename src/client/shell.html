@@ -332,6 +332,8 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #buySlot.paid .bs-card .cface{filter:none}
 .bs-ring{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);background:#0b120f;border:1.5px solid var(--gold2);border-radius:14px;padding:3px 11px;font-weight:800;font-size:14px;color:var(--gold2);white-space:nowrap;display:flex;gap:4px;font-variant-numeric:tabular-nums;box-shadow:0 4px 12px rgba(0,0,0,.5)}
 .bs-ring b{color:#fff}
+/* the paid total's slot fits its widest value (8½: under the dearest cost, 5, plus the best coin, 4), so the "/" never moves while paying */
+#bsPaid{display:inline-grid;justify-items:end}#bsPaid::after{content:"8½";visibility:hidden;height:0}
 #buySlot.paid .bs-ring{background:var(--gold);color:var(--goldInk);border-color:var(--gold)}
 #buySlot.paid .bs-ring b{color:var(--goldInk)}
 .bs-x{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);background:#0b120f;color:var(--muted);cursor:pointer;font-size:12px;display:grid;place-items:center;z-index:2}
