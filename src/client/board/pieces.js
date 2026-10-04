@@ -34,9 +34,11 @@ function make(pl, i) {
 function piecePos(pl, i) {
   const k = S.players[pl].pieces[i];
   if (k !== 'done') { const p = xy(k); return [p.x, p.y]; }
-  const C = layout().city; let idx = 0;
-  S.players.forEach((p, a) => p.pieces.forEach((pk, b) => { if (pk === 'done' && (a < pl || (a === pl && b < i))) idx++; }));
-  const px = -C.dy, py = C.dx, off = (idx - 1.5) * 18;
+  // (each explorer's own slot in the row, by who it is, kept from the start: counted among those already arrived, a slot moved
+  // whenever an earlier player's explorer arrived, and the explorers there jumped along the row)
+  const C = layout().city; let slot = 0, n = 0;
+  S.players.forEach((p, a) => p.pieces.forEach((pk, b) => { if (a < pl || (a === pl && b < i)) slot++; n++; }));
+  const px = -C.dy, py = C.dx, off = (slot - (n - 1) / 2) * 18;
   return [C.x + px * off + C.dx * R * 1.6, C.y + py * off + C.dy * R * 1.6];
 }
 /* an explorer is walking (the view's own: the walks it has started and not finished) */
