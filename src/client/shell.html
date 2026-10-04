@@ -153,7 +153,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* the board layer: always composited (see applyView); #bscale carries the scale baked in once a zoom settles */
 #stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 #bscale{position:relative;transform-origin:0 0}
-.treg{position:absolute;will-change:transform;pointer-events:none} /* (the terrain's regions, each a layer drawn again on its own: terrain.js) */
+#tlevels,.tlevel{position:absolute;left:0;top:0;pointer-events:none}.tlevel canvas{position:absolute} /* (the terrain baked into tiles, a level per density: terrain.js) */
 svg.nudge{display:block;width:1px;height:1px;margin-bottom:-1px;overflow:visible;pointer-events:none} rect.nudge{fill:rgba(0,0,0,.01)} /* (camera.js: moved a pixel to have a board layer drawn again at its zoom. Painted, faintly: a box that paints nothing adds nothing to its layer; a gradient, not a flat colour: Chrome lifts a flat-coloured box into a layer of its own, and the layer around it then never changes size) */
 #board{display:block;overflow:visible}
 #board2{position:absolute;left:0;top:0;overflow:visible}
@@ -557,7 +557,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <div id="shell"><div id="gamecell">
 <div id="app">
   <div id="vp" data-fades>
-    <div id="stage"><div id="bscale"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels"></div><svg id="board2" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels2"></div><div id="pieces"></div><div id="bfx"></div></div></div><div id="grab"></div>
+    <div id="stage"><div id="bscale"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg><div id="tlevels"></div><div id="blabels"></div><svg id="board2" xmlns="http://www.w3.org/2000/svg"></svg><div id="blabels2"></div><div id="pieces"></div><div id="bfx"></div></div></div><div id="grab"></div>
     <div id="tip"></div>
   </div>
   <div id="hud">
