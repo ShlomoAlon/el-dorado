@@ -312,6 +312,7 @@ function layoutBody() {
 const NW = 156, NH = 42, COLX = [0, 400, 800], TRAY = 6;
 let fsel = null, connect = null, focus = null, focusT = null, copyText = null; // (fsel: { node } or { arrow }: shown in the directions; connect: a transition being drawn from the middle box; focus: the middle box)
 const opened = new Set(), openT = new Set(); // (the directions' tree, folded until opened (owner, 2026-10-05): menus and groups opened, transitions opened)
+const only = () => { opened.clear(); openT.clear(); }; // (a click in the chart folds the directions to what it chose, owner 2026-10-05: else they only ever grow)
 const reveal = a => { opened.add('m:' + a.from); opened.add('g:' + a.from + ':' + [...a.states].sort().join(',')); }; // (a transition shown: its menu and group open)
 // (a rule for every menu is in the directions only: on the chart it would be lines from everywhere, owner 2026-10-05)
 const segs = () => { const out = []; for (const a of D.arrows) if (a.from !== '*') for (const st of a.states) { const f = a.from + '@' + st, [tm, ts] = a.to.split('@');
@@ -535,9 +536,9 @@ box.addEventListener('pointerdown', e => { const svg = e.target.closest && e.tar
   const g = e.target.closest('.ed-node'), ar = e.target.closest('[data-arrow]'), key = g && g.dataset.node, tabk = e.target.closest('[data-centre]');
   if (tabk && !connect) { focus = tabk.dataset.centre; return panel(); } // (the centre's state)
   if (connect) { connect = null; if (key && key !== focus) { const [m, st] = focus.split('@'), id = 'a' + Date.now().toString(36); D.arrows.push({ id, from: m, states: [st], to: key, label: '' }); for (const k of [m + '@' + st, key]) if (!k.endsWith('@*')) boxFor(k); // (a menu in the tray: the state stays the same)
-      openT.add(id); reveal(D.arrows[D.arrows.length - 1]); fsel = { arrow: id }; scrollDir = true; focusT = id; save(); } return panel(); }
-  if (key) { if (key === focus) connect = { from: key }; else { focus = key; fsel = { node: key }; opened.add('m:' + key.split('@')[0]); scrollDir = true; } return panel(); }
-  if (ar) { const x = D.arrows.find(y => y.id === ar.dataset.arrow); fsel = { arrow: x.id }; reveal(x); openT.add(x.id); scrollDir = true; return panel(); } });
+      only(); openT.add(id); reveal(D.arrows[D.arrows.length - 1]); fsel = { arrow: id }; scrollDir = true; focusT = id; save(); } return panel(); }
+  if (key) { if (key === focus) connect = { from: key }; else { focus = key; fsel = { node: key }; only(); opened.add('m:' + key.split('@')[0]); scrollDir = true; } return panel(); }
+  if (ar) { const x = D.arrows.find(y => y.id === ar.dataset.arrow); fsel = { arrow: x.id }; only(); reveal(x); openT.add(x.id); scrollDir = true; return panel(); } });
 addEventListener('keydown', e => { if (tab === 'flow' && connect && e.key === 'Escape') { connect = null; panel(); } });
 addEventListener('pointerdown', e => { if (connect && !(e.target.closest && e.target.closest('.ed-fc'))) { connect = null; panel(); } }, true); // (anywhere outside the chart too: the chart's own clicks are decided above)
 // the menu's own screens change by its own clicks: the layout follows whichever is on show
