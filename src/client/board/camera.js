@@ -10,7 +10,7 @@ import { after, frameDue } from '../frame.js';
 import { diag, diagLog, CHECKS } from '../debug.js';
 import { layout, xy } from './layout.js';
 import { walking } from './pieces.js';
-import { terrainLive, terrainRegions, redrawRegion } from './terrain.js';
+import { terrainLive, terrainShow, terrainTop, terrainHook } from './terrain.js';
 export const view = { s: 1, x: 0, y: 0 };
 /* userZoomed: the player moved the board (a resize then keeps their view); dragMoved: the current press became a drag
    (its click is not a tap) */
@@ -26,7 +26,8 @@ const moved = () => { for (const f of hoverHooks) f(); };
    the board at the wrong place for a frame (on reload: zoomed, at the corner, then a jump; 2026-10-04) */
 const stageT = () => `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
 let shownT = ''; // (what #stage was last given: the browser reads a transform back reformatted)
-function writeStage() { stage().style.transform = shownT = stageT(); }
+function writeStage() { stage().style.transform = shownT = stageT(); terrainShow(view.s * devicePixelRatio); } // (the terrain's baked level that fits this zoom: terrain.js)
+terrainHook.ready = () => terrainShow(view.s * devicePixelRatio);
 function bake() { baked = view.s; $('#bscale').style.transform = `scale(${baked})`; if (viewRaf) { cancelAnimationFrame(viewRaf); viewRaf = 0; } writeStage(); }
 function applyView() {
   redrawRun++; draining = false; // (a layer still to be drawn again waits for the next settle)
@@ -58,19 +59,16 @@ function growMark(id) {
    explorers, last in line, stayed a stretched picture until the next zoom; 2026-10-04) */
 const stale = new Set(); let draining = false; // (draining: a run is drawing them, one a frame)
 function redraw() {
-  const run = ++redrawRun, W = geo.app.width, H = geo.app.height, mx = layout().minX, my = layout().minY;
-  const shown = g => { const [x, y, w, h] = g.box, l = (x - mx) * view.s + view.x, t = (y - my) * view.s + view.y; return l + w * view.s > 0 && t + h * view.s > 0 && l < W && t < H; };
-  // the explorers first (what the eye is on), then the terrain on screen, then the rest
-  const rank = L => L === 'pieces' ? 0 : typeof L === 'string' ? 2 : shown(L) ? 1 : 3;
-  draining = true; const next = () => { if (run !== redrawRun || !stale.size) { if (run === redrawRun) draining = false; return; } let L = null; for (const c of stale) if (!L || rank(c) < rank(L)) L = c;
-    stale.delete(L); if (typeof L === 'string') growMark(L); else redrawRegion(L); if (stale.size) requestAnimationFrame(next); else draining = false; };
+  const run = ++redrawRun, order = ['pieces', 'board', 'bfx']; // (the explorers first: what the eye is on)
+  draining = true; const next = () => { if (run !== redrawRun || !stale.size) { if (run === redrawRun) draining = false; return; }
+    const L = order.find(x => stale.has(x)); stale.delete(L); growMark(L); if (stale.size) requestAnimationFrame(next); else draining = false; };
   next();
 }
 function settle() {
   if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) { if (stale.size) redraw(); return; } // (a move at the same zoom: what is still owed goes on)
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); bake(); for (const L of [...terrainRegions, 'board', 'pieces', 'bfx']) stale.add(L); redraw();
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); bake(); for (const L of ['board', 'pieces', 'bfx']) stale.add(L); redraw();
   });
 }
 /* checks: once the board is at rest (no gesture or glide, settled) */
@@ -84,6 +82,9 @@ function restCheck() {
   // at rest, every layer of the board is drawn at the zoom it shows: none left a stretched picture (an explorer soft until
   // the next zoom, 2026-10-04)
   assert(!stale.size, `view: the board at rest is drawn at the zoom it shows: no layer left waiting to be drawn again (${stale.size} waiting)`);
+  // the terrain shown is baked at the density this zoom needs, or the most this device keeps (terrain.js)
+  const need = view.s * devicePixelRatio, got = terrainShow(need);
+  assert(!terrainTop() || got >= Math.min(need, terrainTop()) * .98, `view: the terrain on screen is baked at the density the zoom needs (${got.toFixed(2)} for ${need.toFixed(2)})`);
 }
 const LIVE_MAX = 650; // (most seen: 531, four players; 2026-10-04)
 /* the part of the game area the board should fill: under the prompt, left of the market, above the hand */

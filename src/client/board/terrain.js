@@ -118,7 +118,7 @@ function asImage(svg){
   // (each part carries only the definitions it names: the gradients, patterns and icons its shapes use, not all 9 KB of them)
   const defs=new Map();for(const d of[...DEFS.children,...document.querySelector('body > svg defs').children])if(d.id)defs.set(d.id,ser(d));
   const used=body=>{const ids=new Set();for(const x of body.matchAll(/url\(#([^)]+)\)|href="#([^"]+)"/g))ids.add(x[1]||x[2]);return '<defs>'+[...ids].map(i=>defs.get(i)||'').join('')+'</defs>';};
-  for(const u of terrainUrls)URL.revokeObjectURL(u);terrainUrls=[];
+  for(const u of terrainUrls)URL.revokeObjectURL(u);terrainUrls=[];for(const l of terrainLevels)l.el.remove();terrainLevels=[];shownLevel=null;
   const byTile=new Map(),rest=[];for(const g of L.terrain.children){const t=g.dataset&&g.dataset.tile;if(t==null){rest.push(g);continue;}if(!byTile.has(t))byTile.set(t,[]);byTile.get(t).push(g);}
   let parts=[...[...L.plates.children].map(g=>[g]),...byTile.values(),[...rest,L.city]];
   const live=[L.plates,L.terrain,L.city];parts=parts.map(els=>{
@@ -126,33 +126,68 @@ function asImage(svg){
     x0-=PAD;y0-=PAD;const w=x1+PAD-x0,h=y1+PAD-y0;
     const url=URL.createObjectURL(new Blob([`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${x0} ${y0} ${w} ${h}">${(body=>used(body)+body)(els.map(ser).join(''))}</svg>`],{type:'image/svg+xml'}));terrainUrls.push(url);
     return{url,x0,y0,w,h};});
-  // the images go into regions, a grid of layers of their own (.treg), each with every part that reaches into it, in the
-  // terrain's order, clipped to its rectangle: a region is drawn again on its own (camera.js), a fraction of the board's
-  // drawing, so the repaint after a zoom is spread over frames. Neighbours overlap by OV, identical there: no seam can show
-  for(const g of terrainRegions)g.remove();terrainRegions=[];
-  const{minX,minY,w:BW,h:BH}=layout(),ims=[];let at=svg;
-  for(let r=0;r<RROWS;r++)for(let c=0;c<RCOLS;c++){
-    const x=minX+c*BW/RCOLS-OV,y=minY+r*BH/RROWS-OV,w=BW/RCOLS+2*OV,h=BH/RROWS+2*OV,inside=parts.filter(q=>q.x0<x+w&&q.x0+q.w>x&&q.y0<y+h&&q.y0+q.h>y);
-    if(!inside.length)continue;
-    const g=sv('svg',{class:'treg'});g.box=[x,y,w,h];g.grown=0;g.style.left=(x-minX)+'px';g.style.top=(y-minY)+'px';regionBox(g);
-    for(const q of inside)ims.push(sv('image',{href:q.url,x:q.x0,y:q.y0,width:q.w,height:q.h},g));
-    at.after(g);at=g;terrainRegions.push(g);}
+  // the images, drawn as they are (one layer) until the terrain is baked into pixels (bake, below)
+  const ims=parts.map(q=>{const im=sv('image',{href:q.url,x:q.x0,y:q.y0,width:q.w,height:q.h});svg.insertBefore(im,L.plates);return im;});
   terrainLive=true;
   // (never silently live for good: a part that fails, or doesn't come within 8 s, is a failure)
   Promise.all(ims.map(im=>new Promise((ok,no)=>{im.addEventListener('load',ok,{once:true});im.addEventListener('error',no,{once:true});})))
-    .then(()=>{if(drawnMap!==m)return;requestAnimationFrame(()=>{for(const g of live)g.remove();terrainLive=false;});},()=>assert(false,'view: the board\'s terrain images load'));
+    .then(()=>{if(drawnMap!==m)return;requestAnimationFrame(()=>{for(const g of live)g.remove();terrainLive=false;bake(parts,ims,m);});},()=>assert(false,'view: the board\'s terrain images load'));
   // (8 s: the parts load in about 0.3 s, 2 s on a CPU slowed 6x; the timer rule, 1.5x that and 5 s)
   setTimeout(()=>{if(drawnMap===m)assert(!terrainLive,'view: the board\'s terrain images load within 8 s');},8000);
 }
 /* the terrain still drawn live, its image on its way (asImage): the board's live elements include it until then */
 export let terrainLive=false;
-/* the terrain's regions (asImage), and the one call that has a region drawn again: its size grows by a pixel or back
-   (its view box with it, so nothing in it moves), and Chrome draws a layer whose size changed afresh at the zoom it shows
-   (camera.js) */
-export let terrainRegions=[];
-const RCOLS=4,RROWS=2,OV=3;
-function regionBox(g){const[x,y,w,h]=g.box,d=g.grown;g.setAttribute('width',w+d);g.setAttribute('height',h+d);g.setAttribute('viewBox',`${x} ${y} ${w+d} ${h+d}`);}
-export function redrawRegion(g){g.grown^=1;regionBox(g);}
+/* the terrain baked into pixels, like a photo (owner, 2026-10-04): a picture that is already pixels is only stretched by
+   the GPU when the board zooms or pans, so a zoom draws nothing and stays sharp up to the picture's own resolution. Drawn
+   as vectors, every zoom needed the terrain drawn again, which cost frames (and on Safari, pieces settling apart). Baked once
+   per board, at three densities (device pixels per board unit: the most the zoom can need, capped by a memory budget; half;
+   a quarter, which shrinks cleanly when zoomed out), each in 1024-pixel tiles (GPUs cap a picture's size, and a tile is
+   drawn a part at a time, a few milliseconds a frame). All three stay on the GPU; the one that fits the zoom is shown,
+   the others kept at opacity 0 (never removed: a removed picture is dropped from the GPU and costs an upload to show
+   again). Canvases, not image files: the browser may drop a decoded image to save memory; a canvas keeps its pixels */
+export let terrainLevels=[];let shownLevel=null;
+export const terrainHook={ready:null}; // (camera.js: shows the level that fits the view once the bake is done)
+const TILE=1024,BLEED=4,BUDGET=24e6; // (BUDGET: device pixels of the densest level, about 96 MB; the two others add a third)
+let dprWatch=null;
+function bake(parts,ims,m){
+  const dpr=devicePixelRatio||1,{minX,minY,w:BW,h:BH}=layout(),top=Math.min(3.2*dpr,Math.sqrt(BUDGET/(BW*BH)));
+  const imgs=parts.map(q=>{const i=new Image();i.src=q.url;return i;});
+  Promise.all(imgs.map(i=>i.decode())).then(()=>{
+    if(drawnMap!==m)return;
+    const host=$('#tlevels'),levels=[top,top/2,top/4].map(s=>{const el=document.createElement('div');el.className='tlevel';el.style.opacity=0;host.append(el);return{s,el};});
+    // the jobs, smallest level first: a tile's canvas, then each part that reaches into it (a part at a time: a few ms)
+    const jobs=[];
+    for(const lv of[...levels].reverse()){const s=lv.s,PW=Math.ceil(BW*s),PH=Math.ceil(BH*s);
+      for(let ty=0;ty<PH;ty+=TILE)for(let tx=0;tx<PW;tx+=TILE){
+        // (BLEED pixels of overlap all round, the same content in both: the GPU softens a tile's edge where it falls between
+        // screen pixels, and with under a screen pixel of overlap the background showed through as a hairline; a level is
+        // shown at least about half its size, so 4 is 2 screen pixels or more)
+        const cw=Math.min(TILE,PW-tx)+2*BLEED,ch=Math.min(TILE,PH-ty)+2*BLEED,ox=minX+(tx-BLEED)/s,oy=minY+(ty-BLEED)/s;let g=null;
+        jobs.push(()=>{const c=document.createElement('canvas');c.width=cw;c.height=ch;c.style.cssText=`left:${ox-minX}px;top:${oy-minY}px;width:${cw/s}px;height:${ch/s}px`;
+          g=c.getContext('2d');g.setTransform(s,0,0,s,-ox*s,-oy*s);lv.el.append(c);
+          // (the browser can drop a canvas's pixels (a GPU reset, memory pressure) and says so: the terrain is baked again)
+          c.addEventListener('contextrestored',()=>{if(drawnMap===m)bake(parts,[],m);});});
+        parts.forEach((p,q)=>{if(p.x0<ox+cw/s&&p.x0+p.w>ox&&p.y0<oy+ch/s&&p.y0+p.h>oy)jobs.push(()=>g.drawImage(imgs[q],p.x0,p.y0,p.w,p.h));});}}
+    const step=()=>{if(drawnMap!==m){for(const l of levels)l.el.remove();return;}const t=performance.now();while(jobs.length&&performance.now()-t<6)jobs.shift()();
+      if(jobs.length){requestAnimationFrame(step);return;}
+      for(const l of terrainLevels)l.el.remove();terrainLevels=levels;shownLevel=null;for(const im of ims)im.remove(); // (baked: the vector images go)
+      let px=0;for(const l of levels)for(const c of l.el.children)px+=c.width*c.height;
+      assert(px<=BUDGET*1.4,`view: the baked terrain stays within its memory budget (${(px/1e6).toFixed(1)} MP)`);
+      if(terrainHook.ready)terrainHook.ready();};
+    requestAnimationFrame(step);
+  },()=>assert(false,'view: the board\'s terrain images load'));
+  // (another screen's pixel density: baked again for it)
+  if(dprWatch)dprWatch.removeEventListener('change',dprWatch.f);dprWatch=matchMedia(`(resolution: ${dpr}dppx)`);dprWatch.f=()=>{if(drawnMap===m)bake(parts,[],m);};dprWatch.addEventListener('change',dprWatch.f);
+}
+/* the level that fits a zoom: the least dense one with as many pixels as the screen needs (need: device pixels per board
+   unit), or the densest kept; shown, the others hidden. Returns the density shown (0: not baked yet) */
+export function terrainShow(need){
+  if(!terrainLevels.length)return 0;
+  const fit=[...terrainLevels].reverse().find(l=>l.s>=need*.98)||terrainLevels[0];
+  if(fit!==shownLevel){for(const l of terrainLevels)l.el.style.opacity=l===fit?1:0;shownLevel=fit;}
+  return fit.s;
+}
+export const terrainTop=()=>terrainLevels.length?terrainLevels[0].s:0;
 /* gradients, patterns and icons the board's shapes use: the same for every course */
 function drawDefs(svg){
   const defs=sv('defs',null,svg);
