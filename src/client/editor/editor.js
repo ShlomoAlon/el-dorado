@@ -33,6 +33,25 @@ const kindOf = el => el.classList.contains('linkbtn') ? 'link' : el.classList.co
 function setKind(el, k) { if (!el.matches('button')) return; if (el.__kind === undefined) el.__kind = [kindOf(el), el.classList.contains('big')]; // (the page's own: back when unset)
   const [k0, big] = el.__kind; k = k || k0; el.classList.toggle('btn', k !== 'link'); el.classList.toggle('pri', k === 'pri'); el.classList.toggle('linkbtn', k === 'link'); el.classList.toggle('big', big && k !== 'link'); }
 
+/* a control's type: one of the few kinds the page styles (owner, 2026-10-05: not each thing styled on its own, a limited set to slot
+   between): a yes/no setting as a checkbox or two buttons; a choice of one as a row of buttons, a dropdown, or a list of cards. The
+   page's own control stays the one that holds the value: the other kind is drawn beside it (it hidden) and sets it */
+const CTYPES = { yesno: [['check', 'Checkbox'], ['two', 'Two buttons']], choice: [['seg', 'Row of buttons'], ['select', 'Dropdown'], ['clist', 'Cards']] };
+function ctlOf(el) { if (!el || el.matches('button')) return null; const own = q => [...el.querySelectorAll(q)].filter(x => !x.closest('.ed-alt')), radios = own('input[type=radio]'), sels = own('select'), cbs = own('input[type=checkbox]'); // (not the kind drawn here)
+  if (cbs.length === 1 && !radios.length && !sels.length) { const host = cbs[0].closest('label') || cbs[0]; return { kind: 'yesno', own: 'check', host, opts: () => [['0', 'No', !cbs[0].checked], ['1', 'Yes', cbs[0].checked]], set: v => { if (cbs[0].checked !== (v === '1')) cbs[0].click(); } }; }
+  if (radios.length > 1 && new Set(radios.map(r => r.name)).size === 1 && !sels.length) { const host = radios[0].closest('.seg, .clist') || radios[0].parentElement.parentElement;
+    return { kind: 'choice', own: host.classList.contains('clist') ? 'clist' : 'seg', host, opts: () => radios.map(r => { const l = r.closest('label') || r; return [r.value, ((l.querySelector && l.querySelector('b')) || l).textContent.trim().replace(/\s+/g, ' '), r.checked]; }) /* (a card's title, not all its words) */, set: v => { const r = radios.find(x => x.value === v); if (r && !r.checked) r.click(); } }; }
+  if (sels.length === 1 && !radios.length && !cbs.length) { const sl = sels[0]; return { kind: 'choice', own: 'select', host: sl, opts: () => [...sl.options].map(o => [o.value, o.textContent.trim(), o.selected]), set: v => { if (sl.value !== v) { sl.value = v; sl.dispatchEvent(new Event('change', { bubbles: true })); } } }; }
+  return null; }
+function setCtl(el, t) { const c = ctlOf(el); if (el.__alt && (!c || !t || t === c.own)) { el.__alt.remove(); el.__alt = null; } if (!c) return;
+  c.host.classList.toggle('ed-swapped', !!t && t !== c.own); if (!t || t === c.own) return;
+  const o = c.opts(), sig = t + '|' + o.map(x => x.join(':')).join('|'); if (el.__alt && el.__alt.__sig === sig) return; // (drawn again only when its options or value changed)
+  const alt = t === 'select' ? document.createElement('select') : document.createElement('div'); alt.className = 'ed-alt ' + (t === 'select' ? 'who' : t === 'clist' ? 'clist' : 'seg');
+  alt.innerHTML = t === 'select' ? o.map(([v, n, on]) => `<option value="${esc(v)}"${on ? ' selected' : ''}>${esc(n)}</option>`).join('') : o.map(([v, n, on]) => `<button type="button" data-v="${esc(v)}" class="${on ? 'on' : ''}">${t === 'clist' ? `<b>${esc(n)}</b>` : esc(n)}</button>`).join('');
+  alt.__set = c.set; alt.__sig = sig; if (el.__alt) el.__alt.replaceWith(alt); else c.host.after(alt); el.__alt = alt; }
+addEventListener('click', e => { const b = e.target.closest && e.target.closest('.ed-alt button'); if (!b || editing()) return; e.preventDefault(); b.closest('.ed-alt').__set(b.dataset.v); layout(); }, true);
+addEventListener('change', e => { if (e.target.matches && e.target.matches('select.ed-alt')) { e.target.__set(e.target.value); layout(); } }, true);
+
 /* every change is kept (in this browser) and can be undone: Ctrl+Z, Ctrl+Shift+Z, as in any editor */
 const snap = () => JSON.stringify(D); let last = snap(), undos = [], redos = [];
 const save = () => { const now = snap(); if (now !== last) { undos.push(last); if (undos.length > 200) undos.shift(); redos = []; last = now; }
@@ -178,7 +197,7 @@ function layout() {
     el.style.gridColumn = `${b.c} / span ${b.w}`; el.style.gridRow = String(b.r + 1); el.classList.add('ed-item'); el.classList.toggle('ed-inbar', !!b.bar); // (row 1: the top bar's)
     const off = b.del || ((b.hide || (b.fold && !foldOpen)) && !editing()); el.style.display = off ? 'none' : '';
     if (b.listk) { const l = byName(b.listk); if (l) { if (b.list) l.dataset.edList = b.list; else delete l.dataset.edList; } }
-    setKind(el, b.kind);
+    setKind(el, b.kind); setCtl(el, b.ctype);
     el.classList.toggle('ed-hidden', !!b.hide); el.classList.toggle('ed-folded', !!b.fold); el.classList.toggle('ed-sel', editing() && k === sel); }
   // text changed here (a leaf's words; a button made here keeps its words as its label)
   for (const [k, t] of Object.entries(c.text || {})) { const el = byName(k); if (el && !el.isContentEditable && !el.children.length && el.textContent !== t) el.textContent = t; }
@@ -200,7 +219,7 @@ function layout() {
   panel(); placeGlass();
 }
 function unlay(s) { if (!s.classList.contains('ed-laid')) return; s.classList.remove('ed-laid', 'ed-on'); for (const p of ['display', 'gridTemplateColumns', 'gridAutoRows', 'gap', 'position']) s.style[p] = '';
-  s.querySelectorAll('.ed-item').forEach(el => { setKind(el, null); el.style.gridColumn = el.style.gridRow = ''; if (el.classList.contains('ed-hidden') || el.classList.contains('ed-folded')) el.style.display = ''; el.classList.remove('ed-item', 'ed-hidden', 'ed-folded', 'ed-sel'); });
+  s.querySelectorAll('.ed-item').forEach(el => { setKind(el, null); setCtl(el, null); el.style.gridColumn = el.style.gridRow = ''; if (el.classList.contains('ed-hidden') || el.classList.contains('ed-folded')) el.style.display = ''; el.classList.remove('ed-item', 'ed-hidden', 'ed-folded', 'ed-sel'); });
   for (const bar of s.querySelectorAll(':scope > .ed-bar')) { for (const el of [...bar.children]) { const [p, n] = el.__home || [s, null]; el.style.order = ''; p.insertBefore(el, n && n.parentElement === p ? n : null); } bar.remove(); }
   s.querySelectorAll('[data-ed-list]').forEach(el => { delete el.dataset.edList; });
   s.querySelectorAll('.ed-row').forEach(el => el.classList.remove('ed-row')); s.querySelectorAll('.ed-inbar').forEach(el => el.classList.remove('ed-inbar')); const g = s.querySelector(':scope > .ed-grid'); if (g) g.remove(); }
@@ -269,6 +288,7 @@ function layoutBody() {
     + (b ? (b.bar ? `<p class="ed-hint">In the ${b.bar} bar: drag it left or right (or use the arrows) to order the bar.</p>` : row('Width', WIDTHS.map(([v, n]) => btn('w', n, b.w === v, v)).join('')))
       + row('Place', btn('bar', 'On the screen', !b.bar, '') + btn('bar', 'Top bar', b.bar === 'top', 'top') + btn('bar', 'Bottom bar', b.bar === 'bottom', 'bottom'))
       + ((el => el && el.matches('button') ? row('Button', KINDS.map(([v, n]) => btn('kind', n, (b.kind || el.__kind[0]) === v, v)).join('')) : '')(byName(sel)))
+      + ((el => { const c = ctlOf(el); return c ? row(c.kind === 'yesno' ? 'Setting' : 'Choice', CTYPES[c.kind].map(([v, n]) => btn('ctype', n, (b.ctype || c.own) === v, v)).join('')) : ''; })(byName(sel)))
       + row('', btn('hide', 'Hidden', b.hide) + btn('fold', 'In More options', b.fold) + btn('del', 'Delete'))
       + ((l => l ? row('List', [['', 'Scrolls'], ['all', 'Shows all'], ['3', 'First 3'], ['5', 'First 5'], ['10', 'First 10']].map(([v, n]) => btn('list', n, (b.list || '') === v, v)).join('')) : '')(byName(sel) && listIn(byName(sel))))
       : (editing() ? '<p class="ed-hint">Drag a block to move it; drag its right edge to make it a third, half or the whole width. Click a block to choose it. Double-click any text to change it. A chosen button can be made Main, Plain or Link. Arrows move the chosen block, Delete deletes it, Ctrl+Z undoes. Stop editing to use the menu.</p>' : '<p class="ed-hint">Press Edit (top of this panel) to lay this screen out; until then the menu works as usual.</p>'))
@@ -405,6 +425,7 @@ function act(t, a, v) {
   else if (a === 'opt-reset') { const look = D.options.colors; for (const k of Object.keys(D.options)) if (v === 'all' ? k !== 'reshuffle' : k.startsWith(look + '.')) delete D.options[k]; } // (the look's rows to its own; or every look's, and the page's own look)
   else if (a === 'openmenu') { const m = $('#menuBtn'); if (m) m.click(); }
   else if (b && a === 'w') { b.w = +v; fit(b); }
+  else if (b && a === 'ctype') { const c = ctlOf(byName(sel)); b.ctype = c && c.own === v ? undefined : v; }
   else if (b && a === 'kind') { const el = byName(sel); b.kind = el && el.__kind[0] === v ? undefined : v; }
   else if (b && a === 'del') { const ar = arrowOf(sel); if (ar) { D.arrows = D.arrows.filter(x => x !== ar); delete conf(sc).blocks[sel]; } else b.del = true; sel = null; } // (a button an arrow made: the arrow goes too)
   else if (a === 'undel') { for (const x of Object.values(conf(sc).blocks)) delete x.del; }
@@ -528,6 +549,7 @@ const css = document.createElement('style'); css.textContent = `
 #edPanel .ed-tag{font-size:11px;padding:1px 6px;border-radius:8px;background:#22302a;color:#b8c4bd}#edPanel .ed-tag.st{background:#173247;color:#bfe0f5}
 #edPanel .ed-add{margin-top:10px}#edPanel .ed-states{margin-top:10px;padding-top:8px;border-top:1px solid #2a3a32}
 #edPanel textarea.ed-copy{width:100%;height:160px;background:#0b120f;color:#ecf1ec;border:1px solid #3a4a42;font:12px ui-monospace,monospace}
+#mform .ed-swapped{display:none!important}#mform .ed-alt.seg{margin-top:2px}
 #edPanel .ed-tune{margin:2px 0 10px 12px;padding-left:10px;border-left:2px solid #3a4a42}
 section.ed-on .ed-item{outline:1px dashed #e9b24a88;outline-offset:2px;cursor:move;position:relative}section.ed-on .ed-item:hover{outline:1px solid #e9b24a}
 #edPanel .ed-edit{font-weight:700;padding:3px 10px}#edPanel .ed-edit.on{background:#d9534f;border-color:#d9534f;color:#fff}#edPanel.editing .ed-head{background:#3a2a0c}

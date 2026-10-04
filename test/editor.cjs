@@ -61,6 +61,23 @@ const T = report('editor');
     T.ok("a button's kind is changed (Link, Plain, Main)", /linkbtn/.test(asLink) && !/\bbtn\b/.test(asLink) && /\bbtn\b/.test(asPlain) && !/pri|linkbtn/.test(asPlain) && /\bbtn pri big\b|pri/.test(back) && /big/.test(back), [asLink, asPlain, back].join(' → '));
     await p.click('#edPanel [data-act=kind][data-v=link]'); await p.keyboard.press('Escape');
     await p.evaluate(() => document.querySelector('#mform').scrollTop = 0); }
+  // a control's type: the Players choice as a dropdown, the hand-hiding setting as two buttons; each still sets the page's own control
+  { const at = sel => p.evaluate(sel => { const e = document.querySelector(sel); e.scrollIntoView({ block: 'center' }); const q = e.getBoundingClientRect(); return { x: q.left + 12, y: q.top + q.height / 2 }; }, sel);
+    if (!(await p.$('#edPanel.editing'))) await p.click('#edPanel [data-act=editmode]');
+    let r = await at('#sN'); await p.mouse.click(r.x, r.y); await p.click('#edPanel [data-act=ctype][data-v=select]');
+    r = await at('#sPriv'); await p.mouse.click(r.x + 30, r.y); await p.click('#edPanel [data-act=ctype][data-v=two]');
+    await p.click('#edPanel [data-act=editmode]');
+    T.ok('a choice shown as a dropdown, its own row of buttons hidden', await p.evaluate(() => !!document.querySelector('select.ed-alt') && getComputedStyle(document.querySelector('#sN')).display === 'none'));
+    await p.selectOption('select.ed-alt', '4');
+    T.ok('the dropdown sets the page\'s own choice', await p.evaluate(() => document.querySelector('#sN input[value="4"]').checked));
+    await p.evaluate(() => [...document.querySelectorAll('.ed-alt button')].find(b => b.textContent === 'Yes').click());
+    T.ok('a yes/no setting as two buttons sets the page\'s own checkbox', await p.evaluate(() => document.querySelector('#sPriv').checked));
+    await p.evaluate(() => [...document.querySelectorAll('.ed-alt button')].find(b => b.textContent === 'No').click());
+    await p.click('#edPanel [data-act=editmode]');
+    r = await at('select.ed-alt'); await p.mouse.click(r.x, r.y); await p.click('#edPanel [data-act=ctype][data-v=seg]');
+    r = await at('.ed-alt.seg'); await p.mouse.click(r.x, r.y); await p.click('#edPanel [data-act=ctype][data-v=check]');
+    T.ok('back to their own kinds', await p.evaluate(() => !document.querySelector('.ed-alt') && getComputedStyle(document.querySelector('#sN')).display !== 'none'));
+    await p.keyboard.press('Escape'); await p.evaluate(() => document.querySelector('#mform').scrollTop = 0); } // (Edit mode on, as the steps after expect)
   // Delete: the chosen block is gone (also while editing); undo brings it back
   bl = await blocks(); const dk = bl[1].k; await p.mouse.click(bl[1].x, bl[1].y); await p.keyboard.press('Delete');
   const gone = await p.evaluate(k => getComputedStyle(document.querySelector(`[data-edk="${CSS.escape(k)}"]`)).display === 'none', dk); await p.keyboard.press('Control+z');
