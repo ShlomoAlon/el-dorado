@@ -8,7 +8,7 @@ const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs')
 const T = report('editor');
 (async () => {
   const srv = await serveStatic(), b = await chromium.launch();
-  const p = await openPage(b, 'editor', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25, acceptDownloads: true });
+  const p = await openPage(b, 'editor', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'] }); // (Copy flow writes the clipboard; the test reads it back)
   const answers = []; p.on('dialog', d => d.accept(d.type() === 'prompt' ? answers.shift() || 'title' : undefined));
   // (eight finished games kept on this device, as a player has: Replays' "Your games" is a list long enough to scroll)
   const fx = require('fs').readFileSync(require('path').join(__dirname, 'fixtures/replay.json'), 'utf8');
@@ -17,10 +17,10 @@ const T = report('editor');
   T.ok('?edit: the editor opens', await p.waitForSelector('#edPanel .ed-head', { timeout: 8000 }).then(() => true, () => false));
   const blocks = () => p.evaluate(() => [...document.querySelectorAll('#mform > section[data-screen]:not([hidden]) .ed-item')].map(e => { const r = e.getBoundingClientRect(); return { x: r.left + Math.min(30, r.width / 2), y: r.top + r.height / 2, r: r.right, k: e.dataset.edk, btn: e.matches('button') }; }));
   const col = k => p.evaluate(k => document.querySelector(`[data-edk="${CSS.escape(k)}"]`).style.gridColumn, k);
-  // the menu opens where the flowchart's ★ says (nowhere: the Title, a menu the page hasn't got), its buttons the arrows'
-  T.ok('the menu opens on the flowchart\'s ★: the Title, with its arrows\' buttons', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=title]'); return !!s && !s.hidden && /Play on this device/.test(s.textContent); }));
-  await p.click('#mform > section[data-screen=title] [data-ed-go]:has-text("Play on this device")'); await p.waitForTimeout(200);
-  T.ok('a button an arrow made goes where it leads (the start menu)', await p.evaluate(() => !document.querySelector('#mform > section[data-screen=setup]').hidden && document.querySelector('#mform > section[data-screen=title]').hidden));
+  // the menu opens where the flowchart's ★ says (in every state: the Main menu, a menu the page hasn't got), its buttons the transitions'
+  T.ok('the menu opens on the flowchart\'s ★: the Main menu, with its transitions\' buttons', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=main]'); return !!s && !s.hidden && /Play on this device/.test(s.textContent); }));
+  await p.click('#mform > section[data-screen=main] [data-ed-go]:has-text("Play on this device")'); await p.waitForTimeout(200);
+  T.ok('a button a transition made goes where it leads (the new game screen)', await p.evaluate(() => !document.querySelector('#mform > section[data-screen=setup]').hidden && document.querySelector('#mform > section[data-screen=main]').hidden));
   T.ok('the screen on show is a grid', await p.evaluate(() => getComputedStyle(document.querySelector('#mform > section[data-screen=setup]')).display === 'grid'));
   T.ok('out of Edit mode, the menu works (a click is a click)', await p.evaluate(() => { document.querySelector('#sN label[data-v="4"]').click(); return document.querySelector('#sN input[value="4"]').checked; }));
   await p.click('#edPanel [data-act=editmode]');
@@ -75,45 +75,58 @@ const T = report('editor');
     T.ok('the list cut to its first 5 shows 5 and scrolls no more (the screen does)', await p.evaluate(() => { const l = document.querySelector('#rMine'); return l.dataset.edList === '5' && getComputedStyle(l).overflowY === 'visible' && [...l.children].filter(c => getComputedStyle(c).display !== 'none').length === 5; }));
     await p.click('#edPanel [data-act=editmode]'); }
   await p.evaluate(() => document.querySelector('#sMode label[data-v="local"]').click());
-  // flow: the default flowchart; a box laid out; a new menu with a button arrow back to the Title
+  // flow: full screen; the default flowchart; a box laid out; a reload keeps the editor where it was
   if (await p.$('#edPanel.editing')) await p.click('#edPanel [data-act=editmode]');
   await p.click('#edPanel [data-tab=flow]');
-  T.ok('the default flowchart: boxes and arrows', await p.evaluate(() => document.querySelectorAll('#edPanel .ed-node').length >= 9 && document.querySelectorAll('#edPanel g.ed-ar').length >= 15));
-  await p.click('#edPanel .ed-node[data-node="results@none"]'); await p.click('#edPanel [data-dir="results@none"] [data-act=fl-lay]');
-  T.ok('"Lay out" shows that menu, with its arrows\' buttons', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=results]'); return !!s && !s.hidden && /Done/.test(s.textContent) && /Watch the replay/.test(s.textContent); }));
-  await p.click('#edPanel [data-tab=flow]');
-  answers.push('help'); await p.selectOption('#flMenu', ''); await p.click('#edPanel [data-act=fl-add]');
-  answers.push('Back to the title'); await p.click('#edPanel [data-act=fl-link][data-v="help@none"][data-kind=button]'); await p.click('#edPanel .ed-node[data-node="title@none"]');
-  T.ok('a new box, and an arrow drawn from it', await p.evaluate(() => !!document.querySelector('#edPanel .ed-node[data-node="help@none"]') && [...document.querySelectorAll('#edPanel text.ed-ar')].some(t => t.textContent === 'Back to the title')));
-  // the directions: the arrow's tag says what it changes; made to go to Settings in any state, it changes the menu only
-  T.ok('the directions list each transition, tagged with what it changes', await p.evaluate(() => { const r = [...document.querySelectorAll('#edPanel [data-dir="help@none"] .ed-dr')].find(x => x.querySelector('input').value === 'Back to the title'); return !!r && r.querySelector('.ed-tag').textContent === 'menu'; }));
+  T.ok('Flow takes the whole window', await p.evaluate(() => { const r = document.querySelector('#edPanel').getBoundingClientRect(); return r.left <= 13 && r.right >= innerWidth - 13 && r.bottom >= innerHeight - 13; }));
+  T.ok('the default flowchart: one Main menu in every state, where the menu opens in each', await p.evaluate(() => ['none', 'game', 'room'].every(st => !!document.querySelector(`#edPanel .ed-node[data-node="main@${st}"]`) && /★/.test(document.querySelector(`#edPanel .ed-node[data-node="main@${st}"] .m`).textContent)) && document.querySelectorAll('#edPanel g.ed-ar').length >= 20));
   await p.click('#edPanel .ed-node[data-node="results@none"]');
-  T.ok('a box clicked in the chart is shown in the directions', await p.evaluate(() => { const r = document.querySelector('#edPanel .ed-ds.on'), d = document.querySelector('#edPanel .ed-dirs'); if (!r) return false;
-    const a = r.getBoundingClientRect(), b = d.getBoundingClientRect(); return r.dataset.dir === 'results@none' && a.top >= b.top - 1 && a.top < b.bottom - 20 && d.scrollTop > 0; }));
-  T.ok('the chart stays whole while the directions scroll', await p.evaluate(() => { const c = document.querySelector('#edPanel .ed-fc').getBoundingClientRect(), w = document.querySelector('#edPanel .ed-flowwrap').getBoundingClientRect(); return c.top >= w.top - 1 && c.bottom <= w.bottom + 1 && document.querySelector('#edPanel').scrollTop === 0; }));
+  T.ok('a box clicked in the chart is shown in the directions, the chart staying whole', await p.evaluate(() => { const r = document.querySelector('#edPanel .ed-dir[data-menu="results"]'), d = document.querySelector('#edPanel .ed-dirs'), a = r.getBoundingClientRect(), b = d.getBoundingClientRect();
+    const c = document.querySelector('#edPanel .ed-fc').getBoundingClientRect(), w = document.querySelector('#edPanel .ed-flowwrap').getBoundingClientRect(); return a.top >= b.top - 1 && a.top < b.bottom - 20 && d.scrollTop > 0 && c.top >= w.top - 1 && c.bottom <= w.bottom + 1; }));
+  await p.click('#edPanel [data-dir="results@none"] [data-act=fl-lay]');
+  T.ok('"Lay out" shows that menu, with its transitions\' buttons', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=results]'); return !!s && !s.hidden && /Done/.test(s.textContent) && /Watch the replay/.test(s.textContent); }));
+  await p.reload(); await p.waitForSelector('#edPanel .ed-head'); await p.waitForTimeout(400);
+  T.ok('a reload keeps the editor where it was (the menu on show, the tab)', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=results]'); return !!s && !s.hidden && document.querySelector('#edPanel [data-tab=layout]').classList.contains('on'); }));
+  await p.click('#edPanel [data-tab=flow]');
+  // Connect: a click on one box, then another, draws a transition; its words typed; it applies in a second state too; a note
+  await p.click('#edPanel [data-act=fl-mode]'); await p.click('#edPanel .ed-node[data-node="replays@none"]'); await p.click('#edPanel .ed-node[data-node="results@none"]');
+  const tid = await p.evaluate(() => document.activeElement && document.activeElement.dataset.id);
+  T.ok('Connect: one box, then another, makes a transition, its words ready to type', !!tid);
+  await p.keyboard.type('See results'); await p.keyboard.press('Tab'); await p.keyboard.press('Escape');
+  T.ok('its words in the chart', await p.evaluate(() => [...document.querySelectorAll('#edPanel text.ed-ar')].some(t => /See results/.test(t.textContent))));
+  await p.click(`#edPanel [data-act=fl-tst][data-id="${tid}"][data-v=game]`);
+  T.ok('a transition for two states of its menu: drawn from both boxes', await p.evaluate(id => !!document.querySelector('#edPanel .ed-node[data-node="replays@game"]') && document.querySelectorAll(`#edPanel g.ed-ar[data-arrow="${id}"]`).length === 2, tid));
+  await p.fill(`#edPanel [data-act=fl-tnote][data-id="${tid}"]`, 'Try this'); await p.click('#edPanel .ed-ftools');
+  await p.click('#edPanel [data-act=fl-copy]'); await p.waitForTimeout(200);
+  const copied = await p.evaluate(() => navigator.clipboard.readText().then(t => t, e => 'unreadable: ' + e.name));
+  T.ok('Copy flow: the flow as text, with its notes', /See results/.test(copied) && /note: Try this/.test(copied) && /Main menu/.test(copied), copied.split('\n').filter(l => /See results|Try this/.test(l)).join(' | ') || copied.slice(0, 300));
+  const w0 = await p.evaluate(() => document.querySelector('#edPanel .ed-fc').viewBox.baseVal.width); await p.click('#edPanel [data-act=fl-zoom][data-v=in]');
+  T.ok('the chart zooms', await p.evaluate(w0 => document.querySelector('#edPanel .ed-fc').viewBox.baseVal.width < w0, w0));
+  await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]');
+  T.ok('a menu folds in the directions', await p.evaluate(() => !document.querySelector('#edPanel .ed-dir[data-menu="results"] .ed-mb')));
+  // merge, split, copy
+  await p.selectOption('#edPanel [data-act=fl-merge][data-m="viewer"]', 'replays');
+  T.ok('a menu merged into another: its boxes and transitions are the other\'s', await p.evaluate(() => !document.querySelector('#edPanel .ed-dir[data-menu="viewer"]') && !document.querySelector('#edPanel .ed-node[data-node^="viewer@"]')));
+  answers.push('Room menu'); await p.click('#edPanel [data-act=fl-split][data-v="main@room"]');
+  T.ok('a state split off as a menu of its own', await p.evaluate(() => !document.querySelector('#edPanel .ed-node[data-node="main@room"]') && [...document.querySelectorAll('#edPanel .ed-node .m')].some(t => /Room menu/.test(t.textContent))));
+  await p.selectOption('#edPanel [data-act=fl-copyall][data-m="setup"]', 'online');
+  T.ok('transitions copied to another menu', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-dir[data-menu="online"] input[data-act=fl-tword]')].some(i => i.value === 'Start expedition')));
   // menus and states renamed, a state added
-  await p.fill('#edPanel [data-menu="setup"] input.ed-mname', 'Main menu'); await p.press('#edPanel [data-menu="setup"] input.ed-mname', 'Enter');
-  T.ok('a menu renamed: every box of it', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-node[data-node^="setup@"] .m')].every(t => /Main menu/.test(t.textContent))));
+  await p.fill('#edPanel [data-menu="setup"] input.ed-mname', 'New game!'); await p.press('#edPanel [data-menu="setup"] input.ed-mname', 'Enter');
+  T.ok('a menu renamed: every box of it', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-node[data-node^="setup@"] .m')].every(t => /New game!/.test(t.textContent))));
   answers.push('Watching a replay'); await p.click('#edPanel [data-act=fl-addstate]');
-  T.ok('the directions: one entry per menu, a part for each state it is in', await p.evaluate(() => document.querySelectorAll('#edPanel .ed-dir[data-menu="setup"]').length === 1 && document.querySelectorAll('#edPanel .ed-dir[data-menu="setup"] .ed-ds').length === 2));
   T.ok('a state added, and offered for boxes', await p.evaluate(() => [...document.querySelectorAll('#flState option')].some(o => o.textContent === 'Watching a replay')));
-  await p.selectOption('#edPanel [data-dir="help@none"] [data-act=fl-nstate]', '*');
-  T.ok('a box made any state', await p.evaluate(() => !!document.querySelector('#edPanel .ed-node[data-node="help@*"]') && !document.querySelector('#edPanel .ed-node[data-node="help@none"]')));
-  { const id = await p.evaluate(() => document.querySelector('#edPanel [data-dir="setup@game"] .ed-dr[data-darrow]').dataset.darrow);
-    await p.selectOption(`#edPanel [data-act=fl-ato-m][data-id="${id}"]`, 'help'); await p.selectOption(`#edPanel [data-act=fl-ato-s][data-id="${id}"]`, '*');
-    T.ok('a transition to a box for any state keeps the state: it changes the menu only', await p.evaluate(id => document.querySelector(`#edPanel [data-darrow="${id}"] .ed-tag`).textContent === 'menu', id)); }
-  await p.click('#edPanel .ed-node[data-node="help@*"]'); await p.click('#edPanel [data-dir="help@*"] [data-act=fl-lay]');
-  await p.click('#mform > section[data-screen=help] [data-ed-go]');
-  T.ok('its button goes to the Title', await p.evaluate(() => !document.querySelector('#mform > section[data-screen=title]').hidden && document.querySelector('#mform > section[data-screen=help]').hidden));
-  await p.click('#mform > section[data-screen=title] [data-ed-go]:has-text("Play on this device")');
+  await p.click('#edPanel [data-tab=layout]'); await p.evaluate(() => { const l = document.querySelector('#sMode label[data-v="local"]'); l.click(); });
   // options in a game
   await p.click('#edPanel [data-tab=options]'); await p.click('#edPanel [data-act=opt][data-area=colors][data-v=b]'); await p.click('#edPanel [data-act=opt][data-area=reshuffle][data-v=c]');
+  await p.click('#edPanel [data-act=opt][data-area="b.acc"][data-v="3"]'); await p.click('#edPanel [data-act=opt-reset][data-v=look]');
+  T.ok('a look\'s rows reset to its own', await p.evaluate(() => document.documentElement.dataset.edacc === '1' && document.documentElement.dataset.edcolors === 'b'));
   T.ok('a game feature is the page\'s own setting, set from Options', await p.evaluate(() => window.__ED.UI.reshuffle === 'riffle'));
   await p.evaluate(() => document.querySelector('#sGo').click()); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open, null, { timeout: 8000 }); await settle(p);
   T.ok('an option shows in a game (Brass: the whole look, the menu panel too)', await p.evaluate(() => document.documentElement.dataset.edcolors === 'b' && getComputedStyle(document.querySelector('#menu .modal')).borderTopColor === 'rgb(185, 141, 75)' && document.querySelectorAll('#cards .card').length > 0));
   await p.click('#edPanel [data-act=mini]'); T.ok('the panel shrinks to its title', !(await p.$('#edPanel .ed-body'))); await p.click('#edPanel [data-act=mini]');
   await p.click('#edPanel [data-tab=export]'); const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#edPanel [data-act=download]')]);
-  const txt = require('fs').readFileSync(await dl.path(), 'utf8'); T.ok('the design downloads as a file', /"title"/.test(txt) && /"arrows"/.test(txt) && /"kind": "link"/.test(txt) && /"bar": "bottom"/.test(txt) && /"bar": "top"/.test(txt), dl.suggestedFilename());
+  const txt = require('fs').readFileSync(await dl.path(), 'utf8'); T.ok('the design downloads as a file', /"main"/.test(txt) && /"arrows"/.test(txt) && /"kind": "link"/.test(txt) && /"bar": "bottom"/.test(txt) && /"bar": "top"/.test(txt), dl.suggestedFilename());
   const p2 = await openPage(b, 'no edit'); const reqs = []; p2.on('request', q => reqs.push(q.url())); await p2.goto(srv.url); await p2.waitForFunction(() => window.__ED && document.querySelector('#menu').open); await p2.waitForTimeout(800);
   T.ok('without ?edit the editor is never fetched', !reqs.some(u => /\/ed\.[0-9a-f]+\.js/.test(u)) && !(await p2.$('#edPanel')));
   T.ok('no page errors (assertions included)', !p.errors.length && !p2.errors.length, [...p.errors, ...p2.errors].slice(0, 3).join(' | '));
