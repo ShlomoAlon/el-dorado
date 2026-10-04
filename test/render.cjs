@@ -43,8 +43,9 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
       ok('zoom baked in once it settles', Math.abs(ls - 1) <= .01 && bs > 1.2, `layer scale ${ls}, board scale ${bs} (${info})`); }
     await p.close(); }
   { // 2b. drawn at the zoom's resolution: after zooming to the most and settling, the board's layers have tiles drawn at the
-    // resolution that zoom needs (the overlays' layer, the pieces; the terrain is baked pixels, its density checked by the page at
-    // every rest: camera.js), read from Chrome's own trace (tiles below it are an enlarged, soft picture; a will-change
+    // resolution that zoom needs: every layer Chrome draws, whoever made it (Chrome makes layers of its own: the labels and
+    // overlays above the baked terrain stayed soft, 2026-10-04; the terrain itself is baked pixels, its density checked by the
+    // page at every rest: camera.js), read from Chrome's own trace (tiles below it are an enlarged, soft picture; a will-change
     // hint kept on at rest held them at the first zoom's: a third of the detail at the most, 2026-10-04). Screenshots can't
     // see this: headless Chrome draws the board afresh for them
     const p = await open(); await p.mouse.move(450, 400); for (let i = 0; i < 30; i++) { await p.mouse.wheel(0, -120); await p.waitForTimeout(30); } await p.waitForTimeout(1500);
@@ -52,9 +53,9 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     await b.startTracing(p, { path: tr, categories: ['disabled-by-default-cc.debug'] }); await p.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); await p.waitForTimeout(300); await b.stopTracing();
     const ev = JSON.parse(require('fs').readFileSync(tr, 'utf8')); require('fs').unlinkSync(tr); const L = Array.isArray(ev) ? ev : ev.traceEvents;
     const snaps = L.filter(e => e.ph === 'O' && /LayerTreeHostImpl/.test(e.name) && e.args && e.args.snapshot), out = [];
-    const walk = (o, d) => { if (!o || typeof o !== 'object' || d > 14) return; if (o.tilings && /id='(bscale|pieces)'/.test(o.layer_name || '')) out.push([o.layer_name.match(/id='([^']+)'/)[1], Math.max(...o.tilings.map(t => +t.content_scale || 0)) / (+o.ideal_contents_scale || 1)]); for (const k in o) walk(o[k], d + 1); };
+    const walk = (o, d) => { if (!o || typeof o !== 'object' || d > 14) return; if (o.tilings && o.tilings.length && o.layer_name !== undefined) out.push([(o.layer_name || '?').replace(/^.*?((id|class)='[^']+').*$/, '$1'), Math.max(...o.tilings.map(t => +t.content_scale || 0)) / (+o.ideal_contents_scale || 1)]); for (const k in o) walk(o[k], d + 1); };
     walk(snaps.length && snaps[snaps.length - 1].args.snapshot, 0);
-    ok('zoomed in fully, the board is drawn at the resolution it needs', out.some(([n]) => n === 'pieces') && out.every(([, r]) => r >= .95), out.map(([n, r]) => `${n} ${(100 * r).toFixed(0)}%`).join(', ') || 'no board layers in the trace');
+    ok('zoomed in fully, the board is drawn at the resolution it needs', out.some(([n]) => /pieces/.test(n)) && out.every(([, r]) => r >= .95), (out.filter(([, r]) => r < .95).map(([n, r]) => `soft: ${n} ${(100 * r).toFixed(0)}%`).join(', ') || `all ${out.length} layers at 95% or more`));
     await p.close(); }
   { // 2c. frames the screen misses while zooming the way the owner does: bursts of wheel notches with short pauses, zooming
     // again just as the last zoom's repaint starts (the settle comes at 250 ms), in and out, at his laptop's size. Counted from

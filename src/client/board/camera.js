@@ -30,58 +30,30 @@ function writeStage() { stage().style.transform = shownT = stageT(); terrainShow
 terrainHook.ready = () => terrainShow(view.s * devicePixelRatio);
 function bake() { baked = view.s; $('#bscale').style.transform = `scale(${baked})`; if (viewRaf) { cancelAnimationFrame(viewRaf); viewRaf = 0; } writeStage(); }
 function applyView() {
-  redrawRun++; draining = false; // (a layer still to be drawn again waits for the next settle)
   if (!viewRaf) viewRaf = requestAnimationFrame(() => { viewRaf = 0; writeStage(); }); // (a gesture's events, one write a frame)
   scheduleSettle();
 }
 function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 250); if (CHECKS) { clearTimeout(restT); restT = setTimeout(restCheck, 700); } }
-/* the board's layers keep the will-change hint for good (a pan or zoom only moves and stretches the picture already drawn),
-   so Chrome keeps the resolution it first drew them at: zoomed in, a third of the detail the zoom needs (2026-10-04). Chrome
-   picks a layer's resolution afresh, hint or not, when the layer's size changes (cc picture_layer_impl.cc: "mainly to reset
-   the preserved scale for will-change:transform"), so once a zoom has been baked in, each layer's size changes by a pixel
-   and it is drawn again, once, at the zoom it shows. One layer a frame, the terrain's regions on screen first: the whole
-   board drawn again at once cost frames at 4K (18% dropped zooming in bursts, 2026-10-04). A pan or zoom that starts
-   meanwhile stops the run (what's left stays a stretched picture until it settles again) */
-const NS = 'http://www.w3.org/2000/svg';
-let redrawRun = 0;
-// the other layers: a one-pixel shape in an SVG that paints into the layer (Chrome never lifts an SVG shape into a layer of
-// its own), moved a pixel: the board's own SVG (overlays and labels' layer); for the pieces and the effects, an SVG of their
-// own, in flow, first, so it paints with them
-function growMark(id) {
-  const L = $('#' + id); let r = L.querySelector('rect.nudge');
-  if (!r) { r = document.createElementNS(NS, 'rect'); r.setAttribute('class', 'nudge'); r.setAttribute('width', 1); r.setAttribute('height', 1);
-    if (id === 'board') L.append(r); else { const s = document.createElementNS(NS, 'svg'); s.setAttribute('class', 'nudge'); s.append(r); L.prepend(s); } }
-  const d = r.getAttribute('data-d') === '1' ? 0 : 1, o = id === 'board' ? 1 : 0; r.setAttribute('data-d', d);
-  r.setAttribute('x', o * layout().minX + Math.ceil(layout().w) + 4 + d); r.setAttribute('y', o * layout().minY + Math.ceil(layout().h) + 4 + d);
-}
-/* the layers still to be drawn again at the zoom shown: a bake marks them all, and what is owed stays owed until it's drawn.
-   (It lived in one run of redraw, and a pan or the camera's follow before the run ended dropped the rest for good: the
-   explorers, last in line, stayed a stretched picture until the next zoom; 2026-10-04) */
-const stale = new Set(); let draining = false; // (draining: a run is drawing them, one a frame)
-function redraw() {
-  const run = ++redrawRun, order = ['pieces', 'board', 'bfx']; // (the explorers first: what the eye is on)
-  draining = true; const next = () => { if (run !== redrawRun || !stale.size) { if (run === redrawRun) draining = false; return; }
-    const L = order.find(x => stale.has(x)); stale.delete(L); growMark(L); if (stale.size) requestAnimationFrame(next); else draining = false; };
-  next();
-}
+/* the board has no will-change hint: under one, Chrome keeps every layer at the resolution it first drew it, and had to be
+   tricked into drawing it again after each zoom (a size nudge, layer by layer: Chrome-only, and blind to the layers Chrome
+   makes by itself, the labels and overlays over the baked terrain, which stayed soft; 2026-10-04). The terrain, the costly
+   part, is baked pixels now (terrain.js) that a zoom only stretches; what is left is small, and Chrome draws it again at
+   each zoom by its own rules */
 function settle() {
-  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) { if (stale.size) redraw(); return; } // (a move at the same zoom: what is still owed goes on)
+  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); bake(); for (const L of ['board', 'pieces', 'bfx']) stale.add(L); redraw();
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); bake();
   });
 }
 /* checks: once the board is at rest (no gesture or glide, settled) */
 let restT = 0;
 function restCheck() {
-  if (cam.pointers || gliding || draining) { restT = setTimeout(restCheck, 300); return; } // (draining: still being drawn, one a frame; owed is fine, dropped is not)
+  if (cam.pointers || gliding) { restT = setTimeout(restCheck, 300); return; }
   // what a redraw of the board records: its live elements (the terrain is one image; overlays, labels and pieces are live).
   // A few hundred; the terrain drawn live was 2,271, 9 ms of the main thread per redraw at maximum zoom
   const n = document.querySelectorAll('#bscale *').length;
   assert(terrainLive || n <= LIVE_MAX, `view: the board is a few hundred live elements, its fixed terrain one image (${n})`);
-  // at rest, every layer of the board is drawn at the zoom it shows: none left a stretched picture (an explorer soft until
-  // the next zoom, 2026-10-04)
-  assert(!stale.size, `view: the board at rest is drawn at the zoom it shows: no layer left waiting to be drawn again (${stale.size} waiting)`);
   // the terrain shown is baked at the density this zoom needs, or the most this device keeps (terrain.js)
   const need = view.s * devicePixelRatio, got = terrainShow(need);
   assert(!terrainTop() || got >= Math.min(need, terrainTop()) * .98, `view: the terrain on screen is baked at the density the zoom needs (${got.toFixed(2)} for ${need.toFixed(2)})`);
