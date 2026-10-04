@@ -95,14 +95,14 @@ const STATE0 = [['none', 'Nowhere'], ['game', 'In a game'], ['room', 'In a room'
 const STATES = { [Symbol.iterator]: function* () { const nm = D.stateNames || {}; for (const [v, n] of STATE0) yield [v, nm[v] || n]; for (const v of D.moreStates || []) yield [v, nm[v] || v]; } };
 const stLabel = st => st === '*' ? 'Any state' : ([...STATES].find(([v]) => v === st) || [st, st])[1]; // (*: any state; a transition to it keeps the state)
 const NOLAY = ['board', 'viewer', 'site', '*']; // (no menu: the game, a replay, the way in, any menu (a rule for every menu: '*'))
-const NAMES = { setup: 'New game', online: 'Online', replays: 'Replays', room: 'Game lobby', board: 'Board', viewer: 'Replay viewer', main: 'Main menu', results: 'Results', settings: 'Settings', site: 'Way in', title: 'Title', '*': 'Any menu' };
+const NAMES = { setup: 'New game', online: 'Online', replays: 'Replays', room: 'Game lobby', board: 'Board', viewer: 'Replay viewer', main: 'Main menu', results: 'Results', settings: 'Settings', rules: 'Rules', leaderboard: 'Leaderboard', profile: 'Profile', site: 'Way in', title: 'Title', '*': 'Any menu' };
 const nameOf = m => (D.names && D.names[m]) || NAMES[m] || m; // (a menu renamed here: D.names)
 /* what a transition changes, read from its ends (never stored, so it can't disagree with them): the menu, the state, or both */
 function changes(a) { const [tm, ts] = a.to.split('@'), menu = a.from !== tm, state = ts !== '*' && a.states.some(s => s !== ts);
   return menu && state ? 'menu + state' : state ? 'state' : menu ? 'menu' : 'nothing'; }
 /* the default: one way in (owner, 2026-10-05: opening the site, reloading, or leaving and coming back always lands on the same
    menu, which looks different in each state), so the main menu has a box in every state and is where the menu opens in each */
-const SEED = { extra: ['main', 'results', 'settings'], first: { none: 'main', game: 'main', room: 'main' },
+const SEED = { extra: ['main', 'results', 'settings', 'rules', 'leaderboard', 'profile'], first: { none: 'main', game: 'main', room: 'main' },
   nodes: [['site@*', -160, 230], ['main@none', 250, 60], ['main@game', 250, 230], ['main@room', 250, 400],
     ['online@none', 540, 110], ['replays@none', 820, 0], ['viewer@none', 1100, 0],
     ['board@game', 540, 230], ['results@none', 820, 230], ['room@room', 540, 400], ['*@game', 820, 115]],
@@ -110,7 +110,12 @@ const SEED = { extra: ['main', 'results', 'settings'], first: { none: 'main', ga
     // (a game on this device is a room nobody else joins: the same lobby, the same choices (owner, 2026-10-05); one state at a time,
     // so a new game or room is only reached from nowhere: a game or a room is left first)
     ['main', 'none', 'room@room', 'Play on this device', 'A room only this device is in: the same lobby as online'], ['main', 'none', 'online@none', 'Play online'], ['main', 'none', 'replays@none', 'Replays'],
-    ['online', 'none', 'main@none', 'Back'], ['online', 'none', 'room@room', 'Create room · Join · Quick match'],
+    ['online', 'none', 'main@none', 'Back'], ['online', 'none', 'room@room', 'Quick match'], ['online', 'none', 'room@room', 'Create a room'], ['online', 'none', 'room@room', 'Join with a code'],
+    ['online', 'none', 'room@room', 'Join an open room'], ['online', 'none', 'board@game', 'Rejoin', 'Only when a game of yours is in progress'],
+    ['online', 'none', 'leaderboard@none', 'Leaderboard'], ['online', 'none', 'profile@none', 'Profile'], ['leaderboard', 'none', 'online@none', 'Back'],
+    ['leaderboard', 'none', 'profile@none', 'A player', 'Their profile'], ['profile', 'none', 'online@none', 'Back'],
+    ['main', 'none', 'board@game', 'Resume saved game', 'Only when a game on this device was left unfinished'], ['main', '*', 'rules@*', 'Rules'], ['rules', '*', 'main@*', 'Back'],
+    ['results', 'none', 'room@room', 'Play again', 'The same players and course, in a new lobby'],
     ['replays', 'none', 'main@none', 'Back'], ['replays', 'none', 'viewer@none', 'Open a game'], ['viewer', 'none', 'replays@none', 'Close'],
     ['main', 'game', 'board@game', 'Back to game'], ['main', 'game', 'results@none', 'End game · Resign'], ['board', 'game', 'main@game', 'Menu'], ['board', 'game', 'results@none', 'The race is won'],
     ['results', 'none', 'main@none', 'Done'], ['results', 'none', 'viewer@none', 'Watch the replay'],
@@ -121,9 +126,14 @@ const SEED = { extra: ['main', 'results', 'settings'], first: { none: 'main', ga
 const boxFor = k => { if (!D.nodes.some(n => n.k === k)) D.nodes.push({ k, x: 0, y: Math.max(0, ...D.nodes.map(n => n.y)) + 100 }); };
 // a menu's own buttons, which change something on it and lead nowhere (owner, 2026-10-05: "buttons that aren't transitions ... like
 // settings"): its words, the states it is in, a note
-SEED.buttons = [['settings', 'Sound on / off'], ['settings', 'Remind me before ending a turn if I can still buy'], ['settings', 'Animation speed']];
+SEED.buttons = [['settings', 'Sound on / off'], ['settings', 'Remind me before ending a turn if I can still buy'], ['settings', 'Animation speed'], ['settings', 'Full screen'],
+  ['main', 'Sign in with Google · Sign out'], ['online', 'Sign in with Google', 'Needed to play online'],
+  ['room', 'Players: 2 · 3 · 4'], ['room', 'Seats: a person or an AI, a name, a colour'], ['room', 'Course'], ['room', 'Game ends: when all but one arrive · at the first arrival'],
+  ['room', 'Hide each hand until its player taps Reveal', 'For passing one device around'], ['room', 'Rated · Unrated', 'Online'], ['room', 'Turn clock: 60 s · 90 s · 2 min · 3 min', 'Online'],
+  ['room', 'Public · Private', 'Online'], ['room', 'Copy the room link', 'Online'], ['profile', 'Display name'], ['profile', 'Save'], ['replays', 'Your games · Recent games'],
+  ['viewer', 'Play · Pause'], ['viewer', 'Back a move · Forward a move'], ['viewer', 'Speed'], ['viewer', "Fawcett's recommended turn"]];
 function seed() {
-  if (!D.nodes) { D.nodes = SEED.nodes.map(([k, x, y]) => ({ k, x, y })); D.buttons = SEED.buttons.map(([menu, label], i) => ({ id: 'sb' + i, menu, states: ['*'], label }));
+  if (!D.nodes) { D.nodes = SEED.nodes.map(([k, x, y]) => ({ k, x, y })); D.buttons = SEED.buttons.map(([menu, label, note], i) => ({ id: 'sb' + i, menu, states: ['*'], label, ...(note ? { note } : {}) }));
     D.arrows = [...SEED.arrows.map(([from, st, to, label, note], i) => ({ id: 's' + i, from, states: [st], to, label, ...(note ? { note } : {}) })), ...(D.arrows || [])];
     for (const x of SEED.extra) if (!D.extra.includes(x)) D.extra.push(x);
     for (const [st, m] of Object.entries(SEED.first)) if (!D.first[st]) D.first[st] = m; }
