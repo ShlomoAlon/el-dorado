@@ -2,7 +2,8 @@
 // to itself (test/run.mjs runs it alone, after everything else), and every frame of it judged: the work on the page's main
 // thread (script, style, layout, paint) of each task must stay within 14.3 ms, a frame at 70 fps (owner, 2026-10-03:
 // calibrated for an uncontended, reasonable machine). Along the way it opens the menu, Rules and a player's cards, so their
-// entrances are judged too, and at the end it drags, wheel-zooms and pinches the board (trackpad and touch). Read from a trace (frames come at a fixed 60 per second here, so the
+// entrances are judged too, and at the end it drags, wheel-zooms and pinches the board (trackpad and touch), on the GPU route (lib.cjs: a player's
+// browser stretches the baked board on its GPU). Read from a trace (frames come at a fixed 60 per second here, so the
 // time between them can't show 70 fps): every task over budget is listed with what the game was doing then.
 //   NODE_PATH=$(npm root -g) node test/framebudget.cjs [--moves n]   (n: the person's first n moves, every overlay included;
 //   without it, the whole game: test/run.mjs --full)
@@ -19,10 +20,6 @@ const DETAIL = arg.includes('--detail'); // (each task over budget broken down: 
   await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
   await p.evaluate(() => window.__ED.aiPace(.3)); // (the AIs' pauses shorter; their moves and every animation at full speed)
   await settle(p);
-  // a phone, touch from the start (as a real one), for the two-finger pinch: its own page, set up before the trace starts
-  const ph = await openPage(b, 'framebudget (phone)', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
-  await ph.goto(srv.url); await ph.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-  await ph.click('#sGo'); await ph.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(ph);
   const trace = path.join(os.tmpdir(), 'framebudget-' + process.pid + '.json');
   await b.startTracing(p, { path: trace, categories: ['toplevel', 'blink.user_timing', 'devtools.timeline', ...(DETAIL ? ['disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.stack'] : [])] });
   const mark = label => p.evaluate(l => performance.mark(l), label);
@@ -41,32 +38,50 @@ const DETAIL = arg.includes('--detail'); // (each task over budget broken down: 
       if (r.startsWith('unmapped')) break;
     }
   } catch (e) { T.ok('the game ran to the end', false, e.message.split('\n')[0]); }
-  // the board's gestures, which must stay smooth above all (owner, 2026-10-03): a drag, wheel zoom, a trackpad pinch
-  // (ctrl+wheel, as Chrome sends it) and a two-finger touch pinch, each over the board, each marked; the zoom then settles
-  // and is baked in (one sharp redraw), which is judged too
-  await settle(p);
-  const vp = await p.evaluate(() => { const r = document.querySelector('#vp').getBoundingClientRect(); return { x: r.left + r.width * .45, y: r.top + r.height * .5 }; });
-  await mark('drag the board'); await p.mouse.move(vp.x, vp.y); await p.mouse.down();
-  for (let i = 0; i < 60; i++) { await p.mouse.move(vp.x + Math.sin(i / 8) * 200, vp.y + Math.cos(i / 10) * 100); await p.waitForTimeout(16); }
-  await p.mouse.up(); await p.waitForTimeout(400);
-  await mark('wheel zoom'); await p.mouse.move(vp.x, vp.y); for (let i = 0; i < 24; i++) { await p.mouse.wheel(0, i < 12 ? -60 : 60); await p.waitForTimeout(30); } await p.waitForTimeout(700);
-  await mark('trackpad pinch'); await p.keyboard.down('Control'); for (let i = 0; i < 30; i++) { await p.mouse.wheel(0, i < 15 ? -8 : 8); await p.waitForTimeout(16); } await p.keyboard.up('Control'); await p.waitForTimeout(700);
-  await ph.evaluate(() => performance.mark('touch pinch')); { const c = await ph.context().newCDPSession(ph);
-    const v = await ph.evaluate(() => { const r = document.querySelector('#vp').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * .4 }; });
-    const pts = d => [{ x: v.x - d, y: v.y, id: 1 }, { x: v.x + d, y: v.y, id: 2 }];
-    await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(40) });
-    for (let i = 1; i <= 30; i++) { await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(40 + (i <= 15 ? i : 30 - i) * 6) }); await ph.waitForTimeout(16); }
-    await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await ph.waitForTimeout(800); await ph.evaluate(() => performance.mark('touch pinch done')); }
   await p.waitForTimeout(800);
   await p.waitForTimeout(800); await mark('results');
   if (DETAIL) console.log('     slow updates (the page\'s log): ' + (await p.evaluate(() => window.__ED.diagLog().filter(l => /update \d+ ms/.test(l)).slice(-12).join(' | ')) || 'none'));
   await b.stopTracing();
+  const traces = [trace];
+  /* the board's gestures on the GPU route (lib.cjs), in a browser of their own, a page each for the owner's screen and a phone
+     (owner, 2026-10-05): a zoom only stretches the baked board, which a GPU does with no work on the page's thread; on the
+     software route the stretched pictures are copied on the CPU every frame (16-18 ms a frame: a path no player's browser
+     takes). The page's own work, which is what is judged, is the same on both routes */
+  const bg = await chromium.launch({ gpu: true }), gtrace = path.join(os.tmpdir(), 'framebudget-gpu-' + process.pid + '.json'); traces.push(gtrace);
+  { const p = await openPage(bg, 'framebudget (gestures)', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25 });
+    await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
+    await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(p);
+    // a phone, touch from the start (as a real one), for the two-finger pinch: its own page, set up before the trace starts
+    const ph = await openPage(bg, 'framebudget (phone)', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+    await ph.goto(srv.url); await ph.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
+    await ph.click('#sGo'); await ph.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(ph);
+    await bg.startTracing(p, { path: gtrace, categories: ['toplevel', 'blink.user_timing', 'devtools.timeline', ...(DETAIL ? ['disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.stack'] : [])] });
+    const mark = label => p.evaluate(l => performance.mark(l), label);
+    // the board's gestures, which must stay smooth above all (owner, 2026-10-03): a drag, wheel zoom, a trackpad pinch
+    // (ctrl+wheel, as Chrome sends it) and a two-finger touch pinch, each over the board, each marked; the zoom then settles
+    // and is baked in (one sharp redraw), which is judged too
+    await settle(p);
+    const vp = await p.evaluate(() => { const r = document.querySelector('#vp').getBoundingClientRect(); return { x: r.left + r.width * .45, y: r.top + r.height * .5 }; });
+    await mark('drag the board'); await p.mouse.move(vp.x, vp.y); await p.mouse.down();
+    for (let i = 0; i < 60; i++) { await p.mouse.move(vp.x + Math.sin(i / 8) * 200, vp.y + Math.cos(i / 10) * 100); await p.waitForTimeout(16); }
+    await p.mouse.up(); await p.waitForTimeout(400);
+    await mark('wheel zoom'); await p.mouse.move(vp.x, vp.y); for (let i = 0; i < 24; i++) { await p.mouse.wheel(0, i < 12 ? -60 : 60); await p.waitForTimeout(30); } await p.waitForTimeout(700);
+    await mark('trackpad pinch'); await p.keyboard.down('Control'); for (let i = 0; i < 30; i++) { await p.mouse.wheel(0, i < 15 ? -8 : 8); await p.waitForTimeout(16); } await p.keyboard.up('Control'); await p.waitForTimeout(700);
+    await ph.evaluate(() => performance.mark('touch pinch')); { const c = await ph.context().newCDPSession(ph);
+      const v = await ph.evaluate(() => { const r = document.querySelector('#vp').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * .4 }; });
+      const pts = d => [{ x: v.x - d, y: v.y, id: 1 }, { x: v.x + d, y: v.y, id: 2 }];
+      await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(40) });
+      for (let i = 1; i <= 30; i++) { await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(40 + (i <= 15 ? i : 30 - i) * 6) }); await ph.waitForTimeout(16); }
+      await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await ph.waitForTimeout(800); await ph.evaluate(() => performance.mark('touch pinch done')); }
+    await p.waitForTimeout(800); await mark('results'); await bg.stopTracing(); }
+  await bg.close();
   T.ok(MOVES < Infinity ? `the first ${MOVES} moves played through the UI` : 'a whole game played through the UI', MOVES < Infinity ? steps >= MOVES || await p.evaluate(() => window.__ED.S.over) : await p.evaluate(() => window.__ED.S.over), steps + ' moves');
   // the page's main thread: its top-level tasks, each labelled with the last thing the test did before it
-  const ev = JSON.parse(fs.readFileSync(trace, 'utf8')); fs.unlinkSync(trace);
-  const list = Array.isArray(ev) ? ev : ev.traceEvents;
-  // (each page's main thread on its own: the game's and the phone's, each with its own marks)
+  // (each trace, the game's (software route) and the gestures' (GPU route); each page's main thread on its own, with its own marks)
   const over = [], tasks = [];
+  for (const tf of traces) { const ev = JSON.parse(fs.readFileSync(tf, 'utf8')); fs.unlinkSync(tf);
+  const list = Array.isArray(ev) ? ev : ev.traceEvents;
+
   for (const main of list.filter(e => e.ph === 'M' && e.name === 'thread_name' && e.args.name === 'CrRendererMain')) {
     const pid = main.pid, tid = main.tid;
     if (!list.some(e => e.pid === pid && e.cat === 'blink.user_timing')) continue; // (a page with no marks: not ours)
@@ -86,6 +101,7 @@ const DETAIL = arg.includes('--detail'); // (each task over budget broken down: 
         if (lays.length) console.log('       layouts: ' + lays.join('; '));
         console.log(`     ${o.ms.toFixed(1)} ms at "${o.at}": ` + Object.entries(sum).map(([k, v]) => k + ' ' + v.toFixed(1)).join(', ') + (fn ? ` (slowest function ${fn.name}, ${(fn.dur / 1000).toFixed(1)} ms)` : '')); } }
 
+  }
   }
   const by = {}; for (const o of over) { const k = o.at.replace(/ \(.*\)$/, ''); (by[k] = by[k] || []).push(o.ms); }
   const rows = Object.entries(by).sort((a, c) => Math.max(...c[1]) - Math.max(...a[1])).map(([k, v]) => `${k}: ${v.length} over, worst ${Math.max(...v).toFixed(1)} ms`);
