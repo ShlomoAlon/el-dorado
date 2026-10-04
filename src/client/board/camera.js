@@ -26,24 +26,28 @@ function applyView() {
   scheduleSettle();
 }
 function scheduleSettle() { clearTimeout(settleT); settleT = setTimeout(settle, 250); if (CHECKS) { clearTimeout(restT); restT = setTimeout(restCheck, 700); } }
-/* EXPERIMENT (branch only): once settled, a short animation on the board's layer makes Chrome draw it again at the largest
-   scale that animation reaches (it keeps a will-change layer's resolution otherwise): 'inplace' to the same transform,
-   'x2' toward twice the scale, held at the start (steps) so nothing moves */
-let ZEXP = ''; try { ZEXP = localStorage.getItem('zexp') || ''; } catch (e) { /* expected: storage blocked; no experiment */ }
-function kick() {
-  if (ZEXP === 'size') { const w = layout().w + 4, h = layout().h + 4; for (const id of ['bscale', 'pieces', 'bfx']) { const L = $('#' + id); let sp = L.querySelector(':scope > .zsp');
-      if (!sp) { sp = document.createElement('div'); sp.className = 'zsp'; sp.style.cssText = 'position:absolute;width:1px;height:1px;pointer-events:none'; L.prepend(sp); }
-      const d = sp.dataset.d === '1' ? 0 : 1; sp.dataset.d = d; sp.style.left = (w + d) + 'px'; sp.style.top = (h + d) + 'px'; } diag('kick size'); return; } // (a layer whose size changes gets its resolution chosen afresh, will-change or not: Chrome picture_layer_impl.cc)
-  if (!ZEXP) return; const st = stage(), t = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`;
-  const f = ZEXP === 'inplace' ? 1 : +ZEXP.slice(1), t2 = `translate3d(${view.x}px,${view.y}px,0) scale(${f * view.s / baked})`;
-  diag(`kick ${ZEXP}`);
-  st.animate([{ transform: t }, { transform: t2 }], { duration: 120, easing: 'steps(1, end)' });
+/* the board's layers keep the will-change hint for good (a pan or zoom only moves and stretches the picture already drawn),
+   so Chrome keeps the resolution it first drew them at: zoomed in, a third of the detail the zoom needs (2026-10-04). Chrome
+   picks a layer's resolution afresh, hint or not, when the layer's size changes (cc picture_layer_impl.cc: "mainly to reset
+   the preserved scale for will-change:transform"), so once a zoom has been baked in, a one-pixel mark at each layer's far
+   corner moves a pixel out or back: each is drawn again, once, at the zoom it shows. (The mark is the layer's first child,
+   so it is painted into that layer and not into a sibling's) */
+const NS = 'http://www.w3.org/2000/svg';
+let nudged = 0;
+function nudge() {
+  nudged ^= 1; const x = Math.ceil(layout().w) + 4 + nudged, y = Math.ceil(layout().h) + 4 + nudged;
+  // a shape in an SVG that paints into the layer (Chrome never lifts an SVG shape into a layer of its own): the board's own
+  // SVG; for the pieces and the effects, an SVG of no size of their own, in flow, first, so it paints with them
+  for (const id of ['board', 'pieces', 'bfx']) { const L = $('#' + id); let r = L.querySelector('rect.nudge');
+    if (!r) { r = document.createElementNS(NS, 'rect'); r.setAttribute('class', 'nudge'); r.setAttribute('width', 1); r.setAttribute('height', 1);
+      if (id === 'board') L.append(r); else { const sv = document.createElementNS(NS, 'svg'); sv.setAttribute('class', 'nudge'); sv.append(r); L.prepend(sv); } }
+    r.setAttribute('x', (id === 'board' ? layout().minX : 0) + x); r.setAttribute('y', (id === 'board' ? layout().minY : 0) + y); }
 }
 function settle() {
-  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) { kick(); return; }
+  if (cam.pointers || gliding) { scheduleSettle(); return; } if (Math.abs(view.s / baked - 1) < .005) return;
   requestAnimationFrame(() => {
     if (cam.pointers || gliding) { scheduleSettle(); return; } // a glide or grab may have begun since the timer fired
-    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; kick();
+    diag(`bake ${baked.toFixed(3)} → ${view.s.toFixed(3)}`); baked = view.s; $('#bscale').style.transform = `scale(${baked})`; stage().style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s / baked})`; nudge();
   });
 }
 /* checks: once the board is at rest (no gesture or glide, settled) */

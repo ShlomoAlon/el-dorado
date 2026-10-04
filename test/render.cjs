@@ -42,6 +42,19 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     else { const ls = +((tr.stage.match(/scale\(([\d.]+)\)/) || [])[1] || 1), bs = +((tr.bscale.match(/scale\(([\d.]+)\)/) || [])[1] || 1);
       ok('zoom baked in once it settles', Math.abs(ls - 1) <= .01 && bs > 1.2, `layer scale ${ls}, board scale ${bs} (${info})`); }
     await p.close(); }
+  { // 2b. drawn at the zoom's resolution: after zooming to the most and settling, the board's layers have tiles drawn at the
+    // resolution that zoom needs, read from Chrome's own trace (tiles below it are an enlarged, soft picture; a will-change
+    // hint kept on at rest held them at the first zoom's: a third of the detail at the most, 2026-10-04). Screenshots can't
+    // see this: headless Chrome draws the board afresh for them
+    const p = await open(); await p.mouse.move(450, 400); for (let i = 0; i < 30; i++) { await p.mouse.wheel(0, -120); await p.waitForTimeout(30); } await p.waitForTimeout(1500);
+    const tr = require('path').join(require('os').tmpdir(), 'rz-' + process.pid + '.json');
+    await b.startTracing(p, { path: tr, categories: ['disabled-by-default-cc.debug'] }); await p.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); await p.waitForTimeout(300); await b.stopTracing();
+    const ev = JSON.parse(require('fs').readFileSync(tr, 'utf8')); require('fs').unlinkSync(tr); const L = Array.isArray(ev) ? ev : ev.traceEvents;
+    const snaps = L.filter(e => e.ph === 'O' && /LayerTreeHostImpl/.test(e.name) && e.args && e.args.snapshot), out = [];
+    const walk = (o, d) => { if (!o || typeof o !== 'object' || d > 14) return; if (o.tilings && /id='(bscale|pieces)'/.test(o.layer_name || '')) out.push([o.layer_name.match(/id='([^']+)'/)[1], Math.max(...o.tilings.map(t => +t.content_scale || 0)) / (+o.ideal_contents_scale || 1)]); for (const k in o) walk(o[k], d + 1); };
+    walk(snaps.length && snaps[snaps.length - 1].args.snapshot, 0);
+    ok('zoomed in fully, the board is drawn at the resolution it needs', out.length >= 2 && out.every(([, r]) => r >= .95), out.map(([n, r]) => `${n} ${(100 * r).toFixed(0)}%`).join(', ') || 'no board layers in the trace');
+    await p.close(); }
   { // 3. wheel latency
     const p = await open(); const cdp = await p.context().newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); await p.mouse.move(600, 420);
     await b.startTracing(p, { categories: ['latencyInfo', 'input', 'benchmark'] });
