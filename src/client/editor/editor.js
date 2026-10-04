@@ -109,7 +109,7 @@ const SEED = { extra: ['main', 'results', 'settings', 'rules', 'leaderboard', 'p
   arrows: [['site', '*', 'main@*', 'Open the site, or come back', 'Reloading keeps the player exactly where they were: this is a new visit, or a return after leaving'],
     // (a game on this device is a room nobody else joins: the same lobby, the same choices (owner, 2026-10-05); one state at a time,
     // so a new game or room is only reached from nowhere: a game or a room is left first)
-    ['main', 'none', 'room@room', 'Play on this device', 'A room only this device is in: the same lobby as online'], ['main', 'none', 'online@none', 'Play online'], ['main', 'none', 'replays@none', 'Replays'],
+    ['main', 'none', 'room@room', 'Play on this device', 'A room only this device is in: the same lobby as online'], ['main', 'none', 'online@none', 'Play online', 'Signed in first: otherwise it says to sign in', { signed: true }], ['main', 'none', 'replays@none', 'Replays'],
     ['online', 'none', 'main@none', 'Back'], ['online', 'none', 'room@room', 'Quick match'], ['online', 'none', 'room@room', 'Create a room'], ['online', 'none', 'room@room', 'Join with a code'],
     ['online', 'none', 'room@room', 'Join an open room'],
     ['online', 'none', 'leaderboard@none', 'Leaderboard'], ['online', 'none', 'profile@none', 'Profile'], ['leaderboard', 'none', 'online@none', 'Back'],
@@ -120,25 +120,31 @@ const SEED = { extra: ['main', 'results', 'settings', 'rules', 'leaderboard', 'p
     ['replays', 'none', 'main@none', 'Back'], ['replays', 'none', 'viewer@none', 'Open a game'], ['viewer', 'none', 'replays@none', 'Close'],
     ['main', 'game', 'board@game', 'Back to game'], ['main', 'game', 'results@none', 'End game · Resign'], ['board', 'game', 'main@game', 'Menu'], ['board', 'game', 'results@none', 'The race is won'],
     ['results', 'none', 'main@none', 'Done'], ['results', 'none', 'viewer@none', 'Watch the replay'],
-    ['main', 'room', 'room@room', 'Back to the room'], ['main', 'room', 'main@none', 'Leave the room'], ['room', 'room', 'main@room', 'Menu'], ['room', 'room', 'board@game', 'Start game'], ['room', 'room', 'main@none', 'Leave'],
+    ['main', 'room', 'room@room', 'Back to the room'], ['main', 'room', 'main@none', 'Leave the room'], ['room', 'room', 'main@room', 'Menu'], ['room', 'room', 'board@game', 'Start game', null, { host: true }], ['room', 'room', 'main@none', 'Leave'],
     ['main', '*', 'settings@*', 'Settings'], ['settings', '*', 'main@*', 'Back'],
     ['*', 'game', 'board@game', 'Click beside the menu', 'A rule for every menu, only in a game: a click outside the menu goes back to the game']] };
 // a box for each place a transition starts or ends (each made below the others: drag it where it belongs)
 const boxFor = k => { if (!D.nodes.some(n => n.k === k)) D.nodes.push({ k, x: 0, y: Math.max(0, ...D.nodes.map(n => n.y)) + 100 }); };
 // a menu's own buttons, which change something on it and lead nowhere (owner, 2026-10-05: "buttons that aren't transitions ... like
 // settings"): its words, the states it is in, a note
+/* conditions: facts besides the state (one at a time) that a transition or button can require true or false, so it can depend on
+   "this, this and not this" (owner, 2026-10-05): renamable, more added here */
+SEED.flags = [['signed', 'Signed in'], ['online', 'An online room'], ['host', 'Hosting the room']];
+const flagName = id => (D.flags.find(f => f.id === id) || { name: id }).name;
+const whenText = x => Object.entries(x.when || {}).map(([id, on]) => (on ? '' : 'not ') + flagName(id).toLowerCase()).join(', '); // ("hosting the room, not signed in")
 SEED.buttons = [['settings', 'Sound on / off'], ['settings', 'Remind me before ending a turn if I can still buy'], ['settings', 'Animation speed'], ['settings', 'Full screen'],
-  ['main', 'Sign in with Google · Sign out'], ['online', 'Sign in with Google', 'Needed to play online'],
+  ['main', 'Sign in with Google · Sign out', 'The one place to sign in'],
   ['room', 'Players: 2 · 3 · 4'], ['room', 'Seats: a person or an AI, a name, a colour'], ['room', 'Course'], ['room', 'Game ends: when all but one arrive · at the first arrival'],
-  ['room', 'Hide each hand until its player taps Reveal', 'For passing one device around'], ['room', 'Rated · Unrated', 'Online'], ['room', 'Turn clock: 60 s · 90 s · 2 min · 3 min', 'Online'],
-  ['room', 'Public · Private', 'Online'], ['room', 'Copy the room link', 'Online'], ['profile', 'Display name'], ['profile', 'Save'], ['replays', 'Your games · Recent games'],
+  ['room', 'Hide each hand until its player taps Reveal', 'For passing one device around'], ['room', 'Rated · Unrated', null, { online: true }], ['room', 'Turn clock: 60 s · 90 s · 2 min · 3 min', null, { online: true }],
+  ['room', 'Public · Private', null, { online: true }], ['room', 'Copy the room link', null, { online: true }], ['profile', 'Display name'], ['profile', 'Save'], ['replays', 'Your games · Recent games'],
   ['viewer', 'Play · Pause'], ['viewer', 'Back a move · Forward a move'], ['viewer', 'Speed'], ['viewer', "Fawcett's recommended turn"]];
 function seed() {
-  if (!D.nodes) { D.nodes = SEED.nodes.map(([k, x, y]) => ({ k, x, y })); D.buttons = SEED.buttons.map(([menu, label, note], i) => ({ id: 'sb' + i, menu, states: ['*'], label, ...(note ? { note } : {}) }));
-    D.arrows = [...SEED.arrows.map(([from, st, to, label, note], i) => ({ id: 's' + i, from, states: [st], to, label, ...(note ? { note } : {}) })), ...(D.arrows || [])];
+  if (!D.nodes) { D.nodes = SEED.nodes.map(([k, x, y]) => ({ k, x, y })); D.buttons = SEED.buttons.map(([menu, label, note, when], i) => ({ id: 'sb' + i, menu, states: ['*'], label, ...(note ? { note } : {}), ...(when ? { when } : {}) }));
+    D.arrows = [...SEED.arrows.map(([from, st, to, label, note, when], i) => ({ id: 's' + i, from, states: [st], to, label, ...(note ? { note } : {}), ...(when ? { when } : {}) })), ...(D.arrows || [])];
     for (const x of SEED.extra) if (!D.extra.includes(x)) D.extra.push(x);
     for (const [st, m] of Object.entries(SEED.first)) if (!D.first[st]) D.first[st] = m; }
   if (!D.buttons) D.buttons = [];
+  if (!D.flags) D.flags = SEED.flags.map(([id, name]) => ({ id, name }));
   for (const a of D.arrows) { if (a.from.includes('@')) { const [m, st] = a.from.split('@'); a.from = m; a.states = [st]; } delete a.kind; delete a.el; } // (a transition from the flowchart before: one state, a kind)
   for (const a of D.arrows) { for (const st of a.states) boxFor(a.from + '@' + st); if (!a.to.endsWith('@*') || !D.nodes.some(n => n.k.startsWith(a.to.split('@')[0] + '@'))) boxFor(a.to); } }
 // where a transition from a state lands: its box, or for "the state stays the same", the menu's box in that state when it has one
@@ -355,11 +361,11 @@ function flowSvg() {
     const x1 = inward ? x + NW : COLX[1] + NW, x2 = inward ? COLX[1] : x, y1 = inward ? y + NH / 2 : fy + NH / 2, y2 = inward ? fy + NH / 2 : y + NH / 2, lx = inward ? x1 + 10 : x2 - 14, ly = y1 + (y2 - y1) * (lx - x1) / (x2 - x1); // (its words beside the outer box, where the lines are apart, running toward the centre)
     const st = as.some(a => changes(a).includes('state')), on = as.some(a => fsel && fsel.arrow === a.id);
     g += `<line class="ed-ln${st ? ' st' : ''}${on ? ' on' : ''}" x1="${x1}" y1="${y1}" x2="${x2 - 3}" y2="${y2}" marker-end="url(#edHead${on ? 'On' : ''})"/>`;
-    as.forEach((a, j) => { g += `<text class="ed-ar${st ? ' st' : ''}${fsel && fsel.arrow === a.id ? ' on' : ''}" data-arrow="${a.id}" x="${lx}" y="${ly - 5 - (as.length - 1 - j) * 15}" style="text-anchor:${inward ? 'start' : 'end'}">${esc(a.label || '…')}${a.note ? ' ✎' : ''}</text>`; });
+    as.forEach((a, j) => { g += `<text class="ed-ar${st ? ' st' : ''}${fsel && fsel.arrow === a.id ? ' on' : ''}" data-arrow="${a.id}" x="${lx}" y="${ly - 5 - (as.length - 1 - j) * 15}" style="text-anchor:${inward ? 'start' : 'end'}">${esc(a.label || '…')}${whenText(a) ? ` · ${esc(whenText(a))}` : ''}${a.note ? ' ✎' : ''}</text>`; });
     g += box(k, x, y, ''); });
   side(inK, ins, COLX[0], true); side(outK, outs, COLX[2], false);
   g += box(f, COLX[1], fy, ' focus' + (connect ? ' linking' : ''));
-  own.forEach((b, i) => { g += `<text class="ed-own" data-button="${b.id}" x="${COLX[1]}" y="${fy + NH + 46 + i * 16}">▢ ${esc(b.label || '…')}</text>`; }); // (its own buttons, which lead nowhere)
+  own.forEach((b, i) => { g += `<text class="ed-own" data-button="${b.id}" x="${COLX[1]}" y="${fy + NH + 46 + i * 16}">▢ ${esc(b.label || '…')}${whenText(b) ? ` · ${esc(whenText(b))}` : ''}</text>`; }); // (its own buttons, which lead nowhere)
   // the centre's state: any, or one (the tabs under it)
   [['*', 'any'], ...[...STATES].map(([v, n]) => [v, n.toLowerCase()])].reduce((x, [v, n]) => { const w = n.length * 6.6 + 14; g += `<g class="ed-st${v === fs ? ' on' : ''}" data-centre="${esc(fm + '@' + v)}" transform="translate(${x},${fy + NH + 8})"><rect width="${w}" height="18" rx="9"/><text x="${w / 2}" y="13">${esc(n)}</text></g>`; return x + w + 4; }, COLX[1] - 40);
   if (!inK.length) g += `<text class="ed-none" x="${COLX[0] + NW / 2}" y="${fy + NH / 2 + 4}">nothing leads here</text>`;
@@ -379,8 +385,8 @@ function flowText() {
     'The menu opens on: ' + [...STATES].map(([v, n]) => `${n} → ${D.first[v] ? nameOf(D.first[v]) : '(not set)'}`).join('; '), ''];
   for (const m of menusOf()) { const boxes = D.nodes.filter(n => n.k.split('@')[0] === m).map(n => n.k.split('@')[1]);
     out.push(`${nameOf(m)}${NOLAY.includes(m) ? ' (not a menu)' : ''}: in ${st(boxes)}`); if (D.mnotes && D.mnotes[m]) out.push(`  note: ${D.mnotes[m]}`);
-    for (const b of D.buttons.filter(x => x.menu === m)) { out.push(`  button (stays on this menu), when ${st(b.states)}: "${b.label || '…'}"`); if (b.note) out.push(`    note: ${b.note}`); }
-    for (const a of D.arrows.filter(x => x.from === m)) { out.push(`  when ${st(a.states)}: "${a.label || '…'}" → ${to(a)} [${changes(a)}]`); if (a.note) out.push(`    note: ${a.note}`); }
+    for (const b of D.buttons.filter(x => x.menu === m)) { out.push(`  button (stays on this menu), when ${st(b.states)}${whenText(b) ? ', ' + whenText(b) : ''}: "${b.label || '…'}"`); if (b.note) out.push(`    note: ${b.note}`); }
+    for (const a of D.arrows.filter(x => x.from === m)) { out.push(`  when ${st(a.states)}${whenText(a) ? ', ' + whenText(a) : ''}: "${a.label || '…'}" → ${to(a)} [${changes(a)}]`); if (a.note) out.push(`    note: ${a.note}`); }
     out.push(''); }
   return out.join('\n');
 }
@@ -392,15 +398,16 @@ function flowBody() {
   const menus = [...new Set([...sections().map(s => s.dataset.screen), ...NOLAY, ...D.extra])], mOpts = (cur, any) => menus.filter(m => any || m !== '*').map(m => `<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(nameOf(m))}</option>`).join('');
   const others = m => menusOf().filter(x => x !== m).map(x => `<option value="${esc(x)}">${esc(nameOf(x))}</option>`).join('');
   const chips = a => [['*', 'Any state'], ...STATES].map(([v, n]) => btn('fl-tst', esc(n), a.states.includes(v), v, `data-id="${a.id}"`)).join('');
+  const fchips = (x, act) => D.flags.map(f => { const on = (x.when || {})[f.id]; return btn(act, on === undefined ? esc(f.name) : on ? '✓ ' + esc(f.name) : '✗ not ' + esc(f.name), on !== undefined, f.id, `data-id="${x.id}" title="Click: required, required not, either"`); }).join('');
   const bchips = b => [['*', 'Any state'], ...STATES].map(([v, n]) => btn('fl-bst', esc(n), b.states.includes(v), v, `data-id="${b.id}"`)).join('');
   const brow = b => { const open = openT.has(b.id);
     return `<div class="ed-dr" data-dbutton="${b.id}">${tw('t:' + b.id, open)}<input data-act="fl-bword" data-id="${b.id}" value="${esc(b.label)}" maxlength="48" placeholder="The button's words">${btn('fl-rmb', '×', false, b.id, 'title="Remove this button"')}`
-      + (open ? `<div class="ed-tx"><div class="ed-dh"><span>When in:</span>${bchips(b)}</div><textarea data-act="fl-bnote" data-id="${b.id}" rows="2" placeholder="A note">${esc(b.note || '')}</textarea></div>` : '') + `</div>`; };
+      + (open ? `<div class="ed-tx"><div class="ed-dh"><span>When in:</span>${bchips(b)}</div><div class="ed-dh"><span>And:</span>${fchips(b, 'fl-bflag')}</div><textarea data-act="fl-bnote" data-id="${b.id}" rows="2" placeholder="A note">${esc(b.note || '')}</textarea></div>` : '') + `</div>`; };
   const trow = a => { const [tm, ts] = a.to.split('@'), on = fsel && fsel.arrow === a.id, open = openT.has(a.id);
     return `<div class="ed-dr${on ? ' on' : ''}" data-darrow="${a.id}">${tw('t:' + a.id, open)}<input data-act="fl-tword" data-id="${a.id}" value="${esc(a.label)}" maxlength="48" placeholder="What takes the player there">`
       + `<span>→</span><select data-act="fl-tto-m" data-id="${a.id}">${mOpts(tm)}</select><select data-act="fl-tto-s" data-id="${a.id}">${stOpts(ts, true, 'state stays the same')}</select>`
       + `<span class="ed-tag ${changes(a).includes('state') ? 'st' : ''}">${changes(a)}</span>${btn('fl-rmt', '×', false, a.id, 'title="Remove this transition"')}`
-      + (open ? `<div class="ed-tx"><div class="ed-dh"><span>When in:</span>${chips(a)}</div><textarea data-act="fl-tnote" data-id="${a.id}" rows="2" placeholder="A note">${esc(a.note || '')}</textarea><div class="ed-dh"><select data-act="fl-copyt" data-id="${a.id}"><option value="">Copy to…</option>${others(a.from)}</select></div></div>` : '') + `</div>`; };
+      + (open ? `<div class="ed-tx"><div class="ed-dh"><span>When in:</span>${chips(a)}</div><div class="ed-dh"><span>And:</span>${fchips(a, 'fl-tflag')}</div><textarea data-act="fl-tnote" data-id="${a.id}" rows="2" placeholder="A note">${esc(a.note || '')}</textarea><div class="ed-dh"><select data-act="fl-copyt" data-id="${a.id}"><option value="">Copy to…</option>${others(a.from)}</select></div></div>` : '') + `</div>`; };
   const dirs = menusOf().map(m => { const open = opened.has('m:' + m), lay = !NOLAY.includes(m), boxes = D.nodes.filter(n => n.k.split('@')[0] === m).map(n => n.k.split('@')[1]);
     const free = [['*', 'Any state'], ...STATES].filter(([v]) => !boxes.includes(v)), ts = D.arrows.filter(a => a.from === m), groups = new Map();
     for (const a of ts) { const g = [...a.states].sort().join(','); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(a); }
@@ -415,7 +422,8 @@ function flowBody() {
       + `<select data-act="fl-merge" data-m="${esc(m)}"><option value="">Merge into…</option>${others(m)}</select>${btn('fl-rmmenu', 'Remove menu', false, m)}</div></div>` : '';
     return `<div class="ed-dir" data-menu="${esc(m)}"><div class="ed-dh ed-mh">${tw('m:' + m, open)}<input class="ed-mname" data-act="fl-mname" data-m="${esc(m)}" value="${esc(nameOf(m))}" maxlength="32" title="The menu's name"><span class="ed-hint">${ts.length} out</span></div>${body}</div>`; }).join('');
   const add = `<div class="ed-dh ed-add"><span>+ Menu:</span><select id="flMenu">${mOpts('', true)}<option value="">New menu…</option></select><select id="flState">${stOpts('none', true, 'Any state')}</select>${btn('fl-add', 'Add')}</div>`
-    + `<div class="ed-states"><b>States</b>${[...STATES].map(([v, n]) => `<div class="ed-dh"><input data-act="fl-sname" data-s="${esc(v)}" value="${esc(n)}" maxlength="32">${(D.moreStates || []).includes(v) ? btn('fl-rmstate', 'Remove', false, v) : '<span class="ed-hint">the page\'s</span>'}</div>`).join('')}<div class="ed-dh">${btn('fl-addstate', '+ State')}</div></div>`;
+    + `<div class="ed-states"><b>States</b>${[...STATES].map(([v, n]) => `<div class="ed-dh"><input data-act="fl-sname" data-s="${esc(v)}" value="${esc(n)}" maxlength="32">${(D.moreStates || []).includes(v) ? btn('fl-rmstate', 'Remove', false, v) : '<span class="ed-hint">the page\'s</span>'}</div>`).join('')}<div class="ed-dh">${btn('fl-addstate', '+ State')}</div></div>`
+    + `<div class="ed-states"><b>Conditions</b> <span class="ed-hint">facts besides the state, for a transition or button to require (or require not)</span>${D.flags.map(f => `<div class="ed-dh"><input data-act="fl-fname" data-f="${esc(f.id)}" value="${esc(f.name)}" maxlength="40">${btn('fl-rmflag', 'Remove', false, f.id)}</div>`).join('')}<div class="ed-dh">${btn('fl-addflag', '+ Condition')}</div></div>`;
   // (two panes: the chart, never scrolled, and the directions, which alone scroll: owner, 2026-10-05)
   const tools = `<div class="ed-ftools">${connect ? `<span class="ed-link">Drawing a transition from ${esc(nameOf(focus.split('@')[0]))}: click the box it goes to (anywhere else drops it)</span>` : ''}`
     + `${btn('fl-copy', 'Copy flow', false, '', 'title="The flow as text, to paste to Claude"')}${btn('fl-reset', 'Default flowchart')}</div>`;
@@ -495,14 +503,19 @@ function act(t, a, v) {
     for (const x of D.nodes.filter(x => x.k.endsWith('@' + v))) removeBox(x.k); D.moreStates = D.moreStates.filter(x => x !== v); delete D.first[v]; fsel = null; }
   else if (a === 'fl-rmmenu') { if (!confirm(`Remove the menu "${nameOf(v)}", its boxes and its transitions?`)) return;
     for (const x of D.nodes.filter(x => x.k.split('@')[0] === v)) removeBox(x.k); D.arrows = D.arrows.filter(x => x.from !== v); D.buttons = D.buttons.filter(x => x.menu !== v); fsel = null; }
+  else if (a === 'fl-fname') { const f = D.flags.find(x => x.id === t.dataset.f); if (f && v.trim()) f.name = v.trim().slice(0, 40); }
+  else if (a === 'fl-addflag') { const n = (prompt('A fact a transition can depend on (for example: has friends online)') || '').trim().slice(0, 40); if (!n) return; D.flags.push({ id: 'f' + Date.now().toString(36), name: n }); }
+  else if (a === 'fl-rmflag') { D.flags = D.flags.filter(f => f.id !== v); for (const x of [...D.arrows, ...D.buttons]) if (x.when) { delete x.when[v]; if (!Object.keys(x.when).length) delete x.when; } }
   else if (a === 'fl-addb') { const id = 'b' + Date.now().toString(36); D.buttons.push({ id, menu: v, states: ['*'], label: '' }); opened.add('m:' + v); opened.add('b:' + v); openT.add(id); focusT = id; }
   else if (a === 'fl-rmb') { D.buttons = D.buttons.filter(x => x.id !== v); }
   else if (a.startsWith('fl-b')) { const bt = D.buttons.find(x => x.id === t.dataset.id); if (!bt) return;
     if (a === 'fl-bword') bt.label = v.trim().slice(0, 48); else if (a === 'fl-bnote') { if (v.trim()) bt.note = v.trim(); else delete bt.note; }
+    else if (a === 'fl-bflag') { const x = bt; { const w = x.when || (x.when = {}); if (w[v] === undefined) w[v] = true; else if (w[v]) w[v] = false; else delete w[v]; if (!Object.keys(w).length) delete x.when; } }
     else if (a === 'fl-bst') { const st = new Set(bt.states); if (v === '*') bt.states = ['*']; else { st.delete('*'); if (st.has(v)) st.delete(v); else st.add(v); if (st.size) bt.states = [...st]; } } }
   else if (a.startsWith('fl-t')) { const ar = D.arrows.find(x => x.id === t.dataset.id); if (!ar) return; fsel = { arrow: ar.id };
     if (a === 'fl-tword') ar.label = v.trim().slice(0, 48);
     else if (a === 'fl-tnote') { if (v.trim()) ar.note = v.trim(); else delete ar.note; }
+    else if (a === 'fl-tflag') { const x = ar; { const w = x.when || (x.when = {}); if (w[v] === undefined) w[v] = true; else if (w[v]) w[v] = false; else delete w[v]; if (!Object.keys(w).length) delete x.when; } }
     else if (a === 'fl-tst') { const s = new Set(ar.states); if (v === '*') ar.states = ['*']; else { s.delete('*'); if (s.has(v)) s.delete(v); else s.add(v); if (s.size) ar.states = [...s]; } // (always at least one)
       for (const st of ar.states) boxFor(ar.from + '@' + st); reveal(ar); } // (its group changed: shown in its new one)
     else if (a === 'fl-tto-m' || a === 'fl-tto-s') { const [tm, ts] = ar.to.split('@'), m = a === 'fl-tto-m' ? v : tm, st = a === 'fl-tto-s' ? v : ts; ar.to = m + '@' + st;

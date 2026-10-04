@@ -128,6 +128,8 @@ const T = report('editor');
   await p.click('#edPanel .ed-node.focus'); await p.click('#edPanel .ed-ftools');
   T.ok('a transition being drawn is dropped by a click anywhere but a box', await p.evaluate(() => !document.querySelector('#edPanel .ed-fc.connect')));
   await p.fill(`#edPanel [data-act=fl-tnote][data-id="${tid}"]`, 'Try this'); await p.click('#edPanel .ed-ftools');
+  await p.click(`#edPanel [data-act=fl-tflag][data-id="${tid}"][data-v=signed]`); await p.click(`#edPanel [data-act=fl-tflag][data-id="${tid}"][data-v=host]`); await p.click(`#edPanel [data-act=fl-tflag][data-id="${tid}"][data-v=host]`);
+  T.ok('a transition requiring a condition and not another: shown with its words', await p.evaluate(() => [...document.querySelectorAll('#edPanel text.ed-ar')].some(t => /See results · signed in, not hosting the room/.test(t.textContent))));
   // a menu's own buttons: Settings has some in the default flowchart; one added to Results
   await p.click('#edPanel .ed-node[data-node="settings@*"]');
   T.ok('the default has a Settings menu, its own buttons listed under it when centred', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-own')].some(t => /Sound/.test(t.textContent))));
@@ -136,7 +138,7 @@ const T = report('editor');
   T.ok('a button that stays on its menu, added and shown under it', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-own')].some(t => /Share the result/.test(t.textContent))));
   await p.click('#edPanel [data-act=fl-copy]'); await p.waitForTimeout(200);
   const copied = await p.evaluate(() => navigator.clipboard.readText().then(t => t, e => 'unreadable: ' + e.name));
-  T.ok('Copy flow: the flow as text, with its notes', /See results/.test(copied) && /note: Try this/.test(copied) && /Main menu/.test(copied) && /button \(stays on this menu\).*Share the result/.test(copied), copied.split('\n').filter(l => /See results|Try this/.test(l)).join(' | ') || copied.slice(0, 300));
+  T.ok('Copy flow: the flow as text, with its notes', /See results/.test(copied) && /note: Try this/.test(copied) && /Main menu/.test(copied) && /button \(stays on this menu\).*Share the result/.test(copied) && /signed in, not hosting the room: "See results"/.test(copied) && /an online room: "Copy the room link"/.test(copied), copied.split('\n').filter(l => /See results|Try this/.test(l)).join(' | ') || copied.slice(0, 300));
   const mb = () => p.evaluate(() => !!document.querySelector('#edPanel .ed-dir[data-menu="results"] .ed-mb'));
   const was = await mb(); await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]'); const now = await mb(); await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]');
   T.ok('a menu opens and folds in the directions', now !== was && (await mb()) === was);
