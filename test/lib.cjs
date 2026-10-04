@@ -10,9 +10,10 @@ const pw = require('playwright');
    route with different costs (it made the baked board look slower than it is, and hid what costs frames on a GPU).
    SwiftShader is software that runs the GPU's own code path, so the route is the shipped one (slower in absolute terms).
    Each launch checks the GPU path is really on: a silent fallback would measure the wrong thing again */
-const GPU = ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--enable-gpu-compositing'];
+// (SOFT=1: the software path instead, to tell what the emulated GPU's slowness causes from what the page does; never the suite's)
+const GPU = process.env.SOFT ? [] : ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--enable-gpu-compositing'];
 const gpuOn = async b => { const c = await b.newBrowserCDPSession(), f = (await c.send('SystemInfo.getInfo')).gpu.featureStatus; await c.detach();
-  for (const k of ['2d_canvas', 'gpu_compositing', 'rasterization']) if (!/^enabled/.test(f[k])) throw new Error(`the test browser is not on the GPU path: ${k} is ${f[k]}`); return b; };
+  if (!process.env.SOFT) for (const k of ['2d_canvas', 'gpu_compositing', 'rasterization']) if (!/^enabled/.test(f[k])) throw new Error(`the test browser is not on the GPU path: ${k} is ${f[k]}`); return b; };
 const chromium = { launch: async (o = {}) => gpuOn(await pw.chromium.launch({ ...o, args: [...GPU, ...(o.args || [])] })),
   launchServer: (o = {}) => pw.chromium.launchServer({ ...o, args: [...GPU, ...(o.args || [])] }),
   connect: async (...a) => gpuOn(await pw.chromium.connect(...a)) };
