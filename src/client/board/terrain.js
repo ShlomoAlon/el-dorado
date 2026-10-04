@@ -1,10 +1,10 @@
 /* The static board: terrain, board plates, seams and the city, drawn once per deal into #board (SVG)
    with their text as HTML labels (#blabels): Chrome re-lays out SVG text whenever an ancestor's scale changes, HTML
    text it doesn't. The live layers (targets, blockades, trails: #board2; explorers: #pieces) sit above it. */
-import { R, hash } from '../../engine.gen.js';
+import { R, hash, assert } from '../../engine.gen.js';
 import { MAP } from '../state.js';
 import { layout, xy } from './layout.js';
-import { $, sv } from '../dom.js';
+import { $, sv, spriteDefs } from '../dom.js';
 export function hexPts(x,y,r){let s='';for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);s+=(x+r*Math.cos(a)).toFixed(1)+','+(y+r*Math.sin(a)).toFixed(1)+' ';}return s;}
 const TFILL={j:['#4a9b5f','#2a6a40'],w:['#4aa0dd','#2464a0'],v:['#f2cd6c','#d09632'],r:['#aeb2ad','#7a7f7b'],c:['#d4705a','#9a3e2d'],m:['#58615a','#2d332f'],s:['#e3d8b9','#b4a887'],g:['#ffe690','#e3a52b']};
 /* harder spaces are darker, like the printed tiles: [top,bottom] gradient per strength 1..4 */
@@ -102,8 +102,26 @@ export function buildBoard(){
   // arrived explorers stand: never on either
   let px=-C.dy,py=C.dx;if(px<0||(Math.abs(px)<.35&&py<0)){px=-px;py=-py;}
   const side=px>.35;label(lab,C.x+(side?px*40+2:0),C.y+(side?py*40+5:44),'El Dorado',{anchor:side?'start':'middle',family:'Young Serif, Georgia, serif',size:15,color:'#f8dc97'});
+  asImage(svg);
   return true;
 }
+/* the terrain never changes during a game, so it is drawn as one image (an SVG image: still vector, sharp at any zoom):
+   recorded as one element instead of ~2,000 whenever the board is redrawn (a zoom settling: about 9 ms of the main thread
+   at maximum zoom, a hitch when zooming restarts on a slow CPU; owner 2026-10-04). Drawn live first and swapped once the
+   image has loaded, under the live shapes: never a frame without the terrain */
+let terrainUrl=null;
+function asImage(svg){
+  const live=[L.plates,L.terrain,L.city],m=drawnMap,{minX,minY,w,h}=layout(),ser=e=>new XMLSerializer().serializeToString(e);
+  if(terrainUrl)URL.revokeObjectURL(terrainUrl);
+  const url=terrainUrl=URL.createObjectURL(new Blob([`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${minX} ${minY} ${w} ${h}">${ser(DEFS)}${spriteDefs()}${live.map(ser).join('')}</svg>`],{type:'image/svg+xml'}));
+  const im=sv('image',{href:url,x:minX,y:minY,width:w,height:h});svg.insertBefore(im,L.plates);terrainLive=true;
+  im.addEventListener('load',()=>{if(drawnMap!==m)return;requestAnimationFrame(()=>{for(const g of live)g.remove();terrainLive=false;});},{once:true});
+  // (never silently live for good: an image that fails, or doesn't come within 4 s, is a failure)
+  im.addEventListener('error',()=>assert(false,'view: the board\'s terrain image loads'),{once:true});
+  setTimeout(()=>{if(drawnMap===m)assert(!terrainLive,'view: the board\'s terrain image loads within 4 s');},4000);
+}
+/* the terrain still drawn live, its image on its way (asImage): the board's live elements include it until then */
+export let terrainLive=false;
 /* gradients, patterns and icons the board's shapes use: the same for every course */
 function drawDefs(svg){
   const defs=sv('defs',null,svg);

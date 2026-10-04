@@ -10,6 +10,7 @@ import { after, frameDue } from '../frame.js';
 import { diag, diagLog, CHECKS } from '../debug.js';
 import { layout, xy } from './layout.js';
 import { walking } from './pieces.js';
+import { terrainLive } from './terrain.js';
 export const view = { s: 1, x: 0, y: 0 };
 /* userZoomed: the player moved the board (a resize then keeps their view); dragMoved: the current press became a drag
    (its click is not a tap) */
@@ -48,7 +49,12 @@ function restCheck() {
   const m = stage().style.transform.match(/translate3d\(([-\d.e]+)px,\s*([-\d.e]+)px/), d = devicePixelRatio; if (!m) return;
   const off = v => Math.abs(v * d - Math.round(v * d));
   assert(off(+m[1]) < .01 && off(+m[2]) < .01, `view: the board at rest sits on whole device pixels (at ${m[1]}, ${m[2]} css px, ${d} device px each)`);
+  // what a redraw of the board records: its live elements (the terrain is one image; overlays, labels and pieces are live).
+  // A few hundred; the terrain drawn live was 2,271, 9 ms of the main thread per redraw at maximum zoom
+  const n = document.querySelectorAll('#bscale *').length;
+  assert(terrainLive || n <= LIVE_MAX, `view: the board is a few hundred live elements, its fixed terrain one image (${n})`);
 }
+const LIVE_MAX = 800;
 /* the part of the game area the board should fill: under the prompt, left of the market, above the hand */
 function safeRect() {
   const W = geo.app.width, H = geo.app.height, phone = W < 600;

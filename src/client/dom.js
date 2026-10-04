@@ -15,5 +15,9 @@ export function setQuery(set) {
   try { const u = new URL(location.href); for (const k in set) { if (set[k] == null) u.searchParams.delete(k); else u.searchParams.set(k, set[k]); } history.replaceState(null, '', u); }
   catch (e) { /* expected: a page with no address of its own (the claude.ai artifact build) */ }
 }
+/* the page's icon symbols (shell.html's sprite), as markup for an SVG drawn as an image: an image can't see the page's
+   definitions, so it carries its own copy (the cards' art, the board's terrain) */
+let SPRITES = null;
+export const spriteDefs = () => SPRITES ??= new XMLSerializer().serializeToString(document.querySelector('body > svg defs'));
 export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 export const EASE = 'cubic-bezier(.2,.8,.2,1)';

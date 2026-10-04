@@ -1,6 +1,6 @@
 /* Card faces: the same markup for the hand, the market, the piles and other players' turn feed. */
 import { CT, SYMNAME, plural, assert } from '../engine.gen.js';
-import { esc } from './dom.js';
+import { esc, spriteDefs } from './dom.js';
 import { cardBg } from './art.js';
 import { CHECKS } from './debug.js';
 import { afterDrawn } from './frame.js';
@@ -18,14 +18,12 @@ function cardArt(t){
   if(d.c==='p')emb=`<g transform="translate(50 35) scale(2.1)">${GLYPH[t]}</g>`;
   else{const sym=d.s==='*'?'x':d.s;const col={j:'#f2fff5',w:'#f2f9ff',v:'#ffe08a',x:'#8a6a1f'}[sym];
     emb=`<g transform="translate(50 36)"><ellipse cx="0" cy="22" rx="18" ry="3.5" fill="rgba(0,0,0,.25)"/><g filter="none" style="color:${col}"><use href="#i-${sym}" x="-19" y="-19" width="38" height="38" style="color:rgba(0,0,0,.35)" transform="translate(1.5 2)"/><use href="#i-${sym}" x="-19" y="-19" width="38" height="38"/></g></g>`;}
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 70" preserveAspectRatio="xMidYMid slice">${sprites()}${cardBg(t)}${emb}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 70" preserveAspectRatio="xMidYMid slice">${spriteDefs()}${cardBg(t)}${emb}</svg>`;
 }
 /* a card type's art is drawn once, as an image (its own copy of the page's icon symbols inside), and every card of that
    type shows that image: art that never changes is never rebuilt as live elements in each card (49 elements a card, laid
    out and painted again whenever a card appeared: a buy's new cards cost 6-11 ms of a frame). Made and loaded at start,
    so a card never shows without its art */
-let SPRITES = null;
-const sprites = () => SPRITES ??= new XMLSerializer().serializeToString(document.querySelector('body > svg defs'));
 const ART = new Map(), artImgs = [];
 const artUrl = t => { let u = ART.get(t); if (!u) { u = URL.createObjectURL(new Blob([cardArt(t)], { type: 'image/svg+xml' })); ART.set(t, u); } return u; };
 export function artLoad() { for (const t of Object.keys(CT)) { const i = new Image(); i.src = artUrl(t); artImgs.push(i); } return Promise.all(artImgs.map(i => i.decode())); }
