@@ -21,6 +21,10 @@ const T = report('editor');
   await p.click('#edPanel [data-act=w-]'); bl = await blocks(); const before = await p.evaluate(k => document.querySelector(`[data-edk="${k}"]`).style.gridColumn, bl[0].k);
   await p.mouse.move(bl[0].x, bl[0].y); await p.mouse.down(); await p.mouse.move(bl[0].x + 400, bl[0].y, { steps: 6 }); await p.mouse.up();
   T.ok('a block dragged snaps to another column', await p.evaluate(([k, b]) => document.querySelector(`[data-edk="${k}"]`).style.gridColumn !== b, [bl[0].k, before]));
+  { bl = await blocks(); const k = bl[0].k, col = () => p.evaluate(k => document.querySelector(`[data-edk="${k}"]`).style.gridColumn, k), c0 = await col();
+    await p.mouse.click(bl[0].x, bl[0].y); await p.keyboard.press('ArrowLeft'); const c1 = await col();
+    await p.keyboard.press('Control+z'); const c2 = await col(); await p.keyboard.press('Control+Shift+z'); const c3 = await col();
+    T.ok('arrow keys move the chosen block a cell; Ctrl+Z undoes it, Ctrl+Shift+Z redoes it', c1 !== c0 && c2 === c0 && c3 === c1, [c0, c1, c2, c3].join(' → ')); }
   bl = await blocks(); await p.mouse.click(bl[3].x, bl[3].y); await p.click('#edPanel [data-act=fold]'); await p.click('#edPanel [data-act=edit]'); // (trying it)
   T.ok('a folded block is behind More options', await p.evaluate(k => getComputedStyle(document.querySelector(`[data-edk="${k}"]`)).display === 'none' && !!document.querySelector('.ed-more'), bl[3].k));
   await p.click('.ed-more'); T.ok('More options shows it', await p.evaluate(k => getComputedStyle(document.querySelector(`[data-edk="${k}"]`)).display !== 'none', bl[3].k));

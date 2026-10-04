@@ -22,7 +22,12 @@ const STATES = [['none', 'Nowhere'], ['game', 'In a game'], ['room', 'In a room'
 const HOME = { setup: 'none', online: 'none', replays: 'none', room: 'room' }; // (the page's own screens)
 const stateOf = sc => D.states[sc] || HOME[sc] || 'none';
 const stateNow = () => ED.online() && ED.NET.room ? 'room' : ED.S && !ED.S.over && !ED.G.replay ? 'game' : 'none';
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { /* expected: storage off; the design lives in Export */ } };
+/* every change is kept (in this browser) and can be undone: Ctrl+Z, Ctrl+Shift+Z (as every editor does) */
+const snap = () => JSON.stringify(D); let last = snap(), undos = [], redos = [];
+const save = () => { const now = snap(); if (now !== last) { undos.push(last); if (undos.length > 200) undos.shift(); redos = []; last = now; }
+  try { localStorage.setItem(KEY, now); } catch (e) { /* expected: storage off; the design lives in Export */ } };
+function restore(txt) { for (const k of Object.keys(D)) delete D[k]; Object.assign(D, JSON.parse(txt)); last = txt; try { localStorage.setItem(KEY, txt); } catch (e) { /* expected: storage off */ } sel = null; applyOptions(); layout(); }
+const undo = () => { if (!undos.length) return; redos.push(last); restore(undos.pop()); }, redo = () => { if (!redos.length) return; undos.push(last); restore(redos.pop()); };
 
 /* ---------- the lists everything is chosen from ---------- */
 const AREAS = [
@@ -84,7 +89,7 @@ function layout() {
   for (const [k, el] of its) { const b = c.blocks[k] || (c.blocks[k] = { c: 1, r: row, w: c.cols, h: 1 }); row = Math.max(row, b.r + b.h);
     const col = Math.min(b.c, c.cols); el.style.gridColumn = `${col} / span ${Math.min(b.w, c.cols - col + 1)}`; el.style.gridRow = `${b.r} / span ${b.h}`;
     const off = b.hide || (b.fold && !foldOpen); el.style.display = off && !editing ? 'none' : ''; el.classList.toggle('ed-hidden', !!b.hide); el.classList.toggle('ed-folded', !!b.fold);
-    el.classList.toggle('ed-sel', editing && k === sel);
+    el.classList.toggle('ed-sel', editing && k === sel); el.classList.add('ed-item');
     for (const x of [...el.classList]) if (CLS.test(x)) el.classList.remove(x);
     for (const p of Object.keys(BLOCK)) if (b[p]) el.classList.add(`ed-${p}-${b[p]}`); }
   // a screen with folded blocks has a "More options" button, a block like the others
@@ -100,7 +105,7 @@ function layout() {
 }
 function unlay(s) { if (!s.classList.contains('ed-laid')) return; s.classList.remove('ed-laid', 'ed-on'); for (const p of ['display', 'gridTemplateColumns', 'gridAutoRows', 'gap', 'position']) s.style[p] = '';
   s.querySelectorAll('*').forEach(el => { el.style.gridColumn = el.style.gridRow = ''; if (el.classList.contains('ed-hidden') || el.classList.contains('ed-folded')) el.style.display = '';
-    for (const x of [...el.classList]) if (CLS.test(x) || /^ed-(hidden|folded|sel|split)$/.test(x)) el.classList.remove(x); });
+    for (const x of [...el.classList]) if (CLS.test(x) || /^ed-(hidden|folded|sel|split|item)$/.test(x)) el.classList.remove(x); });
   const g = s.querySelector(':scope > .ed-grid'); if (g) g.remove(); }
 addEventListener('click', e => { if (!editing && e.target.closest('.ed-more')) { e.preventDefault(); e.stopPropagation(); foldOpen = !foldOpen; layout(); } }, true);
 
@@ -110,16 +115,30 @@ function cellAt(s, c, x, y) { const r = s.getBoundingClientRect(), cs = getCompu
   let yy = r.top + pt, row = 1; for (const h of cs.gridTemplateRows.split(' ').map(parseFloat)) { if (y < yy + h + c.gap / 2) break; yy += h + c.gap; row++; }
   return [Math.max(1, Math.min(c.cols, col)), Math.max(1, row)]; }
 let drag = null;
+// (near the right edge: stretch across; the bottom edge: down; the corner: both. The cursor says which, as in any editor)
+const zone = (r, x, y) => { const R = x > r.right - 12, B = y > r.bottom - 10; return R && B ? 'wh' : R ? 'w' : B ? 'h' : null; };
+addEventListener('pointermove', e => { if (!editing || drag) return; const s = shown(); if (!s) return; const el = e.target.closest && e.target.closest('.ed-item');
+  const z = el && s.contains(el) ? zone(el.getBoundingClientRect(), e.clientX, e.clientY) : null; s.style.cursor = z === 'wh' ? 'nwse-resize' : z === 'w' ? 'ew-resize' : z === 'h' ? 'ns-resize' : ''; }, true);
 addEventListener('pointerdown', e => { if (!editing) return; const s = shown(); if (!s || !s.contains(e.target)) return; const c = D.screens[s.dataset.screen]; if (!c) return;
   const hit = items(s).find(([, el]) => el.contains(e.target)); if (!hit) return; e.preventDefault(); e.stopPropagation(); const [k, el] = hit; sel = k;
   const r = el.getBoundingClientRect(), b = c.blocks[k], [cc, rr] = cellAt(s, c, e.clientX, e.clientY);
-  drag = { k, mode: e.clientX > r.right - 12 ? 'w' : e.clientY > r.bottom - 10 ? 'h' : 'move', dc: cc - b.c, dr: rr - b.r }; layout(); }, true);
+  drag = { k, mode: zone(r, e.clientX, e.clientY) || 'move', dc: cc - b.c, dr: rr - b.r }; layout(); }, true);
 addEventListener('pointermove', e => { if (!drag) return; const s = shown(); if (!s) { drag = null; return; } const c = D.screens[s.dataset.screen], b = c.blocks[drag.k], [cc, rr] = cellAt(s, c, e.clientX, e.clientY);
   if (drag.mode === 'move') { b.c = Math.max(1, Math.min(c.cols - b.w + 1, cc - drag.dc)); b.r = Math.max(1, rr - drag.dr); }
-  else if (drag.mode === 'w') b.w = Math.max(1, Math.min(c.cols - b.c + 1, cc - b.c + 1)); else b.h = Math.max(1, rr - b.r + 1);
+  else { if (drag.mode !== 'h') b.w = Math.max(1, Math.min(c.cols - b.c + 1, cc - b.c + 1)); if (drag.mode !== 'w') b.h = Math.max(1, rr - b.r + 1); }
   layout(); }, true);
 addEventListener('pointerup', () => { if (drag) { drag = null; save(); } }, true);
 for (const t of ['click', 'change', 'input', 'keydown']) addEventListener(t, e => { const s = shown(); if (editing && s && s.contains(e.target)) { e.preventDefault(); e.stopPropagation(); } }, true);
+
+/* the keys every editor has: arrows move the chosen block a cell (with Shift: stretch it), Delete hides it, Escape lets go,
+   Ctrl+Z / Ctrl+Shift+Z undo and redo (only while editing: the game's own Ctrl+Z stays the game's) */
+addEventListener('keydown', e => { if (!editing || e.target.closest && e.target.closest('#edPanel select, input, textarea')) return; const s = shown(), c = s && D.screens[s.dataset.screen]; if (!c) return;
+  const z = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z', y = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y';
+  if (z || y) { e.preventDefault(); e.stopPropagation(); if (e.shiftKey || y) redo(); else undo(); return; }
+  const b = sel && c.blocks[sel]; if (e.key === 'Escape') { if (sel) { sel = null; layout(); e.preventDefault(); e.stopPropagation(); } return; } if (!b) return;
+  const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+  if (d) { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) { b.w = Math.max(1, Math.min(c.cols - b.c + 1, b.w + d[0])); b.h = Math.max(1, b.h + d[1]); } else { b.c = Math.max(1, Math.min(c.cols - b.w + 1, b.c + d[0])); b.r = Math.max(1, b.r + d[1]); } save(); layout(); }
+  else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); e.stopPropagation(); b.hide = !b.hide || undefined; save(); layout(); } }, true);
 
 /* ---------- the panel ---------- */
 const box = document.createElement('div'); box.id = 'edPanel'; document.body.appendChild(box);
@@ -145,13 +164,13 @@ function panel() {
         + Object.entries(BLOCK).filter(([p]) => !['tone', 'size'].includes(p) || (el && (el.matches('button') || el.querySelector('button')))).map(([p, list]) => row(p[0].toUpperCase() + p.slice(1), pick('st-' + p, list, b[p]))).join('')
         + row('Move to', `<select data-act="to">${all.filter(x => stateOf(x) === stateOf(sc)).map(x => `<option ${x === sc ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`)
         + (b.go ? row('Goes to', `<select data-act="goto">${['(menu)', ...all.filter(x => stateOf(x) === stateOf(sc))].map(x => `<option ${x === b.go ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select><button data-act="label">Label…</button><button data-act="del">Remove</button>`) : '')
-        : editing ? '<p>Press a block to choose it and move it; drag its right or bottom edge to stretch it.</p>' : '')
+        : editing ? '<p>Click a block to choose it, drag to move it, drag its edge or corner to stretch it. Arrows move it a cell (Shift: stretch), Delete hides it, Esc lets go, Ctrl+Z undoes.</p>' : '')
       + `<hr>${row('Screens', `<button data-act="newscreen">New screen…</button><button data-act="addgo">Add a button that goes to…</button>`)}`
       + STATES.map(([st, n]) => row(`Opens on (${n.toLowerCase()})`, `<select data-act="first" data-v="${st}">${['(as is)', ...all.filter(x => stateOf(x) === st)].map(x => `<option ${x === (D.first[st] || '(as is)') ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`)).join('')
       + `<button data-act="reset">This screen back to the page's own</button>`;
   } else body = `<p>Your design is kept in this browser as you go. To send it to me, download it and attach the file.</p>`
     + row('', '<button data-act="download">Download design</button><button data-act="import">Load a design file…</button>') + row('', '<button data-act="clear">Start over</button>');
-  const html = `<div class="ed-head"><b>Design editor</b><span>${mini ? '' : ['layout', 'options', 'export'].map(t => `<button data-tab="${t}" class="${tab === t ? 'on' : ''}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}<button data-act="mini" title="${mini ? 'Open the editor' : 'Shrink it out of the way'}">${mini ? '▾' : '▴'}</button></span></div>${mini ? '' : `<div class="ed-body">${body}</div>`}`;
+  const html = `<div class="ed-head"><b>Design editor</b><span>${mini ? '' : ['layout', 'options', 'export'].map(t => `<button data-tab="${t}" class="${tab === t ? 'on' : ''}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}<button data-act="undo" title="Undo (Ctrl+Z)" ${undos.length ? '' : 'disabled'}>↶</button><button data-act="redo" title="Redo (Ctrl+Shift+Z)" ${redos.length ? '' : 'disabled'}>↷</button><button data-act="mini" title="${mini ? 'Open the editor' : 'Shrink it out of the way'}">${mini ? '▾' : '▴'}</button></span></div>${mini ? '' : `<div class="ed-body">${body}</div>`}`;
   if (box.__h !== html) { box.__h = html; box.innerHTML = html; }
   box.style.left = at.x === null ? '' : at.x + 'px'; box.style.right = at.x === null ? '12px' : ''; box.style.top = at.y + 'px';
 }
@@ -186,6 +205,7 @@ function act(t, a, v) {
 box.addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.tab) { tab = t.dataset.tab; mini = false; panel(); return; }
   if (t.dataset.act === 'mini') { mini = !mini; panel(); return; }
+  if (t.dataset.act === 'undo') { undo(); return; } if (t.dataset.act === 'redo') { redo(); return; }
   if (t.dataset.opt) { D.options[t.dataset.opt] = t.dataset.v; save(); applyOptions(); panel(); return; }
   act(t, t.dataset.act, t.dataset.v); });
 box.addEventListener('change', e => { const t = e.target; if (t.matches('select[data-act]')) act(t, t.dataset.act, t.value); });
@@ -206,6 +226,9 @@ const css = document.createElement('style'); css.textContent = `
 #edPanel textarea{width:100%;height:90px;font:11px monospace;background:#0b120f;color:#cfe;border:1px solid #3a3020;border-radius:6px}
 section.ed-on > *:not(.ed-grid),section.ed-on .ed-split > *{outline:1px dashed #e9b24a99;outline-offset:2px;cursor:move}
 section.ed-on .ed-split{outline:none!important}section.ed-on .ed-sel{outline:2px solid #e9b24a!important}
+section.ed-on .ed-item{position:relative}section.ed-on .ed-item:hover{outline:1px solid #e9b24a!important}
+section.ed-on .ed-sel::after{content:'';position:absolute;right:-6px;bottom:-6px;width:10px;height:10px;background:#e9b24a;border:1px solid #2a1c05;border-radius:2px;pointer-events:none}
+#edPanel button:disabled{opacity:.35;cursor:default}
 section.ed-on .ed-hidden{opacity:.25}section.ed-on .ed-folded{opacity:.6;outline-style:dotted!important}
 .ed-grid{position:absolute;inset:0;display:grid;pointer-events:none;z-index:-1}.ed-grid i{border:1px dashed #ffffff22;border-radius:4px}
 .ed-split{display:contents!important}
