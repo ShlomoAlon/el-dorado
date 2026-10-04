@@ -33,7 +33,7 @@ const undo = () => { if (!undos.length) return; redos.push(last); restore(undos.
 
 /* ---------- options: sets to flip between ---------- */
 const AREAS = [
-  { id: 'colors', name: 'Button colours', options: [['a', 'Current'], ['b', 'Brass'], ['c', 'Jungle']] },
+  { id: 'colors', name: 'Look', options: [['a', 'Current'], ['b', 'Brass (whole look)'], ['c', 'Jungle buttons']] },
   { id: 'shape', name: 'Button shape', options: [['a', 'Current'], ['b', 'Rounded'], ['c', 'Square']] },
   { id: 'heads', name: 'Headings', options: [['a', 'Current'], ['b', 'Serif'], ['c', 'Large serif']] },
   // a game feature, not a look: the page's own setting (UI.reshuffle, hand.js), which only this sets until one is chosen
@@ -271,9 +271,67 @@ section.ed-on [contenteditable]{outline:2px solid #7ec4f5!important;cursor:text;
 .ed-bar-bottom{bottom:-26px;margin:0 -26px -26px;border-top:1px solid rgba(233,178,74,.35);box-shadow:0 -8px 18px rgba(0,0,0,.35)}
 .ed-bar-top{top:-26px;grid-row:1;margin:-26px -26px 0;border-bottom:1px solid rgba(233,178,74,.35);box-shadow:0 8px 18px rgba(0,0,0,.35);justify-content:flex-start}
 section.ed-on .ed-bar{outline:1px dashed #e9b24a;outline-offset:-3px}
-/* button colours, by a button's role (the main action, the others): b brass on leather, c jungle green */
-html[data-edcolors=b] #menu .btn,html[data-edcolors=b] #actBtns .btn{background:linear-gradient(#3a2c1b,#241a0f);color:#f1dcae;border:1px solid #b08a4a}
-html[data-edcolors=b] #menu .btn.pri,html[data-edcolors=b] #actBtns .btn.pri{background:linear-gradient(#e7c27a,#b98a3c);color:#2a1c05;border-color:#f3d79c}
+/* the look: b brass (the whole expedition kit, below), c jungle green buttons */
+/* b: the whole "expedition kit" (owner, 2026-10-05: the full look of the D2-A mock-up, 681ed0a: leather panels framed in brass, serif
+   section titles, brass buttons, the game's chrome to match), not only its buttons */
+html[data-edcolors=b]{--leather:#1c1610;--leather2:#251c13;--brass:#b98d4b;--brassHi:#efcd8a;--brassDk:#5a4020;
+  --glass:linear-gradient(180deg,rgba(40,30,20,.95),rgba(26,20,13,.95));--glass2:linear-gradient(180deg,rgba(54,41,26,.96),rgba(34,26,17,.96));
+  --line:rgba(214,170,100,.14);--line2:rgba(214,170,100,.34);--muted:#b3a58c;--faint:#7c6f58}
+html[data-edcolors=b] .glass{border-color:rgba(199,154,82,.5);box-shadow:inset 0 1px 0 rgba(255,228,170,.1),0 8px 22px rgba(0,0,0,.4)}
+html[data-edcolors=b] #menu{background:rgba(8,6,4,.76)}
+html[data-edcolors=b] .modal{background:radial-gradient(120% 80% at 50% 0%,#2a2016 0%,#1b150e 60%,#15100b 100%);border:1px solid var(--brass);border-radius:14px;
+  box-shadow:inset 0 0 0 5px #17120c,inset 0 0 0 6px rgba(199,154,82,.35),0 30px 80px rgba(0,0,0,.65)}
+html[data-edcolors=b] .modal h2{color:var(--brassHi)}
+html[data-edcolors=b] .field>label{font-family:var(--display);font-size:17px;letter-spacing:0;text-transform:none;color:var(--brassHi);font-weight:400;margin-bottom:10px;display:flex;align-items:center;gap:10px}
+html[data-edcolors=b] .field>label::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(199,154,82,.45),transparent)}
+html[data-edcolors=b] .field>label.chk::after{display:none}
+html[data-edcolors=b] .btn{background:linear-gradient(180deg,#34281a,#221a11);border:1px solid var(--brass);border-radius:9px;color:#f1e6cf;box-shadow:inset 0 1px 0 rgba(255,230,180,.16),inset 0 -1px 0 rgba(0,0,0,.35),0 2px 0 #0b0805,0 6px 14px rgba(0,0,0,.35)}
+html[data-edcolors=b] .btn:hover{background:linear-gradient(180deg,#403120,#2a2015);border-color:var(--brassHi)}
+html[data-edcolors=b] .btn.pri{background:linear-gradient(180deg,#f6d88f 0%,#dcac55 45%,#b98434 100%);border-color:#7a5620;color:#2a1b06;box-shadow:inset 0 1px 0 rgba(255,250,225,.75),inset 0 -2px 0 rgba(110,70,20,.45),0 2px 0 #3a2807,0 6px 14px rgba(0,0,0,.4)}
+html[data-edcolors=b] .btn.pri:hover{background:linear-gradient(180deg,#fbe3a6 0%,#e4b867 45%,#c38e3c 100%)}
+html[data-edcolors=b] .btn.big{border-radius:10px}
+html[data-edcolors=b] .seg{background:#120e09;border-color:rgba(199,154,82,.28);border-radius:9px;box-shadow:inset 0 2px 4px rgba(0,0,0,.5)}
+html[data-edcolors=b] .seg label{border-radius:6px}
+html[data-edcolors=b] .seg button.on,html[data-edcolors=b] .seg label:has(input:checked){background:linear-gradient(180deg,#3d2f1e,#2b2115);color:var(--brassHi);box-shadow:inset 0 0 0 1px var(--brass),inset 0 1px 0 rgba(255,230,180,.15)}
+html[data-edcolors=b] #sMode{background:none;border:0;box-shadow:none;border-bottom:1px solid rgba(199,154,82,.35);border-radius:0;padding:0;gap:0}
+html[data-edcolors=b] #sMode label{font-family:var(--display);font-weight:400;font-size:17px;border-radius:0;padding:9px 4px 10px;color:var(--muted)}
+html[data-edcolors=b] #sMode label:has(input:checked){background:none;box-shadow:inset 0 -2px 0 var(--brassHi);color:var(--brassHi)}
+html[data-edcolors=b] .clist button,html[data-edcolors=b] .clist label,html[data-edcolors=b] .rlist button,html[data-edcolors=b] .boxrow,html[data-edcolors=b] .rrow,html[data-edcolors=b] .seatrow,html[data-edcolors=b] .pst{background:#16110b;border-color:rgba(199,154,82,.2)}
+html[data-edcolors=b] .clist button.on,html[data-edcolors=b] .clist label:has(input:checked){border-color:var(--brass);background:linear-gradient(180deg,rgba(199,154,82,.16),rgba(199,154,82,.06));box-shadow:inset 0 0 0 1px rgba(239,205,138,.25)}
+html[data-edcolors=b] .clist .dtag{text-transform:none;letter-spacing:0;font-size:11.5px;font-style:italic;font-family:var(--display);border:0;padding:0}
+html[data-edcolors=b] .prow input,html[data-edcolors=b] select.who{background-color:#120e09;border-color:rgba(199,154,82,.3)}
+html[data-edcolors=b] select.who option,html[data-edcolors=b] select.who optgroup{background:#1c1610}
+html[data-edcolors=b] .ingame{border-color:var(--brass);background:linear-gradient(180deg,rgba(199,154,82,.14),rgba(199,154,82,.05))}
+html[data-edcolors=b] .ingame #igTxt{font-family:var(--display)}
+html[data-edcolors=b] .aitag{font-family:var(--display);font-weight:400;letter-spacing:0;font-size:11px;border-color:rgba(199,154,82,.6);color:var(--brassHi)}
+html[data-edcolors=b] .sws label:has(input:checked){border-color:var(--brassHi)}
+html[data-edcolors=b] .modal.menu{scrollbar-color:rgba(199,154,82,.35) transparent}
+html[data-edcolors=b] #vp{background:radial-gradient(ellipse 80% 70% at 45% 42%,#1b2a1e 0%,#101a14 55%,#0a0f0b 100%)}
+html[data-edcolors=b] .brand{color:var(--brassHi)}
+html[data-edcolors=b] #roundLbl{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px;color:var(--muted)}
+html[data-edcolors=b] .tbtn{border-radius:9px;color:#f1e6cf}
+html[data-edcolors=b] .tbtn.on{border-color:var(--brassHi);color:var(--brassHi);box-shadow:inset 0 0 0 1px rgba(239,205,138,.35),inset 0 1px 0 rgba(255,228,170,.15),0 8px 22px rgba(0,0,0,.4)}
+html[data-edcolors=b] .pchip{border-radius:9px}
+html[data-edcolors=b] .pchip .dot{box-shadow:0 0 0 1.5px #0b0805,0 0 0 2.5px rgba(199,154,82,.6)}
+html[data-edcolors=b] .zoomctl button{border-radius:9px;color:var(--brassHi)}
+html[data-edcolors=b] #prompt{border-radius:10px;color:#eadfc8}
+html[data-edcolors=b] #prompt b{color:var(--brassHi)}
+html[data-edcolors=b] #hist{background:linear-gradient(180deg,rgba(38,29,19,.97),rgba(25,19,13,.97));border-radius:10px}
+html[data-edcolors=b] .ht+.ht{border-top:1px dashed rgba(199,154,82,.22)}
+html[data-edcolors=b] .hwho{font-family:var(--display);font-weight:400;font-size:13px}
+html[data-edcolors=b] .hwho span{font-family:var(--ui)}
+html[data-edcolors=b] .fend .fpill{border-color:rgba(199,154,82,.45);background:rgba(199,154,82,.08);color:#f1e6cf;border-radius:6px}
+html[data-edcolors=b] .pile .lbl{border-radius:7px}
+html[data-edcolors=b] #playLbl{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px}
+html[data-edcolors=b] #banner .s{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:16px}
+html[data-edcolors=b] #banner{border-radius:12px}
+html[data-edcolors=b] .allc-sect h3 span,html[data-edcolors=b] .allc-head span{font-family:var(--display);letter-spacing:0;text-transform:none;font-size:14px}
+html[data-edcolors=b] #rdock,html[data-edcolors=b] #rside,html[data-edcolors=b] #lside{background:#17120c;border-color:rgba(199,154,82,.3)}
+html[data-edcolors=b] #rdock button{background:linear-gradient(180deg,#34281a,#221a11);border-color:rgba(199,154,82,.55);border-radius:8px}
+html[data-edcolors=b] #rdock .rgrp button.pri{background:linear-gradient(180deg,#f6d88f,#dcac55 45%,#b98434);border-color:#7a5620}
+html[data-edcolors=b] #rdock .rspd{border-color:rgba(199,154,82,.45)}
+html[data-edcolors=b] #rdock .rspd button+button{border-left-color:rgba(199,154,82,.3)}
+html[data-edcolors=b] .sclose,html[data-edcolors=b] .bs-x{border-color:var(--brass);background:#1c1610}
 html[data-edcolors=c] #menu .btn,html[data-edcolors=c] #actBtns .btn{background:#17332a;color:#d8efe3;border:1px solid #2f6b55}
 html[data-edcolors=c] #menu .btn.pri,html[data-edcolors=c] #actBtns .btn.pri{background:linear-gradient(#5fbf8a,#2f8a5c);color:#062014;border-color:#8fe3b8}
 /* button shape: b rounded, c square */
