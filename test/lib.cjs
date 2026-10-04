@@ -21,7 +21,7 @@ const gpuOn = async (b, o) => { if (!onGpu(o)) return b; const c = await b.newBr
   for (const k of ['2d_canvas', 'gpu_compositing', 'rasterization']) if (!/^enabled/.test(f[k])) throw new Error(`the test browser is not on the GPU path: ${k} is ${f[k]}`); return b; };
 const chromium = { launch: async (o = {}) => gpuOn(await pw.chromium.launch(argsFor(o)), o),
   launchServer: (o = {}) => pw.chromium.launchServer(argsFor(o)),
-  connect: async (ws, o = {}) => gpuOn(await pw.chromium.connect(ws), o) };
+  connect: async (ws, o = {}) => gpuOn(await pw.chromium.connect(ws, { timeout: o.timeout }), o) };
 const http = require('http'), fs = require('fs'), path = require('path'), net = require('net'), os = require('os');
 const { spawn } = require('child_process');
 const ROOT = path.join(__dirname, '..');

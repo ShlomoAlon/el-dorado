@@ -26,10 +26,12 @@ const CPU_MS = 100; // (measured 65 ms with the board's terrain as one image, 20
   const games = [...Array.from({ length: GAMES }, (_, g) => SIZES[g % SIZES.length]), PASS];
   const results = await Promise.all(games.map(async ([name, viewport, dpr, pass], g) => {
     // game 1 (the owner's screen) in a browser of its own: the CPU of everything it runs is that one game's
-    const srvB = g === 0 ? await chromium.launchServer() : null, own = srvB && await chromium.connect(srvB.wsEndpoint()); // (a browser server: its process is known)
-    const p = await openPage(own || b, `game ${g + 1} (${name})`, { viewport, deviceScaleFactor: dpr });
+    const at = what => console.log(`     game ${g + 1} (${name}): ${what}, ${((Date.now() - t0) / 1000).toFixed(0)} s`); // (setup's progress: a hang there shows where)
+    const srvB = g === 0 ? await chromium.launchServer() : null; if (srvB) at('its own browser started');
+    const own = srvB && await chromium.connect(srvB.wsEndpoint(), { timeout: 30000 }); if (own) at('connected'); // (a browser server: its process is known)
+    const p = await openPage(own || b, `game ${g + 1} (${name})`, { viewport, deviceScaleFactor: dpr }); at('page open');
     const cdp = await p.context().newCDPSession(p); await cdp.send('Animation.enable'); await cdp.send('Animation.setPlaybackRate', { playbackRate: 20 });
-    await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
+    await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open); at('start screen');
     // (what the page shows if its start screen can't be used: a rare timeout under load, not yet explained)
     const pageState = () => p.evaluate(() => { const d = document.querySelector('#menu'), g = document.querySelector('#sGo'), r = g && g.getBoundingClientRect(), sec = g && g.closest('section');
       return JSON.stringify({ open: d.open, modal: d.matches(':modal'), cls: d.className, html: document.documentElement.className, screen: sec && sec.dataset.screen, secHidden: sec && sec.hidden, rect: r && [r.x, r.y, r.width, r.height].map(Math.round), disp: getComputedStyle(d).display, scripts: [...document.scripts].map(x => x.src.split('/').pop() || 'inline'), ed: !!window.__ED, S: !!(window.__ED && window.__ED.S), seats: document.querySelectorAll('#seats .seat:not([hidden])').length }); });
@@ -49,8 +51,10 @@ const CPU_MS = 100; // (measured 65 ms with the board's terrain as one image, 20
         else { await ready(false); await settle(p); await p.evaluate(() => window.__ED.fitCheck(true)); } // (the board check at every settled step, not only when its samples happen to see one)
         if (await p.evaluate(() => window.__ED.S.over)) break;
         const r = await p.evaluate(step); const k = r.split(':')[0]; did[k] = (did[k] || 0) + 1; if (r.startsWith('unmapped')) { unmapped.push(r); break; }
+        // (where each game is, as it goes: a run stopped as hung (run.mjs) shows how far each got and what it last did)
+        if (steps % 50 === 0) console.log(`     game ${g + 1} (${name}): step ${steps}, ${r.slice(0, 60)}, ${((Date.now() - t0) / 1000).toFixed(0)} s`);
       }
-    } catch (e) { unmapped.push('stopped: ' + e.message.split('\n')[0]); }
+    } catch (e) { unmapped.push('stopped: ' + e.message.split('\n')[0]); console.log(`     game ${g + 1} (${name}): stopped at step ${steps}: ${e.message.split('\n')[0]}; the page: ${await p.evaluate(() => { const E = window.__ED; return JSON.stringify({ mode: E.UI.mode, cur: E.S.cur, ai: !!E.S.players[E.S.cur].ai, canAct: E.canAct(), walking: E.walking(), over: !!E.S.over, log: E.diagLog().slice(-6) }); }).catch(x => 'unreadable: ' + x.message.split('\n')[0])}`); }
     const used = cpu && cpu(), actions = await p.evaluate(() => { const E = window.__ED, L = E.G.rec || E.UI.lastReplay; return L ? L.actions.length : 0; }); // (over: the record is kept as a replay)
     const over = await p.evaluate(() => !!window.__ED.S.over), round = await p.evaluate(() => window.__ED.S.round);
     const seen = await p.evaluate(() => window.__seen ? { modes: Object.keys(window.__seen.modes), labels: Object.keys(window.__seen.labels) } : { modes: [], labels: [] });
