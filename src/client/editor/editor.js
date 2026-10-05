@@ -152,8 +152,8 @@ function seed() {
 const landing = (a, st) => { const [tm, ts] = a.to.split('@'); return ts === '*' && st !== '*' && D.nodes.some(n => n.k === tm + '@' + st) ? tm + '@' + st : ts === '*' && st === '*' ? (D.nodes.some(n => n.k === a.to) ? a.to : null) : a.to; };
 seed();
 const stateNow = () => ED.online() && ED.NET.room ? 'room' : ED.S && !ED.S.over && !ED.G.replay && !ED.UI.preview ? 'game' : 'none'; // (the start screen's board is a preview: nowhere)
-// the state whose menus are on show: the player's, or the one a box laid out from the flowchart is in (until the menu closes)
-let edState = null; const viewState = () => edState || stateNow();
+// the state whose menus are on show: the player's (the flowchart is a drawing: it never changes the page's menus; owner, 2026-10-05)
+const viewState = stateNow;
 const sections = () => [...form.querySelectorAll(':scope > section[data-screen]')];
 // a menu's box in the state on show: its own box there, else its box for any state (a menu that is the same in every state)
 const keyFor = sc => { const k = sc + '@' + viewState(); return D.nodes.some(n => n.k === k) || !D.nodes.some(n => n.k === sc + '@*') ? k : sc + '@*'; };
@@ -167,54 +167,25 @@ const buttonRow = el => el.children.length > 1 && [...el.children].every(c => c.
 const items = s => { const out = []; for (const el of s.children) { if (el.classList.contains('ed-grid')) continue;
     if (el.classList.contains('ed-bar')) { for (const c of el.children) out.push([name(c), c]); continue; } // (the top and bottom bars' blocks)
     if (buttonRow(el)) { el.classList.add('ed-row'); for (const c of el.children) out.push([name(c), c]); } else out.push([name(el), el]); } return out; };
-// the menus added here (a blank screen with its name as a heading), and on them, in the state on show, a button for each of
-// their transitions (its words); the page's own menus keep their own buttons
-function build() {
-  for (const x of D.extra) if (!form.querySelector(`section[data-screen="${CSS.escape(x)}"]`)) { const s = document.createElement('section'); s.dataset.screen = x; s.hidden = true; s.dataset.ed = '1';
-    const h = document.createElement('h2'); h.dataset.edk = x + '>title'; h.textContent = nameOf(x); s.appendChild(h); form.appendChild(s); }
-  for (const s of sections()) if (s.dataset.ed && !D.extra.includes(s.dataset.screen)) s.remove();
-  const goes = new Set(), vs = viewState();
-  for (const s of sections()) { if (!s.dataset.ed) continue; const m = s.dataset.screen;
-    for (const a of D.arrows) { if (a.from !== m || !(a.states.includes(vs) || a.states.includes('*')) || !a.label) continue; const ek = 'go:' + a.id; goes.add(ek); let el = byName(ek);
-      if (!el) { el = document.createElement('button'); el.type = 'button'; el.className = 'btn'; el.dataset.edk = ek; s.appendChild(el); }
-      if (el.textContent !== a.label && !el.isContentEditable) el.textContent = a.label; el.dataset.edGo = a.to; if (el.closest('section') !== s) s.appendChild(el); } }
-  for (const s of sections()) { if (!s.dataset.ed) continue; const m = s.dataset.screen;
-    for (const b of D.buttons) { if (b.menu !== m || !(b.states.includes(vs) || b.states.includes('*')) || !b.label) continue; const ek = 'bt:' + b.id; goes.add(ek); let el = byName(ek);
-      if (!el) { el = document.createElement('button'); el.type = 'button'; el.className = 'btn'; el.dataset.edk = ek; el.dataset.edGo = ''; s.appendChild(el); }
-      if (el.textContent !== b.label && !el.isContentEditable) el.textContent = b.label; if (el.closest('section') !== s) s.appendChild(el); } }
-  for (const el of form.querySelectorAll('[data-ed-go]')) if (!goes.has(el.dataset.edk)) el.remove();
-}
-const arrowOf = ek => ek && ek.startsWith('go:') ? D.arrows.find(a => 'go:' + a.id === ek) : null;
 
 /* ---------- which screen is on show ---------- */
 /* a reload keeps the editor where it was (owner, 2026-10-05: reloading changes nothing; coming back is a new visit): the screen, the
    state it was shown in, the tab and Edit mode, kept for this tab only (sessionStorage: a reload keeps it, a new visit hasn't it) */
 const AT = 'eldorado-design-at';
 let back = (() => { try { return JSON.parse(sessionStorage.getItem(AT)); } catch (e) { return null; } })(); // (expected: storage off, or nothing kept)
-let edScreen = null, sel = null, foldOpen = false, wasOpen = false, tab = 'layout'; // (edScreen: a screen the editor shows, the page's own choice aside)
+let sel = null, foldOpen = false, wasOpen = false, tab = 'layout';
 const shown = () => { const m = $('#menu'); return m && m.open ? form.querySelector(':scope > section[data-screen]:not([hidden])') : null; };
-function show() { const m = $('#menu'), open = !!(m && m.open);
-  if (open && !wasOpen) { edScreen = null; if (back && back.sc) { edState = back.st || null; tab = back.tab || tab; editOn = !!back.edit; pick(back.sc); back = null; } else { const f = D.first[stateNow()]; if (f) pick(f); } back = null; } wasOpen = open; if (!open) { edState = null; return; } // (opened: on the screen the design starts with here)
-  // (a menu made here held on show: the page's own screens hidden meanwhile, each as the page left it kept, and put back after:
-  // the page writes its screens only when its own screen changes)
-  if (edScreen) for (const s of sections()) { const want = s.dataset.screen !== edScreen; if (!s.dataset.ed && !('edWas' in s.dataset)) s.dataset.edWas = s.hidden ? '1' : ''; if (s.hidden !== want) s.hidden = want; }
-  else for (const s of sections()) { if (s.dataset.ed) { if (!s.hidden) s.hidden = true; } else if ('edWas' in s.dataset) { s.hidden = !!s.dataset.edWas; delete s.dataset.edWas; } } }
-/* a menu shown: one of the page's own screens by the page's own tab (so its tabs go on working), one made here held on show
-   until the page's tabs are used */
+/* the menu opened after a reload: on the screen it was on, by the page's own tab (the editor never shows a screen of its own) */
 const MODE = { setup: 'local', online: 'online', replays: 'replays' };
-function pick(sc) { const l = MODE[sc] && $(`#sMode label[data-v="${MODE[sc]}"]`); if (l) { edScreen = null; l.click(); } else edScreen = sc; }
-const go = sc => { pick(sc); foldOpen = false; sel = null; ED.render(); layout(); };
-addEventListener('click', e => { if (!editing() && e.target.closest && e.target.closest('#sMode') && edScreen) { edScreen = null; queueMicrotask(layout); } }, true); // (the page's tab for the screen it is already on changes nothing of its own: the editor's screen let go of, shown again)
-// a box: its menu shown as it is in its state (the board and the replay viewer aren't menus: said, not shown)
+function show() { const m = $('#menu'), open = !!(m && m.open);
+  if (open && !wasOpen && back) { tab = back.tab || tab; editOn = !!back.edit; const l = MODE[back.sc] && $(`#sMode label[data-v="${MODE[back.sc]}"]`); back = null; if (l && !l.querySelector('input').checked) l.click(); }
+  wasOpen = open; }
 let note = '';
-function goTo(k) { const [m, st] = k.split('@'); if (NOLAY.includes(m)) { note = `That goes to the ${nameOf(m).toLowerCase()} (${stLabel(st).toLowerCase()}): not a menu.`; return panel(); }
-  note = ''; if (st !== '*') edState = st === stateNow() ? null : st; /* (to a box for any state: the state stays) */ const menu = $('#menu'); if (!menu.open) { const mb = $('#menuBtn'); if (mb) mb.click(); } go(m); }
-addEventListener('click', e => { const g = e.target.closest('[data-ed-go]'); if (!g || editing()) return; e.preventDefault(); e.stopPropagation(); if (g.dataset.edGo) goTo(g.dataset.edGo); }, true); // (a menu's own button: stays)
 
 /* ---------- laying the screen on show out on the grid ---------- */
 let editOn = false; const editing = () => editOn; // (Edit mode: off until the owner turns it on)
 function layout() {
-  build(); show();
+  show();
   const s = shown(); for (const x of sections()) if (x !== s) unlay(x);
   if (!s) { panel(); placeGlass(); return; }
   const c = conf(s.dataset.screen); s.classList.add('ed-laid'); s.classList.toggle('ed-on', editing());
@@ -289,7 +260,7 @@ let typing = false;
 glass.addEventListener('dblclick', e => { const s = shown(), t = under(e.clientX, e.clientY); if (!s || !t || !s.contains(t) || t.children.length || !t.textContent.trim()) return;
   e.preventDefault(); typing = true; placeGlass(); t.contentEditable = 'plaintext-only'; t.focus(); getSelection().selectAllChildren(t);
   const done = () => { t.removeEventListener('blur', done); t.removeAttribute('contenteditable'); typing = false; const c = conf(s.dataset.screen), w = t.textContent.trim().slice(0, 120);
-    const ar = arrowOf(t.dataset.edk); if (ar) ar.label = w || ar.label; else (c.text || (c.text = {}))[name(t)] = w; save(); layout(); }; // (a button an arrow made: the arrow's words)
+    (c.text || (c.text = {}))[name(t)] = w; save(); layout(); };
   t.addEventListener('blur', done); t.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === 'Escape') { ev.preventDefault(); t.blur(); } ev.stopPropagation(); }); });
 // the keys every editor has: arrows move the chosen block a cell, Delete hides it, Escape lets go, Ctrl+Z / Ctrl+Shift+Z
 // (only while laying out: the game's own Ctrl+Z stays the game's)
@@ -310,9 +281,7 @@ const btn = (act, label, on, v = '', extra = '') => `<button data-act="${act}" d
 function layoutBody() {
   const s = shown(); if (!s) return `<p>Open the menu to lay out its screens.</p>${btn('openmenu', 'Open the menu')}`;
   const sc = s.dataset.screen, b = sel && conf(sc).blocks[sel];
-  const ar = b && arrowOf(sel);
-  return `<p><b>${esc(nameOf(sc))}</b> · ${stLabel(viewState()).toLowerCase()}${edState ? ` <span class="ed-hint">(as designed in that state; you're ${stLabel(stateNow()).toLowerCase()}, so what the page fills in is as it is now)</span>` : ''}</p>`
-    + (ar ? `<p class="ed-hint">This button is an arrow in Flow: it goes to ${esc(nameOf(ar.to.split('@')[0]))} · ${esc(stLabel(ar.to.split('@')[1]).toLowerCase())}.</p>` : '')
+  return `<p><b>${esc(nameOf(sc))}</b> · ${stLabel(viewState()).toLowerCase()}</p>`
     + (b ? (b.bar ? `<p class="ed-hint">In the ${b.bar} bar: drag it left or right (or use the arrows) to order the bar.</p>` : row('Width', WIDTHS.map(([v, n]) => btn('w', n, b.w === v, v)).join('')))
       + row('Place', btn('bar', 'On the screen', !b.bar, '') + btn('bar', 'Top bar', b.bar === 'top', 'top') + btn('bar', 'Bottom bar', b.bar === 'bottom', 'bottom'))
       + ((el => el && el.matches('button') ? row('Button', KINDS.map(([v, n]) => btn('kind', n, (b.kind || el.__kind[0]) === v, v)).join('')) : '')(byName(sel)))
@@ -413,7 +382,7 @@ function flowBody() {
     const free = [['*', 'Any state'], ...STATES].filter(([v]) => !boxes.includes(v)), ts = D.arrows.filter(a => a.from === m), groups = new Map();
     for (const a of ts) { const g = [...a.states].sort().join(','); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(a); }
     const body = open ? `<div class="ed-mb"><div class="ed-dh ed-in">${boxes.map(st => { const k = m + '@' + st, on = fsel && fsel.node === k;
-        return `<span class="ed-box${on ? ' on' : ''}" data-dir="${esc(k)}">${esc(stLabel(st))}${lay ? btn('fl-lay', 'Lay out', false, k) : ''}${lay && st !== '*' ? btn('fl-first', D.first[st] === m ? '★' : '☆', D.first[st] === m, k, `title="The menu opens here ${stLabel(st).toLowerCase()}"`) : ''}${boxes.length > 1 ? btn('fl-split', '⑂', false, k, 'title="Split off: this state becomes a menu of its own"') : ''}${btn('fl-rmbox', '×', false, k, 'title="Not in this state"')}</span>`; }).join('')}`
+        return `<span class="ed-box${on ? ' on' : ''}" data-dir="${esc(k)}">${esc(stLabel(st))}${lay && st !== '*' ? btn('fl-first', D.first[st] === m ? '★' : '☆', D.first[st] === m, k, `title="The menu opens here ${stLabel(st).toLowerCase()}"`) : ''}${boxes.length > 1 ? btn('fl-split', '⑂', false, k, 'title="Split off: this state becomes a menu of its own"') : ''}${btn('fl-rmbox', '×', false, k, 'title="Not in this state"')}</span>`; }).join('')}`
       + `${free.length ? `<select data-act="fl-addst" data-m="${esc(m)}"><option value="">+ in a state…</option>${free.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join('')}</select>` : ''}</div>`
       + `<textarea data-act="fl-mnote" data-m="${esc(m)}" rows="1" placeholder="A note about this menu">${esc((D.mnotes || {})[m] || '')}</textarea>`
       + [...groups].map(([g, as]) => { const gk = 'g:' + m + ':' + g, gopen = opened.has(gk);
@@ -468,7 +437,7 @@ function panel() {
     if (d && r) d.scrollTop = r.offsetTop - 8; } // (the directions scroll to the transition or the menu; the chart stays)
   if (focusT) { const f = box.querySelector(`input[data-id="${focusT}"]`); focusT = null; if (f) f.focus(); } // (a transition just drawn: its words to type)
   if (copyText) { const c = box.querySelector('textarea.ed-copy'); if (c && document.activeElement !== c) { c.focus(); c.select(); } }
-  { const s = shown(); try { sessionStorage.setItem(AT, JSON.stringify({ sc: s ? s.dataset.screen : null, st: edState, tab, edit: editOn })); } catch (e) { /* expected: storage off */ } }
+  { const s = shown(); try { sessionStorage.setItem(AT, JSON.stringify({ sc: s ? s.dataset.screen : null, tab, edit: editOn })); } catch (e) { /* expected: storage off */ } }
   box.classList.toggle('wide', tab === 'flow' && !mini); box.classList.toggle('flowtab', tab === 'flow' && !mini); box.classList.toggle('editing', editOn);
   box.style.left = at.x === null ? '' : at.x + 'px'; box.style.right = at.x === null ? '12px' : ''; box.style.top = at.y + 'px';
 }
@@ -482,11 +451,10 @@ function act(t, a, v) {
   else if (b && a === 'w') { b.w = +v; fit(b); }
   else if (b && a === 'ctype') { const c = ctlOf(byName(sel)); b.ctype = c && c.own === v ? undefined : v; }
   else if (b && a === 'kind') { const el = byName(sel); b.kind = el && el.__kind[0] === v ? undefined : v; }
-  else if (b && a === 'del') { const ar = arrowOf(sel); if (ar) { D.arrows = D.arrows.filter(x => x !== ar); delete conf(sc).blocks[sel]; } else b.del = true; sel = null; } // (a button an arrow made: the arrow goes too)
+  else if (b && a === 'del') { b.del = true; sel = null; }
   else if (a === 'undel') { for (const x of Object.values(conf(sc).blocks)) delete x.del; }
   else if (b && a === 'list') { const l = listIn(byName(sel)); if (l) { b.listk = name(l); b.list = v || undefined; } } else if (b && (a === 'hide' || a === 'fold')) b[a] = !b[a] || undefined; else if (b && a === 'bar') b.bar = v || undefined;
   else if (a === 'reset') { delete D.screens[sc]; sel = null; unlay(s); }
-  else if (a === 'fl-lay') { tab = 'layout'; fsel = null; goTo(v); return; }
   else if (a === 'fl-fold') { const k = v.startsWith('t:') ? v.slice(2) : v, set = v.startsWith('t:') ? openT : opened; if (set.has(k)) set.delete(k); else set.add(k); return panel(); }
   else if (a === 'fl-copy') { const txt = flowText(); copyText = null;
     navigator.clipboard.writeText(txt).then(() => { note = 'The flow is copied: paste it to Claude.'; panel(); }, err => { copyText = txt; note = `Copying wasn't allowed here (${err.name}): select the text below and copy it.`; panel(); }); return; }

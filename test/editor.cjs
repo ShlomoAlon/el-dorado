@@ -17,11 +17,10 @@ const T = report('editor');
   T.ok('?edit: the editor opens', await p.waitForSelector('#edPanel .ed-head', { timeout: 8000 }).then(() => true, () => false));
   const blocks = () => p.evaluate(() => [...document.querySelectorAll('#mform > section[data-screen]:not([hidden]) .ed-item')].map(e => { const r = e.getBoundingClientRect(); return { x: r.left + Math.min(30, r.width / 2), y: r.top + r.height / 2, r: r.right, k: e.dataset.edk, btn: e.matches('button') }; }));
   const col = k => p.evaluate(k => document.querySelector(`[data-edk="${CSS.escape(k)}"]`).style.gridColumn, k);
-  // the menu opens where the flowchart's ★ says (in every state: the Main menu, a menu the page hasn't got), its buttons the transitions'
-  T.ok('the menu opens on the flowchart\'s ★: the Main menu, with its transitions\' buttons', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=main]'); return !!s && !s.hidden && /Play on this device/.test(s.textContent); }));
-  await p.click('#mform > section[data-screen=main] [data-ed-go]:has-text("Play on this device")'); await p.waitForTimeout(200);
-  T.ok('a button a transition made goes where it leads (the game lobby)', await p.evaluate(() => !document.querySelector('#mform > section[data-screen=room]').hidden && document.querySelector('#mform > section[data-screen=main]').hidden));
-  await p.evaluate(() => document.querySelector('#sMode label[data-v="local"]').click()); await p.waitForTimeout(200); // (the page's own tab: its new-game screen, laid out below)
+  // the flowchart is a drawing: the menu is the page's own, on the page's own first screen, with no screen of the flowchart's (owner, 2026-10-05)
+  const onShow = () => p.evaluate(() => [...document.querySelectorAll('#mform > section[data-screen]:not([hidden])')].map(s => s.dataset.screen).join(','));
+  const pageOnly = () => p.evaluate(() => !document.querySelector('#mform > section[data-ed], #mform [data-ed-go]'));
+  T.ok('the menu opens on the page\'s own first screen, and has no screen of the flowchart\'s', await onShow() === 'setup' && await pageOnly(), await onShow());
   T.ok('the screen on show is a grid', await p.evaluate(() => getComputedStyle(document.querySelector('#mform > section[data-screen=setup]')).display === 'grid'));
   T.ok('out of Edit mode, the menu works (a click is a click)', await p.evaluate(() => { document.querySelector('#sN label[data-v="4"]').click(); return document.querySelector('#sN input[value="4"]').checked; }));
   await p.click('#edPanel [data-act=editmode]');
@@ -95,6 +94,7 @@ const T = report('editor');
   await p.evaluate(() => document.querySelector('#sMode label[data-v="local"]').click());
   // flow: full screen; the default flowchart; a box laid out; a reload keeps the editor where it was
   if (await p.$('#edPanel.editing')) await p.click('#edPanel [data-act=editmode]');
+  const before = await onShow();
   await p.click('#edPanel [data-tab=flow]');
   T.ok('the directions start folded', await p.evaluate(() => document.querySelectorAll('#edPanel .ed-dir').length > 5 && !document.querySelector('#edPanel .ed-mb')));
   T.ok('Flow takes the whole window', await p.evaluate(() => { const r = document.querySelector('#edPanel').getBoundingClientRect(); return r.left <= 13 && r.right >= innerWidth - 13 && r.bottom >= innerHeight - 13; }));
@@ -112,10 +112,10 @@ const T = report('editor');
   await p.click('#edPanel .ed-node[data-node="settings@*"]');
   T.ok('a click in the chart folds the directions to what it chose', await p.evaluate(() => document.querySelectorAll('#edPanel .ed-mb').length === 1 && !!document.querySelector('#edPanel .ed-dir[data-menu="settings"] .ed-mb')));
   await p.click('#edPanel .ed-node[data-node="results@*"]');
-  await p.click('#edPanel [data-dir="results@none"] [data-act=fl-lay]');
-  T.ok('"Lay out" shows that menu, with its transitions\' buttons', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=results]'); return !!s && !s.hidden && /Done/.test(s.textContent) && /Watch the replay/.test(s.textContent); }));
+  T.ok('nothing done in the chart changes the page\'s menu (the screen on show, no screen of the flowchart\'s)', await onShow() === before && await pageOnly(), `${before} → ${await onShow()}`);
+  T.ok('a box has no "Lay out": the flowchart never shows a menu', await p.evaluate(() => !document.querySelector('#edPanel [data-act=fl-lay]')));
   await p.reload(); await p.waitForSelector('#edPanel .ed-head'); await p.waitForTimeout(400);
-  T.ok('a reload keeps the editor where it was (the menu on show, the tab)', await p.evaluate(() => { const s = document.querySelector('#mform > section[data-screen=results]'); return !!s && !s.hidden && document.querySelector('#edPanel [data-tab=layout]').classList.contains('on'); }));
+  T.ok('a reload keeps the editor where it was (the menu on show, the tab)', await onShow() === before && await p.evaluate(() => document.querySelector('#edPanel [data-tab=flow]').classList.contains('on')), await onShow());
   await p.click('#edPanel [data-tab=flow]');
   // a transition drawn: the centred box clicked, then another; its words typed; for two states of its menu; a note
   await p.click('#edPanel .ed-node[data-node="replays@*"]'); await p.click('#edPanel .ed-node.focus[data-node="replays@*"]'); await p.click('#edPanel .ed-node[data-node="results@*"]');
