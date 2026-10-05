@@ -252,6 +252,13 @@ Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), s
   parts. Edit mode adds its listeners once at the root and removes them when it ends; the site itself is plain HTML and
   the theme. Moves animate (pick up, siblings make room, drop into a slot). The test for any design: a person can make it
   in the editor easily and smoothly.
+- **Three kinds of element, set in the code, never by the editor** (owner, 2026-10-05): *flowing* (most: they sit in their
+  parent's layout and get only what it grants: reorder, width, kind), *fixed* (only the ones we designate, today the floating
+  game controls: anchor, offset and size, per size class, editable by pixel), and *special* (board, cards: nothing). A user
+  can't make an element fixed or flowing; they get the controls of the kind it is.
+- Before fixed elements are editable: size classes defined once (theme tokens read by CSS and JS; today "phone" is written
+  in five places), and each fixed element as anchor + offset + size, placed relative to another by name ("above the discard
+  pile"), not by sums of its size (today `bottom: 16px + 104px + 34px`).
 
 ## 7. Testing recipes
 
