@@ -22,7 +22,11 @@ const run = ([name, cmd, normal], env = {}) => new Promise(res => { const t = Da
   c.stdout.on('data', d => out += d); c.stderr.on('data', d => out += d);
   const timer = setTimeout(() => { hung = true; try { process.kill(-c.pid, 'SIGKILL'); } catch (e) { /* expected: it exited just now */ } }, limit * 1000);
   c.on('close', code => { clearTimeout(timer); if (hung) out += `\nFAIL ${name}: still running after ${limit} s (normally about ${normal} s): stopped as hung; its output so far is above\n`;
-    res({ name, code: hung ? 'hung' : code, out, s: ((Date.now() - t) / 1000).toFixed(0) }); }); });
+    // a test that has grown past its normal fails here, while it still finishes: its normal is stale. (Left alone, the limit
+    // drifted until the test was stopped as hung, which read as a hang: render grew from 30 s to 80 s, 2026-10-05)
+    const s = (Date.now() - t) / 1000, grown = !hung && !code && s > 1.3 * normal + 3;
+    if (grown) out += `\nFAIL ${name}: took ${s.toFixed(0)} s, normally about ${normal} s: it has grown, update its normal in run.mjs (or find what made it slower)\n`;
+    res({ name, code: hung ? 'hung' : grown ? 'grown' : code, out, s: s.toFixed(0) }); }); });
 if (arg.includes('--gpu')) {
   const rs = [];
   for (const t of [['layout', 'node test/layout.cjs --quick', 75], ['flows', 'node test/flows.cjs', 50], ['taps', 'node test/taps.cjs', 16], ['play', 'node test/play.cjs', 130], ['menus', 'node test/menus.cjs', 24]])
@@ -59,7 +63,7 @@ res.push(await run(['frames', 'node test/frames.cjs', 10]));
 res.push(await run(['framebudget', 'node test/framebudget.cjs' + (full ? '' : ' --moves 20'), full ? 140 : 25]));
 // text and cards sharp at rest, as the screen shows them (GPU route, sub-pixel text on, the owner's screen): every menu tab, a game, the windows
 res.push(await run(['sharp', 'node test/sharp.cjs', 40]));
-if (full) res.push(await run(['render', 'node test/render.cjs', 30]));
+if (full) res.push(await run(['render', 'node test/render.cjs', 80]));
 for (const r of res) { const last = r.out.trim().split('\n').filter(l => l.trim()).pop() || ''; console.log(`${r.code ? 'FAIL' : 'ok  '} ${r.name.padEnd(7)} ${String(r.s).padStart(3)} s  ${last.slice(0, 110)}`); }
 // every test's whole output is kept (test-results/<name>.log); for a failing test, every failure is printed in full, wherever
 // it came in the output, with the indented detail lines under it (the end of the output only when a test crashed before
