@@ -27,7 +27,9 @@ function make(pl, i) {
     + `<div class="pin">${svg('pmark', '-9 -46 18 13', '<path d="M-7.5,-44 L7.5,-44 L0,-34 Z" fill="#ffe08a" stroke="rgba(40,24,0,.6)" stroke-width="1.5" stroke-linejoin="round"/>', -32, -50)}`
     + `<svg viewBox="-32 -50 64 72" width="64" height="72">${meepleSVG(p.color, p.pieces.length > 1 ? i + 1 : 0)}</svg></div>`;
   $('#pieces').appendChild(el);
-  const P = { el, pin: el.querySelector('.pin'), shadow: el.querySelector('.pshadow'), tf: '', anims: [] };
+  // (tf: where it rests, null until placed: placed in the same update that made it, never drawn anywhere before; an empty
+  // place read as the board's corner, and its first placement as a jump from there: checks, debug.js movedTo)
+  const P = { el, pin: el.querySelector('.pin'), shadow: el.querySelector('.pshadow'), tf: null, anims: [] };
   return P;
 }
 /* where an explorer rests: its space, or (arrived) a spot in a row beside the city */
