@@ -40,11 +40,11 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
   await p.click('#sMode label[data-v="local"]'); await check('This device tab', new Function(`return ${screen('setup')}`));
   await p.click('#sGo'); await check('the game starts', () => !!window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
   await settle(p);
-  // a player's chip shows four things: their hand and draw pile (face down, another player's), their discard pile, and every card they own
+  // a player's chip shows two piles: the discard pile, and everything else they own (hand, draw pile, in play: not where each is)
   const other = await p.evaluate(() => (window.__ED.S.cur + 1) % window.__ED.S.players.length);
   await p.click(`#players .pchip:nth-child(${other + 1})`);
-  await check("another player's chip: hand face down, draw pile, discard pile, and every card they own", i => { const q = window.__ED.S.players[i], P = [...document.querySelectorAll('#overlay .ppart')], h = P.map(e => e.querySelector('h3').firstChild.textContent.trim());
-    return h.join() === 'Hand,Draw pile,Discard pile,Owned,Blockades' && P[0].querySelectorAll('.pback').length === q.hand.length && !P[0].querySelector('.mcard') && P[3].querySelectorAll('.mcard').length === q.hand.length + q.deck.length + q.discard.length + q.play.length; }, other);
+  await check("another player's chip: the discard pile, and everything else they own", i => { const q = window.__ED.S.players[i], P = [...document.querySelectorAll('#overlay .ppart')], h = P.map(e => e.querySelector('h3').firstChild.textContent.trim());
+    return h.join() === 'Discard pile,Everything else,Blockades' && P[0].querySelectorAll('.mcard').length === q.discard.length && P[1].querySelectorAll('.mcard').length === q.hand.length + q.deck.length + q.play.length; }, other);
   await p.click('#pClose'); await settle(p);
   const pos = await p.evaluate(() => JSON.stringify(window.__ED.S.players.map(q => q.hand)));
   await p.click('#menuBtn'); await check('Menu during a game: the game bar and the tabs', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && !document.querySelector('#sMode').hidden);
