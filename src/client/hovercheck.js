@@ -3,16 +3,24 @@
    items grow or move when hovered (the market, the All cards spread, the hand): each says where its items rest and which
    one is highlighted. Judged once the frame is drawn (afterDrawn: layout already done, so measuring is free) */
 import { assert } from '../engine.gen.js';
-import { afterDrawn } from './frame.js';
+import { afterDrawn, frameDue } from './frame.js';
 /* where: a name; box: the element that holds them (only a point where the page's topmost element is inside it is judged:
    under a menu or another panel the pointer isn't over these items at all); items(): the elements; rest(el): its resting box in page coordinates {l, t, w, h, z, rot?: degrees about its centre} (the topmost resting
    box under the pointer wins where they overlap, as in a fanned hand); hovered(): the highlighted element or null; off(): true while the rule doesn't apply (a drag) */
 /* (drawn(el): where the highlighted item is drawn beyond its resting place, the hand's risen card: over no resting place, the
    pointer there is on it) */
+/* (a place's judgement is of the pointer where it was; one made since, for where it is now, replaces it: WebKit delivered six
+   moves of a sweep in 10 ms, all judged a frame later at their old places, with the pointer and the hover already further on) */
+const latest = new Map();
 export function hoverCheck(where, box, x, y, items, rest, hovered, off = () => false, about = () => '', drawn = () => null) {
+  const n = (latest.get(where) || 0) + 1; latest.set(where, n);
   afterDrawn(() => {
+    if (latest.get(where) !== n) return;
     // (whether the rule applies is decided when the page is judged, not when the pointer moved: a drag may have begun since)
-    if (off()) return;
+    // (and only a page that is up to date is judged, as every check of the page: a change since the frame drawn, such as a
+    // click that closed the menu under the pointer, has its own frame due, which works the hover out again and judges it in
+    // turn. Firefox and WebKit ran that click between the frame and this check; 2026-10-05)
+    if (off() || frameDue()) return;
     const t = document.elementFromPoint(x, y); if (!t || !box.contains(t)) return;
     let under = null, uz = -Infinity;
     for (const e of items()) { const r = rest(e); if (!r || r.z < uz) continue;
