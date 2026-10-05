@@ -123,7 +123,9 @@ function timeLeft(){if(!online()||NET.clockEnd==null||S.over)return null;return 
 function renderTimer(){
   const el=$('#turnTimer'),t=$('#ptxt').classList.contains('timed')?timeLeft():null;show(el,t!==null);if(t===null)return;
   if(t<10&&t>0&&t!==SND.lastT&&canAct())sfx('timer');SND.lastT=t;
-  setHTML(el,num(Math.floor(t/60),2)+':'+String(t%60).padStart(2,'0')); // (a slot for the minutes: a bank of ten minutes or more counts down past 9:59 without the clock changing width)el.classList.toggle('low',t<=15);
+  // (a slot for the minutes: a bank of ten minutes or more counts down past 9:59 without the clock changing width)
+  setHTML(el,num(Math.floor(t/60),2)+':'+String(t%60).padStart(2,'0'));
+  el.classList.toggle('low',t<=15); // (the last 15 s: red)
 }
 export const hudPart = { name: 'hud', update(){updateHeader();updatePrompt();}};
 export function hudInit(){

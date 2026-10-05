@@ -211,6 +211,8 @@ const T = report('online');
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 2);
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 3);
     await A.click('#rlStart'); await wait(A, () => __ED.online());
+    // a 5 s clock is in its last 15 s from the start: it shows so (red) while it runs
+    T.ok('a clock in its last 15 s shows it', await wait(A, () => { const t = document.querySelector('#turnTimer'); return !t.hidden && t.classList.contains('low'); }, null, 30000));
     // the person's turn runs out with the AIs to play next: their turns show no clock (the page asserts it every half second)
     T.ok('timeout before AI turns: the turn passes', await wait(A, () => __ED.S.log.some(l => l.e === 'timeout') && __ED.S.players[__ED.S.cur].ai, null, 60000));
     T.ok('timeout before AI turns: no clock while the AIs play', await wait(A, () => __ED.S.players[__ED.S.cur].ai && document.querySelector('#turnTimer').hidden, null, 3000));

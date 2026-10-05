@@ -253,7 +253,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .fend{align-self:center}
 .fend .fpill{font-size:11px;font-weight:800;color:var(--text);border-radius:9px;padding:3px 9px}
 .timer{display:inline-block;font-variant-numeric:tabular-nums;font-weight:800;padding:1px 9px;border-radius:8px;background:rgba(255,255,255,.08);margin-right:10px;color:var(--gold2);transition:background .2s,color .2s}
-.timer.low{background:rgba(232,99,79,.28);color:#ffb3a5;animation:pulse 1s ease-in-out infinite}
+.timer.low{background:rgba(232,99,79,.28);color:#ffb3a5}
 
 /* ---------- market: six cards floating over the top of the board, plus an "all cards" spread */
 #mkt{position:absolute;right:var(--mktR);top:var(--row2,64px);z-index:16;transition:transform .35s var(--ease),opacity .25s}
@@ -552,7 +552,6 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   .zoomctl button:not(#fsBtn):not(#sndBtn){display:none}
 
 }
-@keyframes pulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.4}}
 @keyframes fgIn{from{opacity:0}} /* (opacity only: the step is where its cards fly to, and a place that moves while they fly makes them land off it, then jump) */
 @keyframes bsIn{from{transform:translateY(-14px) scale(.9);opacity:0}}
 #shell,#overlay,#banner{--display:'Young Serif', Georgia, 'Times New Roman', serif;--ui:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;font-family:var(--ui)}
