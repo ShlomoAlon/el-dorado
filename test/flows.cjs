@@ -5,12 +5,12 @@
 // Also checks that pressing Start changes nothing on the board, and that no step logs an error.
 // Every check waits for what it expects (up to a few seconds), so a slow or busy machine doesn't fail it.
 //   NODE_PATH=$(npm root -g) node test/flows.cjs
-const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { browser, serveStatic, openPage, settle, report } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
 const log = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/replay.json'), 'utf8'));
 const T = report('flows');
 (async () => {
-  const srv = await serveStatic(), b = await chromium.launch(), p = await openPage(b, 'flows', { viewport: { width: 1366, height: 820 } });
+  const srv = await serveStatic(), b = await browser.launch(), p = await openPage(b, 'flows', { viewport: { width: 1366, height: 820 } });
   const S = (f, a) => p.evaluate(f, a);
   const until = (f, a, ms = 15000) => p.waitForFunction(f, a, { timeout: ms }).then(() => true, () => false);
   const check = async (name, f, a, ms) => T.ok(name, await until(f, a, ms));

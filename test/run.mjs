@@ -2,11 +2,14 @@
 //   node test/run.mjs            build, import lint, rules, engine (quick), layout (6 sizes, the owner's screen included), game flows, board taps, played games (3), menus, worker bundle, frame costs, the frame budget (20 moves), sharp text and cards  (~130 s)
 //   node test/run.mjs --online   also online play end to end, against a game server the test starts itself  (+~45 s)
 //   node test/run.mjs --full     everything: engine (60 games + AI on every course), layout (12 sizes), played games (6), online, board rendering
+//   node test/run.mjs --gpu      the game's tests on Chrome's GPU route, one at a time (due every 5 commits)
+//   node test/run.mjs --engines  the game's tests in WebKit (Safari's engine) and Firefox (desktop), one at a time (due every 10 commits)
 import { spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { createRequire } from 'node:module';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), arg = process.argv.slice(2), full = arg.includes('--full'), online = full || arg.includes('--online');
 const NODE_PATH = [process.env.NODE_PATH, execSync('npm root -g').toString().trim()].filter(Boolean).join(path.delimiter);
 const t0 = Date.now(); execSync('node build.mjs', { cwd: root, stdio: 'inherit' });
@@ -35,6 +38,33 @@ if (arg.includes('--gpu')) {
   for (const r of rs) { const last = r.out.trim().split('\n').filter(l => l.trim()).pop() || ''; console.log(`${r.code ? 'FAIL' : 'ok  '} ${r.name.padEnd(7)} ${String(r.s).padStart(3)} s  ${last.slice(0, 140)}`); if (r.code) console.log(r.out.split('\n').filter(l => /^\s*FAIL\b|assertion failed/.test(l)).slice(0, 6).join('\n')); }
   const badG = rs.filter(r => r.code).length; if (!badG) fs.writeFileSync(gpuFile, head() + '\n');
   console.log(badG ? `\n${badG} failing on the GPU route` : `\nall ok on the GPU route (recorded: ${head().slice(0, 7)})`); process.exit(badG ? 1 : 0);
+}
+/* the other engines (owner, 2026-10-05): the game's tests in Safari's engine (WebKit) and Firefox's, at least every 10 commits
+   (the suite fails when it is due); a pass records the commit (test/engines-run.txt). One test at a time, as on the GPU route:
+   side by side they crowded this machine until timed waits failed (the terrain's 8 s, in WebKit, 2026-10-05). Firefox at
+   desktop sizes only (owner: no Firefox for phones). An engine not in this container is fetched first, the build the installed
+   Playwright names, from its download mirror */
+const enginesFile = path.join(root, 'test/engines-run.txt');
+const ENGINE_TESTS = { webkit: [['layout', 'node test/layout.cjs --quick', 60], ['flows', 'node test/flows.cjs', 40], ['taps', 'node test/taps.cjs', 15], ['play', 'node test/play.cjs', 150], ['menus', 'node test/menus.cjs', 20], ['editor', 'node test/editor.cjs', 15], ['online', 'node test/online.cjs', 200]],
+  firefox: [['layout', 'node test/layout.cjs --quick --desktop', 50], ['flows', 'node test/flows.cjs', 40], ['taps', 'node test/taps.cjs', 15], ['play', 'node test/play.cjs --desktop', 150], ['menus', 'node test/menus.cjs', 20], ['editor', 'node test/editor.cjs', 15], ['online', 'node test/online.cjs', 200]] };
+function ensureEngine(name) {
+  // (Playwright resolved through NODE_PATH, as the tests find it)
+  const req = createRequire(import.meta.url), from = { paths: NODE_PATH.split(path.delimiter) }, pw = req(req.resolve('playwright', from));
+  if (fs.existsSync(pw[name].executablePath())) return;
+  const core = path.dirname(req.resolve('playwright-core/package.json', { paths: [path.dirname(req.resolve('playwright/package.json', from)), ...from.paths] }));
+  const rev = JSON.parse(fs.readFileSync(path.join(core, 'browsers.json'), 'utf8')).browsers.find(b => b.name === name).revision;
+  const dir = path.join(process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(os.homedir(), '.cache/ms-playwright'), `${name}-${rev}`), zip = path.join(os.tmpdir(), `${name}-${rev}.zip`);
+  console.log(`fetching ${name} ${rev} (not in this container)`);
+  execSync(`curl -sf -o ${zip} https://playwright.download.prss.microsoft.com/dbazure/download/playwright/builds/${name}/${rev}/${name}-ubuntu-24.04.zip && mkdir -p ${dir} && unzip -qo ${zip} -d ${dir} && touch ${dir}/INSTALLATION_COMPLETE ${dir}/DEPENDENCIES_VALIDATED && rm ${zip}`, { stdio: 'inherit' });
+  if (!fs.existsSync(pw[name].executablePath())) throw new Error(`${name} was fetched but its browser is not at ${pw[name].executablePath()}`);
+}
+if (arg.includes('--engines')) {
+  const rs = [];
+  for (const e of Object.keys(ENGINE_TESTS)) { ensureEngine(e); for (const t of ENGINE_TESTS[e]) rs.push({ ...await run([e + ' ' + t[0], t[1], t[2]], { ENGINE: e }), engine: e, test: t[0] }); }
+  fs.mkdirSync(path.join(root, 'test-results'), { recursive: true }); for (const r of rs) fs.writeFileSync(path.join(root, 'test-results', r.engine + '-' + r.test + '.log'), r.out);
+  for (const r of rs) { const last = r.out.trim().split('\n').filter(l => l.trim()).pop() || ''; console.log(`${r.code ? 'FAIL' : 'ok  '} ${r.name.padEnd(15)} ${String(r.s).padStart(3)} s  ${last.slice(0, 130)}`); if (r.code) console.log(r.out.split('\n').filter(l => /^\s*FAIL\b|assertion failed/.test(l)).slice(0, 6).join('\n')); }
+  const badE = rs.filter(r => r.code).length; if (!badE) fs.writeFileSync(enginesFile, head() + '\n');
+  console.log(badE ? `\n${badE} failing on the other engines` : `\nall ok on WebKit and Firefox (recorded: ${head().slice(0, 7)})`); process.exit(badE ? 1 : 0);
 }
 /* side by side, but never more at once than the machine has cores, the longest first: all ten at once on four cores, each
    ran two to three times slower than alone (the editor test 9 s alone, past its 28 s limit in the suite), and every timed
@@ -79,6 +109,9 @@ for (const r of res.filter(r => r.code)) {
 // the GPU route is due: 5 commits or more since it last passed (run.mjs --gpu)
 { let since = Infinity; try { since = +execSync(`git rev-list --count ${fs.readFileSync(gpuFile, 'utf8').trim()}..HEAD`, { cwd: root }).toString().trim(); } catch (e) { /* expected: no record yet, or one git doesn't know: due */ }
   if (since >= 5) { res.push({ name: 'gpu', code: 1, out: `FAIL the GPU route is due (${since === Infinity ? 'never recorded' : since + ' commits since it last passed'}): node test/run.mjs --gpu` }); console.log(`FAIL gpu       the GPU route is due: node test/run.mjs --gpu`); } }
+// and the other engines: 10 commits or more since they last passed (run.mjs --engines)
+{ let since = Infinity; try { since = +execSync(`git rev-list --count ${fs.readFileSync(enginesFile, 'utf8').trim()}..HEAD`, { cwd: root }).toString().trim(); } catch (e) { /* expected: no record yet, or one git doesn't know: due */ }
+  if (since >= 10) { res.push({ name: 'engines', code: 1, out: `FAIL the other engines are due (${since === Infinity ? 'never recorded' : since + ' commits since they last passed'}): node test/run.mjs --engines` }); console.log(`FAIL engines   WebKit and Firefox are due: node test/run.mjs --engines`); } }
 const bad = res.filter(r => r.code).length;
 console.log(bad ? `\n${bad} failing (${((Date.now() - t0) / 1000).toFixed(0)} s)` : `\nall ok (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
 process.exit(bad ? 1 : 0);

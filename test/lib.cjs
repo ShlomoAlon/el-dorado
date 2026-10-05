@@ -22,6 +22,13 @@ const gpuOn = async (b, o) => { if (!onGpu(o)) return b; const c = await b.newBr
 const chromium = { launch: async (o = {}) => gpuOn(await pw.chromium.launch(argsFor(o)), o),
   launchServer: (o = {}) => pw.chromium.launchServer(argsFor(o)),
   connect: async (ws, o = {}) => gpuOn(await pw.chromium.connect(ws, { timeout: o.timeout }), o) };
+/* the other engines (owner, 2026-10-05: "make sure that we're not having crazy bugs on them all"): the game's tests that use
+   only what every browser has take `browser`, which is Chrome, or with ENGINE=webkit Safari's engine, or ENGINE=firefox
+   Firefox's (Playwright's builds; run.mjs --engines runs them, at least every 10 commits). Tests that read Chrome's own
+   internals (traces, its drawing route, layers) take `chromium`. ENGINE: which one this run is */
+const ENGINE = process.env.ENGINE || 'chromium';
+if (!['chromium', 'webkit', 'firefox'].includes(ENGINE)) throw new Error(`ENGINE is chromium, webkit or firefox, not ${ENGINE}`);
+const browser = ENGINE === 'chromium' ? chromium : { launch: o => pw[ENGINE].launch(o), launchServer: o => pw[ENGINE].launchServer(o), connect: (ws, o = {}) => pw[ENGINE].connect(ws, { timeout: o.timeout }) };
 const http = require('http'), fs = require('fs'), path = require('path'), net = require('net'), os = require('os');
 const { spawn } = require('child_process');
 const ROOT = path.join(__dirname, '..');
@@ -62,6 +69,9 @@ async function startServer() {
    purpose (a regular expression), which only count as page.errors */
 async function openPage(browser, name, opts = {}) {
   const { allow, ...ctxOpts } = opts;
+  // (Firefox: a browser of its own for every page. Its pages share one mouse under Playwright, so a move in one page reached
+  // another as the pointer leaving it, a stale pointerleave a real player's page never gets; 2026-10-05)
+  if (ENGINE === 'firefox') { const own = await pw.firefox.launch(); browser.on('disconnected', () => own.close().catch(() => { /* expected: already closed with the test */ })); browser = own; }
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...ctxOpts }), page = await ctx.newPage();
   page.errors = [];
   let stopping = false;
@@ -109,4 +119,4 @@ function cpuMeter(rootPid) {
   const iv = setInterval(tick, 200);
   return () => { tick(); clearInterval(iv); let t = 0; for (const [p, c] of seen) t += c - (base.get(p) || 0); return t / tck; };
 }
-module.exports = { chromium, serveStatic, startServer, openPage, settle, report, cpuMeter, ROOT };
+module.exports = { chromium, browser, ENGINE, serveStatic, startServer, openPage, settle, report, cpuMeter, ROOT };

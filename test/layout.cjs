@@ -2,11 +2,12 @@
 // and no two controls overlap (the board may sit under things: it pans). Run after any UI change:
 //   NODE_PATH=$(npm root -g) node test/layout.cjs [--quick] [--shots dir]
 // --quick: five sizes (phone portrait and landscape, tablet, laptop, desktop). Sizes run in parallel.
-const { chromium, serveStatic, settle, openPage } = require('./lib.cjs');
+const { browser, serveStatic, settle, openPage } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
 // [width, height, device scale]; [1536, 639, 1.25] is the owner's own screen (Chrome on Windows at 125%): his setup is the test
 const ALL = [[320, 568], [390, 844], [844, 390], [768, 1024], [1024, 700], [1024, 768], [1280, 720], [1366, 768], [1440, 900], [1536, 639, 1.25], [1920, 1080], [2560, 1440]];
-const SIZES = process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1536, 639, 1.25], [1920, 1080]] : ALL;
+// (--desktop: desktop screens only, 1000 wide or more: Firefox's run, owner 2026-10-05)
+const SIZES = (process.argv.includes('--quick') ? [[390, 844], [844, 390], [768, 1024], [1280, 720], [1536, 639, 1.25], [1920, 1080]] : ALL).filter(s => !process.argv.includes('--desktop') || s[0] >= 1000);
 const shots = process.argv.includes('--shots') ? process.argv[process.argv.indexOf('--shots') + 1] : null;
 const log = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/replay.json'), 'utf8'));
 
@@ -59,7 +60,7 @@ const CHECK = () => {
 };
 
 (async () => {
-  const b = await chromium.launch(); let fails = 0, checks = 0;
+  const b = await browser.launch(); let fails = 0, checks = 0;
   // served over http (as on the site), so the page can fetch the AI network (/ai/first.<hash>.bin) for the replay's evaluation
   const srv = await serveStatic(), url = srv.url;
   const one = async ([w, h, dpr = 1]) => {
@@ -125,7 +126,7 @@ const CHECK = () => {
     if (p.errors.length) { fails++; console.log(`FAIL ${name}: ${p.errors[0].split('\n')[0]}`); } await p.close();
   };
   // a few sizes at a time (each page waits on its own animations: parallel pages don't slow each other much)
-  const queue = [...SIZES.map(s => () => one(s)), () => sweep([1000, false]), () => sweep([700, true])];
+  const queue = [...SIZES.map(s => () => one(s)), () => sweep([1000, false]), ...(process.argv.includes('--desktop') ? [] : [() => sweep([700, true])])];
   await Promise.all([...Array(4)].map(async () => { while (queue.length) await queue.shift()(); }));
   await b.close(); srv.close();
   console.log(fails ? `layout: ${fails} failing of ${checks} checks` : `layout ok: ${checks} checks at ${SIZES.length} sizes`);

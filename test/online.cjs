@@ -8,11 +8,11 @@
 //   3b. two games at once: both run to their end side by side, each page hears only its own room
 //   4. room lists (public listed, private not) and quick match (starts when full, or early when everyone asks)
 //   NODE_PATH=$(npm root -g) node test/online.cjs        (or: node test/run.mjs --online)
-const { chromium, startServer, openPage, settle, report } = require('./lib.cjs');
+const { browser, startServer, openPage, settle, report } = require('./lib.cjs');
 const { step } = require('./playstep.cjs');
 const T = report('online');
 (async () => {
-  const srv = await startServer(), b = await chromium.launch(), pages = [];
+  const srv = await startServer(), b = await browser.launch(), pages = [];
   try {
     const open = async name => { const p = await openPage(b, name, { allow: /self-test/ }); pages.push(p); await p.goto(srv.url); await p.waitForFunction(() => window.__ED); return p; };
     // a page whose section is over is closed (its errors are kept in pages): left open, it goes on drawing and slows the rest

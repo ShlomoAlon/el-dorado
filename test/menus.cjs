@@ -4,11 +4,11 @@
 // game the menu shows the game bar, and watching a replay from there keeps the game; the results at the end of a game.
 // (Online menus, the room lobby and signing out: test/online.cjs.)
 //   NODE_PATH=$(npm root -g) node test/menus.cjs
-const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { browser, serveStatic, openPage, settle, report } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
 const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/replay.json'), 'utf8'));
 (async () => {
-  const srv = await serveStatic(), b = await chromium.launch(), p = await openPage(b, 'menus');
+  const srv = await serveStatic(), b = await browser.launch(), p = await openPage(b, 'menus');
   const until = (f, a, ms = 15000) => p.waitForFunction(f, a, { timeout: ms }).then(() => true, () => false);
   const check = async (name, f, a, ms) => T.ok(name, await until(f, a, ms));
   const screen = s => `!document.querySelector('section[data-screen="${s}"]').hidden`;

@@ -4,11 +4,14 @@
 // buttons between them, the screen the menu opens on), Options (sets to flip between), Export (a file). A page without
 // ?edit never fetches it.
 //   NODE_PATH=$(npm root -g) node test/editor.cjs
-const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { browser, serveStatic, openPage, settle, report } = require('./lib.cjs');
 const T = report('editor');
 (async () => {
-  const srv = await serveStatic(), b = await chromium.launch();
-  const p = await openPage(b, 'editor', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'] }); // (Copy flow writes the clipboard; the test reads it back)
+  const srv = await serveStatic(), b = await browser.launch();
+  const p = await openPage(b, 'editor', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25, acceptDownloads: true });
+  // (Copy flow writes the clipboard: what the page writes is kept as it goes through, the real write still made. Reading the
+  // clipboard back needs a permission each engine names its own way, and Firefox grants none)
+  await p.addInitScript(() => { const c = navigator.clipboard, w = c && c.writeText.bind(c); if (w) c.writeText = t => { window.__copied = t; return w(t); }; });
   const answers = []; p.on('dialog', d => d.accept(d.type() === 'prompt' ? answers.shift() || 'title' : undefined));
   // (eight finished games kept on this device, as a player has: Replays' "Your games" is a list long enough to scroll)
   const fx = require('fs').readFileSync(require('path').join(__dirname, 'fixtures/replay.json'), 'utf8');
@@ -137,7 +140,7 @@ const T = report('editor');
   await p.click('#edPanel .ed-node[data-node="results@*"]');
   T.ok('a button that stays on its menu, added and shown under it', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-own')].some(t => /Share the result/.test(t.textContent))));
   await p.click('#edPanel [data-act=fl-copy]'); await p.waitForTimeout(200);
-  const copied = await p.evaluate(() => navigator.clipboard.readText().then(t => t, e => 'unreadable: ' + e.name));
+  const copied = await p.evaluate(() => window.__copied || 'nothing written to the clipboard');
   T.ok('Copy flow: the flow as text, with its notes', /See results/.test(copied) && /note: Try this/.test(copied) && /Main menu/.test(copied) && /button \(stays on this menu\).*Share the result/.test(copied) && /signed in, not hosting the room: "See results"/.test(copied) && /an online room: "Copy the room link"/.test(copied), copied.split('\n').filter(l => /See results|Try this/.test(l)).join(' | ') || copied.slice(0, 300));
   const mb = () => p.evaluate(() => !!document.querySelector('#edPanel .ed-dir[data-menu="results"] .ed-mb'));
   const was = await mb(); await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]'); const now = await mb(); await p.click('#edPanel [data-act=fl-fold][data-v="m:results"]');

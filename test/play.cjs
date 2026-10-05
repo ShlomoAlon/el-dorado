@@ -5,12 +5,13 @@
 // including states no scripted test reaches (moving on with a card's leftover strength, the buy reminder, keeping
 // cards, removal cards, the Transmitter, base camps, game over). Animations run 20x faster (they still run).
 //   NODE_PATH=$(npm root -g) node test/play.cjs [--games n]
-const { chromium, serveStatic, openPage, settle, report, cpuMeter } = require('./lib.cjs');
+const { browser, ENGINE, serveStatic, openPage, settle, report, cpuMeter } = require('./lib.cjs');
 const { step } = require('./playstep.cjs');
 const T = report('play');
 const arg = process.argv.slice(2), GAMES = +(arg[arg.indexOf('--games') + 1] || 0) || 3;
 // the sizes the games are played at: the owner's screen, a phone, a tablet
-const SIZES = [['owner', { width: 1536, height: 639 }, 1.25], ['phone', { width: 390, height: 844 }, 2], ['tablet', { width: 768, height: 1024 }, 1]];
+// (--desktop: the owner's screen only: Firefox's run, owner 2026-10-05: no Firefox for phones)
+const SIZES = [['owner', { width: 1536, height: 639 }, 1.25], ['phone', { width: 390, height: 844 }, 2], ['tablet', { width: 768, height: 1024 }, 1]].filter(s => !process.argv.includes('--desktop') || s[1].width >= 1000);
 // and one game passed around one device: two people (both played here) and an AI, hands hidden until each one's Reveal
 const PASS = ['pass-and-play', { width: 1536, height: 639 }, 1.25, true];
 // the CPU a whole game may use (owner, 2026-10-03: a ratchet on resources): every process of game 1's own browser, from the
@@ -22,15 +23,16 @@ const CPU_MS = 100; // (measured 65 ms with the board's terrain as one image, 20
 
 
 (async () => {
-  const srv = await serveStatic(), b = await chromium.launch(), t0 = Date.now();
+  const srv = await serveStatic(), b = await browser.launch(), t0 = Date.now();
   const games = [...Array.from({ length: GAMES }, (_, g) => SIZES[g % SIZES.length]), PASS];
   const results = await Promise.all(games.map(async ([name, viewport, dpr, pass], g) => {
     // game 1 (the owner's screen) in a browser of its own: the CPU of everything it runs is that one game's
     const at = what => console.log(`     game ${g + 1} (${name}): ${what}, ${((Date.now() - t0) / 1000).toFixed(0)} s`); // (setup's progress: a hang there shows where)
-    const srvB = g === 0 ? await chromium.launchServer() : null; if (srvB) at('its own browser started');
-    const own = srvB && await chromium.connect(srvB.wsEndpoint(), { timeout: 30000 }); if (own) at('connected'); // (a browser server: its process is known)
+    const srvB = g === 0 ? await browser.launchServer() : null; if (srvB) at('its own browser started');
+    const own = srvB && await browser.connect(srvB.wsEndpoint(), { timeout: 30000 }); if (own) at('connected'); // (a browser server: its process is known)
     const p = await openPage(own || b, `game ${g + 1} (${name})`, { viewport, deviceScaleFactor: dpr }); at('page open');
-    const cdp = await p.context().newCDPSession(p); await cdp.send('Animation.enable'); await cdp.send('Animation.setPlaybackRate', { playbackRate: 20 });
+    // (animations 20 times faster: Chrome's own protocol; on the other engines they play at their speed, the games take longer)
+    if (ENGINE === 'chromium') { const cdp = await p.context().newCDPSession(p); await cdp.send('Animation.enable'); await cdp.send('Animation.setPlaybackRate', { playbackRate: 20 }); }
     await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open); at('start screen');
     // (what the page shows if its start screen can't be used: a rare timeout under load, not yet explained)
     const pageState = () => p.evaluate(() => { const d = document.querySelector('#menu'), g = document.querySelector('#sGo'), r = g && g.getBoundingClientRect(), sec = g && g.closest('section');
@@ -70,6 +72,8 @@ const CPU_MS = 100; // (measured 65 ms with the board's terrain as one image, 20
     T.ok(`game ${r.g + 1} (${r.name}): no assertion failed, no page error`, !r.errors.length, r.errors.slice(0, 3).join(' | '));
     // (CPU is time: measured on the software route only; on the GPU route every GPU operation runs on this CPU: lib.cjs)
     if (r.used != null && process.env.GPU === '1') console.log(`     game ${r.g + 1} (${r.name}): CPU not judged on the GPU route (emulated: ${r.used.toFixed(1)} core-s)`);
+    // (the budget is Chrome's, with its animations 20 times faster: the other engines play them at their own speed)
+    else if (r.used != null && ENGINE !== 'chromium') console.log(`     game ${r.g + 1} (${r.name}): CPU not judged on ${ENGINE} (its animations at full length: ${r.used.toFixed(1)} core-s)`);
     else if (r.used != null) T.ok(`game ${r.g + 1} (${r.name}): the whole game's CPU within budget (${CPU_MS} ms per action)`, r.actions > 0 && r.used * 1000 <= CPU_MS * r.actions, `${r.used.toFixed(1)} core-s for ${r.actions} actions: ${(r.used * 1000 / r.actions).toFixed(0)} ms each, budget ${(CPU_MS * r.actions / 1000).toFixed(1)} core-s`);
     console.log(`     did: ${JSON.stringify(r.did)}\n     modes: ${r.modes.join(', ')}\n     buttons: ${r.labels.join(', ')}`);
   }
