@@ -184,11 +184,11 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState!==
   if(!ws){clearTimeout(NET.retryT);connectRoom();return;}
   if(ws.readyState!==1)return;const t=Date.now();ws.send('ping');setTimeout(()=>{if(NET.ws===ws&&NET.heard<t)lostConnection(ws);},5000);});
 function onRoomMsg(m){
-  if(m.t==='error'){diag('server: '+m.err);if(m.n!=null)refused(m.n);NET.busy=false;NET.leaving=false;clearTimeout(NET.busyT);sfx('error');toast(m.err);if(S)render();return;}
+  if(m.t==='error'){diag('server: '+m.err);if(m.n!=null)refused(m.n);NET.busy=false;if(NET.leaving)closeModal();NET.leaving=false;clearTimeout(NET.busyT);sfx('error');toast(m.err);if(S)render();return;}
   if(m.t==='room'){serverRoom(m);if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}if(m.room.status==='lobby')roomScreen();else renderRoomLobby();return;}
   if(m.t==='state'){NET.room=m.room;NET.roomS=m.room;NET.roomPending=[];NET.seat=m.seat;NET.canUndo=!!m.undo;NET.clockEnd=m.left==null?null:Date.now()+m.left;
     serverState(m);
-    if(NET.leaving&&m.S.players[m.seat].resigned){NET.leaving=false;exitOnline();showHub();}} // (left the game: to the Online screen once the server has it)
+    if(NET.leaving&&m.S.players[m.seat].resigned){NET.leaving=false;closeModal();exitOnline();showHub();}} // (left the game: to the Online screen once the server has it)
 }
 /* a state on show (the server's, or ours ahead of it), with the events that led to it */
 function show(S2,ev){
@@ -201,7 +201,10 @@ function show(S2,ev){
 }
 export function resignOnline(){
   modal(`<h2>Leave this game?</h2><p class="sub">${NET.room.opts.rated===false?'Leaving counts as finishing last among the players still racing (this game is unrated).':'Leaving a rated game counts as finishing last among the players still racing. Your rating will drop.'}</p><div class="mrow"><button class="btn" id="rsNo">Stay</button><button class="btn pri" id="rsYes">Leave game</button></div>`,sc=>{
-    sc.querySelector('#rsNo').onclick=closeModal;sc.querySelector('#rsYes').onclick=()=>{NET.leaving=true;netAct({t:'act',a:{t:'resign'}});closeModal();toast('Leaving the game…',2000);};},true);
+    // (the window stays, saying so, until the server has it: then it gives way to the Online screen in the same frame. Closed
+    // at once, the game showed undimmed between the two for as long as the server took: a flash; 2026-10-05)
+    sc.querySelector('#rsNo').onclick=closeModal;sc.querySelector('#rsYes').onclick=e=>{NET.leaving=true;netAct({t:'act',a:{t:'resign'}});
+      e.target.textContent='Leaving…';for(const b of sc.querySelectorAll('.mrow button'))b.disabled=true;};},true);
 }
 export function exitOnline(){NET.code=null;NET.S=null;NET.shown=null;NET.pending=[];leaveRoomSocket();setS(null);setQuery({room:null,replay:null});resetView();}
 
