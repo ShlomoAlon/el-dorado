@@ -6,6 +6,7 @@ import { spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'), arg = process.argv.slice(2), full = arg.includes('--full'), online = full || arg.includes('--online');
 const NODE_PATH = [process.env.NODE_PATH, execSync('npm root -g').toString().trim()].filter(Boolean).join(path.delimiter);
 const t0 = Date.now(); execSync('node build.mjs', { cwd: root, stdio: 'inherit' });
@@ -31,7 +32,13 @@ if (arg.includes('--gpu')) {
   const badG = rs.filter(r => r.code).length; if (!badG) fs.writeFileSync(gpuFile, head() + '\n');
   console.log(badG ? `\n${badG} failing on the GPU route` : `\nall ok on the GPU route (recorded: ${head().slice(0, 7)})`); process.exit(badG ? 1 : 0);
 }
-const res = await Promise.all([
+/* side by side, but never more at once than the machine has cores, the longest first: all ten at once on four cores, each
+   ran two to three times slower than alone (the editor test 9 s alone, past its 28 s limit in the suite), and every timed
+   check inside a test (a fade's 450 ms, the terrain's 8 s, a frame's budget) judged what else happened to be running, not the
+   page. One test per core keeps each near its own pace, so what a test measures is the page */
+const pool = async (jobs, n) => { const out = [], order = jobs.map((j, k) => k).sort((a, b) => jobs[b][2] - jobs[a][2]); let i = 0;
+  await Promise.all(Array.from({ length: n }, async () => { while (i < order.length) { const k = order[i++]; out[k] = await run(jobs[k]); } })); return out; };
+const res = await pool([
   ['lint', 'node test/lint.mjs', 15],
   ['rules', 'node test/rules.test.mjs', 2],
   ['engine', 'node test/engine.test.mjs' + (full ? '' : ' --quick'), full ? 120 : 50],
@@ -43,7 +50,7 @@ const res = await Promise.all([
   ['editor', 'node test/editor.cjs', 15],
   ['worker', 'npx wrangler deploy --dry-run --outdir /tmp/wdry', 20],
   ...(online ? [['online', 'node test/online.cjs', 290]] : []),
-].map(run));
+], os.cpus().length);
 // the timing measurements (frame costs, wheel latency) need a quiet machine: they run once everything else has finished
 res.push(await run(['firstpaint', 'node test/firstpaint.cjs', 12])); // (timed: run alone) the start screen drawn within 100 ms of the HTML arriving
 res.push(await run(['frames', 'node test/frames.cjs', 10]));

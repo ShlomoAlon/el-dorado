@@ -10,7 +10,11 @@ const CATS = ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'dis
 function summary(T) {
   const tasks = T.filter(e => e.name === 'RunTask' && e.dur).map(e => e.dur / 1000), style = T.filter(e => e.name === 'UpdateLayoutTree' && e.dur);
   const anims = T.filter(e => e.name === 'Animation' && e.ph === 'n' && e.args && e.args.data && 'compositeFailed' in e.args.data);
-  return { longest: Math.max(0, ...tasks), styled: Math.max(0, ...style.map(e => (e.args && e.args.elementCount) || 0)), styleMs: style.reduce((a, e) => a + e.dur / 1000, 0),
+  // (what the longest task was made of: its biggest parts, so a failure says what to look at)
+  const L = T.filter(e => e.name === 'RunTask' && e.dur).sort((a, b) => b.dur - a.dur)[0], parts = {};
+  if (L) for (const e of T) if (e !== L && e.tid === L.tid && e.dur && e.ts >= L.ts && e.ts + e.dur <= L.ts + L.dur) parts[e.name] = (parts[e.name] || 0) + e.dur / 1000;
+  const made = Object.entries(parts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `${k} ${v.toFixed(0)}`).join(', ');
+  return { made, longest: Math.max(0, ...tasks), styled: Math.max(0, ...style.map(e => (e.args && e.args.elementCount) || 0)), styleMs: style.reduce((a, e) => a + e.dur / 1000, 0),
     anims: anims.length, notComposited: anims.filter(e => e.args.data.compositeFailed).length };
 }
 (async () => {
@@ -32,7 +36,7 @@ function summary(T) {
   if (!pick) { console.log('FAIL no move found: ' + await p.evaluate(() => JSON.stringify({ mode: window.__ED.UI.mode, cover: window.__ED.UI.cover, act: window.__ED.canAct(), hand: window.__ED.S.players[window.__ED.S.cur].hand.map(id => window.__ED.S.cards[id]) }))); process.exit(1); }
   const sel = await traced('select', `window.__ED.onHandCard(${JSON.stringify(pick.id)})`);
   ok('select a card: no big restyle', sel.styled < 400, `${sel.styled} elements restyled, longest task ${sel.longest.toFixed(0)} ms`);
-  ok('select a card: no long task', sel.longest < 120, `${sel.longest.toFixed(0)} ms (CPU ÷4)`);
+  ok('select a card: no long task', sel.longest < 120, `${sel.longest.toFixed(0)} ms (CPU ÷4)` + (sel.longest >= 120 ? `; made of (ms): ${sel.made}` : ''));
   const mv = await traced('move', `window.__ED.doMove(${JSON.stringify(pick.k)})`, 1400);
   ok('move: no big restyle', mv.styled < 400, `${mv.styled} elements restyled, longest task ${mv.longest.toFixed(0)} ms`);
   ok('move: animations on the compositor', mv.anims >= 3 && mv.notComposited === 0, `${mv.anims} animations, ${mv.notComposited} on the main thread`);
