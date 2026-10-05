@@ -372,17 +372,17 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 /* strength badge, top left: a coin only on coin cards; machete, paddle and joker cards use their own colour and icon */
 .c-pow{position:absolute;left:.1em;top:.1em;width:2.9em;height:2.9em;border-radius:50%;background:var(--pow);box-shadow:0 .12em .3em rgba(0,0,0,.55),inset 0 0 0 .1em var(--powRim);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:3;color:var(--powInk);font-family:var(--display);font-size:1em}
 .c-pow b{font-size:1.45em;font-weight:400;line-height:1;margin-top:-.02em}
-.c-pow svg{width:1em;height:1em;margin-top:.02em;color:var(--powInk)}
+.c-pow img{width:1em;height:1em;margin-top:.02em} /* (drawn in --powInk: cards.js) */
 .k-g{--pow:radial-gradient(circle at 35% 30%,#b8f0c8,#3f9a5c 50%,#1d5233 100%);--powRim:rgba(10,40,20,.6);--powInk:#f4fff6}
 .k-b{--pow:radial-gradient(circle at 35% 30%,#cfeaff,#3a8ad0 50%,#1b4f84 100%);--powRim:rgba(8,30,60,.6);--powInk:#f2f9ff}
 .k-y{--pow:radial-gradient(circle at 35% 30%,#fff3cf,#e9b24a 45%,#9a6414 100%);--powRim:rgba(90,55,5,.6);--powInk:#3a2505}
 .k-x{--pow:radial-gradient(circle at 35% 30%,#ffffff,#e6dcc4 55%,#a8997a 100%);--powRim:rgba(80,70,50,.55);--powInk:#3b3325}
 .c-icons{display:flex;gap:.12em;justify-content:center;flex-wrap:wrap;max-width:100%}
-.c-icons svg{width:1.45em;height:1.45em;color:var(--acc);filter:drop-shadow(0 .06em 0 rgba(0,0,0,.6))}
+.c-icons img{width:1.45em;height:1.45em;filter:drop-shadow(0 .06em 0 rgba(0,0,0,.6))} /* (drawn in --acc: cards.js) */
 .c-txt{font-size:.8em;line-height:1.28;text-align:center;color:#e7e0f3;font-weight:600}
 .c-txt.long{font-size:.64em;line-height:1.22;margin-top:-.25em}
 .c-icons.many{gap:.04em;flex-wrap:nowrap}
-.c-icons.many svg{width:1.08em;height:1.08em}
+.c-icons.many img{width:1.08em;height:1.08em}
 .c-sub{font-size:.72em;color:rgba(255,255,255,.6);margin-top:.35em;letter-spacing:.06em;text-transform:uppercase;font-weight:700;text-align:center}
 .c-foot{position:absolute;left:.5em;right:.5em;bottom:.45em;display:flex;align-items:center;justify-content:space-between}
 .c-cost{display:inline-flex;align-items:center;justify-content:center;width:1.9em;height:1.9em;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffeeb8,#e0a53a 55%,#9a6414);color:#3a2505;font-weight:800;font-size:.9em;box-shadow:0 .08em .2em rgba(0,0,0,.6),inset 0 0 0 .08em rgba(90,55,5,.5)}

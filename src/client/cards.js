@@ -4,7 +4,6 @@ import { esc, spriteDefs } from './dom.js';
 import { cardBg } from './art.js';
 import { CHECKS } from './debug.js';
 import { afterDrawn } from './frame.js';
-function icon(sym,cls){return `<svg class="${cls||''}" viewBox="-10 -10 20 20"><use href="#i-${sym==='*'?'x':sym}" x="-10" y="-10" width="20" height="20"/></svg>`;}
 const GLYPH={
  transmitter:`<g stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"><path d="M0 -4 L-6 10 M0 -4 L6 10 M-3.6 4 H3.6 M-4.8 7 H4.8"/><path d="M-4.5 -8 Q-7 -4 -4.5 0 M4.5 -8 Q7 -4 4.5 0 M-8 -10.5 Q-12 -4 -8 2.5 M8 -10.5 Q12 -4 8 2.5"/></g><circle cy="-4" r="1.8" fill="#fff"/>`,
  cartographer:`<path d="M-10 -7 L-3.5 -9.5 L3.5 -7 L10 -9.5 V7 L3.5 9.5 L-3.5 7 L-10 9.5Z" fill="#f4e7c3" stroke="#6b4c1a" stroke-width=".8"/><path d="M-3.5 -9.5 V7 M3.5 -7 V9.5" stroke="#6b4c1a" stroke-width=".7"/><path d="M-7 3 Q-4 -3 0 0 T7 -4" stroke="#b33" stroke-width="1.1" fill="none" stroke-dasharray="1.6 1.2"/><path d="M5.5 -5.5 l2.4 2.4 M7.9 -5.5 l-2.4 2.4" stroke="#b33" stroke-width="1.1"/>`,
@@ -26,19 +25,42 @@ function cardArt(t){
    so a card never shows without its art */
 const ART = new Map(), artImgs = [];
 const artUrl = t => { let u = ART.get(t); if (!u) { u = URL.createObjectURL(new Blob([cardArt(t)], { type: 'image/svg+xml' })); ART.set(t, u); } return u; };
-export function artLoad() { for (const t of Object.keys(CT)) { const i = new Image(); i.src = artUrl(t); artImgs.push(i); } return Promise.all(artImgs.map(i => i.decode())); }
-const CARD_MAX = 26; // (the largest card face, a 5-icon card: 26; a card type's face is fixed, so any growth is a change of design)
+/* a card's symbols too (its row of icons, the one in its power badge): an icon drawn as live SVG was an <svg> and a <use>
+   whose symbol the browser copies into the card, laid out again in every card that appeared (a dealt hand: 4-16 ms of a
+   frame's layout; 2026-10-05). Each symbol is an image per colour it is drawn in, the colours read from the theme (a kind's
+   --acc for its row, --powInk for its badge) once, at start */
+const INK = new Map(), ICON = new Map();
+const ink = (kind, v) => INK.get(kind + v);
+function readInks() {
+  const box = document.createElement('div'); box.style.cssText = 'position:absolute;visibility:hidden'; document.body.append(box);
+  // (purple cards have no symbols)
+  for (const k of new Set(Object.values(CT).filter(d => d.c !== 'p').map(d => d.c))) { const e = document.createElement('div'); e.className = 'cface k-' + k; box.append(e); const s = getComputedStyle(e);
+    for (const v of ['--acc', '--powInk']) { const c = s.getPropertyValue(v).trim(); assert(c, `view: a card kind's colours are in the theme (${k} ${v})`); INK.set(k + v, c); } }
+  box.remove();
+}
+const iconUrl = (sym, color) => { const key = sym + color; let u = ICON.get(key); if (!u) {
+  const def = new XMLSerializer().serializeToString(document.querySelector(`body > svg defs #i-${sym}`));
+  u = URL.createObjectURL(new Blob([`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 20 20" style="color:${color}"><defs>${def}</defs><use href="#i-${sym}" x="-10" y="-10" width="20" height="20"/></svg>`], { type: 'image/svg+xml' })); ICON.set(key, u); }
+  return u; };
+const icon = (s, color) => `<img src="${iconUrl(s === '*' ? 'x' : s, color)}" alt="" draggable="false">`;
+export function artLoad() { readInks();
+  for (const t of Object.keys(CT)) { const i = new Image(); i.src = artUrl(t); artImgs.push(i); const d = CT[t]; if (d.c === 'p') continue;
+    for (const c of [ink(d.c, '--acc'), ink(d.c, '--powInk')]) { const j = new Image(); j.src = iconUrl(d.s === '*' ? 'x' : d.s, c); artImgs.push(j); } }
+  return Promise.all(artImgs.map(i => i.decode())); }
+const CARD_MAX = 20; // (the largest card face, a 5-icon card: 20; a card type's face is fixed, so any growth is a change of design)
 let artChecked = false;
 // (checks: every card art shown is loaded: a card never appears without its art, filled in a frame later)
-function checkArt() { artChecked = false; for (const i of document.querySelectorAll('.c-art img')) if (i.checkVisibility({ visibilityProperty: true, opacityProperty: true })) assert(i.complete && i.naturalWidth > 0, 'view: a card\'s art is loaded before the card shows'); }
+function checkArt() { artChecked = false; for (const i of document.querySelectorAll('.cface img')) if (i.checkVisibility({ visibilityProperty: true, opacityProperty: true })) assert(i.complete && i.naturalWidth > 0, 'view: a card\'s pictures (its art, its symbols) are loaded before the card shows'); }
 export function cardHTML(t){
   const d=CT[t];let body;
   if(d.c==='p'){const f=d.face||d.txt;body=`<div class="c-txt${f.length>16?' long':''}">${esc(f)}</div>`;}
-  else{const sym=d.s==='*'?'*':d.s;body=`<div class="c-icons${d.p>=5?' many':''}">${icon(sym).repeat(d.p)}</div><div class="c-sub">${d.s==='*'?'Any one symbol':plural(d.p,SYMNAME[d.s])}</div>`;}
-  const pow=d.c!=='p'?`<div class="c-pow"><b>${d.p}</b>${icon(d.s)}</div>`:'';
+  else body=`<div class="c-icons${d.p>=5?' many':''}">${icon(d.s,ink(d.c,'--acc')).repeat(d.p)}</div><div class="c-sub">${d.s==='*'?'Any one symbol':plural(d.p,SYMNAME[d.s])}</div>`;
+  const pow=d.c!=='p'?`<div class="c-pow"><b>${d.p}</b>${icon(d.s,ink(d.c,'--powInk'))}</div>`:'';
   const foot=`<div class="c-foot">${d.cost!=null?`<span class="c-cost">${d.cost}</span>`:'<span></span>'}${d.once?'<span class="c-once">Single use</span>':''}</div>`;
   const html = `<div class="cface k-${d.c}"><div class="c-art"><img src="${artUrl(t)}" alt="" draggable="false"></div>${pow}<div class="c-title">${esc(d.n)}</div><div class="c-body">${body}</div>${foot}</div>`;
-  if (CHECKS) { assert((html.match(/<[a-z]/g) || []).length <= CARD_MAX, `view: a card face is a few elements, its art one image drawn once per card type (${t})`); if (!artChecked) { artChecked = true; afterDrawn(checkArt); } }
+  if (CHECKS) { assert((html.match(/<[a-z]/g) || []).length <= CARD_MAX, `view: a card face is a few elements, its art one image drawn once per card type (${t})`);
+    assert(!/<svg|<use/.test(html), `view: a card face's pictures (its art, its symbols) are images drawn once, never live SVG laid out in every card (${t})`);
+    if (!artChecked) { artChecked = true; afterDrawn(checkArt); } }
   return html;
 }
 export function cardTitle(t){const d=CT[t];let s=d.n;if(d.c!=='p')s+=` — ${d.p} ${d.s==='*'?'joker (machete, paddle or coin)':SYMNAME[d.s]}`;else s+=' — '+d.txt;if(d.once)s+=' Single use: removed from the game after its effect.';if(d.cost!=null)s+=` Cost ${d.cost}.`;return s;}

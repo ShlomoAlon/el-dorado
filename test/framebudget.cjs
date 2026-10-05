@@ -24,7 +24,7 @@ const DETAIL = arg.includes('--detail'); // (each task over budget broken down: 
   await ph.goto(srv.url); await ph.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
   await ph.click('#sGo'); await ph.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(ph);
   const trace = path.join(os.tmpdir(), 'framebudget-' + process.pid + '.json');
-  await b.startTracing(p, { path: trace, categories: ['toplevel', 'blink.user_timing', 'devtools.timeline', ...(DETAIL ? ['disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.stack'] : [])] });
+  await b.startTracing(p, { path: trace, categories: ['toplevel', 'blink.user_timing', 'devtools.timeline', ...(DETAIL ? ['disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.stack', 'disabled-by-default-v8.cpu_profiler', 'disabled-by-default-devtools.timeline.invalidationTracking'] : [])] });
   const mark = label => p.evaluate(l => performance.mark(l), label);
   // an overlay opened and closed as a player would, its entrance and exit judged with everything else
   const overlays = [['menu', '#menuBtn', '#sBack'], ['rules', '#rulesBtn', '#rClose'], ['a player\'s cards', '#players .pchip:nth-child(2)', '#pClose']];
@@ -77,6 +77,14 @@ const DETAIL = arg.includes('--detail'); // (each task over budget broken down: 
     const mine = []; let end = -1; for (const e of all) if (e.ts >= end) { mine.push(e); end = e.ts + e.dur; } tasks.push(...mine);
     const pageOver = mine.filter(e => e.dur / 1000 > BUDGET).map(e => ({ ms: e.dur / 1000, at: labelAt(e.ts), e })); over.push(...pageOver);
     if (DETAIL) { const inner = list.filter(e => e.pid === pid && e.tid === tid && e.ph === 'X' && e.dur);
+      // (the CPU sampler's stacks: each sample's time, and the innermost page function on its stack, with the one that called it)
+      // (the main thread's profile only: a worker's (the AI's) is a profile of its own, its chunks under its own id)
+      const nodes = new Map(), samples = [], prof = list.find(e => e.pid === pid && e.tid === tid && e.name === 'Profile'); let st = prof ? prof.args.data.startTime : 0;
+      for (const e of list) if (prof && e.pid === pid && e.name === 'ProfileChunk' && e.id === prof.id) { const d = e.args.data, cp = d.cpuProfile || {};
+        for (const n of cp.nodes || []) nodes.set(n.id, n);
+        (cp.samples || []).forEach((id, i) => { st += (d.timeDeltas || [])[i] || 0; samples.push([st, id]); }); }
+      const fnAt = id => { const chain = []; for (let n = nodes.get(id); n; n = nodes.get(n.parent)) { const f = n.callFrame; if (f && /app\./.test(f.url || '')) chain.push((f.functionName || '?') + ':' + f.lineNumber + ':' + f.columnNumber); if (chain.length === 2) break; } if (!chain.length) { const n = nodes.get(id), f = n && n.callFrame; return 'not the page: ' + (f ? (f.functionName || '(anon)') + ' ' + (f.url || '').slice(-40) : '?'); } return chain.join(' < '); };
+      var sampled = t => { const by = {}; let n = 0; for (const [ts, id] of samples) if (ts >= t.ts && ts <= t.ts + t.dur) { n++; const k = fnAt(id); by[k] = (by[k] || 0) + 1; } return n ? Object.entries(by).sort((a, c) => c[1] - a[1]).slice(0, 4).map(([k, v]) => `${k} ${Math.round(100 * v / n)}%`).join(', ') : 'no samples'; };
       const KIND = { FunctionCall: 'script', EvaluateScript: 'script', TimerFire: 'script', FireAnimationFrame: 'script', EventDispatch: 'script', UpdateLayoutTree: 'style', Layout: 'layout', Paint: 'paint', PrePaint: 'paint', Layerize: 'paint', 'Commit': 'paint' };
       for (const o of pageOver) { const t = o.e, sum = {}; let fn = null;
         for (const e of inner) { if (e === t || e.ts < t.ts || e.ts + e.dur > t.ts + t.dur) continue; const k = KIND[e.name]; if (!k) continue;
@@ -84,6 +92,13 @@ const DETAIL = arg.includes('--detail'); // (each task over budget broken down: 
           if (k !== 'script' || !['FunctionCall', 'EventDispatch'].includes(e.name) || !sum.script) sum[k] = (sum[k] || 0) + e.dur / 1000; }
         const lays = inner.filter(e => e.name === 'Layout' && e.ts >= t.ts && e.ts + e.dur <= t.ts + t.dur).map(e => { const bd = e.args && e.args.beginData || {}; const st = (bd.stackTrace || [])[0]; return `${(e.dur / 1000).toFixed(1)} ms, ${bd.dirtyObjects}/${bd.totalObjects} objects${bd.partialLayout ? ' (partial)' : ''}${st ? ' forced by ' + st.functionName + ' ' + (st.url || '').split('/').pop() + ':' + st.lineNumber + ':' + st.columnNumber : ''}`; });
         if (lays.length) console.log('       layouts: ' + lays.join('; '));
+        // (and everything it was made of, by name: the kinds above leave out the compositor's commit, rasters, uploads)
+        const made = {}; for (const e of inner) if (e !== t && e.ts >= t.ts && e.ts + e.dur <= t.ts + t.dur && !/RunTask$/.test(e.name)) made[e.name] = (made[e.name] || 0) + e.dur / 1000;
+        console.log('       made of (ms): ' + Object.entries(made).sort((a, c) => c[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} ${v.toFixed(1)}`).join(', '));
+        console.log('       sampled: ' + sampled(t));
+        // (what made the layout dirty in it: each element invalidated, and why)
+        const inv = {}; for (const e of list) if (e.pid === pid && e.name === 'LayoutInvalidationTracking' && e.ts >= t.ts - 20000 && e.ts <= t.ts + t.dur) { const d = e.args.data || {}; const k = (d.nodeName || '?').slice(0, 50) + ' (' + d.reason + ')'; inv[k] = (inv[k] || 0) + 1; }
+        console.log('       layout dirtied by: ' + (Object.entries(inv).sort((a, c) => c[1] - a[1]).slice(0, 6).map(([k, v]) => `${k} ×${v}`).join(', ') || 'nothing tracked'));
         console.log(`     ${o.ms.toFixed(1)} ms at "${o.at}": ` + Object.entries(sum).map(([k, v]) => k + ' ' + v.toFixed(1)).join(', ') + (fn ? ` (slowest function ${fn.name}, ${(fn.dur / 1000).toFixed(1)} ms)` : '')); } }
 
   }
