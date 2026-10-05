@@ -240,6 +240,11 @@ Follow these in new code and fix toward them:
   and writes only what changed. Never read layout while updating (sizes come from `geometry.js`; measuring after an update
   goes in `after()`). Never set a CSS variable on `#app` or use `:has()` on it at runtime: either restyles all ~3,800 board
   elements (set it on the element that uses it). `test/frames.cjs` checks this.
+- Sharp at rest (owner, 2026-10-05: zero tolerance, except while something moves): whatever holds text over the board is a
+  surface (`.surf`, or the same rules in its own CSS): solid background and border, no shadow outside it (a window's frame,
+  `.mframe`, draws one behind), a layer of its own (a 3D transform); nothing above text is faded, filtered or will-change
+  (dim a disabled control by its colours). Chrome draws text in any other layer over the board grey-smoothed: fuzzy at 1080p.
+  `sharp.js` checks it at rest in every test and in players' browsers; `test/sharp.cjs` checks the pixels.
 - Respect `prefers-reduced-motion`. Keep it working at 390 px wide (phone) and 1440 px.
 - Menus (start screen, Online, room lobby, Replays) are one native `<dialog id="menu">` in shell.html: every screen is
   written there once and shown with `hidden`; choices are native radios/selects/checkboxes (the browser keeps their state,

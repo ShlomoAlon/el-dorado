@@ -4,7 +4,8 @@
 /* the start screen's CSS: inline in the page (build.mjs), so the menu paints from the first ~14 KB */
 :root{
   color-scheme:dark;
-  --bg:#0a1310; --glass:rgba(12,21,18,.9); --glass2:rgba(22,34,29,.92); --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+  --bg:#0a1310; --surf:#0d1613; --surf2:#17231e; --edge:#2f3734; --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+  /* (--surf, --surf2, --edge: what floats over the board is solid, its border too: see .surf) */
   --text:#ecf1ec; --muted:#98aa9f; --faint:#62756a;
   --gold:#e9b24a; --gold2:#f8dc97; --goldInk:#3a2807; --danger:#e8634f;
   /* the menu and anything shown before the game uses the device's own fonts: nothing to download, drawn at once, the
@@ -21,7 +22,11 @@ html,body{overflow:clip;overscroll-behavior:none}
 
 /* ---------- HUD */
 /* no backdrop-filter on anything that floats over the board: a live blur is recomputed every frame the board moves */
-.glass{background:var(--glass);border:1px solid var(--line2);box-shadow:0 10px 30px rgba(0,0,0,.35)}
+/* a surface over the board: solid, its border too, no shadow, a layer of its own (translateZ). Over the board (always GPU
+   layers) Chrome puts whatever is drawn in layers of its choosing; text in one that is see-through, shadowed or shared is
+   drawn grey-smoothed instead of sub-pixel: fuzzy on a 1080p screen (owner, 2026-10-05). Checked at rest: sharp.js; the
+   pixels: test/sharp.cjs */
+.surf{background:var(--surf);border:1px solid var(--edge);transform:translateZ(0)}
 .tbtn:focus-visible,.btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .note{font-size:11.5px;color:var(--muted);margin:8px 0 0;line-height:1.4}
 /* journal (game log): its own HUD button opens it; it stays live while open. No backdrop blur: the board may move under it */
@@ -29,7 +34,7 @@ html,body{overflow:clip;overscroll-behavior:none}
 #dim{position:fixed;inset:0;z-index:49;background:rgba(4,8,7,.74);pointer-events:none;opacity:0;transition:opacity .2s}#dim.on{opacity:1}html.resume #dim{opacity:0}@media (prefers-reduced-motion:reduce){#dim{transition:none}} /* the one layer that dims the game under the menu and every window (dialogs.js coverPart): one overlay replacing another never shows the game bare */
 #menu{position:fixed;inset:0;margin:0;z-index:60;padding:0;border:0;background:transparent;max-width:none;max-height:none;width:100%;height:100%;display:none;place-items:center;color:var(--text);overflow:hidden}
 html.resume #menu{display:none} /* a saved game or a link is about to open: no start screen first (ui_menu.js removes the class) */
-#menu[open]{display:grid} /* (no fade or slide: the start screen is there, whole, in the first frame; owner, 2026-10-01) */
+#menu[open]{display:grid;grid-template:100%/100%} /* (one cell, the whole dialog: the frame's height in % is of the screen, not of its own content) */ /* (no fade or slide: the start screen is there, whole, in the first frame; owner, 2026-10-01) */
 #menu::backdrop{background:transparent} /* the tint is the dialog itself: the same before the script (open, not modal) and after */
 [hidden]{display:none!important} /* hidden always means hidden: no display rule may override it (one rule, not one per element) */
 #menu .modal:focus{outline:none}
@@ -54,7 +59,8 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .seatrow.open{border-style:dashed;background:none}.seatrow.open .note{opacity:.7}
 .seatrow>span{display:flex;align-items:center;gap:9px;min-width:0}.seatrow i{width:13px;height:13px;border-radius:50%;display:inline-block;flex:none}
 /* the menu panel: one size for every menu screen, the contents scroll inside it */
-.modal.menu{animation:none;width:min(620px,calc(100% - 32px));height:min(860px,calc(100% - 32px));box-sizing:border-box;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.mframe.mmenu{animation:none;width:min(620px,calc(100% - 32px));height:min(860px,calc(100% - 32px));max-height:none}
+.modal.menu{overflow-y:scroll;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent} /* (its scrollbar always there: the content's width never changes as it grows. Not scrollbar-gutter:stable, under which Chrome draws every menu's text without sub-pixel smoothing, fuzzy on a 1080p screen: test/sharp.cjs) */
 .modal.menu::-webkit-scrollbar{width:8px}.modal.menu::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
 .seg.modes{margin:0 0 14px;display:grid;grid-template-columns:repeat(3,1fr);text-align:center}.seg.modes label{padding-inline:4px;white-space:nowrap}
 .lbn{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;text-align:left}.lbn:hover{text-decoration:underline}
@@ -65,13 +71,17 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .pst b{font-size:17px;color:var(--gold2);font-variant-numeric:tabular-nums}.pst span{font-size:11px;color:var(--muted)}
 .plc{color:var(--muted)}.plc.p1{color:var(--gold2)}
 .gsiSm{min-height:32px;margin-left:auto}
-.btn{border:1px solid var(--line2);background:var(--glass);border-radius:12px;padding:9px 16px;font-weight:800;font-size:13.5px;cursor:pointer;transition:background .15s,border-color .15s,opacity .15s,transform .12s;white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.35)}
-.btn:hover{background:var(--glass2)}
+.btn{border:1px solid var(--line2);background:var(--surf);border-radius:12px;padding:9px 16px;font-weight:800;font-size:13.5px;cursor:pointer;transition:background .15s,border-color .15s,opacity .15s,transform .12s;white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.btn:hover{background:var(--surf2)}
 .btn:active{transform:translateY(1px)}
-.btn.pri{background:linear-gradient(#f3c461,#d99a2b);border-color:#f5cf7c;color:var(--goldInk);box-shadow:0 0 0 1px rgba(0,0,0,.3),0 8px 24px rgba(233,178,74,.3)}
-.btn.pri:hover{background:linear-gradient(#f8d27a,#e2a638)}
+.btn.pri{background:#e6ac3f linear-gradient(#f3c461,#d99a2b);border-color:#f5cf7c;color:var(--goldInk);box-shadow:0 0 0 1px rgba(0,0,0,.3),0 8px 24px rgba(233,178,74,.3)}
+.btn.pri:hover{background:#edb44c linear-gradient(#f8d27a,#e2a638)}
 .btn.big{font-size:15px;padding:12px 22px;border-radius:14px}
-.modal{background:#121d19;border:1px solid var(--line2);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.6);width:min(580px,calc(100% - 52px));max-height:calc(100% - 32px);overflow:auto;padding:26px;animation:rise .35s var(--ease)}
+/* a window: its frame (.mframe) draws the rounded edge and the shadow, and the window inside is a square, solid layer of its own:
+   rounded or shadowed, the layer its text is in is partly see-through, and Chrome draws that text grey-smoothed (.surf).
+   1 + 6 + 20 px from the frame's edge to the text: the 1 + 26 of a window with its own edge */
+.mframe{background:#121d19;border:1px solid var(--edge);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.6);box-sizing:border-box;width:calc(min(580px,100% - 52px) + 54px);max-height:calc(100% + 22px);padding:6px;display:flex;animation:rise .35s var(--ease)}
+.modal{background:#121d19;flex:1 1 auto;min-width:0;min-height:0;box-sizing:border-box;overflow:auto;padding:20px;transform:translateZ(0)}
 .modal h2{font-family:var(--display);font-weight:400;font-size:28px;margin:0 0 4px;color:var(--gold2);text-wrap:balance}
 .modal .sub{color:var(--muted);margin:0 0 20px;font-size:14px;line-height:1.45}
 .field{margin:0 0 18px}
@@ -126,10 +136,10 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .mrow{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
 /* a menu screen's actions keep their place at the menu's bottom edge, the content scrolling above them (a short window
    never puts Start out of reach) */
-.modal.menu>section>.mrow{position:sticky;bottom:-26px;z-index:3;margin:22px -26px -26px;padding:14px 26px 26px;background:#121d19;border-top:1px solid var(--line)}
+.modal.menu>section>.mrow{position:sticky;bottom:-20px;z-index:3;margin:22px -20px -20px;padding:14px 20px 20px;background:#121d19;border-top:1px solid var(--line)}
 .routeInfo{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5}
 .routeInfo b{color:var(--text)}
-#toast{position:fixed;left:50%;top:112px;transform:translateX(-50%);padding:9px 16px;border-radius:11px;font-size:13.5px;z-index:45;pointer-events:none;opacity:0;transition:opacity .2s,transform .25s var(--ease)}
+#toast{position:fixed;left:50%;top:112px;transform:translate3d(-50%,0,0);padding:9px 16px;border-radius:11px;font-size:13.5px;z-index:45;pointer-events:none;opacity:0;transition:opacity .2s,transform .25s var(--ease)}
 @container game (max-width:600px){
   .btn.big{font-size:14px;padding:10px 16px}
 }
@@ -177,7 +187,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .dpips{position:absolute;left:0;top:0;display:flex;gap:6.6px;padding:7.6px 7px;border-radius:14px;background:#0b120f;border:1.5px solid #d8dcd6}
 .dpips i{width:12.8px;height:12.8px;border-radius:50%;box-sizing:border-box;border:2px solid #d8dcd6}.dpips i.on{background:#eef2ec}
 .dpips.camp{border-color:#e08a74}.dpips.camp i{border-color:#e08a74}.dpips.camp i.on{background:#e08a74}
-#tip{position:absolute;pointer-events:none;background:rgba(8,14,12,.95);border:1px solid var(--line2);border-radius:9px;padding:6px 10px;font-size:12.5px;white-space:nowrap;opacity:0;transform:translate(-50%,-135%);transition:opacity .12s;z-index:3;box-shadow:0 8px 20px rgba(0,0,0,.4)}
+#tip{position:absolute;pointer-events:none;background:#090f0d;border:1px solid var(--edge);border-radius:9px;padding:6px 10px;font-size:12.5px;white-space:nowrap;opacity:0;transform:translate3d(-50%,-135%,0);transition:opacity .12s;z-index:3}
 #tip b{color:var(--gold2)}
 #hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:12px 16px;pointer-events:none;z-index:20;--hudH:38px} /* every HUD item is --hudH tall, centred on one line */
 #hud>*{pointer-events:auto}
@@ -189,7 +199,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @container players (max-width:560px){.pchip .st{display:none}}
 @container players (max-width:380px){.pchip .aitag{display:none}.pchip{gap:6px;padding:0 9px 0 7px}}
 .pchip{display:flex;align-items:center;gap:8px;padding:0 11px 0 8px;height:var(--hudH);box-sizing:border-box;flex:0 1 auto;min-width:0;border-radius:12px;white-space:nowrap;font-size:13px;transition:border-color .3s,box-shadow .3s,transform .3s var(--ease)}
-.pchip.on{border-color:var(--pc);box-shadow:0 0 0 1px var(--pc) inset,0 10px 30px rgba(0,0,0,.35)}
+.pchip.on{border-color:var(--pc);box-shadow:0 0 0 1px var(--pc) inset}
 .pchip .dot{width:14px;height:14px;border-radius:50%;background:var(--pc);box-shadow:0 0 0 2px rgba(0,0,0,.45) inset}
 .pchip>*{flex:none}.pchip .nm{font-weight:700;flex:0 1 auto;min-width:1.5em;overflow:hidden;text-overflow:ellipsis} /* short of room, chips shrink: the name gives way (never a chip cut in half) */
 .pchip .st{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
@@ -199,7 +209,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .pchip .fin.off,#roundLbl .fl.off{visibility:hidden}
 .hbtns{display:flex;gap:8px}
 .tbtn{border-radius:11px;padding:0 13px;height:var(--hudH);box-sizing:border-box;display:inline-flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
-.tbtn:hover{background:var(--glass2)}
+.tbtn:hover{background:var(--surf2)}
 .tbtn.on{border-color:var(--gold);color:var(--gold2)}
 .tbtn.ico{padding:0 10px;display:inline-grid;place-items:center}
 .tbtn.ico svg{display:block}
@@ -246,7 +256,6 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #mkt{position:absolute;right:var(--mktR);top:var(--row2,64px);z-index:16;transition:transform .35s var(--ease),opacity .25s}
 #mkt.hid{transform:translateX(30px);opacity:0;pointer-events:none}
 #market{display:grid;grid-template-columns:repeat(2,var(--mw));gap:10px 8px}
-#mkt .mslot{filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
 #mkt .mslot>.face{transform-origin:100% 0} /* (a card under the pointer grows down and to the left, over the board: never up into the top bar) */
 #mkt.row .mslot:first-child>.face{transform-origin:0 0} /* (a market in one row: its first card is beside the prompt, so it grows right, over the other cards) */
 #mkt .mslot:hover{z-index:6}#mkt .mslot:hover>.face{transform:scale(1.9)}
@@ -258,18 +267,18 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .mslot.can .cface{box-shadow:0 0 0 2px #8fe3a8,0 .25em .6em rgba(0,0,0,.45)}
 .mslot.can>.face::after{content:'Can buy';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);background:#8fe3a8;color:#0d2a18;font-size:9.5px;font-weight:800;letter-spacing:.04em;padding:1px 7px;border-radius:9px;white-space:nowrap;z-index:4;pointer-events:none}
 .mslot.chosen .cface{box-shadow:0 0 0 2px var(--gold2),0 0 20px rgba(233,178,74,.5)}
-.mslot.empty{border:1.5px dashed var(--line2);border-radius:9px;display:grid;place-items:center;color:var(--faint);font-size:10.5px;text-align:center;cursor:default;line-height:1.3;background:rgba(8,14,12,.45)}
-.alltile{width:var(--mw);height:calc(var(--mw)*1.4);box-sizing:border-box;border-radius:9px;border:1.5px solid var(--line2);background:rgba(10,18,15,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--text);font:800 12px var(--ui);cursor:pointer;text-align:center;line-height:1.2;padding:4px;position:relative;transition:border-color .15s,background .15s}
-.alltile:hover{border-color:var(--gold);background:rgba(20,32,27,.78)}
+.mslot.empty{border:1.5px dashed var(--edge);border-radius:9px;display:grid;place-items:center;color:var(--faint);font-size:10.5px;text-align:center;cursor:default;line-height:1.3;background:#0f1a15;transform:translateZ(0)}
+.alltile{width:var(--mw);height:calc(var(--mw)*1.4);box-sizing:border-box;border-radius:9px;border:1.5px solid var(--edge);background:var(--surf);transform:translateZ(0);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--text);font:800 12px var(--ui);cursor:pointer;text-align:center;line-height:1.2;padding:4px;position:relative;transition:border-color .15s,background .15s}
+.alltile:hover{border-color:var(--gold);background:var(--surf2)}
 .alltile svg{width:26px;height:26px;color:var(--gold2)}
 .alltile small{font-weight:600;color:var(--muted);font-size:10px}
 .alltile.open small{color:var(--gold2)}
 .alltile.can{border-color:#8fe3a8}
 .alltile.can small{color:#8fe3a8}
-#mktBtn.canbuy{box-shadow:0 0 0 1.5px #8fe3a8}
+#mktBtn.canbuy{border-color:#8fe3a8;box-shadow:0 0 0 .5px #8fe3a8 inset}
 .mcard{--cw:86px;position:relative;width:var(--cw);height:calc(var(--cw)*1.4);font-size:calc(var(--cw)*.1)}
-.cnt{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;border-radius:11px;background:#0a1210;border:1px solid var(--line2);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;font-variant-numeric:tabular-nums;z-index:4}
-#allc{position:absolute;inset:0;z-index:40;background:rgba(4,9,7,.86);overflow-y:auto;overscroll-behavior:contain;animation:fade .2s}
+.cnt{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;border-radius:11px;background:#0a1210;border:1px solid var(--edge);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;font-variant-numeric:tabular-nums;z-index:4;transform:translateZ(0)}
+#allc{position:absolute;inset:0;z-index:40;background:#050a08;transform:translateZ(0);overflow-y:auto;overscroll-behavior:contain;animation:fade .2s}
 .allc-in{--allTop:64px;max-width:1080px;margin:0 auto;padding:0 20px 40px} /* (--allTop: the top bar's band, which the heading covers) */
 .allc-sect{margin-top:18px}
 .allc-sect h3,.allc-head h2{font-family:var(--display);font-weight:400;display:flex;align-items:baseline;gap:12px;margin:0 0 14px;color:var(--gold2)}
@@ -277,7 +286,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .allc-sect h3{font-size:18px;color:var(--text)}
 .allc-sect h3 span,.allc-head span{font-family:var(--ui);font-size:10.5px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
 .agrid{display:flex;flex-wrap:wrap;gap:22px 16px;--mw:112px}
-.agrid .mslot{filter:drop-shadow(0 8px 14px rgba(0,0,0,.5));animation:rise .3s var(--ease) backwards}
+.agrid .mslot{animation:rise .3s var(--ease) backwards}
 .agrid .mslot:hover>.face{transform:translateY(-4px)}
 /* the overlay's close button is in its own heading row (never over the top bar's controls), which stays in view below the
    top bar while the lists scroll */
@@ -307,8 +316,11 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #actBtns{position:absolute;right:16px;bottom:calc(16px + 104px + 34px);z-index:13;pointer-events:none;display:grid;grid-template-columns:repeat(2,minmax(0,var(--bslotW,88px)));grid-template-areas:'s2 s3' 'p p';gap:8px} /* fixed slots (hud.js btnWire); Undo's slot (s3) is on the right, above End turn's edge, since it's the button most often alone */
 .bslot{pointer-events:auto} /* (the area keeps its size empty: only its buttons take a tap) */
 .bslot.s3{grid-area:s3}.bslot.s2{grid-area:s2}.bslot.p{grid-area:p}.bslot{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bslot:not(.p){padding-inline:10px}.bslot.off{visibility:hidden;transition:none}.bslot.p{padding-block:9px} /* (the big one: as tall as the others; its words fit, hud.js checkLabels) */
-.btn[disabled]{opacity:.35;pointer-events:none}
-#playLbl{position:absolute;right:0;top:0;z-index:11;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);pointer-events:none;transition:opacity .2s}
+/* (a disabled button is dimmed by its colours, never faded: text under an opacity is never drawn sub-pixel) */
+.btn[disabled]{pointer-events:none;color:color-mix(in srgb,var(--text) 35%,var(--surf));background:var(--surf);border-color:color-mix(in srgb,#fff 5%,var(--surf));box-shadow:none}
+.btn.pri[disabled]{color:color-mix(in srgb,var(--goldInk) 35%,var(--surf));background:color-mix(in srgb,#e6ac3f 35%,var(--surf));border-color:color-mix(in srgb,#f5cf7c 35%,var(--surf))}
+#actBtns .btn{transform:translateZ(0);box-shadow:none;border-color:var(--edge)}#actBtns .btn.pri{border-color:#f5cf7c}#actBtns .btn:active{transform:translate3d(0,1px,0)}
+#playLbl{position:absolute;right:0;top:0;z-index:11;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);pointer-events:none;transition:opacity .2s;background:var(--surf);border:1px solid var(--edge);border-radius:8px;padding:2px 7px}
 .zoomctl{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:12}
 .zoomctl button{width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:17px;font-weight:700;display:grid;place-items:center}
 
@@ -318,7 +330,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #buySlot{position:absolute;left:0;top:0;z-index:24;--bw:92px;width:var(--bw);height:calc(var(--bw)*1.4);transform:translate3d(var(--bx,0),var(--by,0),0);transition:opacity .2s}
 /* a removal to choose (Scientist, Travel Log): the hand comes up (hand.js), this says what's asked just above it, and the
    board steps back until it's answered */
-#choice{position:absolute;left:50%;bottom:var(--cb,300px);transform:translateX(-50%);z-index:24;pointer-events:none;text-align:center;padding:10px 20px;border-radius:14px;background:rgba(10,18,15,.94);border:1px solid var(--gold2);box-shadow:0 10px 30px rgba(0,0,0,.45);animation:bsIn .28s var(--ease);width:max-content;max-width:calc(100% - 32px)}
+#choice{position:absolute;left:50%;bottom:var(--cb,300px);transform:translate3d(-50%,0,0);z-index:24;pointer-events:none;text-align:center;padding:10px 20px;border-radius:14px;background:#0b1411;border:1px solid var(--gold2);animation:bsIn .28s var(--ease);width:max-content;max-width:calc(100% - 32px)}
 #choice .ct{font-size:17px;font-weight:700;color:var(--text)}#choice .ct b{color:var(--gold2)}
 #choice .cs{font-size:12.5px;color:var(--muted);margin-top:3px}#choice .cs b{color:var(--text)}
 #vp{transition:opacity .25s}#vp.dim{opacity:.32}
@@ -330,14 +342,14 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #buySlot .bs-card .mcard{--cw:var(--bw)}
 #buySlot .bs-card .cface{filter:saturate(.8) brightness(.9)}
 #buySlot.paid .bs-card .cface{filter:none}
-.bs-ring{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);background:#0b120f;border:1.5px solid var(--gold2);border-radius:14px;padding:3px 11px;font-weight:800;font-size:14px;color:var(--gold2);white-space:nowrap;display:flex;gap:4px;font-variant-numeric:tabular-nums;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.bs-ring{position:absolute;left:50%;bottom:-16px;transform:translate3d(-50%,0,0);background:#0b120f;border:1.5px solid var(--gold2);border-radius:14px;padding:3px 11px;font-weight:800;font-size:14px;color:var(--gold2);white-space:nowrap;display:flex;gap:4px;font-variant-numeric:tabular-nums}
 .bs-ring b{color:#fff}
 /* the paid total's slot fits its widest value (8½: under the dearest cost, 5, plus the best coin, 4), so the "/" never moves while paying */
 #bsPaid{display:inline-grid;justify-items:end}#bsPaid::after{content:"8½";visibility:hidden;height:0}
 .num{display:inline-grid;justify-items:end}.num::after{content:attr(data-w);visibility:hidden;height:0} /* (dom.js num: a number's slot, its widest value) */
 #buySlot.paid .bs-ring{background:var(--gold);color:var(--goldInk);border-color:var(--gold)}
 #buySlot.paid .bs-ring b{color:var(--goldInk)}
-.bs-x{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);background:#0b120f;color:var(--muted);cursor:pointer;font-size:12px;display:grid;place-items:center;z-index:2}
+.bs-x{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;border:1px solid var(--edge);background:#0b120f;transform:translateZ(0);color:var(--muted);cursor:pointer;font-size:12px;display:grid;place-items:center;z-index:2}
 .bs-x:hover{color:var(--text)}
 .mghost{pointer-events:none!important;z-index:300!important;filter:drop-shadow(0 12px 18px rgba(0,0,0,.55))}
 #mkt .mslot{touch-action:none}
@@ -385,7 +397,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #arrow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:30;overflow:visible}
 
 /* ---------- overlays */
-.scrim{position:fixed;inset:0;display:grid;place-items:center;z-index:50;padding:16px;animation:fade .25s ease}
+.scrim{position:fixed;inset:0;display:grid;grid-template:100%/100%;place-items:center;z-index:50;padding:16px;animation:fade .25s ease}
 /* ---- page grid: the game area plus (only while watching a replay) a control dock and a side panel.
    Each lives in its own cell, so they can't overlap; #app shrinks and lays itself out with container queries. ---- */
 #shell{display:grid;width:100%;height:100%;grid-template-areas:"hist game side" "dock dock dock";grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:minmax(0,1fr) auto}
@@ -478,10 +490,10 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .rules p,.rules ul{margin:0 0 8px}
 .rules ul{padding-left:18px}
 .rules li{margin:3px 0}
-#banner{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:40;pointer-events:none;text-align:center;opacity:0;padding:16px 36px 14px;border-radius:18px}
+#banner{position:fixed;left:50%;top:40%;transform:translate3d(-50%,-50%,0);z-index:40;pointer-events:none;text-align:center;opacity:0;padding:16px 36px 14px;border-radius:18px}
 #banner .t{font-family:var(--display);font-size:clamp(26px,4.5vw,40px);line-height:1.1}
 #banner .s{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold2);margin-top:5px}
-#toast.on{opacity:1;transform:translateX(-50%) translateY(4px)}
+#toast.on{opacity:1;transform:translate3d(-50%,4px,0)}
 .deckgrid{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
 .deckgrid .mcard{--cw:92px}
 .ppart h3{font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin:14px 0 8px;color:var(--text)}.ppart h3 .m{color:var(--muted);margin-left:4px}
@@ -563,16 +575,16 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div id="tip"></div>
   </div>
   <div id="hud">
-    <div class="brandbox glass"><span class="brand">El Dorado</span><span id="roundLbl"></span></div>
+    <div class="brandbox surf"><span class="brand">El Dorado</span><span id="roundLbl"></span></div>
     <div id="players"></div>
     <div class="hbtns">
-      <button class="tbtn glass" id="mktBtn">Market</button>
-      <button class="tbtn glass" id="histBtn" title="History: under the prompt → every turn on the left → hidden" aria-label="History"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M3.6 10a6.4 6.4 0 1 0 1.9-4.55"/><path d="M3.3 3.4v2.9h2.9"/><path d="M10 6.6V10l2.3 1.5"/></svg><span>History</span></button>
-      <button class="tbtn glass" id="rulesBtn">Rules</button>
-      <button class="tbtn glass" id="menuBtn">Menu</button>
+      <button class="tbtn surf" id="mktBtn">Market</button>
+      <button class="tbtn surf" id="histBtn" title="History: under the prompt → every turn on the left → hidden" aria-label="History"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M3.6 10a6.4 6.4 0 1 0 1.9-4.55"/><path d="M3.3 3.4v2.9h2.9"/><path d="M10 6.6V10l2.3 1.5"/></svg><span>History</span></button>
+      <button class="tbtn surf" id="rulesBtn">Rules</button>
+      <button class="tbtn surf" id="menuBtn">Menu</button>
     </div>
   </div>
-  <div id="prompt" class="glass"><div id="ptxt"><span id="turnTimer" class="timer" hidden></span><span id="pmsg"></span></div><div id="feed" hidden aria-live="polite"></div></div>
+  <div id="prompt" class="surf"><div id="ptxt"><span id="turnTimer" class="timer" hidden></span><span id="pmsg"></span></div><div id="feed" hidden aria-live="polite"></div></div>
   <div id="mkt"><div id="market"></div></div>
   <div id="allc" data-dims hidden>
     <div class="allc-in">
@@ -581,9 +593,9 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
       <div class="allc-sect"><h3>Reserve <span id="resState"></span></h3><p class="note" id="resNote" style="margin:-6px 0 14px"></p><div id="reserve" class="agrid"></div></div>
     </div>
   </div>
-  <div class="zoomctl"><button class="glass" id="zin" aria-label="Zoom in">+</button><button class="glass" id="zout" aria-label="Zoom out">−</button><button class="glass" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="glass" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button><button class="glass" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button></div>
-  <div class="pile" id="deckPile" title="Draw pile — click to view"><div class="pstack" id="deckStack"></div><div class="lbl glass">Deck <b id="deckN">0</b></div></div>
-  <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"><div class="empty-slot"></div></div><div class="lbl glass">Discard <b id="discN">0</b></div></div>
+  <div class="zoomctl"><button class="surf" id="zin" aria-label="Zoom in">+</button><button class="surf" id="zout" aria-label="Zoom out">−</button><button class="surf" id="zfit" aria-label="Fit board" style="font-size:13px">⤢</button><button class="surf" id="fsBtn" aria-label="Full screen" title="Full screen" hidden><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="fs-in" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="fs-out" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button><button class="surf" id="sndBtn" aria-label="Mute sounds" title="Mute sounds"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z" fill="currentColor" stroke-width="1.2"/><path class="snd-on" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5.3a6.6 6.6 0 0 1 0 9.4"/><path class="snd-off" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button></div>
+  <div class="pile" id="deckPile" title="Draw pile — click to view"><div class="pstack" id="deckStack"></div><div class="lbl surf">Deck <b id="deckN">0</b></div></div>
+  <div class="pile" id="discPile" title="Discard pile — click to view"><div class="pstack" id="discStack"><div class="empty-slot"></div></div><div class="lbl surf">Discard <b id="discN">0</b></div></div>
   <div id="actBtns"></div>
   <div id="playLbl">In play</div>
   <div id="buySlot" hidden><div class="bs-card"></div><div class="bs-ring"><b id="bsPaid">0</b><span>/</span><span id="bsCost">0</span></div><button class="bs-x" id="bsCancel" aria-label="Cancel purchase">✕</button></div>
@@ -596,15 +608,15 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <aside id="lside" hidden aria-label="History"></aside>
 <div id="rdock" hidden></div>
 </div>
-<div id="banner" class="glass"><div class="t"></div><div class="s"></div></div>
-<div id="toast" class="glass"></div>
+<div id="banner" class="surf" hidden><div class="t"></div><div class="s"></div></div>
+<div id="toast" class="surf"></div>
 <div id="overlay"></div>
 <!-- the menu: one native dialog; every screen is written here once and shown with the hidden attribute. Choices are
      native form controls (they keep their own state); ui_menu.js reads them and fills only the data lists. -->
 <script>/* a saved game or a room / replay link opens straight into it: no start screen first */try{if(localStorage.getItem('eldorado-game-v2')||/[?&](room|replay)=/.test(location.search))document.documentElement.classList.add('resume')}catch(e){}</script>
 <div id="dim" class="on" data-dims></div>
 <dialog id="menu" aria-label="Menu" open>
-<form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
+<div class="mframe mmenu"><form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
   <div class="acct" id="acct"></div>
   <div class="ingame" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn pri" id="sBack">Back to game</button></span></div>
   <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>This device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label></div>
@@ -663,7 +675,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div class="field"><label>Your games</label><div id="rMine" class="rlist"></div></div>
     <div class="field"><label>Recent games</label><div id="rList" class="rlist"></div></div>
   </section>
-</form>
+</form></div>
 </dialog>
 
 

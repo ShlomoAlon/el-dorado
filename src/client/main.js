@@ -30,13 +30,14 @@ import { cam } from './board/camera.js';
 import { targetAt, spaceAt, setHot } from './board/overlays.js';
 import { drag } from './hand.js';
 import { checksPart } from './checks.js';
+import { sharpInit } from './sharp.js';
 
 // the order parts update in each frame: first what the selection allows, then the view from back to front
 for (const p of [coverPart, overlaysPart, piecesPart, cameraPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, replayPart, checksPart]) addPart(p); // (checks: the page's invariants, last)
 GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); });
 
 function boot() {
-  boundaryInit(); debugInit(); { const inPlay = () => !!S && !UI.preview && !document.getElementById('menu').open; checksInit(inPlay); freshInit(inPlay); } /* (in play: a game on show, no menu over it) */ boardLayers(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
+  boundaryInit(); debugInit(); { const inPlay = () => !!S && !UI.preview && !document.getElementById('menu').open; checksInit(inPlay); freshInit(inPlay); } sharpInit(); /* (in play: a game on show, no menu over it) */ boardLayers(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
   if (!document.documentElement.classList.contains('resume')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check)
   $('#deckPile').onclick = () => showPile('deck'); $('#discPile').onclick = () => showPile('discard');
   $('#rulesBtn').onclick = showRules; histInit();

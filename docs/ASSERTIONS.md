@@ -167,5 +167,10 @@ Two tiers, both reported through the boundaries above:
   never in a player's browser): **nothing moves on screen during play** unless it follows an input or code declared
   the layout change (`expectLayout()`: the game area resized, the market or history moved, a replay's dock). Every
   test run therefore fails on a layout jump.
+- **Sharp at rest** (`sharp.js`, 2026-10-05): once the page rests (nothing animating, no input for 600 ms), in slices of
+  3 ms: every text over the game sits on a layer of its own that is solid, with a solid border and no outer shadow, with
+  nothing above it faded, filtered or will-change. In tests every second, in a
+  player's browser once a minute (reported). The pixels behind it: `test/sharp.cjs` (sub-pixel text on, GPU route, the
+  owner's screen) judges every text on each menu tab, a game and the windows.
 - **Lint** (`test/lint.mjs`): no catch that drops its error unless a comment names the failure it expects; no unused
   import (a swallowed call leaves one).

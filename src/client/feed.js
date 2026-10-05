@@ -181,7 +181,7 @@ function columnUpdate(){
 function update(){
   const F=$('#feed'),hide=()=>{if(!F.hidden){F.hidden=true;F.innerHTML='';rowReset();}};
   columnUpdate();
-  const btn=$('#histBtn');if(btn.dataset.m!==MODE){btn.dataset.m=MODE;btn.className='tbtn glass m-'+MODE; // (which of the three it is now, and what a press does)
+  const btn=$('#histBtn');if(btn.dataset.m!==MODE){btn.dataset.m=MODE;btn.className='tbtn surf m-'+MODE; // (which of the three it is now, and what a press does)
     btn.title=({center:'History: under the prompt. Press for every turn on the left',left:'History: every turn, on the left. Press to hide it',off:'History: hidden. Press to show it under the prompt'})[MODE];}
   if(!S){hide();setTrail([],'');return;}
   // the newest turn in the journal: an opponent's as they play it, kept as a recap until you act, then your own

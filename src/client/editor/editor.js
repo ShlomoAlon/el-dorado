@@ -584,9 +584,9 @@ section.ed-on .ed-sel{outline:2px solid #e9b24a!important}section.ed-on .ed-hidd
 [data-ed-list]{max-height:none!important;overflow:visible!important}
 [data-ed-list="3"]>:nth-child(n+4),[data-ed-list="5"]>:nth-child(n+6),[data-ed-list="10"]>:nth-child(n+11){display:none!important}
 section.ed-on [contenteditable]{outline:2px solid #7ec4f5!important;cursor:text;background:rgba(126,196,245,.08)}
-.ed-bar{position:sticky;grid-column:1 / -1;z-index:30;isolation:isolate;display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;padding:12px 26px;background:#0e1612}
-.ed-bar-bottom{bottom:-26px;margin:0 -26px -26px;border-top:1px solid rgba(233,178,74,.35);box-shadow:0 -8px 18px rgba(0,0,0,.35)}
-.ed-bar-top{top:-26px;grid-row:1;margin:-26px -26px 0;border-bottom:1px solid rgba(233,178,74,.35);box-shadow:0 8px 18px rgba(0,0,0,.35);justify-content:flex-start}
+.ed-bar{position:sticky;grid-column:1 / -1;z-index:30;isolation:isolate;display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;padding:12px 20px;background:#0e1612}
+.ed-bar-bottom{bottom:-20px;margin:0 -20px -20px;border-top:1px solid rgba(233,178,74,.35);box-shadow:0 -8px 18px rgba(0,0,0,.35)}
+.ed-bar-top{top:-20px;grid-row:1;margin:-20px -20px 0;border-bottom:1px solid rgba(233,178,74,.35);box-shadow:0 8px 18px rgba(0,0,0,.35);justify-content:flex-start}
 section.ed-on .ed-bar{outline:1px dashed #e9b24a;outline-offset:-3px}
 /* ---------- the looks (owner, 2026-10-05): b brass (the D2-A expedition kit, 681ed0a), c jungle (a field notebook), d water (a river
    chart). Each look is its tokens (colours, its texture, its rule line) and its defaults for the tuning rows (editor.js LOOKS);
@@ -612,11 +612,13 @@ html[data-edcolors=d][data-edacc="3"]{--k-acc:#ffb39c;--k-priA:#ffa58a;--k-priM:
 html[data-edcor=brass]{--k-rb:9px;--k-rp:14px;--k-rs:8px}html[data-edcor=leaf]{--k-rb:16px 4px 16px 4px;--k-rp:28px 28px 28px 8px;--k-rs:14px 4px 14px 4px}
 html[data-edcor=soft]{--k-rb:12px;--k-rp:18px;--k-rs:10px}html[data-edcor=round]{--k-rb:999px;--k-rp:24px;--k-rs:14px}html[data-edcor=sharp]{--k-rb:3px;--k-rp:4px;--k-rs:2px}
 /* the parts every look styles, from its tokens */
-html[data-edlook]{--glass:linear-gradient(180deg,color-mix(in srgb,var(--k-panA) 95%,transparent),color-mix(in srgb,var(--k-panB) 95%,transparent));--glass2:linear-gradient(180deg,var(--k-btnH),var(--k-panA));
+html[data-edlook]{--surf:var(--k-panA);--surf2:color-mix(in srgb,var(--k-acc) 12%,var(--k-panA));
   --line:var(--k-line);--line2:var(--k-line);--muted:var(--k-muted);--faint:var(--k-faint)}
 html[data-edlook] #menu{background:rgba(4,6,8,.74)}
-html[data-edlook] .modal{background:var(--k-tex),linear-gradient(180deg,var(--k-panA),var(--k-panB));border:1px solid var(--k-frame);border-radius:var(--k-rp);box-shadow:0 30px 80px rgba(0,0,0,.6);color:var(--k-text)}
-html[data-edlook] .glass{border-color:var(--k-line);border-radius:var(--k-rs);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 22px rgba(0,0,0,.4)}
+html[data-edlook] .mframe{background:var(--k-panB);border:1px solid var(--k-frame);border-radius:var(--k-rp);box-shadow:0 30px 80px rgba(0,0,0,.6)}
+html[data-edlook] .modal{background:var(--k-tex),linear-gradient(180deg,var(--k-panA),var(--k-panB)) var(--k-panB);color:var(--k-text)}
+html[data-edlook] .surf{border-radius:var(--k-rs);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)} /* (its edge stays solid, no shadow outside: page's .surf) */
+html[data-edlook] #actBtns .btn{background-color:var(--k-panB)}
 html[data-edlook] .modal h2,html[data-edlook] .brand{color:var(--k-acc)}
 html[data-edlook] .field>label{color:var(--k-acc);display:flex;align-items:center;gap:10px;margin-bottom:10px}
 html[data-edlook] .field>label::after{content:"";flex:1;border-bottom:var(--k-rule) var(--k-line)}html[data-edlook] .field>label.chk::after{display:none}
@@ -638,18 +640,18 @@ html[data-edlook] .tbtn.on{border-color:var(--k-acc);color:var(--k-acc)}html[dat
 html[data-edlook] #prompt,html[data-edlook] #banner{border-radius:var(--k-rp);color:var(--k-text)}html[data-edlook] #prompt b{color:var(--k-acc)}
 html[data-edlook] #hist{background:linear-gradient(180deg,var(--k-panA),var(--k-panB));border-radius:var(--k-rp)}html[data-edlook] .ht+.ht{border-top:1px dashed var(--k-line)}
 html[data-edlook] .fend .fpill{border-color:var(--k-line);background:var(--k-sel);color:var(--k-text)}
-html[data-edlook] #rdock .rspd{border-color:var(--k-line)}html[data-edlook] .sclose,html[data-edlook] .bs-x{border-color:var(--k-line);background:var(--k-panB)}
+html[data-edlook] #rdock .rspd{border-color:var(--k-line)}html[data-edlook] .sclose{border-color:var(--k-line);background:var(--k-panB)}html[data-edlook] .bs-x{background:var(--k-panB)}
 /* ornament: plain (flat panels), textured (the look's grain), framed (the grain and an inner frame) */
-html[data-edlook][data-edorn=plain] .modal{background:linear-gradient(180deg,var(--k-panA),var(--k-panB))}
-html[data-edlook][data-edorn=frame] .modal{box-shadow:inset 0 0 0 5px var(--k-panB),inset 0 0 0 6px var(--k-line),0 30px 80px rgba(0,0,0,.65)}
-html[data-edlook][data-edorn=frame] .glass{box-shadow:0 0 0 3px var(--k-panB),0 0 0 4px var(--k-line),0 10px 24px rgba(0,0,0,.45)}
+html[data-edlook][data-edorn=plain] .modal{background:linear-gradient(180deg,var(--k-panA),var(--k-panB)) var(--k-panB)}
+html[data-edlook][data-edorn=frame] .mframe{box-shadow:inset 0 0 0 5px var(--k-panB),inset 0 0 0 6px var(--k-line),0 30px 80px rgba(0,0,0,.65)}
+html[data-edlook][data-edorn=frame] .surf{box-shadow:inset 0 0 0 3px var(--k-panB),inset 0 0 0 4px var(--k-line)}
 /* the main button: metal (polished, lit from above), solid, flat (a ring around it), outlined */
 html[data-edlook] .btn.pri,html[data-edlook] #rdock .rgrp button.pri{color:var(--k-priInk);border-color:var(--k-priEdge)}
 html[data-edlook][data-edpri=metal] .btn.pri,html[data-edlook][data-edpri=metal] #rdock .rgrp button.pri{background:linear-gradient(180deg,var(--k-priA),var(--k-priM) 45%,var(--k-priB));box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.22),0 2px 0 rgba(0,0,0,.55),0 6px 14px rgba(0,0,0,.4)}
 html[data-edlook][data-edpri=solid] .btn.pri,html[data-edlook][data-edpri=solid] #rdock .rgrp button.pri{background:linear-gradient(180deg,var(--k-priA),var(--k-priB));box-shadow:0 2px 0 rgba(0,0,0,.5),0 8px 18px rgba(0,0,0,.3)}
 html[data-edlook][data-edpri=flat] .btn.pri,html[data-edlook][data-edpri=flat] #rdock .rgrp button.pri{background:var(--k-priM);border-color:var(--k-priM);box-shadow:0 0 0 3px var(--k-panB),0 0 0 4px var(--k-priM)}
 html[data-edlook][data-edpri=outline] .btn.pri,html[data-edlook][data-edpri=outline] #rdock .rgrp button.pri{background:var(--k-sel);border:1.5px solid var(--k-priM);color:var(--k-priA);box-shadow:none}
-html[data-edlook] .btn.pri:hover{filter:brightness(1.08)}
+html[data-edlook] .btn.pri:hover{box-shadow:inset 0 0 0 99px rgba(255,255,255,.08)} /* (brighter, never by a filter: text under a filter is grey-smoothed) */
 /* headings: serif, italic serif, spaced capitals */
 html[data-edlook]:is([data-edhd=serif],[data-edhd=italic]) :is(.modal h2,.field>label,#sMode label,.brand,#roundLbl,.hwho,#playLbl,#banner .s,.aitag,.clist .dtag){font-family:var(--display,'Young Serif',serif);font-weight:400;text-transform:none;letter-spacing:0}
 html[data-edlook][data-edhd=italic] :is(.modal h2,.field>label,#sMode label,.brand,#roundLbl,.hwho,#playLbl,#banner .s,.aitag,.clist .dtag){font-style:italic}

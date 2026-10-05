@@ -1,5 +1,5 @@
 // Every check in one command. Independent checks run side by side; the timing measurements run afterwards, alone.
-//   node test/run.mjs            build, import lint, rules, engine (quick), layout (6 sizes, the owner's screen included), game flows, board taps, played games (3), menus, worker bundle, frame costs, the frame budget (20 moves)  (~95 s)
+//   node test/run.mjs            build, import lint, rules, engine (quick), layout (6 sizes, the owner's screen included), game flows, board taps, played games (3), menus, worker bundle, frame costs, the frame budget (20 moves), sharp text and cards  (~130 s)
 //   node test/run.mjs --online   also online play end to end, against a game server the test starts itself  (+~45 s)
 //   node test/run.mjs --full     everything: engine (60 games + AI on every course), layout (12 sizes), played games (6), online, board rendering
 import { spawn, execSync } from 'node:child_process';
@@ -50,6 +50,8 @@ res.push(await run(['frames', 'node test/frames.cjs', 10]));
 // every frame of a game judged against 70 fps (the work on the page's main thread): the first 20 moves and every overlay; the
 // whole game with --full
 res.push(await run(['framebudget', 'node test/framebudget.cjs' + (full ? '' : ' --moves 20'), full ? 140 : 25]));
+// text and cards sharp at rest, as the screen shows them (GPU route, sub-pixel text on, the owner's screen): every menu tab, a game, the windows
+res.push(await run(['sharp', 'node test/sharp.cjs', 40]));
 if (full) res.push(await run(['render', 'node test/render.cjs', 30]));
 for (const r of res) { const last = r.out.trim().split('\n').filter(l => l.trim()).pop() || ''; console.log(`${r.code ? 'FAIL' : 'ok  '} ${r.name.padEnd(7)} ${String(r.s).padStart(3)} s  ${last.slice(0, 110)}`); }
 // every test's whole output is kept (test-results/<name>.log); for a failing test, every failure is printed in full, wherever
