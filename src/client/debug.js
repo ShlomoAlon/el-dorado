@@ -60,12 +60,20 @@ const darkness = () => { let l = 0; darkBy = ''; for (const e of dimmers || (dim
 // (read once a frame has been drawn, in a task right after it: the styles are up to date then, so reading an opacity costs
 // nothing; read during a frame, it made the browser work out the styles early, up to 10 ms of a frame in the tests)
 const afterFrame = f => requestAnimationFrame(() => { const c = new MessageChannel(); c.port1.onmessage = f; c.port2.postMessage(0); });
+const darkLog = []; // (the last readings, [time, how dark, by what]: a failure shows what the screen did, not only that it flashed)
 function flashStep() {
   const t = performance.now(), l = darkness(), side = l >= .6;
-  if (l >= .9 || l <= .1) { leftAt = null; changeAt = null; } else if (leftAt === null) leftAt = changeAt ?? t; // (when it left a settled level: from the page change that started it, not the first frame that showed it)
+  // (with what covered the game: M the menu, m it closing, W a window, w it closing)
+  const mn = document.getElementById('menu'), sc = document.querySelector('#overlay .scrim'), on = (mn.open ? mn.classList.contains('closing') ? 'm' : 'M' : '') + (sc ? sc.classList.contains('closing') ? 'w' : 'W' : '');
+  darkLog.push(Math.round(t) + ':' + l.toFixed(2) + (darkBy ? darkBy : '') + (on ? '/' + on : '')); if (darkLog.length > 12) darkLog.shift();
+  // (when the motion that brought this reading began: from the page change that started it, not the first frame that showed
+  // it. Read before a settled level clears it: on a busy machine one frame can go from mid-way to settled, and the motion's
+  // start was lost there, an answer that came during the motion then counted as before it)
+  const movedAt = leftAt ?? changeAt ?? t;
+  if (l >= .9 || l <= .1) { leftAt = null; changeAt = null; } else if (leftAt === null) leftAt = changeAt ?? t;
   if (flashSide !== null && side !== flashSide) {
-    if (t - flashAt < 450 && !(lastInput > flashLeft)) assert(false, 'view: the screen never flashes (the dimming over the game ' + (side ? 'dropped and came back' : 'came and went') + ' within ' + Math.round(t - flashAt) + ' ms, with no input between; dimmed by ' + (side ? darkBy : flashBy) + ')');
-    flashAt = prevT; flashLeft = leftAt === null ? t : leftAt; flashBy = darkBy || flashBy; } // (from the last frame still on the old side: a
+    if (t - flashAt < 450 && !(lastInput > flashLeft)) assert(false, 'view: the screen never flashes (the dimming over the game ' + (side ? 'dropped and came back' : 'came and went') + ' within ' + Math.round(t - flashAt) + ' ms, with no input between; dimmed by ' + (side ? darkBy : flashBy) + '; the last readings, ms:darkness: ' + darkLog.join(' ') + '; last input at ' + Math.round(lastInput) + ')');
+    flashAt = prevT; flashLeft = movedAt; flashBy = darkBy || flashBy; } // (from the last frame still on the old side: a
     // busy machine draws few frames, and a crossing seen late must not make a long pause look short)
   if (side) flashBy = darkBy; prevT = t;
   flashSide = side;
