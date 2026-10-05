@@ -45,8 +45,8 @@ if (arg.includes('--gpu')) {
    desktop sizes only (owner: no Firefox for phones). An engine not in this container is fetched first, the build the installed
    Playwright names, from its download mirror */
 const enginesFile = path.join(root, 'test/engines-run.txt');
-const ENGINE_TESTS = { webkit: [['layout', 'node test/layout.cjs --quick', 60], ['flows', 'node test/flows.cjs', 40], ['taps', 'node test/taps.cjs', 15], ['play', 'node test/play.cjs', 150], ['menus', 'node test/menus.cjs', 20], ['editor', 'node test/editor.cjs', 15], ['online', 'node test/online.cjs', 200]],
-  firefox: [['layout', 'node test/layout.cjs --quick --desktop', 50], ['flows', 'node test/flows.cjs', 40], ['taps', 'node test/taps.cjs', 15], ['play', 'node test/play.cjs --desktop', 150], ['menus', 'node test/menus.cjs', 20], ['editor', 'node test/editor.cjs', 15], ['online', 'node test/online.cjs', 200]] };
+const ENGINE_TESTS = { webkit: [['layout', 'node test/layout.cjs --quick', 60], ['flows', 'node test/flows.cjs', 40], ['taps', 'node test/taps.cjs', 15], ['play', 'node test/play.cjs', 150], ['menus', 'node test/menus.cjs', 20], ['editor', 'node test/editor.cjs', 40], ['online', 'node test/online.cjs', 200]], // (the editor 37 s in WebKit, 10 in Chrome)
+  firefox: [['layout', 'node test/layout.cjs --quick --desktop', 50], ['flows', 'node test/flows.cjs', 40], ['taps', 'node test/taps.cjs', 15], ['play', 'node test/play.cjs --desktop', 150], ['menus', 'node test/menus.cjs', 35], ['editor', 'node test/editor.cjs', 25], ['online', 'node test/online.cjs', 200]] }; // (the editor 22 s in Firefox; menus 35 s: a browser of its own for each page)
 function ensureEngine(name) {
   // (Playwright resolved through NODE_PATH, as the tests find it)
   const req = createRequire(import.meta.url), from = { paths: NODE_PATH.split(path.delimiter) }, pw = req(req.resolve('playwright', from));

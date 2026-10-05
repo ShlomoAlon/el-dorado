@@ -89,7 +89,7 @@ async function openPage(browser, name, opts = {}) {
   const seen = (msg, stack) => { page.errors.push(`${name}: ${msg}`); if (!(allow && allow.test(msg))) stop(msg, stack); };
   page.on('pageerror', e => seen(e.message, e.stack));
   // (Google's sign-in script and the fonts can't load in the test sandbox: not the page's errors)
-  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_CERT|ERR_TUNNEL|gsi|fonts/.test(m.text())) seen('console: ' + m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_CERT|ERR_TUNNEL|gsi|fonts/i.test(m.text())) seen('console: ' + m.text()); });
   return page;
 }
 /* nothing finite is animating (card flights, explorer moves, fades), and the board's terrain is baked (until then it is drawn
