@@ -115,7 +115,8 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .clist .dtag{display:inline-block;margin-left:6px;padding:0 7px;border-radius:var(--r-round);border:1px solid currentColor;font-size:var(--fs-xs);font-weight:600;font-style:normal;line-height:1.55;letter-spacing:.04em;text-transform:uppercase;vertical-align:2px}
 .clist .d-easy{color:var(--ok)}.clist .d-medium{color:var(--gold)}.clist .d-hard{color:var(--bad)}
 #ingame{margin:0 0 16px}.ig-b{display:flex;gap:8px;flex-wrap:wrap}
-.acct{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:var(--fs-m);color:var(--muted)}
+.acct{display:flex;align-items:center;gap:10px;font-size:var(--fs-m);color:var(--muted);flex:1;min-width:0}
+.mtop{display:flex;align-items:center;gap:10px;margin:0 0 14px;min-height:var(--h-c)}#designBtn{margin-left:auto;flex:none} /* (the account line and the design editor's button: Design always at the right) */
 .gsi{color-scheme:light}
 @media (max-width:500px){.pstats{grid-template-columns:repeat(3,1fr)}
 }
@@ -157,7 +158,7 @@ select.who option,select.who optgroup{background:var(--panel);color:var(--text)}
 
 @keyframes fade{from{opacity:0}}
 @keyframes rise{from{transform:translateY(14px) scale(.98);opacity:0}}
-#acct{min-height:var(--h-c)} /* its line is there before the script fills it: nothing below moves */
+ /* its line is there before the script fills it: nothing below moves */
 #shell{isolation:isolate} /* nothing in the game can stack above the menu, whatever its z-index */
 #shell{visibility:hidden} /* the game shows once its CSS (the late block) has arrived */
 </style>
@@ -626,7 +627,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <div id="dim" class="on" data-dims></div>
 <dialog id="menu" aria-label="Menu" open>
 <form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
-  <div class="acct" id="acct"></div>
+  <div class="mtop"><div class="acct" id="acct"></div><button type="button" class="linkbtn" id="designBtn" hidden>Design</button></div>
   <div class="box gold wrap" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn pri" id="sBack">Back to game</button></span></div>
   <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>This device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label></div>
   <section data-screen="setup">

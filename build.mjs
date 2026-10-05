@@ -47,8 +47,10 @@ const netBin = readFileSync(new URL('./src/ai/first.bin', import.meta.url)), net
 const pack = entry => esbuild.buildSync({ entryPoints: [new URL(entry, import.meta.url).pathname], bundle: true, format: 'iife',
   minify: !process.env.DEV, target: 'es2020', write: false, logLevel: 'error' }).outputFiles[0].text;
 const workerJs = pack('./src/client/aiworker.js');
+// the design editor (src/client/design: owner, 2026-10-05): a script of its own, fetched by the menu's Design button (none in the artifact)
+const designJs = pack('./src/client/design/design.js'), designFile = `design.${createHash('sha256').update(designJs).digest('hex').slice(0, 10)}.js`;
 const bundle = (net, worker) => esbuild.buildSync({ entryPoints: [new URL('./src/client/main.js', import.meta.url).pathname], bundle: true, format: 'iife',
-  minify: !process.env.DEV, target: 'es2020', write: false, define: { AI_NET: JSON.stringify(net), AI_WORKER: JSON.stringify(worker) }, logLevel: 'error' }).outputFiles[0].text;
+  minify: !process.env.DEV, target: 'es2020', write: false, define: { AI_NET: JSON.stringify(net), AI_WORKER: JSON.stringify(worker), DESIGN_URL: JSON.stringify(net && net.url ? designFile : null) }, logLevel: 'error' }).outputFiles[0].text;
 const script = (net, worker) => `<script>\n${bundle(net, worker)}</script>\n`;
 // fonts (Figtree variable 400–800 and Young Serif, Latin subset) are served by the site itself: no render-blocking
 // request to another domain; the artifact (no network) gets them embedded
@@ -63,10 +65,10 @@ const withFonts = (html, fonts) => html.replace('<!--FONTS: build.mjs puts the s
 const minCss = c => esbuild.transformSync(c, { loader: 'css', minify: true }).code;
 const LATE = /<style data-late>([\s\S]*?)<\/style>/, late = shell.match(LATE)[1];
 const hashed = (ext, text) => { const n = `app.${createHash('sha256').update(text).digest('hex').slice(0, 10)}.${ext}`; writeFileSync(new URL('./public/' + n, import.meta.url), text); return n; };
-for (const f of readdirSync(new URL('./public/', import.meta.url))) if (/^(app\.[0-9a-f]{10}\.(js|css)|aiw\.[0-9a-f]{10}\.js)$/.test(f)) unlinkSync(new URL('./public/' + f, import.meta.url));
+for (const f of readdirSync(new URL('./public/', import.meta.url))) if (/^(app\.[0-9a-f]{10}\.(js|css)|aiw\.[0-9a-f]{10}\.js|design\.[0-9a-f]{10}\.js)$/.test(f)) unlinkSync(new URL('./public/' + f, import.meta.url));
 const faceCss = siteFonts.replace(/<\/?style>/g, ''); // the game's fonts are declared in the game's CSS: the start screen never fetches them
 const cssFile = hashed('css', minCss(faceCss + late)), workerFile = `aiw.${createHash('sha256').update(workerJs).digest('hex').slice(0, 10)}.js`;
-writeFileSync(new URL('./public/' + workerFile, import.meta.url), workerJs);
+writeFileSync(new URL('./public/' + workerFile, import.meta.url), workerJs); writeFileSync(new URL('./public/' + designFile, import.meta.url), designJs);
 const jsFile = hashed('js', bundle({ url: '/ai/' + netFile, hash: netHash }, { url: workerFile }));
 const siteShell = withFonts(shell, '').replace(LATE, '').replace(/<style>([\s\S]*?)<\/style>/, (m, c) => `<style>${minCss(c)}</style>`);
 // the start screen needs only the page itself: the game's CSS and script are fetched at once (preloaded) but applied and run

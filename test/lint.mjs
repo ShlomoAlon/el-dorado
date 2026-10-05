@@ -37,7 +37,7 @@ for (const f of scan) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if
 for (const f of scan) if (f.includes(path.sep + 'client' + path.sep)) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (/\\u2007|\u2007/.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a number padded with figure spaces: give it a slot (dom.js num)`); } });
 if (!ESLint) { console.log('lint: ESLint is not installed (npm i -g eslint): the module check could not run'); process.exit(1); }
 const files = []; const walk = d => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) walk(p); else if (/\.js$/.test(f.name) && !/^ui_/.test(f.name)) files.push(p); } }; walk(dir);
-const eslint = new ESLint({ cwd: root, overrideConfigFile: true, overrideConfig: [{ files: ['**/*.js'], languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser, AI_NET: 'readonly', AI_WORKER: 'readonly', google: 'readonly' /* Google sign-in's script */ } },
+const eslint = new ESLint({ cwd: root, overrideConfigFile: true, overrideConfig: [{ files: ['**/*.js'], languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser, AI_NET: 'readonly', AI_WORKER: 'readonly', DESIGN_URL: 'readonly', google: 'readonly' /* Google sign-in's script */ } },
   rules: { 'no-undef': 'error', 'no-unused-vars': ['error', { vars: 'all', args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }], 'no-const-assign': 'error', 'no-import-assign': 'error', 'no-dupe-keys': 'error', 'no-redeclare': 'error' } }] });
 const res = await eslint.lintFiles(files);
 let errors = 0, warns = 0;

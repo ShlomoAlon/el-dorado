@@ -38,6 +38,8 @@ export function menuInit(){
   MENU.f.addEventListener('submit',e=>e.preventDefault());
   MENU.f.addEventListener('change',menuChange);
   MENU.f.addEventListener('click',menuClick);
+  mq('#designBtn').hidden=!DESIGN_URL;
+  if(DESIGN_URL)(window.requestIdleCallback||(f=>setTimeout(f,2000)))(loadDesign,{timeout:4000});
   mq('#jCode').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();mq('#jGo').click();}});
   // the menu is opened with show(), never as a modal (showModal makes the whole page inert: every element, the board's
   // thousands included, restyled each time it opens and closes, a 15-20 ms frame); it covers the screen, so a click
@@ -107,12 +109,19 @@ function menuChange(e){
   if(n==='rlrated'){roomSend({t:'rated',v:e.target.value==='1'});return;}
   if(n==='rlcol'){roomSend({t:'color',color:e.target.value});return;}
 }
+/* the design editor (src/client/design): its file is fetched once the page is idle (small; it builds nothing until opened),
+   so Design opens it at once; a click before it has arrived opens it when it does */
+let designWant=false;
+function loadDesign(){if(document.getElementById('designJs'))return;const s=document.createElement('script');s.id='designJs';s.src=DESIGN_URL;
+  s.onload=()=>{if(designWant)window.__design.open();};document.head.appendChild(s);}
+function openDesign(){if(window.__design){window.__design.open();return;}designWant=true;loadDesign();}
 function menuClick(e){
   const b=e.target.closest('button');if(!b||b.disabled)return;
   const err=t=>{hubErr(t);};
   const run=f=>Promise.resolve().then(f).catch(x=>err(x.message));
   switch(b.id){
     case'sBack':menuClose();return;
+    case'designBtn':openDesign();return;
     case'sResign':menuClose();online()?resignOnline():resignLocal();return;
     case'sEnd':menuClose();endLocal();return;
     case'sResume':menuClose();resumeSaved();return;
