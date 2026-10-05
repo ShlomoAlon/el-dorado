@@ -240,6 +240,19 @@ Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), s
   and steps aside (`#mkt.cramped`, Market button opens the card view) when nothing fits.
 - `test/layout.cjs` checks 11 sizes × play/replay states for off-screen or overlapping controls. Run it after UI changes.
 
+### The theme and the design editor (owner, 2026-10-04/05)
+- **The theme** is shell.html's first `:root`: every colour, font, type size, corner, shadow, control height (28/32/38/46 px)
+  and menu motion is one of its tokens; `test/theme.mjs` fails on anything written in place. Not themed yet: the board,
+  explorers and cards ("eventually").
+- **The flowchart in the editor is a drawing only**: it never changes the page's menus ("more just a design tool").
+- **Editing by the theme's parts (decided, not built yet).** Every element is a themed part with a role, or a *special*
+  (board, cards) that can't be selected. What can be done to an element follows from its parent's layout (a stack: reorder;
+  a row or grid: reorder, width quarter/half/full). Clicks: **a click takes what was clicked** (press on a button and drag
+  it at once); only *units* (an either/or switch and the like) take the click as a whole, and a double-click reaches their
+  parts. Edit mode adds its listeners once at the root and removes them when it ends; the site itself is plain HTML and
+  the theme. Moves animate (pick up, siblings make room, drop into a slot). The test for any design: a person can make it
+  in the editor easily and smoothly.
+
 ## 7. Testing recipes
 
 ```
