@@ -171,8 +171,8 @@ function update() {
 }
 /* a reshuffle: the deck ran out, and the discard pile became the deck (engine drawCards). Seen in the game, never told: the
    bottom card of the pile on view left it for its owner's hand or deck, which nothing else does (a replay stepped back
-   undoes discards: not a reshuffle). How it shows is UI.reshuffle (owner, 2026-10-05: tried in the design editor, the
-   chosen one is then built in for good): 'instant', the deck simply full again; 'gather', the pile's cards fly over onto
+   undoes discards: not a reshuffle). How it shows is UI.reshuffle (owner, 2026-10-05: three ways to
+   compare; the one the owner picks is then built in for good): 'instant', the deck simply full again; 'gather', the pile's cards fly over onto
    the deck; 'riffle', and the deck is riffled. Only drawn (cards that exist only while they fly, the deck shown once they
    land); the cards drawn from it wait for it, input never does. Returns that wait (ms) */
 let seen = null; // the pile on view at the last update: { vi, ids, at (the replay's step) }

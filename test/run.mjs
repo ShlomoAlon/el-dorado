@@ -41,7 +41,6 @@ const res = await Promise.all([
   ['taps', 'node test/taps.cjs', 15],
   ['play', 'node test/play.cjs' + (full ? ' --games 6' : ''), full ? 180 : 80], // whole games through the UI, every assertion on (coverage)
   ['menus', 'node test/menus.cjs', 20],
-  ['editor', 'node test/editor.cjs', 15],
   ['worker', 'npx wrangler deploy --dry-run --outdir /tmp/wdry', 20],
   ...(online ? [['online', 'node test/online.cjs', 290]] : []),
 ].map(run));

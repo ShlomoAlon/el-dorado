@@ -244,7 +244,13 @@ Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), s
 - **The theme** is shell.html's first `:root`: every colour, font, type size, corner, shadow, control height (28/32/38/46 px)
   and menu motion is one of its tokens; `test/theme.mjs` fails on anything written in place. Not themed yet: the board,
   explorers and cards ("eventually").
-- **The flowchart in the editor is a drawing only**: it never changes the page's menus ("more just a design tool").
+- **The old design editor is gone** (owner, 2026-10-05: "the flowcharts were a horrible idea"): its flowchart, looks and
+  options were removed with it. Its three looks (Brass, Jungle, Water) are kept in `docs/looks/` to become theme presets.
+- **The new editor** (being built from scratch, menus first): opened from the menu, not a special address; its panel is
+  open while the game works as usual, and nothing is editable until Edit is pressed. Its job is to tell Claude what the owner
+  wants, not to change the site: every edit is an operation on a named part, and Copy gives the net changes, each with the
+  screen, the part, from → to and the owner's note (a Report button for players may follow). Operations: move (also to
+  another place that accepts the part), copy, delete, width, type within a family, text, note; undo, redo, reset.
 - **Editing by the theme's parts (decided, not built yet).** Every element is a themed part with a role, or a *special*
   (board, cards) that can't be selected. What can be done to an element follows from its parent's layout (a stack: reorder;
   a row or grid: reorder, width quarter/half/full). Clicks: **a click takes what was clicked** (press on a button and drag
