@@ -46,10 +46,14 @@ function wsUrl(path){return(location.protocol==='https:'?'wss://':'ws://')+locat
 export function openLobbyWs(){
   if(NET.lobbyWs||!NET.user)return;
   const ws=new WebSocket(wsUrl('/api/lobby/ws'));NET.lobbyWs=ws;
-  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(_){return;}if(m.t==='rooms'){NET.rooms=m.rooms;roomsRender();}};
+  ws.onmessage=e=>{if(NET.lobbyWs!==ws)return;let m;try{m=JSON.parse(e.data);}catch(_){return;}if(m.t==='rooms'){NET.rooms=m.rooms;roomsRender();}};
   ws.onclose=()=>{if(NET.lobbyWs===ws)NET.lobbyWs=null;};
 }
-export function closeLobbyWs(){if(NET.lobbyWs){NET.lobbyWs.close();NET.lobbyWs=null;}}
+/* a socket we are done with: one still connecting is closed as soon as it opens (closed while connecting, the browser reports
+   a connection that failed: Firefox logs it as an error, when entering a room right after the hub opened its lobby socket;
+   2026-10-05); whatever it hears meanwhile is not ours any more (each socket's handlers check it is still the current one) */
+function drop(ws){if(ws.readyState===WebSocket.CONNECTING)ws.onopen=()=>ws.close();else ws.close();}
+export function closeLobbyWs(){if(NET.lobbyWs){drop(NET.lobbyWs);NET.lobbyWs=null;}}
 
 /* ---------- room connection ---------- */
 export function netSend(m){if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(m));else{NET.busy=false;toast('Reconnecting…');}}
@@ -72,12 +76,12 @@ export function joinRoom(code,made){
 /* the room's screen, once there is something to show on it: its lobby, or why it can't be reached (a game in progress
    shows the game instead) */
 const roomScreen=()=>{if(S&&online())return;if(MENU.dlg.open&&MENU.screen==='room')renderRoomLobby();else showRoomLobby();};
-export function leaveRoomSocket(){if(NET.ws){const w=NET.ws;NET.ws=null;w.close();}clearTimeout(NET.retryT);NET.connected=false;}
+export function leaveRoomSocket(){if(NET.ws){const w=NET.ws;NET.ws=null;drop(w);}clearTimeout(NET.retryT);NET.connected=false;}
 function connectRoom(){
   const code=NET.code;if(!code)return;
   const ws=new WebSocket(wsUrl('/api/rooms/'+code+'/ws'));NET.ws=ws;NET.heard=Date.now();
   ws.onopen=()=>{NET.connected=true;NET.retries=0;NET.status='';NET.heard=Date.now();if(S)render();};
-  ws.onmessage=e=>{NET.heard=Date.now();if(e.data==='pong')return;let m;try{m=JSON.parse(e.data);}catch(_){return;}outsideEvent();onRoomMsg(m);}; // (checks: what another player did, as a tap of ours)
+  ws.onmessage=e=>{if(NET.ws!==ws)return;NET.heard=Date.now();if(e.data==='pong')return;let m;try{m=JSON.parse(e.data);}catch(_){return;}outsideEvent();onRoomMsg(m);}; // (checks: what another player did, as a tap of ours)
   ws.onclose=e=>{if(e.code===4404)noRoom(ws);else lostConnection(ws);};
   // heartbeat: the server answers every ping, so a connection that hears nothing for 40 s is dead (a network that dropped
   // without closing it): give it up and reconnect, which brings the room's current state
@@ -90,7 +94,7 @@ function noRoom(ws){
 }
 /* the connection to the room is gone (closed, silent, or not answering): unless we left, reconnect (backing off) */
 function lostConnection(ws){
-  if(NET.ws!==ws)return;NET.ws=null;NET.connected=false;NET.busy=false;clearTimeout(NET.busyT);ws.close();
+  if(NET.ws!==ws)return;NET.ws=null;NET.connected=false;NET.busy=false;clearTimeout(NET.busyT);drop(ws);
   if(!NET.code)return; // we left, or the room closed
   NET.status='Connection lost. Reconnecting…';if(S)render();if(NET.room.status==='connecting')roomScreen();else renderRoomLobby(); // (never reached yet: the room screen says so)
   NET.retries++;if(NET.retries>8&&!S){NET.status='Could not reach this room. It may have closed.';renderRoomLobby();return;}
