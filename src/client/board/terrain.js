@@ -145,9 +145,11 @@ let bakeDue=false;export const baking=()=>bakeDue;
    as vectors, every zoom needed the terrain drawn again, which cost frames (and on Safari, pieces settling apart). Baked once
    per board, at three densities (device pixels per board unit: the most the zoom can need, capped by a memory budget; half;
    a quarter, which shrinks cleanly when zoomed out), each in 1024-pixel tiles (GPUs cap a picture's size, and a tile is
-   drawn a part at a time, a few milliseconds a frame). All three stay on the GPU; the one that fits the zoom is shown,
-   the others kept at opacity 0 (never removed: a removed picture is dropped from the GPU and costs an upload to show
-   again). Canvases, not image files: the browser may drop a decoded image to save memory; a canvas keeps its pixels */
+   drawn a part at a time, a few milliseconds a frame). The one that fits the zoom is shown, the others kept at opacity 0
+   (kept on the GPU: showing one again costs nothing). Each tile is drawn in a canvas once, then kept as a bitmap, shown by
+   a 'bitmaprenderer' canvas: a bitmap is fixed pixels the compositor takes once, while a drawing canvas's pixels are
+   handed over again by the page's thread every frame the board moves (about 1-2 ms a tile: 10-17 ms a frame of a phone's
+   pinch, 50-60 ms when the level changed; 2026-10-05). (Not images: encoding 30 million pixels as PNG took 10 s) */
 let terrainLevels=[],shownLevel=null;
 export const terrainHook={ready:null}; // (camera.js: shows the level that fits the view once the bake is done)
 const TILE=1024,BLEED=4,BUDGET=24e6; // (BUDGET: device pixels of the densest level, about 96 MB; the two others add a third)
@@ -162,26 +164,32 @@ function bake(parts,ims,m){
   const imgs=parts.map(q=>{const i=new Image();i.src=q.url;return i;});
   Promise.all(imgs.map(i=>i.decode())).then(()=>{
     if(drawnMap!==m)return;
-    const host=$('#tlevels'),levels=[top,top/2,top/4].map(s=>{const el=document.createElement('div');el.className='tlevel';el.style.opacity=0;host.append(el);return{s,el};});
-    // the jobs, smallest level first: a tile's canvas, then each part that reaches into it (a part at a time: a few ms)
-    const jobs=[];
+    const host=$('#tlevels'),levels=[top,top/2,top/4].map(s=>{const el=document.createElement('div');el.className='tlevel';host.append(el);return{s,el};});
+    // the jobs, smallest level first: a tile's canvas, each part that reaches into it (a part at a time: a few ms), then
+    // its pixels made a bitmap and shown at once: the compositor takes a bitmap in the first frame that shows it (about
+    // 2 ms a tile here), so each is shown as it comes, every level at once over the live terrain (the same picture), and
+    // never first in the middle of a pinch (a whole level at once: 55-60 ms)
+    const jobs=[],tiles=[];let px=0;
     for(const lv of[...levels].reverse()){const s=lv.s,PW=Math.ceil(BW*s),PH=Math.ceil(BH*s);
       for(let ty=0;ty<PH;ty+=TILE)for(let tx=0;tx<PW;tx+=TILE){
         // (BLEED pixels of overlap all round, the same content in both: the GPU softens a tile's edge where it falls between
         // screen pixels, and with under a screen pixel of overlap the background showed through as a hairline; a level is
         // shown at least about half its size, so 4 is 2 screen pixels or more)
-        const cw=Math.min(TILE,PW-tx)+2*BLEED,ch=Math.min(TILE,PH-ty)+2*BLEED,ox=minX+(tx-BLEED)/s,oy=minY+(ty-BLEED)/s;let g=null;
-        jobs.push(()=>{const c=document.createElement('canvas');c.width=cw;c.height=ch;c.style.cssText=`left:${ox-minX}px;top:${oy-minY}px;width:${cw/s}px;height:${ch/s}px`;
-          g=c.getContext('2d');g.setTransform(s,0,0,s,-ox*s,-oy*s);lv.el.append(c);
-          // (the browser can drop a canvas's pixels (a GPU reset, memory pressure) and says so: the terrain is baked again)
-          c.addEventListener('contextrestored',()=>{if(drawnMap===m)bake(parts,[],m);});});
-        parts.forEach((p,q)=>{if(p.x0<ox+cw/s&&p.x0+p.w>ox&&p.y0<oy+ch/s&&p.y0+p.h>oy)jobs.push(()=>g.drawImage(imgs[q],p.x0,p.y0,p.w,p.h));});}}
+        const cw=Math.min(TILE,PW-tx)+2*BLEED,ch=Math.min(TILE,PH-ty)+2*BLEED,ox=minX+(tx-BLEED)/s,oy=minY+(ty-BLEED)/s;let c=null,g=null;px+=cw*ch;
+        jobs.push(()=>{c=document.createElement('canvas');c.width=cw;c.height=ch;g=c.getContext('2d');g.setTransform(s,0,0,s,-ox*s,-oy*s);});
+        parts.forEach((p,q)=>{if(p.x0<ox+cw/s&&p.x0+p.w>ox&&p.y0<oy+ch/s&&p.y0+p.h>oy)jobs.push(()=>g.drawImage(imgs[q],p.x0,p.y0,p.w,p.h));});
+        jobs.push(()=>tiles.push(createImageBitmap(c).then(bmp=>{c.width=c.height=0; // (its pixels are the bitmap's now)
+          if(drawnMap!==m){bmp.close();return;}
+          const im=document.createElement('canvas');im.width=cw;im.height=ch;im.style.cssText=`left:${ox-minX}px;top:${oy-minY}px;width:${cw/s}px;height:${ch/s}px`;
+          im.getContext('bitmaprenderer').transferFromImageBitmap(bmp);lv.el.append(im);})));}}
+    assert(px<=BUDGET*1.4,`view: the baked terrain stays within its memory budget (${(px/1e6).toFixed(1)} MP)`);
+    const done=()=>{
+      if(drawnMap!==m){for(const l of levels)l.el.remove();return;}
+      for(const l of terrainLevels)l.el.remove();terrainLevels=levels;shownLevel=null;for(const im of ims)im.remove(); // (baked: the vector images go)
+      bakeDue=false;diag(`terrain baked in ${Math.round(performance.now()-t0)} ms`);loadMark('the board complete (its terrain baked sharp)');if(terrainHook.ready)terrainHook.ready();};
     const step=()=>{if(drawnMap!==m){for(const l of levels)l.el.remove();return;}const t=performance.now();while(jobs.length&&performance.now()-t<6)jobs.shift()();
       if(jobs.length){later(step);return;}
-      for(const l of terrainLevels)l.el.remove();terrainLevels=levels;shownLevel=null;for(const im of ims)im.remove(); // (baked: the vector images go)
-      let px=0;for(const l of levels)for(const c of l.el.children)px+=c.width*c.height;
-      assert(px<=BUDGET*1.4,`view: the baked terrain stays within its memory budget (${(px/1e6).toFixed(1)} MP)`);
-      bakeDue=false;diag(`terrain baked in ${Math.round(performance.now()-t0)} ms`);loadMark('the board complete (its terrain baked sharp)');if(terrainHook.ready)terrainHook.ready();};
+      Promise.all(tiles).then(done,e=>assert(false,`view: the board's terrain is baked into bitmaps (${e.message})`));};
     later(step);
   },()=>assert(false,'view: the board\'s terrain images load'));
   // (another screen's pixel density: baked again for it)

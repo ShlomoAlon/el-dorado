@@ -54,6 +54,11 @@ function restCheck() {
   // A few hundred; the terrain drawn live was 2,271, 9 ms of the main thread per redraw at maximum zoom
   const n = document.querySelectorAll('#bscale *').length;
   assert(terrainLive || n <= LIVE_MAX, `view: the board is a few hundred live elements, its fixed terrain one image (${n})`);
+  // what moves with the board is fixed pixels or drawn by the compositor: a drawing canvas's pixels are handed over by the
+  // page's thread again every frame the board moves (the terrain's tiles as 2d canvases: 10-17 ms a frame of a phone's
+  // pinch; 2026-10-05). (A canvas showing a bitmap answers to 'bitmaprenderer'; one drawn into doesn't)
+  const cv = [...document.querySelectorAll('#stage canvas')].filter(c => !c.getContext('bitmaprenderer')).length;
+  assert(!cv, `view: nothing on the board is a canvas drawn into, whose pixels the page hands over again each frame the board moves (${cv})`);
   // the terrain shown is baked at the density this zoom needs, or the most this device keeps (terrain.js)
   const need = view.s * devicePixelRatio, got = terrainShow(need);
   assert(!terrainTop() || got >= Math.min(need, terrainTop()) * .98, `view: the terrain on screen is baked at the density the zoom needs (${got.toFixed(2)} for ${need.toFixed(2)})`);
