@@ -36,12 +36,15 @@ const RAW = [
   [/cubic-bezier\(/, 'an easing curve'],
 ];
 const MUST = { 'font-size': /^var\(--fs-[\w-]+\)$|^inherit$/, 'border-radius': /^(var\(--r-[\w-]+\)\s*)+$|^0$/, 'font-family': /^var\(--(ui|display)\)$|^inherit$/ };
+// the controls take the theme's heights (--h-*: small, compact, normal, big), or one derived from them
+const CONTROL = /\.btn\b|\.tbtn\b|\.prow input|select\.who|#rdock\b.*button|\.zoomctl button|\.sclose\b|\.bs-x\b|\.rmai\b|\.hx\b|#allClose\b|#hud\b|#acct\b|\.gsiSm\b|#gsiBtn\b|\.seatrow(\.\w+)*$/;
 const bad = [];
 const judge = (where, prop, val) => {
   if (prop.startsWith('--')) { if (RAW[0][0].test(val)) bad.push(`${where}: ${prop} holds ${RAW[0][1]} (${val.trim()}): give it a theme token`); return; }
   for (const [re, what] of RAW) if (re.test(val)) bad.push(`${where}: ${prop}:${val.trim()} holds ${what}: use the theme's`);
   if (MUST[prop] && !MUST[prop].test(val.trim())) bad.push(`${where}: ${prop}:${val.trim()} is not one of the theme's (${prop === 'font-size' ? '--fs-*' : prop === 'border-radius' ? '--r-*' : '--ui, --display'})`);
   if (prop === 'font' && !/var\(--fs-[\w-]+\)/.test(val) && !/^inherit$/.test(val.trim())) bad.push(`${where}: font:${val.trim()} has no theme size (--fs-*)`);
+  if (CONTROL.test(where) && /^(min-)?height$|^--hudH$/.test(prop) && !/^(var\(--(h-[a-z]+|hudH)\)|calc\(var\(--h-[a-z]+\)[^)]*\))$/.test(val.trim())) bad.push(`${where}: ${prop}:${val.trim()} is not one of the theme's heights (--h-*)`);
   if (prop === 'font' && /['"]|serif|sans/.test(val)) bad.push(`${where}: font:${val.trim()} names a font: use --ui or --display`);
 };
 rules.forEach((r, i) => { if (i === theme || r.sel.split(',').every(s => EXEMPT.test(s.trim()))) return;
