@@ -114,7 +114,9 @@ Verified against the rulebook text (rulespal / ultraboardgames / 1j1ju PDF) and 
 - **AI safety net** (`aiFinishGuard`, engine_ai.js): on the new courses the planner sometimes trashed its last paddle/machete card
   (or its deck down to 2 cards) and then waited next to El Dorado forever. The named AIs now keep one card that can enter
   El Dorado, never trash below 4 cards, and buy such a card before ending a turn without one. engine_bot.js untouched.
-- Blockade costs 1,1,1,1,2,2 are still a guess (BoardGameHelpers has blockade images too).
+- Blockade costs 1,1,1,1,2,2 confirmed (2026-10-05) against BoardGameHelpers' tile catalogue: jungle 1, sand (coins) 1,
+  rubble 1, water 1, jungle 2, rubble 2, numbered 1–6 in that order. The owner finds them harder to cross than in person
+  (2026-10-05): the crossing rules (one card pays the blockade plus the space behind it, or breaks it and stays) await his example.
 - Board rendering: harder spaces are darker (`TSHADE` in board/terrain.js), icons laid out 1 / 2 side by side / 3 triangle /
   4 square — owner's request, mirrors the printed tiles.
 
@@ -280,7 +282,7 @@ Playwright can't tap elements outside the viewport when `overflow: clip` is set;
 2. More courses (see §5): transcribe the remaining tiles, then the 6 rulebook routes (needs strips O–R for two of them), then community routes.
    Also: rulebook tiebreak "if tied players have no blockades, whoever reached El Dorado first wins" is not
    implemented yet (currently a shared place).
-3. Blockade costs — confirm from a photo of the tokens.
+3. Blockades feel harder than in person (owner, 2026-10-05): costs confirmed (§5 notes); find which crossing he expects.
 4. Online niceties not built: rematch button, in-game chat/emotes, spectator list, match history page, reconnect
    indicator per player in the HUD (presence exists in `room.seats[].online`), local-game turn timer.
 5. Possible abuse vectors to keep in mind: room codes are guessable (fine for friends), names are user-chosen
