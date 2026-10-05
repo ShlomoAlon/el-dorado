@@ -169,8 +169,8 @@ Two tiers, both reported through the boundaries above:
   test run therefore fails on a layout jump.
 - **Sharp at rest** (`sharp.js`, 2026-10-05): once the page rests (nothing animating, no input for 600 ms), in slices of
   3 ms: every text over the game sits on a layer of its own that is solid, with a solid border and no outer shadow, with
-  nothing above it faded, filtered or will-change. In tests every second, in a
+  nothing above it faded, filtered or will-change; the card under the pointer is upright. In tests every second, in a
   player's browser once a minute (reported). The pixels behind it: `test/sharp.cjs` (sub-pixel text on, GPU route, the
-  owner's screen) judges every text on each menu tab, a game and the windows.
+  owner's screen) judges every text on each menu tab, a game and the windows, and compares cards with plain copies.
 - **Lint** (`test/lint.mjs`): no catch that drops its error unless a comment names the failure it expects; no unused
   import (a swallowed call leaves one).

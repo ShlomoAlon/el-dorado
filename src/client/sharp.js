@@ -6,13 +6,16 @@
    (will-change) text is never drawn sub-pixel either. The rules:
    - text over the game sits on a surface that is a layer of its own (a 3D transform: translateZ(0)), solid (its background
      and border), casting no shadow (a shadow makes the layer partly see-through; the menus' frame draws theirs behind);
-   - nothing above a text is faded, filtered or kept for motion (will-change).
+   - nothing above a text is faded, filtered or kept for motion (will-change);
+   - the card under the pointer stands upright (owner, 2026-10-05: the fan keeps its tilt, the card pointed at straightens).
    A card is a picture (its art, rounded, shadowed, tilted in the fan): its text, and what is written on it ("1 left"), is
-   drawn at full resolution but grey-smoothed, as on a phone. Checked once the page rests (nothing animating, no input for a moment): in tests every second, in a player's
+   drawn at full resolution but grey-smoothed, as on a phone; test/sharp.cjs checks a card is as sharp as one drawn plainly. Checked once the page rests (nothing animating, no input for a moment): in tests every second, in a player's
    browser once a minute (a failure is logged and reported: boundary.js). The pixels themselves: test/sharp.cjs */
 import { assert } from '../engine.gen.js';
 import { CHECKS } from './debug.js';
 import { frameDue, afterDrawn, changeGen } from './frame.js';
+import { UI } from './state.js';
+import { cardEls } from './hand.js';
 import { failed } from './boundary.js';
 
 const ROOTS = ['#app', '#menu', '#overlay', '#banner', '#toast']; // (over the game, the board's own picture (#stage) aside; the side cells and the replay dock sit beside it)
@@ -40,6 +43,8 @@ function* checks() {
       yield;
     }
   }
+  const h = UI.hover && cardEls.get(UI.hover);
+  if (h && h.__t) assert(h.__t.rot === 0, `view: the card under the pointer stands upright (tilted ${h.__t.rot.toFixed(1)}°)`);
 }
 /* a pass runs a few milliseconds at a time, each slice a task of its own (all at once it took 17-41 ms of a slowed phone's
    main thread: a long task, frames: test/framebudget.cjs), and is dropped when the page moves on before it ends (an input,

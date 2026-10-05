@@ -88,8 +88,11 @@ function layoutCards() {
     // (a card under the pointer rises, and stays risen while pressed: only a drag takes it out of the hand's look)
     if (hi >= 0 && i !== hi) x += Math.sign(i - hi) * cw * .16;
     if (paying && UI.picks.includes(id)) { const k = tk++; x = bx + bw + 18 + k * tw * .55 - (cw - tw) / 2; y = by + bw * 1.4 * .5 - ch / 2 + k * 3; rot = 4 + k * 3; sc = tsc; z = 70 + k; }
-    else if (choosing) { y = H - ch * 1.02 - 14 + off * off * 1.5; rot *= .5; if (UI.picks.includes(id)) { y -= ch * .16; z = 60 + i; } if (i === hi && !(drag && drag.started)) { y = Math.min(y, H - ch * 1.1 - 14); rot = 0; z = 90; } } // the whole hand up; chosen cards higher
-    else { if (lifted(id)) { y = H - ch * 1.02 - 14; rot *= .4; z = 60 + i; } if (i === hi && !(drag && drag.started)) { y = H - ch * 1.12 - 14; rot = 0; sc = 1.14; z = 90; } }
+    else if (choosing) { y = H - ch * 1.02 - 14 + off * off * 1.5; rot *= .5; if (UI.picks.includes(id)) { y -= ch * .16; z = 60 + i; } if (i === hi && !(drag && drag.started)) { y = Math.min(y, H - ch * 1.1 - 14); z = 90; } } // the whole hand up; chosen cards higher
+    else { if (lifted(id)) { y = H - ch * 1.02 - 14; rot *= .4; z = 60 + i; } if (i === hi && !(drag && drag.started)) { y = H - ch * 1.12 - 14; sc = 1.14; z = 90; } }
+    // the card pointed at stands upright, wherever it is (owner, 2026-10-05: the fan keeps its tilt, the card pointed at
+    // straightens): one rule over every place's own pose (the tray's once forgot it)
+    if (i === hi && !(drag && drag.started)) rot = 0;
     // whatever lifts a card (chosen, under the pointer, the removal choice), it rises no further than the turn buttons
     // above it: a card never covers End turn (the spending tray beside the buy slot is placed apart, above them)
     const B = geo.act; if (B && !(paying && UI.picks.includes(id)) && x < B.right && x + cw > B.left) y = Math.max(y, B.bottom + 6 + ch * (sc - 1) / 2 + Math.sin(Math.abs(rot) * Math.PI / 180) * cw * sc / 2); // (its drawn box: grown about its centre, and tilted)

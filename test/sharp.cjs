@@ -9,7 +9,8 @@
 // the share of its edge pixels whose channels disagree. Chrome runs with sub-pixel text on (Linux has it off by default), on
 // the GPU route (which layers Chrome makes is what decides it: lib.cjs), at the owner's screen (1536×639 at 125%).
 // The board's picture (#stage: terrain, explorers, its labels) is not judged: it moves by design and the owner judges it fine.
-// A card's text is part of its picture (rounded, shadowed, tilted in the fan: grey-smoothed).
+// A card's text is part of its picture (rounded, shadowed, tilted in the fan: grey-smoothed): a card is judged as a picture,
+// against the same card drawn plainly.
 //   NODE_PATH=$(npm root -g) node test/sharp.cjs
 const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
 const zlib = require('zlib');
@@ -59,6 +60,30 @@ const texts = () => {
   }
   return out;
 };
+/* how much fine detail a picture shows: the mean step between neighbouring pixels' brightness (a picture stretched from a
+   smaller one, or resampled between pixels, steps less) */
+function detail(img, r) {
+  const { w, ch, out } = img, L = (x, y) => { const i = (y * w + x) * ch; return .3 * out[i] + .59 * out[i + 1] + .11 * out[i + 2]; };
+  let sum = 0, n = 0;
+  for (let y = Math.ceil(r.y); y < Math.floor(r.y + r.h) - 1; y++) for (let x = Math.ceil(r.x); x < Math.floor(r.x + r.w) - 1; x++) { sum += Math.abs(L(x + 1, y) - L(x, y)) + Math.abs(L(x, y + 1) - L(x, y)); n++; }
+  return sum / n;
+}
+/* a card at rest is as sharp as the same card drawn plainly: a copy of it, upright, unscaled, at whole pixels, at the size
+   it shows (a picture kept for motion is stretched instead of drawn again: will-change). Compared inside its edges */
+async function cardSharp(p, name, sel) {
+  await settle(p); await p.waitForTimeout(250); // (at rest: a card still turning or growing is in motion)
+  const r = await p.evaluate(sel => { const e = document.querySelector(sel); if (!e) return null; const q = e.getBoundingClientRect(), m = new DOMMatrixReadOnly(getComputedStyle(e).transform);
+    return { x: q.left, y: q.top, w: q.width, h: q.height, upright: Math.abs(m.b) < 1e-6 }; }, sel);
+  if (!T.ok(name + ': on screen, upright', !!r && r.upright, sel)) return;
+  const dpr = await p.evaluate(() => devicePixelRatio), inner = q => ({ x: (q.x + q.w * .1) * dpr, y: (q.y + q.h * .1) * dpr, w: q.w * .8 * dpr, h: q.h * .8 * dpr });
+  const a = detail(pixels(await p.screenshot()), inner(r));
+  const c = await p.evaluate(([sel, r]) => { const e = document.querySelector(sel), k = e.cloneNode(true), x = Math.round(innerWidth - r.w - 8), y = 8;
+    k.id = 'sharpRef'; k.className = e.className.replace(/\bmcard\b/, '') + ' card'; Object.assign(k.style, { position: 'fixed', left: x + 'px', top: y + 'px', transform: 'none', transition: 'none', zIndex: 2147483647, width: r.w + 'px', height: r.h + 'px', margin: 0 }); k.style.setProperty('--cw', r.w + 'px');
+    document.body.appendChild(k); return { x, y, w: r.w, h: r.h }; }, [sel, r]);
+  await p.evaluate(() => new Promise(f => requestAnimationFrame(() => requestAnimationFrame(f))));
+  const b = detail(pixels(await p.screenshot()), inner(c)); await p.evaluate(() => document.getElementById('sharpRef').remove());
+  T.ok(name + ': as sharp as the card drawn plainly', a >= b * .92, `detail ${a.toFixed(2)} against ${b.toFixed(2)} (${Math.round(a / b * 100)}%)`);
+}
 let judged = 0;
 async function screen(p, name) {
   await settle(p); await p.waitForTimeout(250);
@@ -83,6 +108,18 @@ async function screen(p, name) {
   // the card under the pointer
   const c = await p.evaluate(() => { const r = document.querySelector('#cards .card').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 20 }; });
   await p.mouse.move(c.x, c.y); await screen(p, 'a hand card pointed at');
+  await cardSharp(p, 'the hand card pointed at', '#cards .card[style*="z-index: 90"]');
+  await cardSharp(p, 'a market card', '#market .mslot .mcard');
+  // paying: a card picked to pay waits in the tray beside the purchase, tilted; pointed at, it straightens as in the hand
+  await p.mouse.move(600, 200); await settle(p);
+  const buy = await p.evaluate(() => { const E = window.__ED, c = e => E.CT[e.dataset.k.slice(2)].cost, best = [...document.querySelectorAll('#market .mslot.can')].sort((a, b) => c(b) - c(a))[0]; return best && c(best) >= 2 ? `#market .mslot.can[data-k="${best.dataset.k}"]` : null; });
+  if (T.ok('paying: the market has a card that takes more than one coin', !!buy)) {
+    await p.click(buy); await settle(p);
+    await p.evaluate(() => { const E = window.__ED; E.onHandCard(E.S.players[E.S.cur].hand.find(id => E.coinVal(E.S, id) === 1)); E.render(); });
+    await settle(p); const q = await p.evaluate(() => { const e = document.querySelector('#cards .card.pick'); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    if (T.ok('paying: a card waits in the tray', !!q && await p.evaluate(() => window.__ED.UI.mode === 'pay'))) { await p.mouse.move(q.x, q.y); await cardSharp(p, 'a card in the tray, pointed at', '#cards .card.pick'); }
+    await p.keyboard.press('Escape'); await p.mouse.move(600, 200); await settle(p);
+  }
   await p.mouse.move(600, 200);
   await p.click('#rulesBtn'); await screen(p, 'the rules window'); await p.keyboard.press('Escape');
   await settle(p); await p.waitForTimeout(500); await p.click('#menuBtn'); await screen(p, 'the menu during a game');
