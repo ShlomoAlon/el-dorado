@@ -137,13 +137,21 @@ function recFinal(rec,st){
   L.result={places:st.places,rounds:st.round};
   return L;
 }
+/* the cards every player starts with */
+const START_DECK={explorer:3,traveler:4,sailor:1};
+/* what a player owns, wherever each card is (hand, draw pile, discard pile, in play), in the cards' own order: public in the
+   game (everyone sees a purchase and a removal), though where each card is, is not. A page's redacted state hides another
+   seat's hand and draw pile, so it carries this list for them (redact: owns) */
+function ownedTypes(gs,pl){const p=gs.players[pl],n=p.hand.length+p.deck.length+p.discard.length+p.play.length;
+  const order=Object.keys(CT),out=p.owns?p.owns.slice():[...p.hand,...p.deck,...p.discard,...p.play].map(id=>gs.cards[id]).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+  assert(out.length===n&&out.every(t=>CT[t]),'ownedTypes: what a player owns is every card they hold, each a known card');return out;}
 /* a new game (its state) */
 function newGame(o,rnd){assert(typeof rnd==='function','newGame: a random source (rnd)');
   assert(o.players.length>=2&&o.players.length<=4,'newGame: 2 to 4 players');
   const course=o.course||COURSES[0],M=mapOf({course,seed:o.seed});
   let nid=1;const cards={};const mk=t=>{const id='c'+(nid++);cards[id]=t;return id;};
   const players=o.players.map(p=>{
-    const deck=[];for(let i=0;i<3;i++)deck.push(mk('explorer'));for(let i=0;i<4;i++)deck.push(mk('traveler'));deck.push(mk('sailor'));
+    const deck=[];for(const t in START_DECK)for(let i=0;i<START_DECK[t];i++)deck.push(mk(t));
     const pl={name:p.name,color:p.color,pieces:[],deck:shuffle(deck,rnd),hand:[],discard:[],play:[],fin:0,resigned:0};
     if(p.ai){assert(aiById(p.ai),'newGame: a known AI');pl.ai=p.ai;} // a named AI plays this seat (engine_ai.js)
     return pl;
@@ -421,7 +429,7 @@ function redact(state,seat){
   const R=JSON.parse(JSON.stringify(state));const vis=new Set();
   R.players.forEach((p,i)=>{
     if(i===seat){p.deck=p.deck.slice().sort((a,b)=>(state.cards[a]<state.cards[b]?-1:state.cards[a]>state.cards[b]?1:0));p.hand.forEach(id=>vis.add(id));p.deck.forEach(id=>vis.add(id));}
-    else{p.hand=p.hand.map((_,k)=>'h'+i+'_'+k);p.deck=p.deck.map((_,k)=>'d'+i+'_'+k);}
+    else{p.owns=ownedTypes(state,i);p.hand=p.hand.map((_,k)=>'h'+i+'_'+k);p.deck=p.deck.map((_,k)=>'d'+i+'_'+k);} // (owns: sorted, so it says what they own, never where)
     p.play.forEach(id=>vis.add(id));p.discard.forEach(id=>vis.add(id));
   });
   R.trash.forEach(id=>vis.add(id));

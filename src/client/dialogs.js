@@ -1,6 +1,6 @@
 /* Everything that opens over the game: the round banner, toasts, and one modal at a time (rules, results, a pile).
    The menu is its own dialog (menu.js); opening a modal closes it. */
-import { CT, SYMCOL, typeOf, playerDone, plural, blocksOf, assert } from '../engine.gen.js';
+import { CT, SYMCOL, typeOf, playerDone, plural, blocksOf, assert, ownedTypes } from '../engine.gen.js';
 import { $, esc, overlayUp } from './dom.js';
 import { S, UI, NET, online, hp, viewIdx, covered } from './state.js';
 import { cardHTML } from './cards.js';
@@ -52,17 +52,18 @@ export function showGameOver(){
     sc=>{sc.querySelector('#gClose').onclick=closeModal;
       const gr=sc.querySelector('#gRep');if(gr)gr.onclick=()=>{closeModal();if(online()){exitOnline();loadReplayId(rid);}else openReplay(UI.lastReplay,null);};sc.querySelector('#gNew').onclick=()=>{if(online()){exitOnline();showHub();}else showSetup();};},true);
 }
-/* a player's cards, as far as the viewer may see them (redact() keeps the rest from online pages anyway): another player's
-   hand face down and draw pile as a count; cards in play and the discard pile face up (public: played or thrown face up) */
+/* a player's cards, as far as the viewer may see them (redact() keeps the rest from online pages anyway), four things (owner,
+   2026-10-05): the hand, the draw pile, the discard pile, and every card they own wherever it is (starting cards too, removed
+   ones gone). Another player's hand and draw pile face down; what they own face up (every purchase and removal is public) */
 export function showPlayer(i){
   const p=S.players[i],me=i===viewIdx()&&!covered(),order=Object.keys(CT);
-  const faces=ids=>ids.map(id=>typeOf(S,id)).sort((a,b)=>order.indexOf(a)-order.indexOf(b)).map(t=>`<div class="mcard">${cardHTML(t)}</div>`).join('');
+  const types=ts=>ts.map(t=>`<div class="mcard">${cardHTML(t)}</div>`).join(''),faces=ids=>types(ids.map(id=>typeOf(S,id)).sort((a,b)=>order.indexOf(a)-order.indexOf(b)));
   const backs=n=>Array.from({length:n},()=>'<div class="pback"><div class="back"></div></div>').join('');
   const part=(title,n,body)=>`<div class="ppart"><h3>${title} <span class="m">${n}</span></h3>${n?`<div class="deckgrid">${body}</div>`:''}</div>`;
   const held=blocksOf(S,i).map(b=>S.blockades[b]).sort((a,b)=>b.n-a.n); // (the biggest first: most blockades, then the biggest, breaks a tie)
   modal(`<h2><i class="pdot" style="background:${p.color}"></i>${esc(p.name)}</h2>${playerDone(p)||p.resigned?`<p class="sub">${playerDone(p)?'Reached El Dorado':'Left the game'}</p>`:''}
-    ${part('Hand',p.hand.length,me?faces(p.hand):backs(p.hand.length))}${part('In play',p.play.length,faces(p.play))}
-    ${part('Draw pile',p.deck.length,me?faces(p.deck):backs(Math.min(p.deck.length,1)))}${part('Discard pile',p.discard.length,faces(p.discard))}
+    ${part('Hand',p.hand.length,me?faces(p.hand):backs(p.hand.length))}${part('Draw pile',p.deck.length,me?faces(p.deck):backs(Math.min(p.deck.length,1)))}
+    ${part('Discard pile',p.discard.length,faces(p.discard))}${(o=>part('Owned',o.length,types(o)))(ownedTypes(S,i))}
     ${part('Blockades',held.length,held.map(B=>`<span class="pbk" style="--c:${SYMCOL[B.k]}" title="Blockade ${B.n}"><b>${B.n}</b></span>`).join(''))}
     <div class="mrow"><button class="btn pri" id="pClose">Close</button></div>`,sc=>{sc.querySelector('#pClose').onclick=closeModal;},true);
 }

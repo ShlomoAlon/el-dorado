@@ -3,7 +3,7 @@
 // the reserve, the Transmitter, action cards, single-use cards, the end of a turn, both end-of-game rules and their
 // tie-break, two explorers each, resigning, what undo may take back, and what each player is shown.
 //   node test/rules.test.mjs
-import { CT, key, newGame, newCard, applyAction, reach, payTargets, nativeTargets, cardTargets, blocksOf, cantBuy, buyOptions, COURSES, COLORS, recNewGame, recApply, recCanUndo, recUndo, redact, replayCheck, setAssertMode, MAPS } from '../src/engine.gen.js';
+import { CT, key, newGame, newCard, applyAction, reach, payTargets, nativeTargets, cardTargets, blocksOf, cantBuy, buyOptions, COURSES, COLORS, recNewGame, recApply, recCanUndo, recUndo, redact, ownedTypes, replayCheck, setAssertMode, MAPS } from '../src/engine.gen.js';
 let S = null; // the game of the check under way
 setAssertMode({ debug: true }); // a broken invariant fails the run
 let checks = 0; const failures = [];
@@ -223,6 +223,10 @@ const R = redact(S, 1), mine = R.players[1];
 ok(mine.hand.every(id => R.cards[id] === S.cards[id]), 'a player sees their own hand');
 ok(mine.deck.map(id => R.cards[id]).join() === S.players[1].deck.map(id => S.cards[id]).sort().join(), 'and what is in their draw pile, but not its order');
 ok(S.players.every((p, i) => i === 1 || [...p.hand, ...p.deck].every(id => !R.cards[id] && !R.players[i].hand.includes(id) && !R.players[i].deck.includes(id))), 'but no one else\'s hand or draw pile');
+ok(S.players.every((p, i) => ownedTypes(R, i).join() === ownedTypes(S, i).join()), 'everyone sees what each player owns (bought cards are public), as the full game has it');
+ok(S.players.every((p, i) => i === 1 || R.players[i].owns.join() === [...R.players[i].owns].sort((a, b) => Object.keys(CT).indexOf(a) - Object.keys(CT).indexOf(b)).join()), 'in the cards\' own order: what they own, never where each card is');
+{ const g = newGame({ players: [{ name: 'A' }, { name: 'B' }] }, () => .5), p0 = g.players[0]; p0.discard.push('cX'); g.cards.cX = 'scout'; g.nid++; g.trash.push(p0.deck.pop());
+  ok(ownedTypes(g, 0).length === 8 && ownedTypes(g, 0).includes('scout') && ownedTypes(g, 1).length === 8, 'what a player owns: their starting cards and what they got, less what they removed'); }
 
 if (failures.length) { console.error('FAIL:\n  ' + failures.join('\n  ')); process.exit(1); }
 console.log(`ok: ${checks} rules checks`);
