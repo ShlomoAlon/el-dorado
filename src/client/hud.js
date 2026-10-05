@@ -37,7 +37,7 @@ function updateHeader(){
 /* the prompt is two fixed slots: the turn timer (renderTimer), at its own place whose room is kept for the whole online
    game, and the message, written as a whole when it changes (a new message never redraws or moves the timer) */
 /* the message: one line (owner, 2026-10-01), so a new message never moves what's below it */
-function say(html){const M=$('#pmsg');if(M.__h===html)return;setHTML(M,html);
+function say(html){const M=$('#pmsg');if(M.__say===html)return;M.__say=html;setHTML(M,html?`<span class="pm">${html}</span>`:''); // (in a pill: words over the board need a solid ground)
   if(CHECKS)afterDrawn(()=>assert(M.scrollWidth<=M.clientWidth+1,'view: the prompt\'s message fits on one line ('+M.textContent+')'));}
 /* every turn button: its words and its slot (s3: right, above the big one's edge; s2: left; p: the big one). Labels are
    data, so every one is checked against its slot (checkLabels), not only those a test happens to show */

@@ -227,13 +227,15 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #app.nomkt{--mktFoot:16px} /* (a class set by market.js, not :has(): every insertion anywhere in the game area would re-check a :has() and restyle the whole board) */
 #mkt.cramped{display:none}
 @property --six{syntax:'<length>';inherits:true;initial-value:0px} /* the recap's width: six cards side by side (the prompt is sized to it: + padding 14 and border 1, each side) */
-#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;box-sizing:border-box;top:var(--row2,64px);--fw:52px;--six:calc(var(--fw)*6 + 60px);width:min(calc(var(--six) + 30px),calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:7px 14px;border-radius:12px;font-size:12px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s}
+#prompt{position:absolute;left:var(--zoomFoot);right:var(--mktFoot);margin-inline:auto;box-sizing:border-box;top:var(--row2,64px);--fw:52px;--six:calc(var(--fw)*6 + 60px);width:min(calc(var(--six) + 30px),calc(100% - var(--zoomFoot) - var(--mktFoot)));padding:7px 14px;font-size:12px;color:#dbe4de;z-index:15;text-align:center;line-height:1.4;transition:opacity .2s;pointer-events:none} /* (no box of its own: owner, 2026-10-05, the turn's cards hover over the board; the message and captions are pills) */
+#prompt .pm,#prompt .timer,#feed .fcap span,#feed .farr,.fend .fpill{background:var(--surf);border:1px solid var(--edge);transform:translateZ(0)}
+#prompt #pmsg{min-height:calc(1.4em + 8px)}#prompt .pm{display:inline-block;border-radius:10px;padding:3px 12px;pointer-events:auto} /* (the message's slot keeps one size, words or none: the pill inside it is written anew with each message, so nothing moves) */#feed .fg{pointer-events:auto}#feed .fcap span{border-radius:7px;padding:0 4px}#prompt .timer.low{background:color-mix(in srgb,#e8634f 28%,var(--surf))}
 #prompt b{color:var(--gold2)}
 #prompt .who{display:inline-flex;align-items:center;gap:7px;font-weight:800;margin-right:8px;color:var(--text)}
 #prompt .who i{width:11px;height:11px;border-radius:50%}
 #prompt .m{color:var(--muted)}
 /* another player's turn: their cards in a row under the prompt text (ui_view.js feedRender); newest on the right, the oldest clip */
-#feed{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px -6px 0;padding-top:8px;border-top:1px solid var(--line)}
+#feed{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px -6px 0;padding-top:8px}
 #feed .frow{flex:none;display:flex;flex-wrap:wrap;align-items:flex-end;align-content:flex-start;column-gap:12px;row-gap:10px;width:var(--six);padding:2px 0 0;min-height:calc(var(--fw)*1.4 + 22px);box-sizing:border-box} /* room for six cards side by side; more go on a second line (feed.js checkSize); shown only where the prompt holds it (geo.recapFits) */
 .fg{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
 .fg.new{animation:fgIn .32s var(--ease) backwards}
@@ -243,12 +245,12 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .fc .mcard{--cw:var(--fw)}
 .fcs .fc+.fc{margin-left:calc(var(--fw)*-.42)}
 .fc.got .cface{box-shadow:0 0 0 2px var(--gold2),0 0 12px rgba(233,178,74,.45)}
-.fg .farr{font-size:20px;line-height:1;color:var(--gold2);margin:0 4px;font-weight:800}
+.fg .farr{font-size:16px;line-height:1;color:var(--gold2);margin:0 4px;font-weight:800;border-radius:50%;width:20px;height:20px;display:grid;place-items:center;box-sizing:border-box}
 .f-camp .fc .cface,.f-trash .fc .cface{box-shadow:0 0 0 2px #e08a74}
 .fg .fcap{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;line-height:1.2;height:1.2em;width:0;display:flex;justify-content:center} /* (no width of its own: centred under its step, so a caption that changes never moves the steps; its line is kept when empty, so every step is one height and a line never grows) */
 .fg .fcap b{color:var(--text)}
 .fend{align-self:center}
-.fend .fpill{font-size:11px;font-weight:800;color:var(--text);border:1px solid var(--line2);border-radius:9px;padding:3px 9px;background:rgba(255,255,255,.04)}
+.fend .fpill{font-size:11px;font-weight:800;color:var(--text);border-radius:9px;padding:3px 9px}
 .timer{display:inline-block;font-variant-numeric:tabular-nums;font-weight:800;padding:1px 9px;border-radius:8px;background:rgba(255,255,255,.08);margin-right:10px;color:var(--gold2);transition:background .2s,color .2s}
 .timer.low{background:rgba(232,99,79,.28);color:#ffb3a5;animation:pulse 1s ease-in-out infinite}
 
@@ -584,7 +586,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
       <button class="tbtn surf" id="menuBtn">Menu</button>
     </div>
   </div>
-  <div id="prompt" class="surf"><div id="ptxt"><span id="turnTimer" class="timer" hidden></span><span id="pmsg"></span></div><div id="feed" hidden aria-live="polite"></div></div>
+  <div id="prompt"><div id="ptxt"><span id="turnTimer" class="timer" hidden></span><span id="pmsg"></span></div><div id="feed" hidden aria-live="polite"></div></div>
   <div id="mkt"><div id="market"></div></div>
   <div id="allc" data-dims hidden>
     <div class="allc-in">
