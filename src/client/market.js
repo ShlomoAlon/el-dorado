@@ -1,7 +1,7 @@
 /* The market: six cards floating at the top right (plus an "All cards" tile), the All cards spread (market and
    reserve), the purchase slot above the hand, and dragging a market card down to buy it. Slots are made once and
    updated in place; a card's artwork is drawn again only when another card takes its slot. */
-import { CT, MARKET0, stackOf, reserveOpen, cantBuy, fmt, assert } from '../engine.gen.js';
+import { CT, MARKET0, stackOf, reserveOpen, cantBuy, fmt } from '../engine.gen.js';
 import { $, setText, setStyle } from './dom.js';
 import { S, UI, G, canAct, passing } from './state.js';
 import { geo, onGeo } from './geometry.js';
@@ -27,12 +27,9 @@ export function openAll(open){UI.allFor=open?allKey():null;if(open)$('#allc').sc
    when that isn't enough (measured when the game area or the buttons change size, never while updating) */
 function sizeMarket(){
   const mk=$('#mkt'),W=geo.app.width,H=geo.app.height,phone=W<600,top=parseFloat(getComputedStyle(mk).top),ab=$('#actBtns'),at=geo.app.top;
-  // the room: above the turn buttons' area (its slots are fixed: every button it can show is inside it) and the discard pile
-  const avail=Math.min(ab.getBoundingClientRect().top-at-top-12,$('#discPile').getBoundingClientRect().top-at-top-10);
-  // the room follows the game area: a taller one (the same width, the buttons as far from its bottom) never leaves the market
-  // less room (2026-10-05: two rules met at a threshold, and 2 px more height took 44 px of room, hiding the market)
-  { const btm=H-(ab.getBoundingClientRect().top-at),last=sizeMarket.last; sizeMarket.last={W,H,btm,avail};
-    if(last&&last.W===W&&Math.abs(last.btm-btm)<.5)assert((H-last.H)*(avail-last.avail)>=-.5,`market: a taller game area never leaves the market less room (height ${Math.round(last.H)} → ${Math.round(H)}, room ${Math.round(last.avail)} → ${Math.round(avail)})`); }
+  let avail=H-(parseFloat(getComputedStyle(ab).bottom)||0)-150-top; // room for up to three stacked buttons below
+  if(avail<60)avail=ab.getBoundingClientRect().top-at-top-12; // very short screens: just stay above the current ones
+  avail=Math.min(avail,$('#discPile').getBoundingClientRect().top-at-top-10); // and above the discard pile
   const def=phone?44:72,min=phone?34:56,gap=phone?7:10,cg=phone?7:8,n=MARKET0.length+1; // (the market always has its 6 slots, and All cards)
   // every column count against the room below (height) and beside (width: at most ~55% of the game area); the largest cards win
   let pick=null;

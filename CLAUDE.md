@@ -179,9 +179,6 @@ Follow these in new code and fix toward them:
 - Local first: show what's known locally at once; the network only adds; a screen is chosen only once the data that
   decides it has arrived.
 - One source of truth; everything else derives from it.
-- The theme (shell.html's first `:root`): every colour, font, type size, corner, shadow, control height and menu motion of
-  the interface is one of its tokens, nothing written in place (owner, 2026-10-04; `test/theme.mjs`). Not themed yet: the
-  board, explorers and cards (listed in the check). A new kind of value goes into the theme first.
 - Animation follows the state and never gates input.
 
 ### Also

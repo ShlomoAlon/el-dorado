@@ -28,14 +28,14 @@ writeFileSync(new URL('./src/engine.gen.js', import.meta.url),
 const E = await import(new URL('./src/engine.gen.js?' + Date.now(), import.meta.url));
 // the start screen's lists are written into the page from the engine's data, so it needs no script to show
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const card = (name, id, b, sub, on) => `<label class="box down pick" data-v="${id}"><input type="radio" name="${name}" value="${id}"${on ? ' checked' : ''}><b>${b}</b><span>${esc(sub)}</span></label>`;
+const card = (name, id, b, sub, on) => `<label data-v="${id}"><input type="radio" name="${name}" value="${id}"${on ? ' checked' : ''}><b>${b}</b><span>${esc(sub)}</span></label>`;
 const courses = name => E.COURSES.map(c => card(name, c.id, esc(c.name) + (c.diff ? ` <i class="dtag d-${esc(c.diff.toLowerCase())}">${esc(c.diff)}</i>` : ''), 'Boards ' + c.p.map(x => x[0]).join(' · '), c.id === 'first')).join('')
   + (E.COURSES.length > 1 ? card(name, 'random', 'Random course', 'Any course from this list', false) : '');
 const COLS = ['crimson', 'ivory', 'violet', 'orange'], sw = (name, i, val) => E.COLORS.map(c => `<label style="--c:${c.hex}" title="${c.name}"><input type="radio" name="${name}" value="${val(c)}"${i >= 0 && c.id === COLS[i] ? ' checked' : ''}${i >= 0 && i < 3 && COLS.slice(0, 3).some((x, j) => j !== i && x === c.id) ? ' disabled' : ''} aria-label="${c.name}"></label>`).join('');
 const seats = ['Ana', 'Ben', 'Cleo', 'Dev'].map((nm, i) => `<div class="prow seat" data-i="${i}"${i > 2 ? ' hidden' : ''}><select class="who" name="who${i}" aria-label="Player ${i + 1}: human or AI"><option value="">Human</option><optgroup label="AI players">${E.AIS.map(a => `<option value="${a.id}">${esc(a.name)} · ${esc(a.tier)}</option>`).join('')}</optgroup></select>`
   + `<input name="nm${i}" maxlength="14" value="${nm}" aria-label="Player ${i + 1} name"><div class="ainm" hidden><span></span></div><div class="sws">${sw('col' + i, i, c => c.id)}</div></div>`).join('');
 const shell = r('./src/client/shell.html').replace('<!--COURSES:course-->', courses('course')).replace('<!--COURSES:ocourse-->', courses('ocourse')).replace('<!--SEATS-->', seats)
-  .replace('<!--AILIST-->', E.AIS.map(a => `<button type="button" class="box down click" data-addai="${a.id}"><b>${esc(a.name)} <span class="aitag">AI</span></b><span>${esc(a.tier)} · ${esc(a.desc)}</span></button>`).join(''))
+  .replace('<!--AILIST-->', E.AIS.map(a => `<button type="button" data-addai="${a.id}"><b>${esc(a.name)} <span class="aitag">AI</span></b><span>${esc(a.tier)} · ${esc(a.desc)}</span></button>`).join(''))
   .replace('<!--ROOMCOLS-->', sw('rlcol', -1, c => c.hex));
 // the AI's neural network (tools/ai/pack.mjs): the site loads it from /ai/first.<hash>.bin only when an AI needs it, named
 // by its contents like the script (a tab open across a deploy keeps the network its code was built with); the artifact
@@ -47,10 +47,10 @@ const netBin = readFileSync(new URL('./src/ai/first.bin', import.meta.url)), net
 const pack = entry => esbuild.buildSync({ entryPoints: [new URL(entry, import.meta.url).pathname], bundle: true, format: 'iife',
   minify: !process.env.DEV, target: 'es2020', write: false, logLevel: 'error' }).outputFiles[0].text;
 const workerJs = pack('./src/client/aiworker.js');
-// the design editor (src/client/design: owner, 2026-10-05): a script of its own, fetched by the menu's Design button (none in the artifact)
-const designJs = pack('./src/client/design/design.js'), designFile = `design.${createHash('sha256').update(designJs).digest('hex').slice(0, 10)}.js`;
+// the design editor (src/client/editor: owner, 2026-10-05): a script of its own, fetched only by a page opened with ?edit
+const editorJs = pack('./src/client/editor/editor.js'), editorFile = `ed.${createHash('sha256').update(editorJs).digest('hex').slice(0, 10)}.js`;
 const bundle = (net, worker) => esbuild.buildSync({ entryPoints: [new URL('./src/client/main.js', import.meta.url).pathname], bundle: true, format: 'iife',
-  minify: !process.env.DEV, target: 'es2020', write: false, define: { AI_NET: JSON.stringify(net), AI_WORKER: JSON.stringify(worker), DESIGN_URL: JSON.stringify(net && net.url ? designFile : null) }, logLevel: 'error' }).outputFiles[0].text;
+  minify: !process.env.DEV, target: 'es2020', write: false, define: { AI_NET: JSON.stringify(net), AI_WORKER: JSON.stringify(worker), ED_URL: JSON.stringify(net && net.url ? editorFile : null) }, logLevel: 'error' }).outputFiles[0].text;
 const script = (net, worker) => `<script>\n${bundle(net, worker)}</script>\n`;
 // fonts (Figtree variable 400–800 and Young Serif, Latin subset) are served by the site itself: no render-blocking
 // request to another domain; the artifact (no network) gets them embedded
@@ -65,10 +65,10 @@ const withFonts = (html, fonts) => html.replace('<!--FONTS: build.mjs puts the s
 const minCss = c => esbuild.transformSync(c, { loader: 'css', minify: true }).code;
 const LATE = /<style data-late>([\s\S]*?)<\/style>/, late = shell.match(LATE)[1];
 const hashed = (ext, text) => { const n = `app.${createHash('sha256').update(text).digest('hex').slice(0, 10)}.${ext}`; writeFileSync(new URL('./public/' + n, import.meta.url), text); return n; };
-for (const f of readdirSync(new URL('./public/', import.meta.url))) if (/^(app\.[0-9a-f]{10}\.(js|css)|aiw\.[0-9a-f]{10}\.js|design\.[0-9a-f]{10}\.js)$/.test(f)) unlinkSync(new URL('./public/' + f, import.meta.url));
+for (const f of readdirSync(new URL('./public/', import.meta.url))) if (/^(app\.[0-9a-f]{10}\.(js|css)|aiw\.[0-9a-f]{10}\.js|ed\.[0-9a-f]{10}\.js)$/.test(f)) unlinkSync(new URL('./public/' + f, import.meta.url));
 const faceCss = siteFonts.replace(/<\/?style>/g, ''); // the game's fonts are declared in the game's CSS: the start screen never fetches them
 const cssFile = hashed('css', minCss(faceCss + late)), workerFile = `aiw.${createHash('sha256').update(workerJs).digest('hex').slice(0, 10)}.js`;
-writeFileSync(new URL('./public/' + workerFile, import.meta.url), workerJs); writeFileSync(new URL('./public/' + designFile, import.meta.url), designJs);
+writeFileSync(new URL('./public/' + workerFile, import.meta.url), workerJs); writeFileSync(new URL('./public/' + editorFile, import.meta.url), editorJs);
 const jsFile = hashed('js', bundle({ url: '/ai/' + netFile, hash: netHash }, { url: workerFile }));
 const siteShell = withFonts(shell, '').replace(LATE, '').replace(/<style>([\s\S]*?)<\/style>/, (m, c) => `<style>${minCss(c)}</style>`);
 // the start screen needs only the page itself: the game's CSS and script are fetched at once (preloaded) but applied and run

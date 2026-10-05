@@ -99,3 +99,6 @@ window.__ED = { NET, UI, G, reshuffles, targets, walking, baking, diagLog, geo, 
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },
   ...Object.fromEntries(Object.entries({ act, playEvents, openReplay, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, onPiece, onPlayCard, startDiscard, addDiscard, confirmTrash }).map(([k, f]) => [k, now(f)])) };
 boot();
+/* the design editor (src/client/editor: owner, 2026-10-05): fetched only by a page opened with ?edit, so no other page pays for
+   it (ED_URL: its file; none in the artifact) */
+if (ED_URL && new URLSearchParams(location.search).has('edit')) { const s = document.createElement('script'); s.src = ED_URL; document.head.appendChild(s); }

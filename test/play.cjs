@@ -41,7 +41,7 @@ const CPU_MS = 100; // (measured 65 ms with the board's terrain as one image, 20
       await p.click('#sGo', { timeout: 20000 });
     } catch (e) { throw new Error(e.message.split('\n')[0] + ' — page: ' + await pageState()); }
     await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
-    // each way a reshuffle shows (UI.reshuffle: three ways, until the owner picks one) in a game of its own, the owner's screen the fullest
+    // each way a reshuffle shows (UI.reshuffle: tried in the design editor) in a game of its own, the owner's screen the fullest
     const shuffle = ['riffle', 'gather', 'instant', 'gather'][g % 4]; await p.evaluate(v => { window.__ED.UI.reshuffle = v; }, shuffle);
     await p.evaluate(() => window.__ED.aiPace(.05)); // (the AIs' pauses, 20x shorter: their moves and animations unchanged)
     const did = {}, unmapped = []; let steps = 0; const cpu = own && cpuMeter(srvB.process().pid);

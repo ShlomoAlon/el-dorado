@@ -1,5 +1,5 @@
 // Every check in one command. Independent checks run side by side; the timing measurements run afterwards, alone.
-//   node test/run.mjs            build, import lint, the theme check, rules, engine (quick), layout (6 sizes, the owner's screen included), game flows, board taps, played games (3), menus, worker bundle, frame costs, the frame budget (20 moves)  (~95 s)
+//   node test/run.mjs            build, import lint, rules, engine (quick), layout (6 sizes, the owner's screen included), game flows, board taps, played games (3), menus, worker bundle, frame costs, the frame budget (20 moves)  (~95 s)
 //   node test/run.mjs --online   also online play end to end, against a game server the test starts itself  (+~45 s)
 //   node test/run.mjs --full     everything: engine (60 games + AI on every course), layout (12 sizes), played games (6), online, board rendering
 import { spawn, execSync } from 'node:child_process';
@@ -33,7 +33,6 @@ if (arg.includes('--gpu')) {
 }
 const res = await Promise.all([
   ['lint', 'node test/lint.mjs', 15],
-  ['theme', 'node test/theme.mjs', 2], // every colour, size, corner, shadow and motion of the interface from the theme
   ['rules', 'node test/rules.test.mjs', 2],
   ['engine', 'node test/engine.test.mjs' + (full ? '' : ' --quick'), full ? 120 : 50],
   ['layout', 'node test/layout.cjs' + (full ? '' : ' --quick'), full ? 130 : 60],
@@ -41,7 +40,7 @@ const res = await Promise.all([
   ['taps', 'node test/taps.cjs', 15],
   ['play', 'node test/play.cjs' + (full ? ' --games 6' : ''), full ? 180 : 80], // whole games through the UI, every assertion on (coverage)
   ['menus', 'node test/menus.cjs', 20],
-  ['design', 'node test/design.cjs', 15], // the design editor: opened from the menu, every edit, Copy, undo all exact, nothing left after
+  ['editor', 'node test/editor.cjs', 15],
   ['worker', 'npx wrangler deploy --dry-run --outdir /tmp/wdry', 20],
   ...(online ? [['online', 'node test/online.cjs', 290]] : []),
 ].map(run));

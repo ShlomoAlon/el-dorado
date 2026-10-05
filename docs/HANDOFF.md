@@ -240,32 +240,6 @@ Board targets (`cardTargets`, `payTargets`) say which action goes there (`t`), s
   and steps aside (`#mkt.cramped`, Market button opens the card view) when nothing fits.
 - `test/layout.cjs` checks 11 sizes × play/replay states for off-screen or overlapping controls. Run it after UI changes.
 
-### The theme and the design editor (owner, 2026-10-04/05)
-- **The theme** is shell.html's first `:root`: every colour, font, type size, corner, shadow, control height (28/32/38/46 px)
-  and menu motion is one of its tokens; `test/theme.mjs` fails on anything written in place. Not themed yet: the board,
-  explorers and cards ("eventually").
-- **The old design editor is gone** (owner, 2026-10-05: "the flowcharts were a horrible idea"): its flowchart, looks and
-  options were removed with it. Its three looks (Brass, Jungle, Water) are kept in `docs/looks/` to become theme presets.
-- **The new editor** (being built from scratch, menus first): opened from the menu, not a special address; its panel is
-  open while the game works as usual, and nothing is editable until Edit is pressed. Its job is to tell Claude what the owner
-  wants, not to change the site: every edit is an operation on a named part, and Copy gives the net changes, each with the
-  screen, the part, from → to and the owner's note (a Report button for players may follow). Operations: move (also to
-  another place that accepts the part), copy, delete, width, type within a family, text, note; undo, redo, reset.
-- **Editing by the theme's parts (decided, not built yet).** Every element is a themed part with a role, or a *special*
-  (board, cards) that can't be selected. What can be done to an element follows from its parent's layout (a stack: reorder;
-  a row or grid: reorder, width quarter/half/full). Clicks: **a click takes what was clicked** (press on a button and drag
-  it at once); only *units* (an either/or switch and the like) take the click as a whole, and a double-click reaches their
-  parts. Edit mode adds its listeners once at the root and removes them when it ends; the site itself is plain HTML and
-  the theme. Moves animate (pick up, siblings make room, drop into a slot). The test for any design: a person can make it
-  in the editor easily and smoothly.
-- **Three kinds of element, set in the code, never by the editor** (owner, 2026-10-05): *flowing* (most: they sit in their
-  parent's layout and get only what it grants: reorder, width, kind), *fixed* (only the ones we designate, today the floating
-  game controls: anchor, offset and size, per size class, editable by pixel), and *special* (board, cards: nothing). A user
-  can't make an element fixed or flowing; they get the controls of the kind it is.
-- Before fixed elements are editable: size classes defined once (theme tokens read by CSS and JS; today "phone" is written
-  in five places), and each fixed element as anchor + offset + size, placed relative to another by name ("above the discard
-  pile"), not by sums of its size (today `bottom: 16px + 104px + 34px`).
-
 ## 7. Testing recipes
 
 ```

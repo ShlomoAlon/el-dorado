@@ -38,8 +38,6 @@ export function menuInit(){
   MENU.f.addEventListener('submit',e=>e.preventDefault());
   MENU.f.addEventListener('change',menuChange);
   MENU.f.addEventListener('click',menuClick);
-  mq('#designBtn').hidden=!DESIGN_URL;
-  if(DESIGN_URL)(window.requestIdleCallback||(f=>setTimeout(f,2000)))(loadDesign,{timeout:4000});
   mq('#jCode').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();mq('#jGo').click();}});
   // the menu is opened with show(), never as a modal (showModal makes the whole page inert: every element, the board's
   // thousands included, restyled each time it opens and closes, a 15-20 ms frame); it covers the screen, so a click
@@ -109,19 +107,12 @@ function menuChange(e){
   if(n==='rlrated'){roomSend({t:'rated',v:e.target.value==='1'});return;}
   if(n==='rlcol'){roomSend({t:'color',color:e.target.value});return;}
 }
-/* the design editor (src/client/design): its file is fetched once the page is idle (small; it builds nothing until opened),
-   so Design opens it at once; a click before it has arrived opens it when it does */
-let designWant=false;
-function loadDesign(){if(document.getElementById('designJs'))return;const s=document.createElement('script');s.id='designJs';s.src=DESIGN_URL;
-  s.onload=()=>{if(designWant)window.__design.open();};document.head.appendChild(s);}
-function openDesign(){if(window.__design){window.__design.open();return;}designWant=true;loadDesign();}
 function menuClick(e){
   const b=e.target.closest('button');if(!b||b.disabled)return;
   const err=t=>{hubErr(t);};
   const run=f=>Promise.resolve().then(f).catch(x=>err(x.message));
   switch(b.id){
     case'sBack':menuClose();return;
-    case'designBtn':openDesign();return;
     case'sResign':menuClose();online()?resignOnline():resignLocal();return;
     case'sEnd':menuClose();endLocal();return;
     case'sResume':menuClose();resumeSaved();return;
@@ -206,7 +197,7 @@ function onlineRender(){
 }
 export function roomsRender(){
   const rrow=r=>{const o=r.opts,n=r.seats.length,ai=r.seats.filter(x=>x.ai).length,host=(r.seats.find(x=>x.uid===r.host)||{name:''}).name; // (a quick match's room can list before anyone is seated)
-    return`<div class="box"><span>${o.auto?'<b>Quick match</b>':`<b>${esc(host)}</b>’s room`} <span class="note">· ${n}/${o.max}${ai?` (${ai} AI)`:''} · ${o.turn}s turns · ${o.rated?'rated':'unrated'} · ${esc(courseName(o.course))}</span></span>${r.status==='lobby'&&n<o.max?`<button type="button" class="btn" data-join="${r.code}">Join</button>`:'<span class="note">in progress</span>'}</div>`;};
+    return`<div class="rrow"><span>${o.auto?'<b>Quick match</b>':`<b>${esc(host)}</b>’s room`} <span class="note">· ${n}/${o.max}${ai?` (${ai} AI)`:''} · ${o.turn}s turns · ${o.rated?'rated':'unrated'} · ${esc(courseName(o.course))}</span></span>${r.status==='lobby'&&n<o.max?`<button type="button" class="btn" data-join="${r.code}">Join</button>`:'<span class="note">in progress</span>'}</div>`;};
   const open=NET.rooms.filter(r=>r.status==='lobby'),live=NET.rooms.filter(r=>r.status==='playing');
   setHTML(mq('#roomsOpen'),open.map(rrow).join('')||'<p class="note">No open rooms right now. Create one and share the code.</p>');
   mq('#liveBox').hidden=!live.length;setHTML(mq('#roomsLive'),live.map(rrow).join(''));
@@ -233,10 +224,10 @@ function onlineTab(){
 const lbHTML=players=>players.length?`<div class="lb">${players.map((p,i)=>{const A=p.bot&&aiById(p.bot);return`<span class="m">${i+1}</span><span class="lbp"><button type="button" class="lbn${p.id===myId()?' me':''}" data-uid="${esc(p.id)}">${esc(p.name)}</button>${A?`<span class="aitag" title="${esc(A.desc)}">AI</span><span class="note">${esc(A.tier)}</span>`:''}</span><span>${Math.round(p.rating)}</span><span class="m">${p.wins}/${p.games}</span>`;}).join('')}</div><p class="note">Wins / rated games. The AI players are rated like everyone else: beat them to gain rating. Their starting ratings come from hundreds of games against each other; Raleigh (Steady) starts where every new player does, at 1200.</p>`:'<p class="note">No rated games yet.</p>';
 const ordn=n=>n+(['th','st','nd','rd'][n%100>10&&n%100<14?0:Math.min(n%10,4)%4]||'th');
 function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
-  const stat=(v,l)=>`<div class="box down stat"><b>${v}</b><span>${l}</span></div>`;
+  const stat=(v,l)=>`<div class="pst"><b>${v}</b><span>${l}</span></div>`;
   return`<div class="pfh"><span class="av big">${esc(u.name.slice(0,1).toUpperCase())}</span><div><h3>${esc(u.name)}${A?' <span class="aitag">AI</span>':''}</h3>${A?`<span class="note">${esc(A.tier)} · ${esc(A.desc)}</span>`:''}</div></div>
   <div class="pstats">${stat(Math.round(u.rating),'rating')}${stat('#'+u.rank,'rank')}${stat(u.games,'rated games')}${stat(u.wins,'wins')}${stat(u.games?Math.round(100*u.wins/u.games)+'%':'–','win rate')}</div>
-  <div class="field"><label>Recent games</label><div class="list scroll">${r.games.length?r.games.map(g=>gameRowHTML(`data-rid="${esc(g.id)}"`,g,g.seat,'',u.id===myId())).join(''):'<p class="note">No recorded games yet.</p>'}</div></div>`;}
+  <div class="field"><label>Recent games</label><div class="rlist">${r.games.length?r.games.map(g=>gameRowHTML(`data-rid="${esc(g.id)}"`,g,g.seat,'',u.id===myId())).join(''):'<p class="note">No recorded games yet.</p>'}</div></div>`;}
 
 /* ---- the room lobby: drawn from the room the server sends; each part changes only when its data does ---- */
 export function showRoomLobby(){renderRoomLobby();menuOpen('room');}
@@ -258,8 +249,8 @@ export function renderRoomLobby(){
     +(o?` ${courseName(o.course)} · ${auto?'':(o.pub===false?'private · ':'public · ')+o.max+' players max · '}${o.turn}s per turn · ${rated?'rated':'unrated'}`:'');
   mq('#lkIn').value=NET.code?location.origin+location.pathname+'?room='+NET.code:'';
   mq('#rlCount').textContent=`Players ${seats.length}/${max}`;
-  setHTML(mq('#rlSeats'),seats.map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="box slot"><span class="who"><i style="background:${s.color}"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note">(you)</span>':''}</span>${A?`<span class="lbp"><span class="note">${esc(A.tier)}</span>${host&&lobby?`<button type="button" class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note">${s.now?'wants to start · ':''}${s.uid===r.host&&!auto?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('')
-    +(o?'<div class="box slot dashed"><span class="note">Open seat</span></div>'.repeat(Math.max(0,max-seats.length)):'<p class="note">Connecting…</p>')); // (every seat the room holds has its row: a player joining fills one, and nothing below moves)
+  setHTML(mq('#rlSeats'),seats.map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="seatrow"><span><i style="background:${s.color}"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note">(you)</span>':''}</span>${A?`<span class="lbp"><span class="note">${esc(A.tier)}</span>${host&&lobby?`<button type="button" class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note">${s.now?'wants to start · ':''}${s.uid===r.host&&!auto?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('')
+    +(o?'<div class="seatrow open"><span class="note">Open seat</span></div>'.repeat(Math.max(0,max-seats.length)):'<p class="note">Connecting…</p>')); // (every seat the room holds has its row: a player joining fills one, and nothing below moves)
   if(CHECKS)requestAnimationFrame(roomPlace);
   const ctl=host&&!auto&&lobby,aiOK=!!(o&&aiAllowed(o.course,o.max));
   mq('#rlAIBox').hidden=!ctl;mq('#rlAINo').hidden=aiOK;mq('#rlAIList').hidden=!aiOK||!room;mq('#rlFull').hidden=!aiOK||room;
@@ -282,7 +273,7 @@ function gameRowHTML(attr,g,me,where,you=true){
   const won=g.places?g.names.filter((_,i)=>g.places[i]===1).map(esc).join(' & '):'',C=courseById(g.course);
   const res=!g.places?'Unfinished':me<0?`Won by ${won}`:g.places[me]===1&&you?`<span class="plc p1">1st</span> You won`:g.places[me]===1?`<span class="plc p1">1st</span> of ${g.names.length}`:`<span class="plc p${g.places[me]}">${ordn(g.places[me])}</span> of ${g.names.length} · won by ${won}`;
   const sub=[where,C&&C.name,g.rounds&&plural(g.rounds,'round'),new Date(g.created).toLocaleString([],{dateStyle:'medium',timeStyle:'short'})].filter(Boolean).join(' · ');
-  return`<button type="button" class="box down click" ${attr}><b>${res}</b><span>${esc(sub)}</span></button>`;}
+  return`<button type="button" ${attr}><b>${res}</b><span>${esc(sub)}</span></button>`;}
 export function showReplays(){
   const mine=mq('#rMine'),loc=myGames().map(L=>{const hum=L.players.map((p,i)=>p.bot?-1:i).filter(i=>i>=0); // (you: the one person at the table)
     return{t:L.created,h:gameRowHTML(`data-lid="${L.created}"`,{course:L.course,names:L.players.map(p=>p.name),places:L.result&&L.result.places,rounds:L.result&&L.result.rounds,created:L.created},hum.length===1?hum[0]:-1,'on this device')};});
