@@ -13,14 +13,14 @@ import { PART, UNIT, OPTION, partSpec, TYPES, WIDTHS, ALLOWED, STACK, LIST, CONT
 const SCREENS = { setup: 'This device', online: 'Online', room: 'Room lobby', replays: 'Replays' };
 
 /* ---------- where things are, in words (the copied notes) and as a path (to find it in the code) ---------- */
-const clip = t => { t = t.replace(/\s+/g, ' ').trim(); return t.length > 40 ? t.slice(0, 39) + '…' : t; };
+const shorten = t => { t = t.replace(/\s+/g, ' ').trim(); return t.length > 40 ? t.slice(0, 39) + '…' : t; };
 function textOf(el) {
   if (el.matches('select')) return [...el.options].slice(0, 3).map(o => o.text).join(' / ');
-  if (el.matches(UNIT)) return clip([...el.children].map(c => c.textContent.trim()).filter(Boolean).join(' / '));
-  if (el.matches('.field')) { const l = el.querySelector(':scope>label'); return l ? clip(l.textContent) : ''; }
+  if (el.matches(UNIT)) return shorten([...el.children].map(c => c.textContent.trim()).filter(Boolean).join(' / '));
+  if (el.matches('.field')) { const l = el.querySelector(':scope>label'); return l ? shorten(l.textContent) : ''; }
   if (el.matches('input')) return el.placeholder || el.name || '';
-  if (el.matches(CONTAINER)) { const f = [...el.children].find(c => c.textContent.trim()); return f ? clip('with ' + f.textContent) : ''; }
-  return clip(el.textContent);
+  if (el.matches(CONTAINER)) { const f = [...el.children].find(c => c.textContent.trim()); return f ? shorten('with ' + f.textContent) : ''; }
+  return shorten(el.textContent);
 }
 const nameOf = el => { const s = partSpec(el), t = textOf(el); return (s ? s[1] : el.tagName.toLowerCase()) + (t ? ` "${t}"` : ''); };
 // a part's look in words (its type, size and width), for the changes
@@ -50,33 +50,35 @@ const ops = []; let at = 0; // (ops[0..at) are done)
 const notes = new Map(); // element → the owner's note
 const firsts = new Map(); // element → how it was before its first edit (for the changes list)
 const copies = new Set(); // elements made by Copy
-function remember(el) { if (!firsts.has(el) && !copies.has(el)) firsts.set(el, { parent: el.parentElement, next: el.nextElementSibling, cls: el.className, text: textOf(el), tag: el.tagName }); }
+const nextReal = el => { let n = el.nextElementSibling; while (n && copies.has(n)) n = n.nextElementSibling; return n; };
+function remember(el) { if (!firsts.has(el) && !copies.has(el)) firsts.set(el, { parent: el.parentElement, next: nextReal(el), cls: el.className, text: textOf(el), tag: el.tagName }); }
 function run(op) {
   for (const el of op.touches) remember(el);
-  const before = snapshot(); ops.length = at; ops.push({ ...op, before }); op.do(); at++; changed();
+  const before = snapshot(op.scope); ops.length = at; ops.push({ ...op, before }); op.do(); at++; changed();
 }
-function undo() { if (!at) return; const op = ops[--at]; op.undo(); check(snapshot() === op.before, `undo leaves the menu as it was before "${op.what}"`); changed(); }
+function undo() { if (!at) return; const op = ops[--at]; op.undo(); check(snapshot(op.scope) === op.before, `undo leaves the menu as it was before "${op.what}"`); changed(); }
 function redo() { if (at >= ops.length) return; ops[at++].do(); changed(); }
 function reset() { while (at) undo(); ops.length = 0; firsts.clear(); for (const c of copies) c.remove(); copies.clear(); changed(); }
-// the menu's markup as edits see it (the editor's own marks aside): what an undo must give back
-const snapshot = () => FORM.innerHTML.replace(/ ?\bd-(sel|hov|mark|drag|in)\b/g, '').replace(/ class=""/g, '').replace(/ style=""/g, '');
+// what an edit changed, as edits see it: the markup of the parts it touched (each edit names them: its scope), without the
+// editor's own marks and without what the page itself shows or hides meanwhile (another screen chosen): what an undo gives back
+const snapshot = scope => scope.map(e => e.innerHTML.replace(/ ?\bd-(sel|hov|mark|drag|in)\b/g, '').replace(/ class=""/g, '').replace(/ style=""/g, '').replace(/ hidden=""/g, '')).join('\n');
 const place = (el, parent, next) => parent.insertBefore(el, next);
 function moveOp(el, parent, next) { const from = [el.parentElement, el.nextElementSibling];
-  return { what: 'move ' + nameOf(el), touches: [el], do: () => place(el, parent, next), undo: () => place(el, ...from) }; }
-function copyOp(el) { const c = el.cloneNode(true), parent = el.parentElement, next = el.nextElementSibling, n = copies.size + 1;
+  return { what: 'move ' + nameOf(el), touches: [el], scope: [...new Set([from[0], parent])], do: () => place(el, parent, next), undo: () => place(el, ...from) }; }
+function copyOp(el, parent, next) { const c = el.cloneNode(true), n = copies.size + 1;
   for (const x of [c, ...c.querySelectorAll('*')]) { x.removeAttribute('id'); if (x.name) x.name += '-copy' + n; x.classList.remove('d-sel', 'd-hov', 'd-mark'); }
   c.dataset.dcopy = String(n); copies.add(c);
-  return { what: 'copy ' + nameOf(el), touches: [], el: c, src: el, do: () => place(c, parent, next), undo: () => c.remove() }; }
-const delOp = el => ({ what: 'delete ' + nameOf(el), touches: [el], do: () => el.classList.add('d-gone'), undo: () => el.classList.remove('d-gone') });
+  return { what: 'copy ' + nameOf(el), touches: [], scope: [parent], el: c, src: el, do: () => place(c, parent, next), undo: () => c.remove() }; }
+const delOp = el => ({ what: 'delete ' + nameOf(el), touches: [el], scope: [el.parentElement], do: () => el.classList.add('d-gone'), undo: () => el.classList.remove('d-gone') });
 function clsOp(el, add, remove, what) {
   for (const c of add) check(ALLOWED.has(c), `an edit sets only the theme's classes (not "${c}")`);
-  const had = el.className; return { what, touches: [el], do: () => { el.classList.remove(...remove); el.classList.add(...add); }, undo: () => { el.className = had; } }; }
+  const had = el.className; return { what, touches: [el], scope: [el.parentElement], do: () => { el.classList.remove(...remove); el.classList.add(...add); }, undo: () => { el.className = had; } }; }
 function noteOp(el, to) { const from = notes.get(el); const set = v => { if (v) notes.set(el, v); else notes.delete(el); };
-  return { what: 'note on ' + nameOf(el), touches: [el], do: () => set(to), undo: () => set(from) }; }
-function textOp(el, to) { const from = el.textContent; return { what: 'text of ' + nameOf(el), touches: [el], do: () => { el.textContent = to; }, undo: () => { el.textContent = from; } }; }
+  return { what: 'note on ' + nameOf(el), touches: [el], scope: [], do: () => set(to), undo: () => set(from) }; }
+function textOp(el, to) { const from = el.textContent; return { what: 'text of ' + nameOf(el), touches: [el], scope: [el.parentElement], do: () => { el.textContent = to; }, undo: () => { el.textContent = from; } }; }
 function tagOp(el, sel) { // a text part as another (title, lead, note): another element in its place, the same words
   const [tag, cls] = sel.split('.'), n = document.createElement(tag); if (cls) n.className = cls; n.textContent = el.textContent; if (el.id) n.id = el.id;
-  return { what: 'type of ' + nameOf(el), touches: [el], swap: [el, n], do: () => { el.replaceWith(n); moveMarks(el, n); }, undo: () => { n.replaceWith(el); moveMarks(n, el); } }; }
+  return { what: 'type of ' + nameOf(el), touches: [el], scope: [el.parentElement], swap: [el, n], do: () => { el.replaceWith(n); moveMarks(el, n); }, undo: () => { n.replaceWith(el); moveMarks(n, el); } }; }
 function moveMarks(a, b) { if (notes.has(a)) { notes.set(b, notes.get(a)); notes.delete(a); } if (sel === a) sel = b; }
 const current = el => { for (const op of ops.slice(0, at)) if (op.swap && op.swap[0] === el) el = op.swap[1]; return el; };
 
@@ -87,7 +89,7 @@ function changes() {
     const bits = [];
     if (el.classList.contains('d-gone')) bits.push('deleted');
     else {
-      if (el.parentElement !== was.parent || el.nextElementSibling !== was.next) bits.push(`moved: was ${spotOf(was.parent, was.next, el)}; now ${spotOf(el.parentElement, el.nextElementSibling, el)}`);
+      if (el.parentElement !== was.parent || nextReal(el) !== was.next) bits.push(`moved: was ${spotOf(was.parent, was.next, el)}; now ${spotOf(el.parentElement, el.nextElementSibling, el)}`);
       if (el.tagName !== was.tag) bits.push(`type ${was.tag.toLowerCase()} → ${el.tagName.toLowerCase()}${el.className ? '.' + el.className.split(' ').filter(c => !c.startsWith('d-s') && !c.startsWith('d-h') && c !== 'd-mark').join('.') : ''}`);
       const a = was.cls.split(/\s+/).filter(c => c && !/^d-(sel|hov|mark|drag)$/.test(c)), b = el.className.split(/\s+/).filter(c => c && !/^d-(sel|hov|mark|drag)$/.test(c));
       if (el.tagName === was.tag && a.join(' ') !== b.join(' ')) bits.push(`look: ${lookOf(a.join(' '))} → ${lookOf(b.join(' '))}`);
@@ -117,6 +119,7 @@ const css = document.createElement('style'); css.textContent = `
 #dPanel input,#dPanel textarea{width:100%;box-sizing:border-box;background:var(--well);border:1px solid var(--line2);border-radius:var(--r-s);color:var(--text);font:inherit;font-size:var(--fs-s);padding:6px 8px;resize:vertical}
 #dPanel .dsel{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:8px}#dPanel .dhint{color:var(--muted);font-size:var(--fs-s);margin:0}
 #dPanel ol{margin:0;padding-left:18px;font-size:var(--fs-s);color:var(--soft);display:flex;flex-direction:column;gap:4px}#dPanel li{cursor:pointer}#dPanel li:hover{color:var(--text)}
+#dPanel .dpath{gap:4px}#dPanel .dpath button{height:auto;padding:2px 8px}
 #dPanel .dmain{height:var(--h-m);background:linear-gradient(var(--priA),var(--priB));border-color:var(--priEdge);color:var(--goldInk);font-weight:800}
 .d-gone{display:none!important}
 /* the panel has the right of the window to itself: the game and the menu make room (never under it) */
@@ -135,7 +138,7 @@ hov = document.createElement('div'); selBox = document.createElement('div'); dro
 hov.id = 'dHov'; selBox.id = 'dSel'; drop.id = 'dDrop'; document.body.append(hov, selBox, drop);
 listen();
 }
-let editing = false, sel = null, inUnit = null, flash = '';
+let editing = false, sel = null, flash = '', clip = null; // (clip: what Copy or Cut took, for Paste)
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const b = (act, label, on, v = '', dis = false) => `<button type="button" data-a="${act}" data-v="${esc(v)}" class="${on ? 'on' : ''}"${dis ? ' disabled' : ''}>${label}</button>`;
 function typeOf(el, fam) { if (fam === 'text') return TYPES.text.find(([, , s]) => el.matches(s))?.[0];
@@ -144,14 +147,17 @@ function draw() {
   const ch = changes(), spec = sel && partSpec(sel), fam = spec && spec[2], simple = sel && sel.children.length === 0 && !sel.matches('input, select');
   panel.innerHTML = `<h3>Design <span class="sp"></span>${b('edit', editing ? 'Editing' : 'Edit', editing)}${b('close', '✕')}</h3>
     <div class="dr">${b('undo', 'Undo', false, '', !at)}${b('redo', 'Redo', false, '', at >= ops.length)}${b('reset', 'Reset', false, '', !ops.length)}</div>
-    ${!editing ? '<p class="dhint">The game works as usual. Turn on Edit, then click a part of the menu to change it, or drag it somewhere else.</p>' : !sel ? '<p class="dhint">Click a part of the menu; drag it to move it. A switch or a set of cards is taken whole: double-click it to reach one of its options.</p>'
-    : `<div class="dsel"><b>${esc(nameOf(sel))}</b><span class="dhint">${esc(placeOf(sel))}</span>
+    ${editing ? `<div class="dr"><b>Screen</b>${TABS.map(([v, n]) => b('screen', n, screenNow() === v, v, !$(`#sMode label[data-v="${v}"]`))).join('')}</div>` : ''}
+    ${!editing ? '<p class="dhint">The game works as usual. Turn on Edit, then click a part of the menu to change it, or drag it somewhere else.</p>' : !sel ? '<p class="dhint">Click a part of the menu: the biggest part under the pointer first; click it again for a smaller one inside it (Escape: a bigger one; Alt + wheel: either). Drag to move it; Copy or Cut, then Paste on another screen.</p>'
+    : `<div class="dsel"><div class="dr dpath">${chainAt(sel).map((x, i, c) => b('lvl', esc(partSpec(x) ? partSpec(x)[1] : x.tagName.toLowerCase()), i === c.length - 1, String(i))).join('<span class="dhint">›</span>')}</div>
+      <b>${esc(nameOf(sel))}</b><span class="dhint">${esc(placeOf(sel))}</span>
       ${fam && TYPES[fam] ? `<div class="dr"><b>Type</b>${TYPES[fam].map(([v, n]) => b('type', n, typeOf(sel, fam) === v, v)).join('')}</div>` : ''}
       ${fam === 'button' && sel.matches('.btn') ? `<div class="dr"><b>Size</b>${b('big', 'Normal', !sel.matches('.big'), '')}${b('big', 'Big', sel.matches('.big'), 'big')}</div>` : ''}
       ${sel.matches(OPTION) ? '' : `<div class="dr"><b>Width</b>${WIDTHS.map(([v, n]) => b('w', n, v ? sel.classList.contains(v) : !WIDTHS.some(([w]) => w && sel.classList.contains(w)), v)).join('')}</div>`}
       ${simple ? `<div class="dr"><b>Text</b><input data-a="text" value="${esc(sel.textContent)}"></div>` : ''}
       <div class="dr"><b>Note</b><textarea data-a="note" rows="2" placeholder="What should change here?">${esc(notes.get(sel) || '')}</textarea></div>
-      <div class="dr">${b('copy', 'Copy')}${b('del', 'Delete')}${inUnit ? b('outunit', 'Back to the whole') : ''}</div></div>`}
+      <div class="dr">${b('copy', 'Copy')}${b('cut', 'Cut')}${b('paste', 'Paste', false, '', !clip)}${b('del', 'Delete')}</div>
+      ${clip ? `<p class="dhint">${clip.cut ? 'Cut' : 'Copied'}: ${esc(nameOf(clip.el))}. Choose where it goes (on any screen), then Paste: after the part chosen, or into it.</p>` : ''}</div>`}
     <div class="dsel"><b>Changes (${ch.length})</b>${ch.length ? `<ol>${ch.map((x, i) => `<li data-i="${i}">${esc(x.short)}</li>`).join('')}</ol>` : '<p class="dhint">None yet.</p>'}
       <div class="dr">${b('copyall', 'Copy for Claude', false, '', !ch.length)}</div>${flash ? `<p class="dhint">${esc(flash)}</p>` : ''}</div>`;
   panel.querySelector('[data-a="copyall"]').classList.add('dmain');
@@ -169,14 +175,18 @@ panel.addEventListener('click', e => { const t = e.target.closest('[data-a]'); i
   if (a === 'edit') setEditing(!editing); else if (a === 'close') close(); else if (a === 'undo') undo(); else if (a === 'redo') redo();
   else if (a === 'reset') reset();
   else if (a === 'copyall') { const txt = copyText(); navigator.clipboard.writeText(txt).then(() => { flash = 'Copied: paste it to Claude.'; draw(); }, err => { flash = `Copying wasn't allowed here (${err.name}).`; draw(); }); }
+  else if (a === 'screen') goScreen(v);
   else if (!sel) return;
   else if (a === 'type') { const fam = partSpec(sel)[2], T = TYPES[fam].find(x => x[0] === v);
     if (fam === 'text') run(tagOp(sel, T[2])); else run(clsOp(sel, T[2], TYPES[fam].flatMap(x => x[2]), `type of ${nameOf(sel)}`)); }
   else if (a === 'big') run(clsOp(sel, v ? ['big'] : [], ['big'], `size of ${nameOf(sel)}`));
   else if (a === 'w') run(clsOp(sel, v ? [v] : [], WIDTHS.map(w => w[0]).filter(Boolean), `width of ${nameOf(sel)}`));
-  else if (a === 'copy') { const op = copyOp(sel); run(op); choose(op.el); }
+  else if (a === 'screen') goScreen(v);
+  else if (!sel) return;
+  else if (a === 'lvl') choose(chainAt(sel)[+v]);
+  else if (a === 'copy' || a === 'cut') { clip = { el: sel, cut: a === 'cut' }; draw(); }
+  else if (a === 'paste') paste();
   else if (a === 'del') { run(delOp(sel)); choose(null); }
-  else if (a === 'outunit') { const u = inUnit; inUnit = null; choose(u); }
 });
 panel.addEventListener('change', e => { const t = e.target; if (!sel) return;
   if (t.dataset.a === 'text' && t.value !== sel.textContent) run(textOp(sel, t.value));
@@ -187,40 +197,63 @@ panel.addEventListener('click', e => { const li = e.target.closest('li[data-i]')
 }
 
 /* ---------- edit mode: one set of listeners at the root, only while editing (nothing of it while the game is played) ---------- */
-// the part a pointer is on: what was clicked, unless it is inside a control taken whole (unless that control was entered)
-function partAt(t) {
-  if (!t || !t.closest || !FORM.contains(t) || panel.contains(t)) return null;
-  const unit = t.closest(UNIT); if (unit && FORM.contains(unit)) { if (inUnit === unit) { const o = t.closest(OPTION); if (o && unit.contains(o)) return o; } else return unit; }
-  let el = t.closest(PART); while (el && (!FORM.contains(el) || el.closest('.d-gone'))) el = el.parentElement && el.parentElement.closest(PART);
-  return el && FORM.contains(el) ? el : null;
+/* choosing (owner, 2026-10-05): the biggest part under the pointer first; a click again on the chosen part goes one smaller
+   (inside it); a neighbour of the chosen part is taken at the same level; Escape goes one bigger; Alt + wheel either way */
+// the parts under a point, biggest first (an option counts inside its switch, cards or swatches)
+function chainAt(t) {
+  if (!t || !t.closest || !FORM.contains(t) || (panel && panel.contains(t))) return [];
+  const out = []; for (let e = t; e && e !== FORM; e = e.parentElement) if ((e.matches(PART) || e.matches(OPTION)) && !e.classList.contains('d-gone')) out.unshift(e);
+  return out;
 }
+// what a press takes: the chosen part itself (to drag it), a neighbour at its level (the same bigger parts), else the biggest
+function pick(t) { const c = chainAt(t); if (!c.length) return null; if (sel && c.includes(sel)) return sel;
+  if (sel && sel.isConnected) { const s = chainAt(sel), d = s.length - 1; if (d > 0 && c.length > d && s.slice(0, d).every((x, k) => x === c[k])) return c[d]; }
+  return c[0]; }
 function choose(el) { sel = el; draw(); }
-let press = null, dragging = null;
-const swallow = e => { if (FORM.contains(e.target) && !panel.contains(e.target)) { e.preventDefault(); e.stopPropagation(); } };
-function onDown(e) { const el = partAt(e.target); if (!el && !FORM.contains(e.target)) return; swallow(e); if (!el) { choose(null); return; }
-  choose(el); press = { el, x: e.clientX, y: e.clientY, id: e.pointerId }; }
+let press = null, dragging = null, passing = false;
+const swallow = e => { if (!passing && FORM.contains(e.target) && !panel.contains(e.target)) { e.preventDefault(); e.stopPropagation(); } };
+function onDown(e) { if (!FORM.contains(e.target)) return; swallow(e); const el = pick(e.target); if (!el) { choose(null); return; }
+  press = { el, was: el === sel, chain: chainAt(e.target), x: e.clientX, y: e.clientY }; if (!press.was) choose(el); }
 function onMove(e) {
-  if (!press) { const el = partAt(e.target); box(hov, el !== sel ? el : null); return; }
+  if (!press) { const el = pick(e.target); box(hov, el !== sel ? el : null); return; }
   if (!dragging && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) startDrag(e);
   if (dragging) dragTo(e);
 }
-function onUp(e) { if (dragging) endDrag(e); press = null; swallow(e); }
-function onDbl(e) { swallow(e); const u = e.target.closest && e.target.closest(UNIT); if (u && FORM.contains(u)) { inUnit = u; const o = e.target.closest(OPTION); choose(o && u.contains(o) ? o : u); } }
+function onUp(e) { if (dragging) endDrag(e);
+  else if (press && press.was) { const c = press.chain, k = c.indexOf(press.el); if (k >= 0 && k < c.length - 1) choose(c[k + 1]); } // (a click again: one smaller)
+  press = null; swallow(e); }
+function onWheel(e) { if (!e.altKey || !FORM.contains(e.target)) return; e.preventDefault(); e.stopPropagation();
+  const c = chainAt(e.target); if (!c.length) return; let k = c.indexOf(sel); if (k < 0) k = c.indexOf(pick(e.target));
+  choose(c[Math.max(0, Math.min(c.length - 1, k + (e.deltaY > 0 ? 1 : -1)))]); }
+// Copy or Cut, then Paste: into the chosen part when it takes it, else after the chosen part (or the nearest bigger one) in a
+// place that takes it, on any screen
+function paste() { if (!clip || !sel) return; const el = clip.el; let parent = null, next = null;
+  if (sel.matches(CONTAINER) && accepts(sel, el)) parent = sel;
+  else for (let x = sel; x && x !== FORM; x = x.parentElement) { const p = x.parentElement; if (p && p.matches(CONTAINER) && accepts(p, el)) { parent = p; next = x.nextElementSibling; break; } }
+  if (!parent) { flash = `${nameOf(el)} can't go there.`; draw(); return; }
+  if (clip.cut) { run(moveOp(el, parent, next)); clip = null; choose(el); } else { const op = copyOp(el, parent, next); run(op); choose(op.el); } }
+// the menu's screens, by its own tabs (the editor shows no screen of its own)
+const TABS = [['local', 'This device'], ['online', 'Online'], ['replays', 'Replays']];
+const screenNow = () => { const c = $('#sMode input:checked'); return c ? c.value : ''; };
+function goScreen(v) { const l = $(`#sMode label[data-v="${v}"]`); if (!l) return; passing = true; try { l.click(); } finally { passing = false; } choose(null); requestAnimationFrame(draw); }
 function onKey(e) {
   if (e.target.closest && (e.target.closest('#dPanel input, #dPanel textarea'))) return;
   const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
   if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
-  else if (k === 'escape') { e.preventDefault(); e.stopPropagation(); if (dragging) cancelDrag(); else if (inUnit) { const u = inUnit; inUnit = null; choose(u); } else choose(null); }
+  else if (mod && (k === 'c' || k === 'x') && sel) { e.preventDefault(); clip = { el: sel, cut: k === 'x' }; draw(); }
+  else if (mod && k === 'v' && clip) { e.preventDefault(); paste(); }
+  else if (k === 'escape') { e.preventDefault(); e.stopPropagation(); if (dragging) cancelDrag(); else { const c = sel ? chainAt(sel) : []; choose(c.length > 1 ? c[c.length - 2] : null); } }
   else if ((k === 'delete' || k === 'backspace') && sel) { e.preventDefault(); run(delOp(sel)); choose(null); }
 }
-const LISTEN = [['pointerdown', onDown], ['pointermove', onMove], ['pointerup', onUp], ['click', swallow], ['dblclick', onDbl], ['keydown', onKey], ['mousedown', swallow], ['input', swallow], ['change', swallow]];
+const LISTEN = [['pointerdown', onDown], ['pointermove', onMove], ['pointerup', onUp], ['click', swallow], ['dblclick', swallow], ['keydown', onKey], ['mousedown', swallow], ['input', swallow], ['change', swallow]];
 const follow = () => frame();
 function setEditing(on) {
   if (on === editing) return; editing = on;
   for (const [t, f] of LISTEN) (on ? addEventListener : removeEventListener)(t, f, true);
   (on ? addEventListener : removeEventListener)('scroll', follow, true);
+  (on ? addEventListener : removeEventListener)('wheel', onWheel, { capture: true, passive: false });
   document.documentElement.classList.toggle('d-editing', on);
-  if (!on) { sel = null; inUnit = null; press = null; if (dragging) cancelDrag(); box(hov, null); }
+  if (!on) { sel = null; clip = null; press = null; if (dragging) cancelDrag(); box(hov, null); }
   draw();
   if (!on) check(!document.querySelector('.d-sel, .d-hov, .d-drag') && !document.documentElement.classList.contains('d-editing'), 'Edit off leaves nothing of edit mode on the page');
 }
@@ -228,7 +261,7 @@ function setEditing(on) {
 /* ---------- dragging: the part follows the pointer; a line shows where it would land; on release it moves there, and every
    part that moved slides from where it was (measured once at pick-up and once at the drop, never while it follows) ---------- */
 function startDrag(e) {
-  const el = press.el; if (el.matches(OPTION) ? false : el.closest(UNIT) && el.closest(UNIT) !== el) return;
+  const el = press.el;
   const r = el.getBoundingClientRect(); dragging = { el, ox: e.clientX, oy: e.clientY, r, target: null };
   el.classList.add('d-drag'); box(hov, null); selBox.style.display = 'none';
 }
