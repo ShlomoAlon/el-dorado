@@ -69,7 +69,7 @@ const T = report('online');
       // Create room opens its lobby at once, you seated, before the server has made the room (its answer held back a second here)
       await V.route('**/api/rooms', r => setTimeout(() => r.continue(), 1000));
       await V.click('#cGo');
-      T.ok('Create room: its lobby at once, you seated, its code to come', await V.evaluate(() => new Promise(r => requestAnimationFrame(() => r(!document.querySelector('section[data-screen=room]').hidden && document.querySelectorAll('#rlSeats .seatrow:not(.open)').length === 1 && /…/.test(document.querySelector('#rlTitle').textContent))))));
+      T.ok('Create room: its lobby at once, you seated, its code to come', await V.evaluate(() => new Promise(r => requestAnimationFrame(() => r(!document.querySelector('section[data-screen=room]').hidden && document.querySelectorAll('#rlSeats .box:not(.dashed)').length === 1 && /…/.test(document.querySelector('#rlTitle').textContent))))));
       T.ok('Create room: the code arrives and the room connects', await wait(V, () => /^Room [A-Z0-9]{4,}$/.test(document.querySelector('#rlTitle').textContent) && __ED.NET.connected && __ED.NET.roomS && __ED.NET.roomS.seats.length === 1, null, 10000));
       await V.unroute('**/api/rooms'); await V.click('#rlLeave'); await done(V); }
     // ---------- 1. three people
@@ -177,7 +177,7 @@ const T = report('online');
     // after the tap, before the server has it (the server's answer then changes nothing on screen)
     await A.evaluate(() => { const ws = __ED.NET.ws, send = ws.send.bind(ws); ws.send = d => setTimeout(() => send(d), 1000); });
     await A.click('[data-addai="fawcett"]');
-    T.ok('the lobby shows your change at once, before the server answers', await A.evaluate(() => new Promise(r => requestAnimationFrame(() => r([...document.querySelectorAll('#rlSeats .seatrow:not(.open)')].length === 2 && __ED.NET.roomPending.length === 1)))));
+    T.ok('the lobby shows your change at once, before the server answers', await A.evaluate(() => new Promise(r => requestAnimationFrame(() => r([...document.querySelectorAll('#rlSeats .box:not(.dashed)')].length === 2 && __ED.NET.roomPending.length === 1)))));
     await wait(A, () => __ED.NET.roomS && __ED.NET.roomS.seats.length === 2 && !__ED.NET.roomPending.length);
     await A.evaluate(() => { delete __ED.NET.ws.send; }); // (messages go at once again)
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 3);

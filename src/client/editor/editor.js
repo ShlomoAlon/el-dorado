@@ -627,11 +627,11 @@ html[data-edlook] .seg button.on,html[data-edlook] .seg label:has(input:checked)
 html[data-edlook] #sMode{background:none;border:0;box-shadow:none;border-bottom:1px solid var(--k-line);border-radius:0;padding:0;gap:0}
 html[data-edlook] #sMode label{border-radius:0;padding:9px 4px 10px;color:var(--k-muted)}
 html[data-edlook] #sMode label:has(input:checked){background:none;box-shadow:inset 0 -2px 0 var(--k-acc);color:var(--k-acc)}
-html[data-edlook] .clist button,html[data-edlook] .clist label,html[data-edlook] .rlist button,html[data-edlook] .boxrow,html[data-edlook] .rrow,html[data-edlook] .seatrow,html[data-edlook] .pst{background:var(--k-row);border-color:var(--k-line);border-radius:var(--k-rs)}
-html[data-edlook] .clist button.on,html[data-edlook] .clist label:has(input:checked){border-color:var(--k-acc);background:var(--k-sel)}
+html[data-edlook] .box{background:var(--k-row);border-color:var(--k-line);border-radius:var(--k-rs)}
+html[data-edlook] .box.pick:has(input:checked){border-color:var(--k-acc);background:var(--k-sel)}
 html[data-edlook] .prow input,html[data-edlook] select.who{background-color:var(--k-field);border-color:var(--k-line);border-radius:var(--k-rs)}
 html[data-edlook] select.who option,html[data-edlook] select.who optgroup{background:var(--k-panB)}
-html[data-edlook] .ingame{border-color:var(--k-acc);background:var(--k-sel)}html[data-edlook] .aitag{color:var(--k-acc);border-color:var(--k-line)}
+html[data-edlook] .box.gold{border-color:var(--k-acc);background:var(--k-sel)}html[data-edlook] .aitag{color:var(--k-acc);border-color:var(--k-line)}
 html[data-edlook] .sws label:has(input:checked){border-color:var(--k-acc)}html[data-edlook] .modal.menu{scrollbar-color:var(--k-line) transparent}
 html[data-edlook] .tbtn,html[data-edlook] .pchip,html[data-edlook] .zoomctl button,html[data-edlook] .pile .lbl,html[data-edlook] #rdock button{border-radius:var(--k-rb)}
 html[data-edlook] .tbtn.on{border-color:var(--k-acc);color:var(--k-acc)}html[data-edlook] .zoomctl button{color:var(--k-acc)}

@@ -28,14 +28,14 @@ writeFileSync(new URL('./src/engine.gen.js', import.meta.url),
 const E = await import(new URL('./src/engine.gen.js?' + Date.now(), import.meta.url));
 // the start screen's lists are written into the page from the engine's data, so it needs no script to show
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const card = (name, id, b, sub, on) => `<label data-v="${id}"><input type="radio" name="${name}" value="${id}"${on ? ' checked' : ''}><b>${b}</b><span>${esc(sub)}</span></label>`;
+const card = (name, id, b, sub, on) => `<label class="box down pick" data-v="${id}"><input type="radio" name="${name}" value="${id}"${on ? ' checked' : ''}><b>${b}</b><span>${esc(sub)}</span></label>`;
 const courses = name => E.COURSES.map(c => card(name, c.id, esc(c.name) + (c.diff ? ` <i class="dtag d-${esc(c.diff.toLowerCase())}">${esc(c.diff)}</i>` : ''), 'Boards ' + c.p.map(x => x[0]).join(' · '), c.id === 'first')).join('')
   + (E.COURSES.length > 1 ? card(name, 'random', 'Random course', 'Any course from this list', false) : '');
 const COLS = ['crimson', 'ivory', 'violet', 'orange'], sw = (name, i, val) => E.COLORS.map(c => `<label style="--c:${c.hex}" title="${c.name}"><input type="radio" name="${name}" value="${val(c)}"${i >= 0 && c.id === COLS[i] ? ' checked' : ''}${i >= 0 && i < 3 && COLS.slice(0, 3).some((x, j) => j !== i && x === c.id) ? ' disabled' : ''} aria-label="${c.name}"></label>`).join('');
 const seats = ['Ana', 'Ben', 'Cleo', 'Dev'].map((nm, i) => `<div class="prow seat" data-i="${i}"${i > 2 ? ' hidden' : ''}><select class="who" name="who${i}" aria-label="Player ${i + 1}: human or AI"><option value="">Human</option><optgroup label="AI players">${E.AIS.map(a => `<option value="${a.id}">${esc(a.name)} · ${esc(a.tier)}</option>`).join('')}</optgroup></select>`
   + `<input name="nm${i}" maxlength="14" value="${nm}" aria-label="Player ${i + 1} name"><div class="ainm" hidden><span></span></div><div class="sws">${sw('col' + i, i, c => c.id)}</div></div>`).join('');
 const shell = r('./src/client/shell.html').replace('<!--COURSES:course-->', courses('course')).replace('<!--COURSES:ocourse-->', courses('ocourse')).replace('<!--SEATS-->', seats)
-  .replace('<!--AILIST-->', E.AIS.map(a => `<button type="button" data-addai="${a.id}"><b>${esc(a.name)} <span class="aitag">AI</span></b><span>${esc(a.tier)} · ${esc(a.desc)}</span></button>`).join(''))
+  .replace('<!--AILIST-->', E.AIS.map(a => `<button type="button" class="box down click" data-addai="${a.id}"><b>${esc(a.name)} <span class="aitag">AI</span></b><span>${esc(a.tier)} · ${esc(a.desc)}</span></button>`).join(''))
   .replace('<!--ROOMCOLS-->', sw('rlcol', -1, c => c.hex));
 // the AI's neural network (tools/ai/pack.mjs): the site loads it from /ai/first.<hash>.bin only when an AI needs it, named
 // by its contents like the script (a tab open across a deploy keeps the network its code was built with); the artifact

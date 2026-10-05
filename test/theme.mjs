@@ -37,7 +37,7 @@ const RAW = [
 ];
 const MUST = { 'font-size': /^var\(--fs-[\w-]+\)$|^inherit$/, 'border-radius': /^(var\(--r-[\w-]+\)\s*)+$|^0$/, 'font-family': /^var\(--(ui|display)\)$|^inherit$/ };
 // the controls take the theme's heights (--h-*: small, compact, normal, big), or one derived from them
-const CONTROL = /\.btn\b|\.tbtn\b|\.prow input|select\.who|#rdock\b.*button|\.zoomctl button|\.sclose\b|\.bs-x\b|\.rmai\b|\.hx\b|#allClose\b|#hud\b|#acct\b|\.gsiSm\b|#gsiBtn\b|\.seatrow(\.\w+)*$/;
+const CONTROL = /\.btn\b|\.tbtn\b|\.prow input|select\.who|#rdock\b.*button|\.zoomctl button|\.sclose\b|\.bs-x\b|\.rmai\b|\.hx\b|#allClose\b|#hud\b|#acct\b|\.gsiSm\b|#gsiBtn\b|\.box\.slot\b/;
 const bad = [];
 const judge = (where, prop, val) => {
   if (prop.startsWith('--')) { if (RAW[0][0].test(val)) bad.push(`${where}: ${prop} holds ${RAW[0][1]} (${val.trim()}): give it a theme token`); return; }

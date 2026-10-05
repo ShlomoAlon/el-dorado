@@ -66,7 +66,7 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
   await p.click('#sGo'); await check('another game starts', () => !!window.__ED.S && !window.__ED.S.over && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(p);
   // the end of a game: two resign, the third wins, the results come up; New game goes back to the start screen
   await p.evaluate(() => { __ED.act({ t: 'resign' }); }); await p.evaluate(() => { __ED.act({ t: 'resign' }); });
-  await check('game over: the results', () => window.__ED.S.over && !!document.querySelector('#overlay #gNew') && document.querySelectorAll('#overlay .boxrow').length === 3);
+  await check('game over: the results', () => window.__ED.S.over && !!document.querySelector('#overlay #gNew') && document.querySelectorAll('#overlay .box').length === 3);
   await p.click('#overlay #gNew'); await check('New game: the start screen', new Function(`return document.querySelector('#menu').open && ${screen('setup')}`));
   T.ok('no page errors', !p.errors.length, p.errors.slice(0, 5).join(' | '));
   await b.close(); srv.close(); T.done();
