@@ -13,6 +13,21 @@ export function diag(msg) {
   if (box) { box.textContent = lines.slice(-22).join('\n'); }
 }
 export const diagLog = () => lines.slice();
+/* how long the page took to load, on this device (owner, 2026-10-05): each step of a load is marked once, timed from the moment
+   the page was asked for; __ED.loadTimes() in the browser's console prints them with the browser's own (the HTML, the first
+   paint, the app's files) */
+export const loadMark = what => { if (!performance.getEntriesByName('ed: ' + what).length) performance.mark('ed: ' + what); };
+export function loadTimes() {
+  const n = performance.getEntriesByType('navigation')[0], rows = [], add = (step, t) => rows.push({ step, ms: Math.round(t) });
+  if (n) { add('asked for the page', n.startTime); add('HTML: first byte', n.responseStart); add('HTML: all arrived', n.responseEnd); }
+  for (const e of performance.getEntriesByType('paint')) add(e.name === 'first-paint' ? 'first paint' : 'first words drawn (the start screen)', e.startTime);
+  for (const e of performance.getEntriesByType('resource')) if (/\/app\.[0-9a-f]+\.(js|css)$/.test(e.name)) add('app ' + (e.name.endsWith('.js') ? 'script' : 'styles') + ' arrived' + (e.transferSize === 0 ? ' (from the cache)' : ''), e.responseEnd);
+  for (const m of performance.getEntriesByType('mark')) if (m.name.startsWith('ed: ')) add(m.name.slice(4), m.startTime);
+  // (the game area shows once both are in: shell.html, html.gameready.boardready)
+  const f = performance.getEntriesByName('ed: the game\'s fonts in')[0], b = performance.getEntriesByName('ed: the board fitted')[0];
+  if (f && b) add('the game shown (fonts in, board fitted)', Math.max(f.startTime, b.startTime));
+  rows.sort((a, b) => a.ms - b.ms); console.table(rows); return rows;
+}
 export const shifts = [], churn = []; // (checks: every layout shift and every unchanged rebuild seen, for tests)
 /* checks: what is "in play" comes from the page (main.js), so this module stays free of the game's state */
 let inPlay = () => false, expectedAt = -1e9, expectedEnd = -1e9;

@@ -7,7 +7,7 @@ import { $ } from '../dom.js';
 import { S, MAP, UI, G, cur, canAct, passing } from '../state.js';
 import { geo, onGeo, measure, handTop } from '../geometry.js';
 import { after, frameDue } from '../frame.js';
-import { diag, diagLog, CHECKS } from '../debug.js';
+import { diag, diagLog, CHECKS, loadMark } from '../debug.js';
 import { layout, xy } from './layout.js';
 import { walking } from './pieces.js';
 import { terrainLive, terrainShow, terrainTop, terrainHook } from './terrain.js';
@@ -91,7 +91,7 @@ export function fit(anim) {
   // not animated: drawn sharp at this scale right away (no blurry frame, no later redraw once it's on screen)
   applyView(); if (anim) glide(); else bake(); cam.userZoomed = false;
   if (!anim) assert(shownT === stageT(), `view: the board is shown where the camera puts it: its position written with its scale, in the same frame (${shownT || 'none'})`);
-  document.documentElement.classList.add('boardready'); // the game area may show now (with its fonts): never an unfitted board
+  document.documentElement.classList.add('boardready'); loadMark('the board fitted'); // the game area may show now (with its fonts): never an unfitted board
 }
 /* fit once the frame's updates are in (the prompt's height and the market's width are part of the fit); anim: glide there */
 export const fitSoon = anim => after(() => { measure(); fit(anim); });

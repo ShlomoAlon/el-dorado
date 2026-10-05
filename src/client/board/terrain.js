@@ -5,7 +5,7 @@ import { R, hash, assert } from '../../engine.gen.js';
 import { MAP } from '../state.js';
 import { layout, xy } from './layout.js';
 import { $, sv } from '../dom.js';
-import { diag } from '../debug.js';
+import { diag, loadMark } from '../debug.js';
 export function hexPts(x,y,r){let s='';for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);s+=(x+r*Math.cos(a)).toFixed(1)+','+(y+r*Math.sin(a)).toFixed(1)+' ';}return s;}
 const TFILL={j:['#4a9b5f','#2a6a40'],w:['#4aa0dd','#2464a0'],v:['#f2cd6c','#d09632'],r:['#aeb2ad','#7a7f7b'],c:['#d4705a','#9a3e2d'],m:['#58615a','#2d332f'],s:['#e3d8b9','#b4a887'],g:['#ffe690','#e3a52b']};
 /* harder spaces are darker, like the printed tiles: [top,bottom] gradient per strength 1..4 */
@@ -181,7 +181,7 @@ function bake(parts,ims,m){
       for(const l of terrainLevels)l.el.remove();terrainLevels=levels;shownLevel=null;for(const im of ims)im.remove(); // (baked: the vector images go)
       let px=0;for(const l of levels)for(const c of l.el.children)px+=c.width*c.height;
       assert(px<=BUDGET*1.4,`view: the baked terrain stays within its memory budget (${(px/1e6).toFixed(1)} MP)`);
-      bakeDue=false;diag(`terrain baked in ${Math.round(performance.now()-t0)} ms`);if(terrainHook.ready)terrainHook.ready();};
+      bakeDue=false;diag(`terrain baked in ${Math.round(performance.now()-t0)} ms`);loadMark('the board complete (its terrain baked sharp)');if(terrainHook.ready)terrainHook.ready();};
     later(step);
   },()=>assert(false,'view: the board\'s terrain images load'));
   // (another screen's pixel density: baked again for it)

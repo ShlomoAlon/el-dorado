@@ -24,7 +24,7 @@ import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, s
 import { netInit, joinRoom, netSend } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
 import { soundInit } from './sound.js';
-import { debugInit, checksInit, shifts, churn, diag, diagLog } from './debug.js';
+import { debugInit, checksInit, shifts, churn, diag, diagLog, loadMark, loadTimes } from './debug.js';
 import { boundaryInit } from './boundary.js';
 import { cam } from './board/camera.js';
 import { targetAt, spaceAt, setHot } from './board/overlays.js';
@@ -34,10 +34,10 @@ import { sharpInit } from './sharp.js';
 
 // the order parts update in each frame: first what the selection allows, then the view from back to front
 for (const p of [coverPart, overlaysPart, piecesPart, cameraPart, hudPart, feedPart, marketPart, buySlotPart, handPart, aimPart, replayPart, checksPart]) addPart(p); // (checks: the page's invariants, last)
-GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); });
+GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gameready'); loadMark('the game\'s fonts in'); });
 
 function boot() {
-  boundaryInit(); debugInit(); { const inPlay = () => !!S && !UI.preview && !document.getElementById('menu').open; checksInit(inPlay); freshInit(inPlay); } sharpInit(); /* (in play: a game on show, no menu over it) */ boardLayers(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
+  loadMark('the app running'); boundaryInit(); debugInit(); { const inPlay = () => !!S && !UI.preview && !document.getElementById('menu').open; checksInit(inPlay); freshInit(inPlay); } sharpInit(); /* (in play: a game on show, no menu over it) */ boardLayers(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
   if (!document.documentElement.classList.contains('resume')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check)
   $('#deckPile').onclick = () => showPile('deck'); $('#discPile').onclick = () => showPile('discard');
   $('#rulesBtn').onclick = showRules; histInit();
@@ -94,7 +94,7 @@ function onBoardHover(e) { if (!drag && !e.buttons && e.pointerType === 'mouse')
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, reshuffles, targets, walking, baking, diagLog, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiThink, buyOptions, coinVal, CT, // (aiThink: test/playstep.cjs lets an AI choose the person's moves, in the AI's worker, played through the calls below; the rest let it choose a purchase of its own)
+window.__ED = { NET, UI, G, reshuffles, targets, walking, baking, diagLog, loadTimes, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiThink, buyOptions, coinVal, CT, // (aiThink: test/playstep.cjs lets an AI choose the person's moves, in the AI's worker, played through the calls below; the rest let it choose a purchase of its own)
   render() { render(); flush(); },
   aiPace(k) { AIX.pace = k; }, fitCheck, // (test/play.cjs: the board check, judged at once on a settled page) // (test/play.cjs: shorter pauses between the AIs' moves)
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },
