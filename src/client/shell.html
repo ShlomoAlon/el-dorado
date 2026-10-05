@@ -56,7 +56,7 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .mrow.left{justify-content:flex-start;margin-top:10px}
 #jCode{text-transform:uppercase;letter-spacing:.15em;font-weight:700}
 .seatrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);min-height:48px;box-sizing:border-box;margin-bottom:8px}
-.seatrow.open{border-style:dashed;background:none}.seatrow.open .note{opacity:.7}
+.seatrow.open{border-style:dashed;background:none}.seatrow.open .note{color:color-mix(in srgb,var(--muted) 70%,#121d19)} /* (dimmed by its colour, never faded: sharp.js) */
 .seatrow>span{display:flex;align-items:center;gap:9px;min-width:0}.seatrow i{width:13px;height:13px;border-radius:50%;display:inline-block;flex:none}
 /* the menu panel: one size for every menu screen, the contents scroll inside it */
 .mframe.mmenu{animation:none;width:min(620px,calc(100% - 32px));height:min(860px,calc(100% - 32px));max-height:none}
@@ -123,7 +123,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
   .prow.seat select.who{grid-area:who;max-width:none}.prow.seat .sws{grid-area:sws}
   .prow.seat input,.prow.seat .ainm{grid-area:nm}.prow.seat .ainm{min-height:0;padding:0 2px}
 }
-.ailist button:disabled{opacity:.4;cursor:default}
+.ailist button:disabled,.ailist button:disabled *{cursor:default;color:var(--faint);border-color:var(--line)} /* (dimmed by its colours, never faded: sharp.js) */
 .rmai{width:28px;height:28px;border-radius:50%;border:1px solid var(--line2);background:#0f1a16;color:var(--muted);font-size:17px;line-height:1;cursor:pointer;padding:0}
 .rmai:hover{color:var(--text);border-color:var(--gold)}
 .aitag{font-size:9.5px;font-weight:800;letter-spacing:.08em;color:var(--gold2);border:1px solid rgba(233,178,74,.55);border-radius:5px;padding:0 4px;line-height:14px}
@@ -206,6 +206,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .pchip .bk{display:flex;gap:4px;align-items:center}.pchip .bk b{margin-left:3px;font-size:12px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
 .pchip .bk i{width:9px;height:9px;border-radius:2px;display:block;transform:rotate(45deg);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
 .pchip .fin{color:var(--gold);font-weight:800;font-size:12px}
+.pchip.off,.pchip.off *{color:var(--faint)}.pchip.off .dot{opacity:.55} /* (an offline player's chip: dimmed by its colours, never faded: text under an opacity is never drawn sharp) */
 .pchip .fin.off,#roundLbl .fl.off{visibility:hidden}
 .hbtns{display:flex;gap:8px}
 .tbtn{border-radius:11px;padding:0 13px;height:var(--hudH);box-sizing:border-box;display:inline-flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}

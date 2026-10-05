@@ -26,9 +26,9 @@ function updateHeader(){
       c.onclick=()=>showPlayer(i);c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showPlayer(i);}};} // (what can be seen of that player's cards)
     const fin=p.pieces.filter(k=>k==='done').length;
     const off=online()&&!NET.room.seats[i].online; // (the room's seats are in the game's seat order)
-    const on=i===S.cur&&!S.over,cls='pchip surf'+(on?' on':'');
-    if(c.className!==cls){c.className=cls;if(on&&!reduceMotion)c.animate([{transform:'scale(1)'},{transform:'scale(1.12)'},{transform:'scale(1)'}],{duration:520,easing:EASE});} // whose turn: the chip lights up and flashes once
-    setStyle(c,'--pc',p.color);setStyle(c,'opacity',off?.55:1);c.title=off?'offline':'';
+    const on=i===S.cur&&!S.over,cls='pchip surf'+(on?' on':'')+(off?' off':''); // (off: dimmed by its colours, never faded: sharp.js)
+    if(c.className!==cls){const lit=on&&!c.classList.contains('on');c.className=cls;if(lit&&!reduceMotion)c.animate([{transform:'scale(1)'},{transform:'scale(1.12)'},{transform:'scale(1)'}],{duration:520,easing:EASE});} // whose turn: the chip lights up and flashes once
+    setStyle(c,'--pc',p.color);c.title=off?'offline':'';
     setHTML(c,`<span class="dot"></span><span class="nm">${esc(p.name)}</span>${p.ai?'<span class="aitag" title="AI player">AI</span>':''}<span class="fin${fin?'':' off'}">${p.pieces.length>1?fin+'/'+p.pieces.length+' ':''}★</span>`); // (the star's room is always kept: the chip never grows when someone arrives)
   });
 }
