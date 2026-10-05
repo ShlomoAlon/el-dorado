@@ -49,9 +49,12 @@ export function freshInit(during) {
   const who = r => { const n = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (!n) return '?'; const c = n.getAttribute('class');
     const was = r.type === 'childList' ? '' : ': ' + String(r.oldValue).slice(0, 80) + ' -> ' + String(r.type === 'attributes' ? r.target.getAttribute(r.attributeName) : r.target.data).slice(0, 80);
     return ((n.closest('[id]') || {}).id || '?') + ' ' + n.tagName.toLowerCase() + (c ? '.' + c.split(' ')[0] : '') + (r.type === 'attributes' ? ' [' + r.attributeName + ']' : r.type === 'childList' ? ' (elements)' : ' (text)') + was; };
-  let due = 0; // checks in a row that found a frame due (and so judged nothing)
+  let due = 0, sizeAt = ''; // checks in a row that found a frame due (and so judged nothing); the window's size at the last check
   const check = () => {
     if (!during()) { due = 0; return; }
+    // (a window resized since the last check: its frame is the page keeping up with a change from outside, not a page that
+    // never rests. Resized all along, WebKit's frames of 50-70 ms were due at every check of a 16 s sweep; 2026-10-05)
+    const size = innerWidth + '×' + innerHeight; if (size !== sizeAt) { sizeAt = size; due = 0; }
     // a frame is due: judged at the next check. Not for long: a page that always has a frame due is never judged, and never rests
     if (raf) { if (++due >= 40) { due = 0; assert(false, 'view: the page rests (a frame was due at every check for 10 s)'); } return; }
     due = 0;
