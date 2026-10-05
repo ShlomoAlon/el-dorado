@@ -1,7 +1,7 @@
 /* The heads-up display: the top bar (round, one chip per player), the prompt (what to do now, the online turn clock)
    and the turn buttons. Each piece is rewritten only when its text changes. */
 import { CT, SYMNAME, assert } from '../engine.gen.js';
-import { $, esc, setText, setHTML, setStyle, show, reduceMotion, EASE } from './dom.js';
+import { $, esc, setText, setHTML, setStyle, show, num, reduceMotion, EASE } from './dom.js';
 import { S, UI, NET, G, cur, canAct, online, covered, turnKey } from './state.js';
 import { onGeo, geo } from './geometry.js';
 import { render, afterDrawn } from './frame.js';
@@ -19,7 +19,7 @@ function updateHeader(){
   const box=$('#players');
   if(!S){setHTML(box,'');return;}
   // (fixed width: the number takes two digits' room, a figure space before 1–9; ' · final' is always laid out and only shown at the end)
-  setHTML($('#roundLbl'),'Round '+String(S.round).padStart(2,'\u2007')+`<span class="fl${S.endTriggered&&!S.over?'':' off'}"> · final</span>`);
+  setHTML($('#roundLbl'),'Round '+num(S.round,2)+`<span class="fl${S.endTriggered&&!S.over?'':' off'}"> · final</span>`);
   while(box.children.length>S.players.length)box.lastChild.remove();
   S.players.forEach((p,i)=>{
     let c=box.children[i];if(!c){c=document.createElement('div');c.setAttribute('role','button');c.tabIndex=0;box.appendChild(c);
@@ -123,7 +123,7 @@ function timeLeft(){if(!online()||NET.clockEnd==null||S.over)return null;return 
 function renderTimer(){
   const el=$('#turnTimer'),t=$('#ptxt').classList.contains('timed')?timeLeft():null;show(el,t!==null);if(t===null)return;
   if(t<10&&t>0&&t!==SND.lastT&&canAct())sfx('timer');SND.lastT=t;
-  setText(el,String(Math.floor(t/60)).padStart(2,'\u2007')+':'+String(t%60).padStart(2,'0')); // (figure spaces: a bank of ten minutes or more counts down past 9:59 without the clock changing width)el.classList.toggle('low',t<=15);
+  setHTML(el,num(Math.floor(t/60),2)+':'+String(t%60).padStart(2,'0')); // (a slot for the minutes: a bank of ten minutes or more counts down past 9:59 without the clock changing width)el.classList.toggle('low',t<=15);
 }
 export const hudPart = { name: 'hud', update(){updateHeader();updatePrompt();}};
 export function hudInit(){

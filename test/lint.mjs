@@ -32,6 +32,9 @@ for (const f of scan) if (f.includes(path.sep + 'test' + path.sep)) readFileSync
 const MODAL = /\.showModal\(/;
 for (const f of scan) if (f.includes(path.sep + 'client' + path.sep)) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (MODAL.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a modal dialog restyles the whole page: open it with show()`); } });
 for (const f of scan) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (SILENT.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a catch that drops the error: name the failure it expects, or handle it`); } });
+// a number's width is its slot's (dom.js num), never a padding of figure spaces: a figure space isn't a digit's width in
+// every font and size, so a padded label changed width as its number did (2026-10-05)
+for (const f of scan) if (f.includes(path.sep + 'client' + path.sep)) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (/\\u2007|\u2007/.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} a number padded with figure spaces: give it a slot (dom.js num)`); } });
 if (!ESLint) { console.log('lint: ESLint is not installed (npm i -g eslint): the module check could not run'); process.exit(1); }
 const files = []; const walk = d => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) walk(p); else if (/\.js$/.test(f.name) && !/^ui_/.test(f.name)) files.push(p); } }; walk(dir);
 const eslint = new ESLint({ cwd: root, overrideConfigFile: true, overrideConfig: [{ files: ['**/*.js'], languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser, AI_NET: 'readonly', AI_WORKER: 'readonly', ED_URL: 'readonly', google: 'readonly' /* Google sign-in's script */ } },

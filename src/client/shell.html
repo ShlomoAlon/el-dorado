@@ -334,6 +334,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .bs-ring b{color:#fff}
 /* the paid total's slot fits its widest value (8½: under the dearest cost, 5, plus the best coin, 4), so the "/" never moves while paying */
 #bsPaid{display:inline-grid;justify-items:end}#bsPaid::after{content:"8½";visibility:hidden;height:0}
+.num{display:inline-grid;justify-items:end}.num::after{content:attr(data-w);visibility:hidden;height:0} /* (dom.js num: a number's slot, its widest value) */
 #buySlot.paid .bs-ring{background:var(--gold);color:var(--goldInk);border-color:var(--gold)}
 #buySlot.paid .bs-ring b{color:var(--goldInk)}
 .bs-x{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);background:#0b120f;color:var(--muted);cursor:pointer;font-size:12px;display:grid;place-items:center;z-index:2}

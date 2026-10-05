@@ -11,6 +11,9 @@ export const setText = (e, t) => { t = String(t); if (e.__tx !== t) { e.__tx = t
 export const setHTML = (e, h) => { if (e.__h !== h) { e.__h = h; e.innerHTML = h; } };
 export const setStyle = (e, p, v) => { v = String(v); const k = '__s' + p; if (e[k] !== v) { if (p === 'transform') movedTo(e, e[k], v); e[k] = v; if (p.startsWith('--')) e.style.setProperty(p, v); else e.style[p] = v; } };
 export const show = (e, on) => { if (e.hidden === on) e.hidden = !on; };
+/* a number in a slot as wide as its widest value (n digits): its width never follows the number shown, whatever the font's
+   spaces measure (a figure space isn't a digit's width in every font and size: 2026-10-05, the replay's position label) */
+export const num = (v, n) => `<span class="num" data-w="${'8'.repeat(n)}">${v}</span>`;
 /* the address bar's parameters (?room=, ?replay=): set (a value) or remove (null) only those given, keeping the rest (?debug) */
 export function setQuery(set) {
   try { const u = new URL(location.href); for (const k in set) { if (set[k] == null) u.searchParams.delete(k); else u.searchParams.set(k, set[k]); } history.replaceState(null, '', u); }
