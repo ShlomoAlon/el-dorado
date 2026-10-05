@@ -24,12 +24,22 @@ export const ALLOWED = new Set(['btn', 'pri', 'big', 'linkbtn', 'gold', 'dashed'
 export const STACK = 'section[data-screen], .field, .tab, #oPlay, #oIn, #oOut, #oOff, #lbList, #pf';
 const ROW = '.mtop, .mrow, .opts, .prow, .ig-b, .box:not(.down)';
 export const LIST = '.list';
-export const CONTAINER = [STACK, ROW, LIST].join(', ');
-export function accepts(c, el) {
-  if (el.matches(OPTION)) return c === el.parentElement; // (an option stays in its own control)
+export const CHOICE = '.seg, .clist, .sws'; // (controls whose options can be added, moved, or taken to another of their kind)
+export const CONTAINER = [STACK, ROW, LIST, CHOICE].join(', ');
+const kindOf = e => ['seg', 'clist', 'sws'].find(k => e.classList.contains(k));
+export function accepts(c, el, from = el.parentElement) {
+  if (el.matches(OPTION) || (from && from.matches(CHOICE))) return c.matches(CHOICE) && kindOf(c) === kindOf(from); // (an option goes only into its own kind of control)
+  if (c.matches(CHOICE)) return false;
   if (c === el || el.contains(c)) return false;
   if (c.matches(LIST)) return el.matches('.box');
   if (c.matches(ROW)) return el.matches('button, .seg, select, .chk, input, p.note, .aiNote');
   if (c.matches('.field')) return !el.matches('.field');
   return c.matches(STACK);
 }
+
+// the parts that can be added (the panel's Add row): each as the theme makes it, with words to replace
+export const BLOCKS = [
+  ['Button', '<button type="button" class="btn">New button</button>'], ['Main button', '<button type="button" class="btn pri">New button</button>'],
+  ['Link', '<button type="button" class="linkbtn">New link</button>'], ['Title', '<h2>New title</h2>'], ['Lead', '<p class="sub">New lead</p>'],
+  ['Note', '<p class="note">New note</p>'], ['Box', '<div class="box">New box</div>'], ['Field', '<div class="field"><label>New field</label></div>'],
+];

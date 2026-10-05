@@ -25,6 +25,9 @@ const T = report('design');
   const chosen = () => p.evaluate(() => { const b = document.querySelector('#dPanel .dsel > b'); return b ? b.textContent : ''; });
   // choosing: the biggest part first, a click again one smaller, Escape one bigger, Alt + wheel either way
   await p.click('#sN label[data-v="2"]');
+  const hl = await p.evaluate(() => { const f = document.querySelector('#sN').closest('.field'); return { ok: f.classList.contains('d-sel') && getComputedStyle(f).outlineStyle === 'solid' && !document.querySelector('#dSel, #dHov'), sel: [...document.querySelectorAll('.d-sel')].map(e => e.tagName + '.' + e.className).join(' ') }; });
+  T.ok('the part chosen carries the highlight itself (an outline on its own corners), no box drawn over the page', hl.ok, hl.sel);
+  await p.keyboard.press('Escape'); await p.click('#sN label[data-v="2"]');
   T.ok('in Edit, a click takes the biggest part under it (the field) and does nothing else', !(await p.evaluate(() => document.querySelector('#sN input[value="2"]').checked)) && /^Field "Players"/.test(await chosen()), await chosen());
   await p.click('#sN label[data-v="2"]'); T.ok('a click again: the switch inside it', /^Switch "2 \/ 3 \/ 4"/.test(await chosen()), await chosen());
   await p.click('#sN label[data-v="2"]'); T.ok('and again: one of its options', /^Option "2"/.test(await chosen()), await chosen());
@@ -58,17 +61,35 @@ const T = report('design');
   const oh = p.locator('section[data-screen=online] h2:visible').first(); await oh.click(); await p.keyboard.press('Control+v');
   T.ok('pasted there: a copy on the Online screen', await p.evaluate(() => !!document.querySelector('section[data-screen=online] [data-dcopy]')));
   await p.click('#dPanel [data-a=screen][data-v=local]');
+  // adding: a part from the Add row into the chosen field; one dragged in from the panel; an option to a switch, and an option
+  // taken to another switch
+  await p.keyboard.press('Escape'); await p.click('#sN label[data-v="2"]'); // (the Players field)
+  await p.click('#dPanel [data-a=add]:text-is("Button")');
+  T.ok('Add: a new button into the chosen field', await p.evaluate(() => { const f = document.querySelector('#sN').closest('.field'), l = f.lastElementChild; return l.matches('button.btn') && l.textContent === 'New button' && l.classList.contains('d-sel'); }));
+  const note = await p.locator('#dPanel [data-a=add]:text-is("Note")').boundingBox(), lead = await p.locator('section[data-screen=setup] p.sub').boundingBox();
+  await p.mouse.move(note.x + 10, note.y + 10); await p.mouse.down(); await p.mouse.move(note.x - 40, note.y + 10, { steps: 3 }); await p.mouse.move(lead.x + 30, lead.y + lead.height - 3, { steps: 8 });
+  T.ok('dragging one in from the panel shows where it lands', await p.evaluate(() => !!document.querySelector('.d-ghost') && getComputedStyle(document.querySelector('#dDrop')).display === 'block'));
+  await p.mouse.up(); await p.waitForTimeout(250);
+  T.ok('dropped: a new note in the screen, nothing left floating', await p.evaluate(() => [...document.querySelectorAll('section[data-screen=setup] p.note')].some(n => n.textContent === 'New note' && n.dataset.dcopy) && !document.querySelector('.d-ghost')));
+  await p.keyboard.press('Escape'); await p.click('#sN label[data-v="2"]'); await p.click('#sN label[data-v="2"]'); // (the switch)
+  await p.click('#dPanel [data-a=addopt]');
+  T.ok('Add option: the switch has a fourth, its own choice', await p.evaluate(() => { const o = [...document.querySelectorAll('#sN > label')]; return o.length === 4 && o[3].textContent.trim() === 'New option' && o[3].querySelector('input').value !== o[2].querySelector('input').value; }));
+  const o2 = await p.locator('#sN > label').nth(0).boundingBox(), cp = await p.locator('#sN + .seg').boundingBox();
+  await p.click('#sN > label >> nth=0'); // (the switch's neighbour level: an option)
+  await p.mouse.move(o2.x + o2.width / 2, o2.y + o2.height / 2); await p.mouse.down(); await p.mouse.move(o2.x + o2.width / 2 + 20, o2.y + 10, { steps: 3 }); await p.mouse.move(cp.x + cp.width - 6, cp.y + cp.height / 2, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(250);
+  T.ok('an option dragged into another switch of its kind', await p.evaluate(() => document.querySelectorAll('#sN + .seg > label').length === 4 && document.querySelectorAll('#sN > label').length === 3));
   await p.click('section[data-screen=setup] p.sub'); await p.click('#dPanel [data-a=del]');
   T.ok('Delete hides it', await p.evaluate(() => getComputedStyle(document.querySelector('section[data-screen=setup] p.sub')).display === 'none'));
   await p.click('section[data-screen=setup] h2'); await p.fill('#dPanel [data-a=text]', 'The Expedition'); await p.click('#dPanel h3');
   await p.click('#dPanel [data-a=copyall]'); await p.waitForTimeout(300); const copied = await p.evaluate(() => navigator.clipboard.readText());
   T.ok('Copy for Claude: each change in words, where to find it, and the note', /moved: was in Row/.test(copied) && /#sGo/.test(copied) && /look: main, big → plain, big, full width/.test(copied) && /note: "Should this be at the top\?"/.test(copied) && /a copy of Switch "2 \/ 3 \/ 4"/.test(copied) && /Online › a copy of Button "Start expedition"/.test(copied) && /deleted/.test(copied) && /text: "El Dorado Expedition" → "The Expedition"/.test(copied), '\n' + copied);
-  T.ok('nothing else in it', copied.split('\n').length === 6, copied.split('\n').length + ' lines');
+  const nChanges = (await p.evaluate(() => window.__design.changes())).length;
+  T.ok('one line a change, nothing else', copied.split('\n').length === nChanges + 1 && nChanges >= 8, nChanges + ' changes');
   // undo all: the menu exactly as it was; redo all; reset
-  for (let i = 0; i < 10; i++) await p.keyboard.press('Control+z');
+  for (let i = 0; i < 30; i++) await p.keyboard.press('Control+z');
   T.ok('undo all gives the menu back exactly, and no changes are left', norm(await p.evaluate(() => document.querySelector('#mform').innerHTML)) === orig && (await p.evaluate(() => window.__design.changes())).length === 0);
-  for (let i = 0; i < 10; i++) await p.keyboard.press('Control+Shift+z');
-  T.ok('redo all brings every change back', (await p.evaluate(() => window.__design.changes())).length === 5);
+  for (let i = 0; i < 30; i++) await p.keyboard.press('Control+Shift+z');
+  T.ok('redo all brings every change back', (await p.evaluate(() => window.__design.changes())).length === nChanges);
   await p.click('#dPanel [data-a=reset]');
   T.ok('Reset: the menu as it was', norm(await p.evaluate(() => document.querySelector('#mform').innerHTML)) === orig);
   // Edit off, closing: nothing left
