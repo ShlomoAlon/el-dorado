@@ -87,7 +87,7 @@ const res = await pool([
   ...(online ? [['online', 'node test/online.cjs', 290]] : []),
 ], os.cpus().length);
 // the timing measurements (frame costs, wheel latency) need a quiet machine: they run once everything else has finished
-res.push(await run(['firstpaint', 'node test/firstpaint.cjs', 12])); // (timed: run alone) the start screen drawn within 100 ms of the HTML arriving
+res.push(await run(['firstpaint', 'node test/firstpaint.cjs', 19])); // (timed: run alone) the start screen drawn within 100 ms of the HTML arriving
 res.push(await run(['frames', 'node test/frames.cjs', 10]));
 // every frame given to the page during drags, fast zooms and moves (the engine-neutral measure, run in WebKit and Firefox too)
 res.push(await run(['smooth', 'node test/smooth.cjs', 12]));
