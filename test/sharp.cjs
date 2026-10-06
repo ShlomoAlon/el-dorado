@@ -12,7 +12,7 @@
 // A card's text is part of its picture (rounded, shadowed, tilted in the fan: grey-smoothed): a card is judged as a picture,
 // against the same card drawn plainly.
 //   NODE_PATH=$(npm root -g) node test/sharp.cjs
-const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { chromium, serveStatic, openPage, settle, report, menuGo } = require('./lib.cjs');
 const zlib = require('zlib');
 const T = report('sharp');
 // a PNG's pixels (8-bit RGB or RGBA, not interlaced: what Chrome's screenshots are)
@@ -102,8 +102,8 @@ async function screen(p, name) {
     T.ok('the reference: a plain page\'s text is sub-pixel here, and grey smoothing is told apart', j[0] && j[0].share > .7 && j[1] && j[1].share < .1, j.map(x => x && Math.round(x.share * 100) + '%').join(', ')); }
   await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
   await screen(p, 'start screen');
-  for (const tab of ['online', 'replays']) { await p.click(`#sMode label[data-v=${tab}]`); await screen(p, tab + ' tab'); }
-  await p.click('#sMode label[data-v=local]'); await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !document.querySelector('#menu').open);
+  for (const tab of ['local', 'online', 'replays', 'settings']) { await menuGo(p, tab); await screen(p, tab + ' screen'); }
+  await menuGo(p, 'local'); await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !document.querySelector('#menu').open);
   await screen(p, 'a game');
   // the card under the pointer
   const c = await p.evaluate(() => { const r = document.querySelector('#cards .card').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 20 }; });

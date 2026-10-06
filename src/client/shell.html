@@ -39,7 +39,7 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 [hidden]{display:none!important} /* hidden always means hidden: no display rule may override it (one rule, not one per element) */
 #menu .modal:focus{outline:none}
 /* option groups are native radio buttons, drawn as segmented buttons, cards and swatches */
-.seg input,.clist input,.sws input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.seg input,.clist input,.sws input,.hub input,.mback input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
 .seg label:has(input:focus-visible),.clist label:has(input:focus-visible),.sws label:has(input:focus-visible){outline:2px solid var(--gold);outline-offset:2px}
 /* the Online tabs: the checked tab's panel shows (no script) */
 #menu .tab{display:none}
@@ -48,6 +48,9 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .opts{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .rrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);margin-bottom:8px}
 .rrow .note{margin:0}
+/* a list the server fills (open rooms, games in progress): its box keeps one height, about three rows, and scrolls inside it,
+   so rooms coming and going move nothing else on the screen */
+.slist{height:170px;overflow-y:auto;scrollbar-width:thin}.slist>.note{margin:4px 0 0}
 .note.warn{color:#f3c98b}
 .lb{display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums;margin-bottom:12px}.lb .m{color:var(--muted)}
 .lbp{display:flex;align-items:center;gap:7px;min-width:0}.lbp .note,.seatrow .note,.pfh .note{margin:0}.lbn.me{color:var(--gold2)}
@@ -60,7 +63,15 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .mframe.mmenu{animation:none;width:min(620px,calc(100% - 32px));height:min(860px,calc(100% - 32px));max-height:none}
 .modal.menu{overflow-y:scroll;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent} /* (its scrollbar always there: the content's width never changes as it grows. Not scrollbar-gutter:stable, under which Chrome draws every menu's text without sub-pixel smoothing, fuzzy on a 1080p screen: test/sharp.cjs) */
 .modal.menu::-webkit-scrollbar{width:8px}.modal.menu::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
-.seg.modes{margin:0 0 14px;display:grid;grid-template-columns:repeat(3,1fr);text-align:center}.seg.modes label{padding-inline:4px;white-space:nowrap}
+/* the main menu: the game in progress (Continue, Resign, End game), then where to go; a choice not open now is greyed, by its colours (sharp.js) */
+.mgame{display:grid;gap:10px;margin:6px 0 18px}.mgame .cont{display:flex;align-items:center;gap:14px}#igTxt{min-height:1.4em}
+.hrow{display:flex;gap:8px}
+.hub{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:18px}
+.hub label{position:relative;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:12px;background:var(--surf);border:1px solid var(--line2);font-weight:800;font-size:15.5px;cursor:pointer;transition:border-color .15s}
+.hub label::after{content:'›';color:var(--muted);font-size:20px;line-height:1}
+.hub label:hover{border-color:var(--gold)}
+.hub label:has(input:disabled){color:var(--faint);border-color:var(--line);cursor:default}.hub label:has(input:disabled)::after{color:var(--faint)}
+.mback{position:relative;display:inline-flex;align-items:center;color:var(--muted);font-size:14px;font-weight:700;cursor:pointer;margin:0 0 8px}.mback:hover{color:var(--text)}
 .lbn{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;text-align:left}.lbn:hover{text-decoration:underline}
 .pfh{display:flex;align-items:center;gap:12px;margin:4px 0 12px}.pfh h3{margin:0;font-size:18px}
 .av.big{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(233,178,74,.18);color:var(--gold2);font-weight:800;font-size:18px;flex:none}
@@ -101,8 +112,6 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .rlist{display:flex;flex-direction:column;gap:6px;max-height:44vh;overflow:auto}
 .rlist button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);color:var(--text);cursor:pointer;font:inherit}
 .rlist button b{font-size:14px}.rlist button span{font-size:12px;color:var(--muted)}.rlist button:hover{border-color:var(--line2)}
-.ingame{display:flex;flex-direction:column;gap:18px;font-size:16px}
-.ingame .ig-b{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .acct{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--muted)}
 .gsi{color-scheme:light}
 @media (max-width:500px){.pstats{grid-template-columns:repeat(3,1fr)}
@@ -618,19 +627,24 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <dialog id="menu" aria-label="Menu" open>
 <div class="mframe mmenu"><form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
   <div class="acct" id="acct"></div>
-  <div class="ingame" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn pri" id="sBack">Continue</button></span></div>
-  <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>This device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label></div>
-  <section data-screen="setup">
-    <h2>El Dorado Expedition</h2>
+  <!-- the main menu: the same buttons every time; what can't be used now (a new game during one) is greyed (owner, 2026-10-06) -->
+  <section data-screen="main">
+    <h2>El Dorado Expedition</h2><input type="radio" name="mode" value="main" checked hidden>
+    <div class="mgame" id="ingame"><div class="cont"><button type="button" class="btn pri big" id="sBack" disabled>Continue</button><span class="note" id="igTxt"></span></div>
+      <div class="hrow"><button type="button" class="btn" id="sResign" disabled>Resign</button><button type="button" class="btn" id="sEnd" disabled>End game</button></div></div>
+    <div class="hub" id="hub"><label data-v="local"><input type="radio" name="mode" value="local"><span>New game</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label><label data-v="settings"><input type="radio" name="mode" value="settings"><span>Settings</span></label></div>
+  </section>
+  <section data-screen="setup" hidden>
+    <label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>New game</h2>
     <div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div></div>
     <div class="field"><label>Expedition leaders</label><div id="seats"><!--SEATS--></div><p class="note warn" id="allAI" hidden>Seat at least one human player.</p></div>
     <div class="field"><label>Course</label><div class="clist" id="sC"><!--COURSES:course--></div><div class="aiNote" id="aiNote" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><label data-v="1"><input type="radio" name="full" value="1" checked><span>When all but one arrive</span></label><label data-v="0"><input type="radio" name="full" value="0"><span>At the first arrival (official)</span></label></div></div>
     <div class="field"><label class="chk"><input type="checkbox" name="priv" id="sPriv"> <span>Pass-and-play: hide hands between turns</span></label></div>
-    <div class="field"><label>Settings</label><label class="chk"><input type="checkbox" name="buywarn" id="sBuyWarn" checked> <span>Remind me if I can still buy</span></label></div>
     <div class="mrow"><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
   </section>
   <section data-screen="online" hidden>
+    <label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label>
     <div id="oOff" hidden><h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p></div>
     <div id="oOut" hidden><h2>Play online</h2>      <p class="note warn" id="oNoG" hidden>Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>
       <div class="field" id="oDev" hidden><label>Developer sign-in (local testing only)</label><div class="prow"><input id="devName" maxlength="16" placeholder="Name"><button type="button" class="btn" id="devGo">Sign in</button></div></div></div>
@@ -645,8 +659,8 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
           <div class="clist" id="cCourse"><!--COURSES:ocourse--></div>
           <div class="mrow left"><button type="button" class="btn pri big" id="cGo">Create room</button></div></div>
         <div class="field"><label>Join with a code</label><div class="prow"><input id="jCode" maxlength="5" placeholder="e.g. K7Q2M" autocomplete="off"><button type="button" class="btn" id="jGo">Join</button></div></div>
-        <div class="field"><label>Open rooms</label><div id="roomsOpen"></div></div>
-        <div class="field" id="liveBox" hidden><label>Games in progress</label><div id="roomsLive"></div></div>
+        <div class="field"><label>Open rooms</label><div id="roomsOpen" class="slist"></div></div>
+        <div class="field" id="liveBox"><label>Games in progress</label><div id="roomsLive" class="slist"></div></div>
         </div>
       </div>
       <div class="tab" data-tab="board"><div id="lbList"><p class="note">Loading…</p></div></div>
@@ -667,9 +681,15 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div class="mrow"><button type="button" class="btn" id="rlLeave">Leave</button><button type="button" class="btn big" id="rlNow" hidden>Start now</button><button type="button" class="btn pri big" id="rlStart" hidden>Start game</button></div>
   </section>
   <section data-screen="replays" hidden>
-    <h2>Replays</h2>
+    <label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>Replays</h2>
     <div class="field"><label>Your games</label><div id="rMine" class="rlist"></div></div>
     <div class="field"><label>Recent games</label><div id="rList" class="rlist"></div></div>
+  </section>
+  <section data-screen="settings" hidden>
+    <label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>Settings</h2>
+    <div class="field"><label class="chk"><input type="checkbox" id="setSnd" checked> <span>Sound</span></label></div>
+    <div class="field" id="setFullBox"><label class="chk"><input type="checkbox" id="setFull"> <span>Full screen</span></label></div>
+    <div class="field"><label class="chk"><input type="checkbox" name="buywarn" id="sBuyWarn" checked> <span>Remind me if I can still buy</span></label></div>
   </section>
 </form></div>
 </dialog>

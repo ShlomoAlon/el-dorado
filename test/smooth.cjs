@@ -3,7 +3,7 @@
 // few moves played, while the page records the time of every frame it is given. A frame that comes more than twice the
 // usual interval after the last one was dropped. Run in Chrome (with the suite) and in WebKit and Firefox (run.mjs --engines).
 //   NODE_PATH=$(npm root -g) node test/smooth.cjs        (ENGINE=webkit|firefox for the other engines)
-const { browser, ENGINE, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { browser, ENGINE, serveStatic, openPage, settle, report, menuGo } = require('./lib.cjs');
 const { step } = require('./playstep.cjs');
 const T = report('smooth (' + ENGINE + ')');
 // what each part may drop, at most: the share of frames dropped and the longest gap (ms). A gap of 100 ms is a visible hitch
@@ -12,7 +12,7 @@ const LIMIT = { drop: 0.05, gap: 100 };
   const srv = await serveStatic(), b = await browser.launch();
   const p = await openPage(b, 'smooth', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25 });
   await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-  await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
+  await menuGo(p, 'local'); await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
   await p.evaluate(() => window.__ED.aiPace(.3)); await settle(p);
   // the page's own record of its frames: started and read per part
   const rec = () => p.evaluate(() => { const f = window.__frames = []; const tick = t => { if (window.__frames !== f) return; f.push(t); requestAnimationFrame(tick); }; requestAnimationFrame(tick); });

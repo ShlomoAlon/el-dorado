@@ -2,7 +2,7 @@
 // Reports frame times (mean, p95, frames over 25 ms) and where the browser spent its time (script / style / layout),
 // plus the heaviest JS functions from a CPU profile.
 //   NODE_PATH=$(npm root -g) node test/perf.cjs [path/to/index.html] [--cpu 4] [--size 1440x900] [--profile]
-const { chromium, openPage } = require('./lib.cjs');
+const { chromium, openPage, menuGo } = require('./lib.cjs');
 const path = require('path');
 const args = process.argv.slice(2), opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
 const file = args.find(a => a.endsWith('.html')) || path.join(__dirname, '..', 'public/index.html');
@@ -12,7 +12,7 @@ const CPU = +(opt('--cpu') || 4), [W, H] = (opt('--size') || '1440x900').split('
   const b = await chromium.launch({ timing: true }); const p = await openPage(b, 'perf', { viewport: { width: W, height: H } });
   const cdp = await p.context().newCDPSession(p);
   await p.goto('file://' + path.resolve(file)); await p.waitForTimeout(700);
-  await p.click('#sGo'); await p.waitForTimeout(1800);
+  await menuGo(p, 'local'); await p.click('#sGo'); await p.waitForTimeout(1800);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU });
   await cdp.send('Performance.enable');
   const metrics = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(m => [m.name, m.value]));

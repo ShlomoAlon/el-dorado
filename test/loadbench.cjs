@@ -19,7 +19,7 @@ async function once(browser, P, warm) {
   const errs = []; page.on('pageerror', e => errs.push(e.message));
   await page.goto(URL0, { waitUntil: 'commit' });
   // start screen visible = the Start button is on screen; usable = it is visible and the page's script has wired it up
-  await page.waitForSelector('#sGo', { state: 'visible', timeout: 60000 });
+  await page.waitForSelector('#hub label[data-v=local]', { state: 'visible', timeout: 60000 }); // (the main menu)
   const tStart = await page.evaluate(() => performance.now());
   const paint = await page.evaluate(() => (performance.getEntriesByName('first-contentful-paint')[0] || {}).startTime || null);
   // the script has run (the game can start at once from here)
@@ -27,7 +27,7 @@ async function once(browser, P, warm) {
   const tReady = await page.evaluate(() => performance.now());
   await page.waitForTimeout(READ_MS);
   const tClick = await page.evaluate(() => performance.now());
-  await page.click('#sGo');
+  await page.click('#hub label[data-v=local]'); await page.click('#sGo');
   // playing = the setup is gone, the board is drawn and the hand's cards are on screen, and a frame has been painted
   // drawn = the board and the hand are in the page and a frame has been painted (the start screen then fades out over 160 ms)
   await page.waitForFunction(() => document.querySelectorAll('#board *').length > 50 && document.querySelectorAll('.card').length >= 4, null, { timeout: 60000, polling: 'raf' });

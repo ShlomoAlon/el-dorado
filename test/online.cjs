@@ -8,7 +8,7 @@
 //   3b. two games at once: both run to their end side by side, each page hears only its own room
 //   4. room lists (public listed, private not) and quick match (starts when full, or early when everyone asks)
 //   NODE_PATH=$(npm root -g) node test/online.cjs        (or: node test/run.mjs --online)
-const { browser, startServer, openPage, settle, report } = require('./lib.cjs');
+const { browser, startServer, openPage, settle, report, menuGo } = require('./lib.cjs');
 const { step } = require('./playstep.cjs');
 const T = report('online');
 (async () => {
@@ -18,7 +18,7 @@ const T = report('online');
     // a page whose section is over is closed (its errors are kept in pages): left open, it goes on drawing and slows the rest
     const done = async (...ps) => { for (const q of ps) await q.context().close(); };
     const signIn = async (p, name) => {
-      await p.click('#sMode label[data-v="online"]'); await p.waitForSelector('#devName', { state: 'visible' });
+      await menuGo(p, 'online'); await p.waitForSelector('#devName', { state: 'visible' });
       await p.fill('#devName', name); await p.click('#devGo');
       await p.waitForFunction(() => __ED.NET.user); return p.evaluate(() => __ED.NET.user.id);
     };
@@ -46,7 +46,7 @@ const T = report('online');
       const R = await open('R'), still = async name => { await slow(R); await R.reload(); await R.waitForFunction(() => window.__ED && __ED.NET.available, null, { timeout: 15000 }); await R.waitForTimeout(400); await R.unroute('**/api/**');
         T.ok(name + ': the start screen stays in place while the server answers (no layout shift in the menu)', !R.errors.length, R.errors.join(' | ')); };
       await still('reload, signed out');
-      await R.click('#sMode label[data-v="online"]'); await R.fill('#devName', 'Rhea'); await R.click('#devGo'); await R.waitForFunction(() => __ED.NET.user); await R.click('#sMode label[data-v="local"]');
+      await menuGo(R, 'online'); await R.fill('#devName', 'Rhea'); await R.click('#devGo'); await R.waitForFunction(() => __ED.NET.user); await menuGo(R, 'local');
       await still('reload, signed in'); await done(R); }
     // ---------- 0a. coming back: the screen is chosen from what this device knows at once (the server only adds), and a signed-in
     //      player's server check is one round trip, not two (every request here takes 1.5 s). Counted in round trips, not in
@@ -55,10 +55,10 @@ const T = report('online');
     //      for a round trip, nor hide one
     { const RT = 1500, slow = P => P.route('**/api/**', async r => { await new Promise(res => setTimeout(res, RT)); await r.continue().catch(e => { if (!/already handled/.test(e.message)) throw e; }); }); // (expected: the page moved on meanwhile)
       const reload = async P => { const t0 = Date.now(); await P.reload({ waitUntil: 'commit' });
-        await P.waitForFunction(() => window.__ED && __ED.S && !__ED.UI.preview && document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.documentElement.classList.contains('boardready'), null, { timeout: 15000 }); // (the game, behind its menu)
+        await P.waitForFunction(() => window.__ED && __ED.S && !__ED.UI.preview && !document.querySelector('section[data-screen=main]').hidden && !document.querySelector('#sBack').disabled && document.documentElement.classList.contains('boardready'), null, { timeout: 15000 }); // (the game, behind the main menu)
         return Date.now() - t0; };
       const back = async (P, signed) => { // (a local game started and saved; then the page is opened again: at once, then with slow requests; it comes back behind its menu)
-        if (signed) await signIn(P, 'Ulla'); await P.click('label:has(input[name=mode][value=local])'); await P.waitForSelector('#sGo', { state: 'visible' });
+        if (signed) await signIn(P, 'Ulla'); await menuGo(P, 'local'); await P.waitForSelector('#sGo', { state: 'visible' });
         await P.click('#sGo'); await P.waitForFunction(() => __ED.S && !__ED.UI.preview && !document.querySelector('#menu').open);
         const base = await reload(P); await slow(P); const ms = await reload(P); await P.unroute('**/api/**'); return { base, ms, added: ms - base }; };
       const U = await open('U'), out = await back(U, false), U2 = await open('U2'), inn = await back(U2, true);
@@ -90,13 +90,13 @@ const T = report('online');
     await B.fill('#jCode', code); await B.click('#jGo');
     await C.goto(srv.url + '?room=' + code);
     T.ok('room: joined by code and by link', await wait(A, () => __ED.NET.room && __ED.NET.room.seats.length === 3), code);
-    T.ok('room lobby: no tabs to wander off with (Leave is the way out)', await B.evaluate(() => document.querySelector('#sMode').hidden));
+    T.ok('room lobby: no way back to the menu to wander off with (Leave is the way out)', await B.evaluate(() => !document.querySelector('section[data-screen=room]').hidden && !document.querySelector('section[data-screen=room] .mback')));
     await A.click('#rlStart');
     const started = await Promise.all([A, B, C].map(p => wait(p, () => __ED.online() && !document.querySelector('#menu').open)));
     T.ok('start: every player is in the game, menu closed', started.every(Boolean));
     // the menu during an online game: the Online screen with the game bar only (no second game to start, no tabs)
     await B.click('#menuBtn');
-    T.ok('menu during an online game: that game only (Continue, Resign; no tabs, no screen that would start or join another)', await wait(B, () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.querySelector('#sMode').hidden && [...document.querySelectorAll('#menu section[data-screen]')].every(s => s.hidden) && document.querySelector('#sEnd').hidden));
+    T.ok('menu during an online game: the main menu, Continue and Resign open; New game, Online, Replays and End game greyed', await wait(B, () => (() => { const m = document.querySelector('#menu'); return m.open && !m.querySelector('section[data-screen=main]').hidden && !m.querySelector('#sBack').disabled && ['local', 'online', 'replays'].every(v => m.querySelector(`#hub input[value=${v}]`).disabled); })() && !document.querySelector('#sResign').disabled && document.querySelector('#sEnd').disabled));
     await B.click('#sBack');
     T.ok('back to the online game, still connected', await wait(B, () => !document.querySelector('#menu').open && __ED.NET.connected && !!__ED.S));
     // a connection that dies silently (a phone asleep, a dropped network): noticed when the page comes back, and replaced
@@ -161,8 +161,8 @@ const T = report('online');
     T.ok('reload during a game: straight back to it, no lobby on the way', backIn && !(await C.evaluate(() => window.__lobbyShown)), 'back: ' + backIn);
     // coming back without the room's link (the site opened again): the game's menu first, nothing else on it; Continue joins
     await C.goto(srv.url);
-    T.ok('opened again without the link: the online game in progress, behind its menu', await wait(C, () => window.__ED && !__ED.online() && document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.querySelector('#sMode').hidden && [...document.querySelectorAll('#menu section[data-screen]')].every(s => s.hidden), null, 15000),
-      await C.evaluate(() => JSON.stringify({ S: !!__ED.S, user: !!__ED.NET.user, active: __ED.NET.active, open: document.querySelector('#menu').open, ingame: !document.querySelector('#ingame').hidden, screens: [...document.querySelectorAll('#menu section[data-screen]:not([hidden])')].map(s => s.dataset.screen), url: location.href })));
+    T.ok('opened again without the link: the online game in progress, behind its menu', await wait(C, () => window.__ED && !__ED.online() && (() => { const m = document.querySelector('#menu'); return m.open && !m.querySelector('section[data-screen=main]').hidden && !m.querySelector('#sBack').disabled && ['local', 'online', 'replays'].every(v => m.querySelector(`#hub input[value=${v}]`).disabled); })(), null, 15000),
+      await C.evaluate(() => JSON.stringify({ S: !!__ED.S, user: !!__ED.NET.user, active: __ED.NET.active, open: document.querySelector('#menu').open, cont: !document.querySelector('#sBack').disabled, screens: [...document.querySelectorAll('#menu section[data-screen]:not([hidden])')].map(s => s.dataset.screen), url: location.href })));
     await C.click('#sBack');
     T.ok('Continue: back in the online game', await wait(C, () => __ED.online() && !!__ED.S && !__ED.S.over && !document.querySelector('#menu').open, null, 15000));
     // two resign: the game is over for the third, rated
@@ -172,7 +172,7 @@ const T = report('online');
     // the others play on without B: B is out of that room (no Continue; Quick match doesn't send B back into it)
     const bActive = () => B.evaluate(async () => (await (await fetch('/api/me', { headers: { authorization: 'Bearer ' + __ED.NET.token } })).json()).active);
     let bIn = await bActive(); for (let i = 0; i < 20 && bIn; i++) { await B.waitForTimeout(250); bIn = await bActive(); }
-    T.ok('a resigned player is out of the room (no game menu to continue it, no quick match back into it)', bIn === null && await B.evaluate(() => document.querySelector('#ingame').hidden && !__ED.NET.active), bIn);
+    T.ok('a resigned player is out of the room (no game menu to continue it, no quick match back into it)', bIn === null && await B.evaluate(() => document.querySelector('#sBack').disabled && !__ED.NET.active), bIn);
     await C.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('game over after two resign', await wait(A, () => __ED.S.over && __ED.NET.room.results));
     const res = await A.evaluate(() => __ED.NET.room.results), lb1 = await board(A);

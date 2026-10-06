@@ -5,7 +5,7 @@
 // including states no scripted test reaches (moving on with a card's leftover strength, the buy reminder, keeping
 // cards, removal cards, the Transmitter, base camps, game over). Animations run 20x faster (they still run).
 //   NODE_PATH=$(npm root -g) node test/play.cjs [--games n]
-const { browser, ENGINE, serveStatic, openPage, settle, report, cpuMeter } = require('./lib.cjs');
+const { browser, ENGINE, serveStatic, openPage, settle, report, cpuMeter, menuGo } = require('./lib.cjs');
 const { step } = require('./playstep.cjs');
 const T = report('play');
 const arg = process.argv.slice(2), GAMES = +(arg[arg.indexOf('--games') + 1] || 0) || 3;
@@ -38,7 +38,7 @@ const CPU_MS = 100; // (measured 65 ms with the board's terrain as one image, 20
     const pageState = () => p.evaluate(() => { const d = document.querySelector('#menu'), g = document.querySelector('#sGo'), r = g && g.getBoundingClientRect(), sec = g && g.closest('section');
       return JSON.stringify({ open: d.open, modal: d.matches(':modal'), cls: d.className, html: document.documentElement.className, screen: sec && sec.dataset.screen, secHidden: sec && sec.hidden, rect: r && [r.x, r.y, r.width, r.height].map(Math.round), disp: getComputedStyle(d).display, scripts: [...document.scripts].map(x => x.src.split('/').pop() || 'inline'), ed: !!window.__ED, S: !!(window.__ED && window.__ED.S), seats: document.querySelectorAll('#seats .seat:not([hidden])').length }); });
     try {
-      await p.selectOption('select[name=who1]', pass ? '' : 'raleigh', { timeout: 20000 }); await p.selectOption('select[name=who2]', 'raleigh', { timeout: 20000 });
+      await menuGo(p, 'local'); await p.selectOption('select[name=who1]', pass ? '' : 'raleigh', { timeout: 20000 }); await p.selectOption('select[name=who2]', 'raleigh', { timeout: 20000 });
       if (pass) await p.check('#sPriv');
       await p.click('#sGo', { timeout: 20000 });
     } catch (e) { throw new Error(e.message.split('\n')[0] + ' — page: ' + await pageState()); }

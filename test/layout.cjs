@@ -2,7 +2,7 @@
 // and no two controls overlap (the board may sit under things: it pans). Run after any UI change:
 //   NODE_PATH=$(npm root -g) node test/layout.cjs [--quick] [--shots dir]
 // --quick: five sizes (phone portrait and landscape, tablet, laptop, desktop). Sizes run in parallel.
-const { browser, serveStatic, settle, openPage } = require('./lib.cjs');
+const { browser, serveStatic, settle, openPage, menuGo } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
 // [width, height, device scale]; [1536, 639, 1.25] is the owner's own screen (Chrome on Windows at 125%): his setup is the test
 const ALL = [[320, 568], [390, 844], [844, 390], [768, 1024], [1024, 700], [1024, 768], [1280, 720], [1366, 768], [1440, 900], [1536, 639, 1.25], [1920, 1080], [2560, 1440]];
@@ -68,7 +68,7 @@ const CHECK = () => {
     const p = await openPage(b, `${w}×${h}`, { viewport: { width: w, height: h }, deviceScaleFactor: dpr }), errs = p.errors; // (assertion failures count: openPage)
     await p.goto(url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
     // normal play: start a local game from the setup screen
-    await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
+    await menuGo(p, 'local'); await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
     const states = [['play', null],
       // the All cards overlay over the game (from its tile; where the market is too narrow, the Market button opens it)
       ['All cards open', async () => { await p.click(await p.evaluate(() => { const t = document.querySelector('#allTile'); return t && t.offsetParent && !document.querySelector('#mkt').classList.contains('cramped') ? '#allTile' : '#mktBtn'; }), { timeout: 5000 }); await p.waitForSelector('#allc:not([hidden])', { timeout: 5000 }); }],
@@ -101,7 +101,7 @@ const CHECK = () => {
       ['replay, market closed', async () => { await p.click('#rbA', { timeout: 5000 }); await p.click('#mktBtn', { timeout: 5000 }); }]];
     for (const [name, setup] of states) {
       await p.keyboard.press('Escape'); // close any overlay a previous step opened
-      try { if (setup) await setup(); } catch (e) { fails++; out.push(`FAIL ${w}×${h} ${name}: could not set up (${e.message.split('\n').filter(l => /Timeout|intercepts|not visible|not stable|waiting for|resolved/.test(l)).slice(0, 6).join(' · ')})`); continue; }
+      try { if (setup) await setup(); } catch (e) { fails++; out.push(`FAIL ${w}×${h} ${name}: could not set up (${e.message.split('\n').filter(l => /Timeout|intercepts|not visible|not stable|waiting for|resolved/.test(l)).slice(0, 6).join(' · ')}; the page: ${await p.evaluate(() => { const E = window.__ED; return JSON.stringify({ allFor: E.UI.allFor, mode: E.UI.mode, cur: E.S.cur, menu: document.querySelector('#menu').open, menuCls: document.querySelector('#menu').className, over: E.S.over, log: E.diagLog().slice(-8) }); }).catch(e => e.message)})`); continue; }
       if (!/under the pointer/.test(name)) await p.mouse.move(w / 2, 1); // park the pointer away from the hand (hovered cards lift by design)
       await settle(p, 6000); // (card flights, panels, the market: whatever the step set moving)
       const bad = await p.evaluate(CHECK); checks++;
@@ -119,7 +119,7 @@ const CHECK = () => {
   const sweep = async ([w, replay]) => {
     const name = `${w} wide, ${replay ? 'a replay' : 'play'}, heights 560 to 260`, p = await openPage(b, name, { viewport: { width: w, height: 560 } });
     await p.goto(url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-    await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(p);
+    await menuGo(p, 'local'); await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(p);
     if (replay) { await p.evaluate(l => window.__ED.openReplay(l, null), log); await p.waitForFunction(() => window.__ED.G.replay); await settle(p); }
     if (!(await p.evaluate(() => window.__ED.UI.mktOpen))) await p.click('#mktBtn'); // (the market open: what the heights decide)
     for (let h = 560; h >= 260 && !p.errors.length; h -= 2) { await p.setViewportSize({ width: w, height: h }); await p.evaluate(() => new Promise(r => setTimeout(r, 60))); } checks++;

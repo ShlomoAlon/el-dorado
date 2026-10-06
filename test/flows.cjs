@@ -5,7 +5,7 @@
 // Also checks that pressing Start changes nothing on the board, and that no step logs an error.
 // Every check waits for what it expects (up to a few seconds), so a slow or busy machine doesn't fail it.
 //   NODE_PATH=$(npm root -g) node test/flows.cjs
-const { browser, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { browser, serveStatic, openPage, settle, report, menuGo } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
 const log = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/replay.json'), 'utf8'));
 const T = report('flows');
@@ -22,7 +22,7 @@ const T = report('flows');
   // and a whole one: the buy step's total changes width)
   for (let k = 0; ; k++) {
     await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-    await p.selectOption('select[name=who1]', 'fawcett'); await settle(p);
+    await menuGo(p, 'local'); await p.selectOption('select[name=who1]', 'fawcett'); await settle(p);
     if (await S(() => { const E = window.__ED, P = E.S.players[E.S.cur], half = P.hand.filter(id => E.coinVal(E.S, id) % 1 !== 0).length; return !P.ai && half >= 2 && half < P.hand.length; })) break;
     if (k === 30) { T.ok('a deal where the person moves first, with half and whole coins in hand', false); break; }
   }

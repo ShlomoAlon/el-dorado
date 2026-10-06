@@ -20,7 +20,7 @@ import { feedPart, histInit } from './feed.js';
 import { showRules, showPile, closeModal, modalOpen, coverPart } from './dialogs.js';
 import { AIX, aiThink } from './ai.js';
 import { act, targets, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, undo, resumeSaved, onPiece, onPlayCard, startDiscard, addDiscard, confirmTrash } from './actions.js';
-import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, startLocal, radio, menuRefresh } from './menu.js';
+import { MENU, menuInit, showMenu, showMain, showSetup, showSettings, showReplays, showHub, setupSync, prepareGame, startLocal, radio, menuRefresh } from './menu.js';
 import { netInit, joinRoom, netSend } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
 import { soundInit } from './sound.js';
@@ -44,12 +44,14 @@ function boot() {
   $('#vp').addEventListener('click', onBoardClick); $('#vp').addEventListener('pointermove', onBoardHover); $('#vp').addEventListener('pointerleave', () => { if (!drag) setHot(null); });
   // full screen (hidden where the browser can't do it, e.g. iPhone Safari — there, Add to Home Screen gives a full-screen app)
   const fsEl = document.documentElement, fsOn = () => document.fullscreenElement || document.webkitFullscreenElement;
+  $('#setFullBox').hidden = !(fsEl.requestFullscreen || fsEl.webkitRequestFullscreen);
   if (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen) {
     const fb = $('#fsBtn'); fb.hidden = false;
     // (the browser may refuse: it throws, or rejects the promise, in older and newer versions)
     fb.onclick = () => { const refused = e => diag('full screen refused: ' + (e && e.message)); // (expected: some browsers and app views refuse)
       try { Promise.resolve(fsOn() ? (document.exitFullscreen || document.webkitExitFullscreen).call(document) : (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl, { navigationUI: 'hide' })).catch(refused); } catch (e) { refused(e); } };
-    const sync = () => { const on = !!fsOn(); fb.classList.toggle('full', on); fb.title = fb.ariaLabel = on ? 'Exit full screen' : 'Full screen'; };
+    $('#setFull').onchange = fb.onclick; // (the menu's Settings: the same switch)
+    const sync = () => { const on = !!fsOn(); fb.classList.toggle('full', on); fb.title = fb.ariaLabel = on ? 'Exit full screen' : 'Full screen'; $('#setFull').checked = on; };
     document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
   }
   // Menu: during a game, that game's menu (Continue, Resign, End game); else the start screen
@@ -67,7 +69,8 @@ function boot() {
   // a game in progress comes back behind its menu (owner, 2026-10-06: coming back starts at the menu, not in the game)
   const local = () => {
     if (resumeSaved()) { showMenu(); return; }
-    showSetup(); if ($('#sGo').dataset.q) { delete $('#sGo').dataset.q; startLocal(); } // Start pressed before the script had loaded
+    ({ local: showSetup, replays: showReplays, settings: showSettings }[radio('mode')] || showMain)(); // (a screen chosen before the script had loaded)
+    if ($('#sGo').dataset.q) { delete $('#sGo').dataset.q; startLocal(); } // Start pressed before the script had loaded
   };
   const known = !rid && !room && !load('token') && radio('mode') !== 'online'; // (Online picked before the script had loaded: its screen needs the server)
   if (known) local();

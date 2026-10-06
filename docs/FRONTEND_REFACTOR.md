@@ -59,17 +59,19 @@ The rules engine (`src/engine_*.js`) is imported from `src/engine.gen.js`, which
 
 ## Menu workflows (menu.js; tested by test/menus.cjs and test/online.cjs)
 
-- Three tabs: **This device** (setup), **Online** (hub: play, leaderboard, profile), **Replays**. No Back buttons: the tabs are
-  the navigation.
-- In a game, the menu is that game and nothing else (owner, 2026-10-06: "if you're in a game, you're in a game"): `showMenu()`
-  opens the pseudo-screen `'game'`: every section hidden, no tabs, no Sign out, only the game bar (Continue, Resign, End game
-  for a local game). No new game, no room, no replays until it ends. Esc or the backdrop is Continue. `menuOpen` asserts the
-  menu is the game's exactly when there is a game (`gameOn()`: a local or online game in progress, or the server's
-  `NET.active`, an online game of this player's not joined in this page yet, which Continue joins).
-- Coming back (a reload, the site opened again) starts at that menu, not in the game: a saved local game is rebuilt behind it
-  (the inline script hides the start screen while one is saved), and its AIs wait until Continue. A room link still opens
-  the room.
-- A finished online game: its room is left, to Online. The room lobby has no tabs: **Leave** (or Close room, for the host) is
-  the way out. Signing out leaves any room (`leaveRoom()`).
-- A replay returns to the menu screen it was opened from (Replays, Online) when closed, or to the game's menu if a game is
-  in progress.
+- The main menu (owner, 2026-10-06: "an indirection that directs you to the other screens"): Continue, Resign, End game,
+  then New game, Online, Replays, Settings. It is the same every time; what can't be used now is greyed (disabled), never
+  hidden: without a game, Continue, Resign and End game; in a game ("if you're in a game, you're in a game"), New game,
+  Online and Replays (and End game online). The menu opens on it, the Menu button opens it, and coming back to the page
+  (a reload, the site opened again) starts at it. Each screen has ‹ Menu at its top (a radio of the same `mode` group, so it
+  works before the script), and Esc goes back too; in a game, Esc or the backdrop on the main menu is Continue.
+- `menuOpen` asserts that a player in a game sees only the main menu, Settings or a room (`gameOn()`: a local or online game
+  in progress, or the server's `NET.active`, an online game of this player's not joined in this page yet, which Continue
+  joins).
+- A saved local game comes back behind the main menu (the inline script hides the menu until the script decides), and its
+  AIs wait until Continue. A room link still opens the room.
+- The room lobby has no ‹ Menu: **Leave** (or Close room, for the host) is the way out. Signing out leaves any room.
+- Data from the server fills slots that are always there (the account line, the room lists, a full room's note): the
+  layout-shift check judges the menu at all times, excused only by input or `expectMenu()` (another screen, the menu
+  opened, the window resized).
+- A replay returns to the screen it was opened from (Replays, Online), or to the main menu if a game is in progress.

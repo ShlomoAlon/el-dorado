@@ -3,7 +3,7 @@
 //   2. the zoom is baked in once it settles (layer scale back to 1, #bscale carries the zoom); edge energy printed as info only
 //   3. wheel zoom responsiveness: Chrome's input-to-screen latency for wheel events (EventLatency), CPU slowed 4x
 //   NODE_PATH=$(npm root -g) node test/render.cjs [index.html] [--shots dir]
-const { chromium, openPage } = require('./lib.cjs'); const path = require('path');
+const { chromium, openPage, menuGo } = require('./lib.cjs'); const path = require('path');
 const args = process.argv.slice(2), file = path.resolve(args.find(a => a.endsWith('.html')) || path.join(__dirname, '..', 'public/index.html'));
 const shots = args.includes('--shots') ? args[args.indexOf('--shots') + 1] : null;
 const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
@@ -14,7 +14,7 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
 (async () => {
   // (two browsers: the GPU path for what is drawn and how sharp (steps 1-2), the software path for what takes time (2c, 3): lib.cjs)
   const b = await chromium.launch({ gpu: true }), bt = await chromium.launch({ timing: true }); let fails = 0; const ok = (name, pass, detail) => { if (!pass) fails++; console.log(`${pass ? 'ok  ' : 'FAIL'} ${name}: ${detail}`); };
-  const errs = [], open = async (br = b) => { const p = await openPage(br, 'render', { viewport: { width: 1200, height: 800 } }); errs.push(p.errors); await p.goto('file://' + file); await p.waitForTimeout(700); await p.click('#sGo'); await p.waitForTimeout(1800); await p.waitForFunction(() => !window.__ED.baking()); return p; }; // (the terrain baked: lib.cjs settle)
+  const errs = [], open = async (br = b) => { const p = await openPage(br, 'render', { viewport: { width: 1200, height: 800 } }); errs.push(p.errors); await p.goto('file://' + file); await p.waitForTimeout(700); await menuGo(p, 'local'); await p.click('#sGo'); await p.waitForTimeout(1800); await p.waitForFunction(() => !window.__ED.baking()); return p; }; // (the terrain baked: lib.cjs settle)
   { // 0. the bake's length: the terrain is baked in short chunks between frames, so it takes about as long as its work, whatever
     // the frame rate (on the GPU route a frame takes 30-50 ms: a chunk a frame made it last 4.9 s, the page never at rest meanwhile)
     const p = await open(), t = await p.evaluate(() => window.__ED.diagLog().filter(l => / terrain baked in /.test(l)).map(l => +l.match(/in (\d+) ms/)[1]));
@@ -68,7 +68,7 @@ const diff = async (p, a, b) => p.evaluate(async ([x, y]) => {
     // drawing, not only the page's thread: the page-thread measures saw none of the hitches he felt (2026-10-04). (At 4K this
     // machine, with no GPU, misses frames drawing the screen alone, so 4K is judged on his)
     const p = await openPage(bt, 'render', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25 }); errs.push(p.errors);
-    await p.goto('file://' + file); await p.waitForTimeout(700); await p.click('#sGo'); await p.waitForTimeout(2500); await p.mouse.move(690, 290); await p.waitForTimeout(300);
+    await p.goto('file://' + file); await p.waitForTimeout(700); await menuGo(p, 'local'); await p.click('#sGo'); await p.waitForTimeout(2500); await p.mouse.move(690, 290); await p.waitForTimeout(300);
     const tr = require('path').join(require('os').tmpdir(), 'rd-' + process.pid + '.json');
     await bt.startTracing(p, { path: tr, categories: ['disabled-by-default-devtools.timeline.frame'] });
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;

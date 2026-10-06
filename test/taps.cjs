@@ -4,7 +4,7 @@
 // Checks: a tap on a target a figure covers moves there; hovering it lights it; a tap on my explorer's space reaches it;
 // the hand: hovering cards that are still being drawn.
 //   NODE_PATH=$(npm root -g) node test/taps.cjs
-const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { chromium, serveStatic, openPage, settle, report, menuGo } = require('./lib.cjs');
 const T = report('taps');
 (async () => {
   // the owner's window (1536×639 at 125%): the default fit where the tester met it
@@ -15,7 +15,7 @@ const T = report('taps');
   for (let tries = 0; tries < 20 && !setup; tries++) {
     if (tries) await p.evaluate(() => localStorage.clear()); // (else the page resumes the saved game)
     await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-    await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview); await settle(p);
+    await menuGo(p, 'local'); await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview); await settle(p);
     if (await p.evaluate(() => window.__ED.S.players[window.__ED.S.cur].ai)) continue;
     setup = await p.evaluate(() => { const E = window.__ED, S = E.S, other = (S.cur + 1) % S.players.length;
       for (const id of S.players[S.cur].hand) { E.onHandCard(id); E.render();

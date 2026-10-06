@@ -79,9 +79,11 @@ export function sfxEvent(e,viewer){
   }
   if(e.e==='turn')SND.prevCur=e.pl;
 }
-function setSound(on){
+/* sound on or off: the board's button and the menu's Settings show the same setting */
+export function setSound(on){
   SND.muted=!on;store('sound',on?'1':'0');
   const b=document.getElementById('sndBtn');b.classList.toggle('off',!on);b.title=b.ariaLabel=on?'Mute sounds':'Unmute sounds';
+  document.getElementById('setSnd').checked=on;
 }
 export function soundInit(){
   // first gesture unlocks audio; then a soft tick for every button, a paper swish for picking a card

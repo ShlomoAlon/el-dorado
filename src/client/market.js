@@ -22,7 +22,7 @@ function setMkt(open){expectLayout();UI.mktOpen=open;$('#mkt').classList.toggle(
    closes it by itself (nothing has to remember to). allFor: where it was opened; it shows while that is still where we are */
 const allKey=()=>S&&!S.over&&!G.replay&&!$('#menu').open?`${S.seed}|${S.round}|${S.cur}|${UI.mode}`:null;
 export const allShown=()=>UI.allFor!==null&&UI.allFor===allKey();
-export function openAll(open){UI.allFor=open?allKey():null;if(open)$('#allc').scrollTop=0;render();}
+export function openAll(open){UI.allFor=open?allKey():null;diag('all cards: '+(open?'open, for '+UI.allFor:'closed'));if(open)$('#allc').scrollTop=0;render();}
 /* size the market column so it always ends above the turn buttons and the discard pile: smaller cards, and more columns
    when that isn't enough (measured when the game area or the buttons change size, never while updating) */
 function sizeMarket(){

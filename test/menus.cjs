@@ -1,10 +1,10 @@
-// The menus as a person uses them, on this device (no server): the start screen's three tabs (This device / Online /
-// Replays) and no extra Back or Replays buttons; a game kept on this device listed with who won, and opened from Replays
-// comes back to Replays when closed; during a game the menu is that game only, and coming back (a reload) starts at it;
+// The menus as a person uses them, on this device (no server): the main menu (Continue, Resign, End game; New game, Online,
+// Replays, Settings: the same every time, greyed where it can't be used) and each screen's way back to it; a game kept on this device listed with who won, and opened from Replays
+// comes back to Replays when closed; during a game the same menu greys what would leave the game, and coming back (a reload) starts at it;
 // the results at the end of a game.
 // (Online menus, the room lobby and signing out: test/online.cjs.)
 //   NODE_PATH=$(npm root -g) node test/menus.cjs
-const { browser, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { browser, serveStatic, openPage, settle, report, menuGo } = require('./lib.cjs');
 const fs = require('fs'), path = require('path');
 const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/replay.json'), 'utf8'));
 (async () => {
@@ -13,17 +13,21 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
   const check = async (name, f, a, ms) => T.ok(name, await until(f, a, ms));
   const screen = s => `!document.querySelector('section[data-screen="${s}"]').hidden`;
   await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-  await check('start screen: three tabs, no Back or Replays buttons', () => document.querySelectorAll('#sMode label').length === 3 && !document.querySelector('[data-go]') && !document.querySelector('#sReplays'));
+  // the main menu first: no game, so Continue, Resign and End game are greyed, and every screen is open
+  const mainShows = g => document.querySelector('#menu').open && !document.querySelector('section[data-screen=main]').hidden && document.querySelectorAll('#hub label').length === 4
+    && document.querySelector('#sBack').disabled === !g && document.querySelector('#sEnd').disabled === !g
+    && ['local', 'online', 'replays'].every(v => document.querySelector(`#hub input[value=${v}]`).disabled === g) && !document.querySelector('#hub input[value=settings]').disabled;
+  await check('the main menu first: no game, so Continue, Resign and End game greyed; New game, Online, Replays, Settings open', mainShows, false);
   // keys an older version kept (playtest 2: eldorado-save-v4/-v5, -side, -rexp) are gone once the page loads; its own stay
   await p.evaluate(() => { for (const k of ['eldorado-save-v4', 'eldorado-save-v5', 'eldorado-side', 'eldorado-rexp']) localStorage.setItem(k, '1'); localStorage.setItem('other-site', '1'); });
   await p.reload(); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
   await check('old keys are removed when the page loads, and only ours', () => !Object.keys(localStorage).some(k => /^eldorado-(save-v[45]|side|rexp)$/.test(k)) && localStorage.getItem('other-site') === '1');
-  await p.click('#sMode label[data-v="online"]');
-  await check('Online tab (this copy can\'t reach the server, and says so)', new Function(`return ${screen('online')} && !document.querySelector('#oOff').hidden`));
+  await menuGo(p, 'online');
+  await check('Online (this copy can\'t reach the server, and says so)', new Function(`return ${screen('online')} && !document.querySelector('#oOff').hidden`));
   // a game finished on this device is listed under Your games: its result first (all AIs here: who won), then the course
   await p.evaluate(L => localStorage.setItem('eldorado-games-v2', JSON.stringify([{ ...L, created: Date.now() }])), LOG);
-  await p.click('#sMode label[data-v="replays"]');
-  await check('Replays tab', new Function(`return ${screen('replays')}`));
+  await menuGo(p, 'replays');
+  await check('Replays', new Function(`return ${screen('replays')}`));
   const won = LOG.players.filter((_, i) => LOG.result.places[i] === 1).map(x => x.name).join(' & ');
   await check('a game kept here: who won, then where and when (no upload button)', w => { const b = document.querySelector('#rMine [data-lid] b'); return !!b && b.textContent === 'Won by ' + w && !document.querySelector('#rUp'); }, won);
   // opening it plays it; closing it comes back to Replays
@@ -37,7 +41,10 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
   await check('the advice arrives after the replay closed', () => window.__R.asking.size === 0);
   await check('closing it comes back to Replays', new Function(`return !window.__ED.G.replay && document.querySelector('#menu').open && ${screen('replays')} && document.querySelector('input[name=mode][value=replays]').checked`));
   // a game: the menu over it has the game bar; a replay watched from there keeps the game
-  await p.click('#sMode label[data-v="local"]'); await check('This device tab', new Function(`return ${screen('setup')}`));
+  // each screen goes back to the main menu by its ‹ Menu, or Esc
+  await p.keyboard.press('Escape'); await check('Esc: back to the main menu', mainShows, false);
+  await menuGo(p, 'settings'); await check('Settings: sound, the buy reminder', () => !document.querySelector('section[data-screen=settings]').hidden && !!document.querySelector('#setSnd') && !!document.querySelector('#sBuyWarn'));
+  await menuGo(p, 'local'); await check('New game', new Function(`return ${screen('setup')}`));
   await p.click('#sGo'); await check('the game starts', () => !!window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
   await settle(p);
   // a player's chip shows two piles: the discard pile, and everything else they own (hand, draw pile, in play: not where each is)
@@ -47,21 +54,20 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
     return h.join() === 'Discard pile,Everything else,Blockades' && P[0].querySelectorAll('.mcard').length === q.discard.length && P[1].querySelectorAll('.mcard').length === q.hand.length + q.deck.length + q.play.length; }, other);
   await p.click('#pClose'); await settle(p);
   const pos = await p.evaluate(() => JSON.stringify(window.__ED.S.players.map(q => q.hand)));
-  // the menu during a game is that game and nothing else (owner, 2026-10-06: "if you're in a game, you're in a game"):
-  // Continue, Resign, End game; no tabs, no screen to start another game or watch a replay
-  const only = () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.querySelector('#sMode').hidden && [...document.querySelectorAll('#menu section[data-screen]')].every(s => s.hidden);
-  await p.click('#menuBtn'); await check('Menu during a game: the game and nothing else (no tabs, no new game, no replays)', only);
+  // the menu during a game is the same main menu, with the game's buttons open and nothing that would start or join another
+  // (owner, 2026-10-06: "if you're in a game, you're in a game"): New game, Online and Replays greyed
+  await p.click('#menuBtn'); await check('Menu during a game: Continue, Resign, End game; New game, Online, Replays greyed', mainShows, true);
   // coming back (a reload: the tab closed and opened again) starts at the game's menu, not in the game: Continue goes in,
   // the position kept (the AIs wait while the menu is open)
   await p.reload(); await p.waitForFunction(() => window.__ED && window.__ED.S);
-  await check('reloaded: the game in progress, behind its menu', only);
+  await check('reloaded: the game in progress, behind the main menu', mainShows, true);
   await check('the same position', r => JSON.stringify(window.__ED.S.players.map(q => q.hand)) === r, pos);
   await p.click('#sBack'); await check('Continue: back in the game', () => !document.querySelector('#menu').open && !!window.__ED.S && !window.__ED.S.over && !window.__ED.G.replay);
-  await settle(p); await p.click('#menuBtn'); await check('the menu again', only);
+  await settle(p); await p.click('#menuBtn'); await check('the menu again', mainShows, true);
   await p.keyboard.press('Escape'); await check('Escape: back to the game', () => !document.querySelector('#menu').open && !window.__ED.S.over);
   // from the menu to the window it opens and back (Resign, then Keep playing), and End game from the menu straight to the
   // results: the game never shows bare between two overlays (the page's cover check fails the test at once if it does)
-  await p.click('#menuBtn'); await check('Menu again', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden);
+  await p.click('#menuBtn'); await check('Menu again', mainShows, true);
   await settle(p); await p.click('#sResign'); await check('Resign asks first', () => !!document.querySelector('#overlay #rsNo'));
   await settle(p); await p.click('#overlay #rsNo'); await check('Keep playing: back to the game', () => !document.querySelector('#overlay .scrim:not(.closing)') && !window.__ED.S.over);
   await settle(p); await p.waitForTimeout(1100); await p.click('#menuBtn'); await check('and the menu once more', () => document.querySelector('#menu').open);

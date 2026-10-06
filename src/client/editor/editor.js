@@ -176,9 +176,9 @@ let back = (() => { try { return JSON.parse(sessionStorage.getItem(AT)); } catch
 let sel = null, foldOpen = false, wasOpen = false, tab = 'layout';
 const shown = () => { const m = $('#menu'); return m && m.open ? form.querySelector(':scope > section[data-screen]:not([hidden])') : null; };
 /* the menu opened after a reload: on the screen it was on, by the page's own tab (the editor never shows a screen of its own) */
-const MODE = { setup: 'local', online: 'online', replays: 'replays' };
+const MODE = { setup: 'local', online: 'online', replays: 'replays', settings: 'settings' };
 function show() { const m = $('#menu'), open = !!(m && m.open);
-  if (open && !wasOpen && back) { tab = back.tab || tab; editOn = !!back.edit; const l = MODE[back.sc] && $(`#sMode label[data-v="${MODE[back.sc]}"]`); back = null; if (l && !l.querySelector('input').checked) l.click(); }
+  if (open && !wasOpen && back) { tab = back.tab || tab; editOn = !!back.edit; const l = MODE[back.sc] && $(`#hub label[data-v="${MODE[back.sc]}"]`); back = null; if (l && !l.querySelector('input').checked) l.click(); }
   wasOpen = open; }
 let note = '';
 
@@ -627,9 +627,6 @@ html[data-edlook] .btn{background:linear-gradient(180deg,var(--k-btnA),var(--k-b
 html[data-edlook] .btn:hover{background:var(--k-btnH);border-color:var(--k-acc)}
 html[data-edlook] .seg{background:var(--k-field);border-color:var(--k-line);border-radius:var(--k-rs)}html[data-edlook] .seg label{border-radius:var(--k-rs)}
 html[data-edlook] .seg button.on,html[data-edlook] .seg label:has(input:checked){background:var(--k-sel);color:var(--k-acc);box-shadow:inset 0 0 0 1px var(--k-acc)}
-html[data-edlook] #sMode{background:none;border:0;box-shadow:none;border-bottom:1px solid var(--k-line);border-radius:0;padding:0;gap:0}
-html[data-edlook] #sMode label{border-radius:0;padding:9px 4px 10px;color:var(--k-muted)}
-html[data-edlook] #sMode label:has(input:checked){background:none;box-shadow:inset 0 -2px 0 var(--k-acc);color:var(--k-acc)}
 html[data-edlook] .clist button,html[data-edlook] .clist label,html[data-edlook] .rlist button,html[data-edlook] .rrow,html[data-edlook] .seatrow,html[data-edlook] .pst{background:var(--k-row);border-color:var(--k-line);border-radius:var(--k-rs)}
 html[data-edlook] .clist button.on,html[data-edlook] .clist label:has(input:checked){border-color:var(--k-acc);background:var(--k-sel)}
 html[data-edlook] .prow input,html[data-edlook] select.who{background-color:var(--k-field);border-color:var(--k-line);border-radius:var(--k-rs)}
@@ -654,11 +651,11 @@ html[data-edlook][data-edpri=flat] .btn.pri,html[data-edlook][data-edpri=flat] #
 html[data-edlook][data-edpri=outline] .btn.pri,html[data-edlook][data-edpri=outline] #rdock .rgrp button.pri{background:var(--k-sel);border:1.5px solid var(--k-priM);color:var(--k-priA);box-shadow:none}
 html[data-edlook] .btn.pri:hover{box-shadow:inset 0 0 0 99px rgba(255,255,255,.08)} /* (brighter, never by a filter: text under a filter is grey-smoothed) */
 /* headings: serif, italic serif, spaced capitals */
-html[data-edlook]:is([data-edhd=serif],[data-edhd=italic]) :is(.modal h2,.field>label,#sMode label,.brand,#roundLbl,.hwho,#playLbl,#banner .s,.aitag,.clist .dtag){font-family:var(--display,'Young Serif',serif);font-weight:400;text-transform:none;letter-spacing:0}
-html[data-edlook][data-edhd=italic] :is(.modal h2,.field>label,#sMode label,.brand,#roundLbl,.hwho,#playLbl,#banner .s,.aitag,.clist .dtag){font-style:italic}
-html[data-edlook]:is([data-edhd=serif],[data-edhd=italic]) :is(.field>label,#sMode label){font-size:17px}html[data-edlook]:is([data-edhd=serif],[data-edhd=italic]) #roundLbl{font-size:14px}
-html[data-edlook][data-edhd=caps] :is(.modal h2,.field>label,#sMode label,.brand,#roundLbl,#playLbl,#banner .s,.aitag,.clist .dtag){font-family:var(--ui,system-ui,sans-serif);font-style:normal;text-transform:uppercase;letter-spacing:.18em;font-weight:700}
-html[data-edlook][data-edhd=caps] .modal h2{font-size:20px;font-weight:800}html[data-edlook][data-edhd=caps] :is(.field>label,#sMode label){font-size:11.5px}
+html[data-edlook]:is([data-edhd=serif],[data-edhd=italic]) :is(.modal h2,.field>label,#hub label,.brand,#roundLbl,.hwho,#playLbl,#banner .s,.aitag,.clist .dtag){font-family:var(--display,'Young Serif',serif);font-weight:400;text-transform:none;letter-spacing:0}
+html[data-edlook][data-edhd=italic] :is(.modal h2,.field>label,#hub label,.brand,#roundLbl,.hwho,#playLbl,#banner .s,.aitag,.clist .dtag){font-style:italic}
+html[data-edlook]:is([data-edhd=serif],[data-edhd=italic]) :is(.field>label,#hub label){font-size:17px}html[data-edlook]:is([data-edhd=serif],[data-edhd=italic]) #roundLbl{font-size:14px}
+html[data-edlook][data-edhd=caps] :is(.modal h2,.field>label,#hub label,.brand,#roundLbl,#playLbl,#banner .s,.aitag,.clist .dtag){font-family:var(--ui,system-ui,sans-serif);font-style:normal;text-transform:uppercase;letter-spacing:.18em;font-weight:700}
+html[data-edlook][data-edhd=caps] .modal h2{font-size:20px;font-weight:800}html[data-edlook][data-edhd=caps] :is(.field>label,#hub label){font-size:11.5px}
 html[data-edlook][data-edhd=caps] .brand{font-size:15px;font-weight:800;letter-spacing:.16em}html[data-edlook][data-edhd=caps] .hwho{text-transform:uppercase;letter-spacing:.1em;font-size:12px}
 /* the board's backdrop: the look's tint behind the board, or the page's own */
 html[data-edlook][data-edbg=tint] #vp{background:radial-gradient(ellipse 85% 75% at 45% 40%,var(--k-vpA) 0%,var(--k-vpB) 55%,var(--k-vpC) 100%)}

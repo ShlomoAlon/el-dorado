@@ -11,7 +11,7 @@ const RUNS = 5, med = a => { const s = [...a].sort((x, y) => x - y); return s[s.
 const PROFILES = [['desktop', 1, 100, { width: 1536, height: 639 }, 1.25], ...(ENGINE === 'chromium' ? [['phone (4x slower CPU)', 4, 350, { width: 390, height: 844 }, 2]] : [])];
 // the start screen as a person sees it: the menu open, opaque, not animating, with its controls on screen
 const COMPLETE = () => { const d = document.querySelector('#menu'), vis = s => { const e = document.querySelector(s); if (!e) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }; // (drawn; whether Start is within reach at a short window is playtest 2 A7)
-  const miss = ['#sMode', '#seats .seat', 'input[name=np]+span', '#sGo'].filter(s => !vis(s));
+  const miss = ['#sBack', '#hub label[data-v=local]', '#hub label[data-v=settings]'].filter(s => !vis(s)); // (the main menu)
   if (!d.open || getComputedStyle(d).display === 'none') miss.push('the menu is not shown');
   if (+getComputedStyle(d).opacity < 1 || +getComputedStyle(d.querySelector('form')).opacity < 1) miss.push('the menu is not opaque');
   if (document.getAnimations().some(a => a.playState === 'running' && d.contains(a.effect && a.effect.target))) miss.push('the menu is animating in');

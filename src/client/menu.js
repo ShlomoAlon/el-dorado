@@ -14,6 +14,7 @@ import { loadReplayId, openReplay } from './replay.js';
 import { load, store } from './store.js';
 import { diag, CHECKS, watchFlash, expectMenu } from './debug.js';
 import { render } from './frame.js';
+import { setSound } from './sound.js';
 /* course list: official routes first; 'random' picks one of them */
 function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:courseById(id);}
 // (a room's course, as the server sends it: one this page doesn't know yet, from a newer version, shows as the first)
@@ -42,23 +43,37 @@ export function menuInit(){
   // the menu is opened with show(), never as a modal (showModal makes the whole page inert: every element, the board's
   // thousands included, restyled each time it opens and closes, a 15-20 ms frame); it covers the screen, so a click
   // never reaches the game, and Esc is ours
-  MENU.dlg.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(menuDismissible())continueGame();}});
+  MENU.dlg.addEventListener('keydown',e=>{if(e.key==='Escape'&&MENU.dlg.open&&!MENU.dlg.classList.contains('closing')){e.preventDefault(); // (focus can stay in the menu once it has closed: Esc then is the game's)
+  if(menuDismissible())continueGame();else if(MODE[MENU.screen]&&MENU.screen!=='main')showMain();}}); // (Esc: back to the game, or from a screen back to the main menu)
   MENU.dlg.addEventListener('click',e=>{if(e.target===MENU.dlg&&menuDismissible())continueGame();}); // the backdrop
   setupSync();
   const d=MENU.dlg;
   if(document.documentElement.classList.contains('resume'))d.close(); // a saved game or a link opens instead (boot decides)
   else if(d.open)MENU.f.focus({preventScroll:true});
 }
-const menuDismissible=()=>inGame()&&MENU.screen==='game';
+const menuDismissible=()=>inGame()&&(MENU.screen==='main'||MENU.screen==='settings');
 /* a game in progress, on show or not: this device's (on show behind the menu once the page is back), or an online one the
    player is in, though this page isn't connected to it yet (coming back to the page while it runs) */
 const awayOnline=()=>!!NET.user&&!!NET.active; // (an online game of this player's, not joined in this page yet: joinRoom clears it)
 const gameOn=()=>inGame()||awayOnline();
-const MODE={setup:'local',online:'online',room:'online',replays:'replays'};
-/* the menu for where the player is. In a game, the menu is that game and nothing else (owner, 2026-10-06: "if you're in a
-   game, you're in a game"): Continue, Resign, End game; no new game, no room, no replays until it ends. An online game just
-   finished: its room is left, to the Online screen; else the start screen */
-export function showMenu(){if(online()&&S.over){exitOnline();showHub();}else if(gameOn())menuOpen('game');else showSetup();}
+const MODE={main:'main',setup:'local',online:'online',replays:'replays',settings:'settings'};
+const AWAY=['main','settings','room']; // (the screens a player in a game can be on)
+/* the Menu button, and coming back to the page: the main menu (an online game just finished: its room is left first) */
+export function showMenu(){if(online()&&S.over)exitOnline();showMain();}
+/* the main menu: the same buttons every time (owner, 2026-10-06: it directs to the other screens, and loads the same way
+   whether or not a game is on). In a game: Continue, Resign, End game, and nothing that would start or join another ("if
+   you're in a game, you're in a game"): New game, Online and Replays are greyed. Out of one, the game about to start is
+   made behind it */
+export function showMain(){closeLobbyWs();if(!S){setupSync();prepareGame();}menuOpen('main');}
+export function showSettings(){menuOpen('settings');}
+function mainRender(){
+  const g=gameOn(),away=g&&!inGame(),rs=g&&!away?resignSeat():-1;
+  mq('#sBack').disabled=!g;
+  mq('#igTxt').textContent=!g?'':away?'Online game in progress':'Round '+S.round+(online()?' · online':'');
+  const r=mq('#sResign');r.disabled=rs<0;r.textContent='Resign'+(rs>=0&&!online()&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');
+  mq('#sEnd').disabled=!g||away||online();
+  for(const v of['local','online','replays'])mq(`#hub input[value=${v}]`).disabled=g;
+}
 /* back to the game in progress: the menu goes, and its AIs play on (they wait while the page was away); one not connected
    yet is joined */
 function continueGame(){if(awayOnline()){joinRoom(NET.active);return;}menuClose();aiKick();}
@@ -71,16 +86,13 @@ function menuReach(){
   if(!row||!row.offsetHeight)return;const r=row.getBoundingClientRect(),f=MENU.f.getBoundingClientRect();
   assert(r.top>=f.top-1&&r.bottom<=f.bottom+1,"view: a menu screen's actions are on screen without scrolling ("+MENU.screen+': '+Math.round(r.bottom-f.bottom)+' px below)');
 }
-function menuOpen(screen){watchFlash();if(MENU.screen!==screen||!MENU.dlg.open)expectMenu(); // (another screen, or the menu opened: its layout is new)
+function menuOpen(screen){watchFlash();diag('menu: '+screen+(MENU.dlg.open?'':' (opened)'));if(MENU.screen!==screen||!MENU.dlg.open)expectMenu(); // (another screen, or the menu opened: its layout is new)
   $('#overlay').innerHTML=''; // one window at a time: the menu replaces results, rules or a pile (never left underneath it)
-  const d=MENU.dlg,ig=screen==='game',away=ig&&awayOnline(),rs=ig&&!away?resignSeat():-1;
-  assert(ig===gameOn()||screen==='room','view: in a game the menu is that game, and only then (screen '+screen+')');
-  mq('#ingame').hidden=!ig;
-  if(ig){mq('#igTxt').innerHTML=`<b>Game in progress</b>${away?'':' · round '+S.round}${away||online()?' · online':''}`;const r=mq('#sResign');r.hidden=rs<0;
-    r.textContent='Resign'+(rs>=0&&!online()&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');mq('#sEnd').hidden=away||online();}
-  acctRender();
-  if(MODE[screen])setRadio('mode',MODE[screen]);mq('#sMode').hidden=screen==='room'||ig; // in a room, Leave is the way out; in a game, the game is all there is
-  mq('#acct').classList.toggle('ingame',ig); // (signing out would leave the game)
+  const d=MENU.dlg,g=gameOn();
+  assert(!g||AWAY.includes(screen),'view: in a game the menu offers that game only (screen '+screen+')');
+  mainRender();acctRender();
+  if(MODE[screen])setRadio('mode',MODE[screen]);
+  mq('#acct').classList.toggle('ingame',g); // (signing out would leave the game)
   if(MENU.screen!==screen){for(const s of mqa('section[data-screen]'))s.hidden=s.dataset.screen!==screen;MENU.screen=screen;MENU.f.scrollTop=0;}
   clearTimeout(MENU.closeT);d.classList.remove('closing');document.documentElement.classList.remove('resume');
   // (the page opens the dialog as plain HTML, before any script: already on screen, it only takes the focus)
@@ -88,7 +100,7 @@ function menuOpen(screen){watchFlash();if(MENU.screen!==screen||!MENU.dlg.open)e
   else{d.show();MENU.f.scrollTop=0;MENU.f.focus({preventScroll:true});
     // opened during a game (the Menu button): it comes in like a window, fading in and rising into place with a window's
     // timing (owner, 2026-10-03; the page's first menu stays instant)
-    if(ig&&!reduceMotion){d.animate([{opacity:0},{opacity:1}],{duration:250,easing:'ease'});MENU.f.animate([{transform:'translateY(14px) scale(.98)',opacity:0},{transform:'none',opacity:1}],{duration:350,easing:EASE});}}
+    if(g&&!reduceMotion){d.animate([{opacity:0},{opacity:1}],{duration:250,easing:'ease'});MENU.f.animate([{transform:'translateY(14px) scale(.98)',opacity:0},{transform:'none',opacity:1}],{duration:350,easing:EASE});}}
   if(CHECKS)requestAnimationFrame(()=>requestAnimationFrame(menuReach));
   render(); // (the layer that dims the game follows: dialogs.js coverPart)
 }
@@ -114,10 +126,11 @@ function cachedMe(){try{return JSON.parse(load('me')||'null');}catch(e){/* expec
 /* ---- every choice ---- */
 function menuChange(e){
   const n=e.target.name||e.target.id;
-  if(n==='mode'){({local:showSetup,online:showHub,replays:showReplays})[e.target.value]();return;}
+  if(n==='mode'){({main:showMain,local:showSetup,online:showHub,replays:showReplays,settings:showSettings})[e.target.value]();return;}
   if(n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){setupSync();prepareGame();
     if(/^who\d$/.test(n))store('seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value))); return;}
   if(n==='buywarn'){store('buywarn',e.target.checked?'1':'0');return;}
+  if(n==='setSnd'){setSound(e.target.checked);return;}
   if(n==='otab'){onlineTab();return;}
   if(n==='rlrated'){roomSend({t:'rated',v:e.target.value==='1'});return;}
   if(n==='rlcol'){roomSend({t:'color',color:e.target.value});return;}
@@ -154,7 +167,7 @@ function menuClick(e){
 }
 
 /* ---- start screen ---- */
-export function showSetup(){closeLobbyWs();setupSync();prepareGame();menuOpen('setup');}
+export function showSetup(){closeLobbyWs();setupSync();if(!(S&&UI.preview))prepareGame();menuOpen('setup');} // (the game about to start is made once: shown from the main menu, it is already behind it)
 // what the choices allow: seats shown, AI only where it plays, one colour per seat, at least one person
 export function setupSync(){
   const n=+radio('np'),aiOK=aiAllowed(radio('course'),n),rows=[...mqa('#seats .seat')];
@@ -211,8 +224,9 @@ export function roomsRender(){
   const rrow=r=>{const o=r.opts,n=r.seats.length,ai=r.seats.filter(x=>x.ai).length,host=(r.seats.find(x=>x.uid===r.host)||{name:''}).name; // (a quick match's room can list before anyone is seated)
     return`<div class="rrow"><span>${o.auto?'<b>Quick match</b>':`<b>${esc(host)}</b>’s room`} <span class="note">· ${n}/${o.max}${ai?` (${ai} AI)`:''} · ${o.turn}s turns · ${o.rated?'rated':'unrated'} · ${esc(courseName(o.course))}</span></span>${r.status==='lobby'&&n<o.max?`<button type="button" class="btn" data-join="${r.code}">Join</button>`:'<span class="note">in progress</span>'}</div>`;};
   const open=NET.rooms.filter(r=>r.status==='lobby'),live=NET.rooms.filter(r=>r.status==='playing');
-  setHTML(mq('#roomsOpen'),open.map(rrow).join('')||'<p class="note">No open rooms right now. Create one and share the code.</p>');
-  mq('#liveBox').hidden=!live.length;setHTML(mq('#roomsLive'),live.map(rrow).join(''));
+  // (both lists are always there, saying when they're empty: a list arriving or emptying moves nothing else)
+  setHTML(mq('#roomsOpen'),open.map(rrow).join('')||'<p class="note">None right now</p>');
+  setHTML(mq('#roomsLive'),live.map(rrow).join('')||'<p class="note">None right now</p>');
 }
 /* the Online tabs show by themselves (CSS); this fetches what the shown tab needs (at most every 5 s) */
 const PROFILES={},FETCHED={};

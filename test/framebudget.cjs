@@ -6,7 +6,7 @@
 // time between them can't show 70 fps): every task over budget is listed with what the game was doing then.
 //   NODE_PATH=$(npm root -g) node test/framebudget.cjs [--moves n]   (n: the person's first n moves, every overlay included;
 //   without it, the whole game: test/run.mjs --full)
-const { chromium, serveStatic, openPage, settle, report } = require('./lib.cjs');
+const { chromium, serveStatic, openPage, settle, report, menuGo } = require('./lib.cjs');
 const { step } = require('./playstep.cjs');
 const fs = require('fs'), path = require('path'), os = require('os');
 const T = report('framebudget'), BUDGET = 1000 / 70; // ms
@@ -16,13 +16,13 @@ const DETAIL = arg.includes('--detail'); // (each task over budget broken down: 
   const srv = await serveStatic(), b = await chromium.launch({ timing: true }), t0 = Date.now();
   const p = await openPage(b, 'framebudget', { viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25 });
   await p.goto(srv.url); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-  await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
+  await menuGo(p, 'local'); await p.click('#sGo'); await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
   await p.evaluate(() => window.__ED.aiPace(.3)); // (the AIs' pauses shorter; their moves and every animation at full speed)
   await settle(p);
   // a phone, touch from the start (as a real one), for the two-finger pinch: its own page, set up before the trace starts
   const ph = await openPage(b, 'framebudget (phone)', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
   await ph.goto(srv.url); await ph.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-  await ph.click('#sGo'); await ph.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(ph);
+  await menuGo(ph, 'local'); await ph.click('#sGo'); await ph.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open); await settle(ph);
   const trace = path.join(os.tmpdir(), 'framebudget-' + process.pid + '.json');
   await b.startTracing(p, { path: trace, categories: ['toplevel', 'blink.user_timing', 'devtools.timeline', ...(DETAIL ? ['disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.stack', 'disabled-by-default-v8.cpu_profiler', 'disabled-by-default-devtools.timeline.invalidationTracking'] : [])] });
   const mark = label => p.evaluate(l => performance.mark(l), label);
