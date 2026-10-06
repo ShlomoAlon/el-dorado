@@ -68,10 +68,11 @@ async function startServer() {
    (debug.js), and saves a screenshot (test-results/<name>-failed.png), then exits failing. allow: errors a test causes on
    purpose (a regular expression), which only count as page.errors */
 async function openPage(browser, name, opts = {}) {
-  const { allow, ...ctxOpts } = opts;
+  const { allow, alone, ...ctxOpts } = opts;
   // (Firefox: a browser of its own for every page. Its pages share one mouse under Playwright, so a move in one page reached
-  // another as the pointer leaving it, a stale pointerleave a real player's page never gets; 2026-10-05)
-  if (ENGINE === 'firefox') { const own = await pw.firefox.launch(); browser.on('disconnected', () => own.close().catch(() => { /* expected: already closed with the test */ })); browser = own; }
+  // another as the pointer leaving it, a stale pointerleave a real player's page never gets; 2026-10-05. alone: the test
+  // opens one page at a time, so they share the test's browser, running already, as a player's is: firstpaint)
+  if (ENGINE === 'firefox' && !alone) { const own = await pw.firefox.launch(); browser.on('disconnected', () => own.close().catch(() => { /* expected: already closed with the test */ })); browser = own; }
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...ctxOpts }), page = await ctx.newPage();
   page.errors = [];
   let stopping = false;
