@@ -137,7 +137,7 @@ export function checksInit(during) {
   if (window.PerformanceObserver && PerformanceObserver.supportedEntryTypes.includes('layout-shift'))
     new PerformanceObserver(list => { for (const e of list.getEntries()) for (const s of e.sources || []) {
       const n = s.node, who = !n ? '?' : n.id ? '#' + n.id : n.nodeType === 1 ? n.tagName.toLowerCase() + (n.className && typeof n.className === 'string' ? '.' + n.className.split(' ')[0] : '') + (n.closest('[id]') ? ' in #' + n.closest('[id]').id : '') + (n.textContent ? ' "' + n.textContent.slice(0, 20) + '"' : '') : (n.parentElement && n.parentElement.id ? '#' + n.parentElement.id + ' text' : 'text');
-      const d = `${Math.round(s.currentRect.x - s.previousRect.x)},${Math.round(s.currentRect.y - s.previousRect.y)} size ${Math.round(s.currentRect.width - s.previousRect.width)}×${Math.round(s.currentRect.height - s.previousRect.height)}`;
+      const d = `${Math.round(s.currentRect.x - s.previousRect.x)},${Math.round(s.currentRect.y - s.previousRect.y)} size ${Math.round(s.currentRect.width - s.previousRect.width)}×${Math.round(s.currentRect.height - s.previousRect.height)} (${[s.previousRect, s.currentRect].map(q => [q.x, q.y, q.width, q.height].map(Math.round).join(' ')).join(' → ')})`;
       shifts.push({ who, d, input: e.hadRecentInput, play: playAt(e.startTime) }); diag(`shift ${who} by ${d}${e.hadRecentInput ? ' (after input)' : ''}`);
       // (judged in play, and in the menu at any time: a menu is on screen from the page's first frame, and what the server
       // sends later (who is signed in, the lists) fills its own place; owner, 2026-10-06: "the entire page stays in place")

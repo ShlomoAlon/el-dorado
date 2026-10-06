@@ -35,12 +35,26 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
   // The replay is closed in the same moment the page asks the AI's worker for advice (not caught by polling: the answer can
   // come between two looks)
   await p.evaluate(() => { const pm = Worker.prototype.postMessage; Worker.prototype.postMessage = function (m, ...r) { pm.call(this, m, ...r);
-    if (m && m.t === 'advise' && !window.__R) { window.__R = window.__ED.G.replay; queueMicrotask(() => document.querySelector('#menuBtn').click()); } }; }); // (a microtask: once the frame asking has finished, before any answer can come back)
+    if (m && m.t === 'advise' && !window.__R) { window.__R = window.__ED.G.replay; queueMicrotask(() => { const b = document.querySelector('#menuBtn'); b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' })); b.click(); }); } }; }); // (a microtask: once the frame asking has finished, before any answer can come back; pressed as a player presses, pointer down then click)
   await p.click('#rMine [data-lid]');
   await check('a kept game opens as a replay; the advisor is asked, and the replay closed at once', () => !!window.__R && !window.__ED.G.replay);
   await check('the advice arrives after the replay closed', () => window.__R.asking.size === 0);
   await check('closing it comes back to Replays', new Function(`return !window.__ED.G.replay && document.querySelector('#menu').open && ${screen('replays')} && document.querySelector('input[name=mode][value=replays]').checked`));
   // a game: the menu over it has the game bar; a replay watched from there keeps the game
+  // a screen that scrolls keeps its way back and title at the top and its main action at the foot in sight (owner,
+  // 2026-10-06), at the owner's size and on a phone: each screen scrolled through, top to bottom (the page's own check
+  // judges every scroll), and a screen that fits shows no edge lines
+  for (const vp of [{ width: 1229, height: 511 }, { width: 390, height: 844 }, { width: 390, height: 600 }]) { // (1536×639 at 125%: 1229×511 CSS pixels)
+    await p.setViewportSize(vp); await settle(p);
+    for (const v of ['local', 'online', 'replays', 'settings']) { await menuGo(p, v); await settle(p);
+      const r = await p.evaluate(async () => { const f = document.querySelector('#mform'), sec = f.querySelector('section[data-screen]:not([hidden])'), fr = () => f.getBoundingClientRect();
+        const seen = el => { if (!el) return true; const a = el.getBoundingClientRect(), b = fr(); return a.top >= b.top - 1 && a.bottom <= b.bottom + 1; };
+        const head = sec.querySelector(':scope > .mhead'), foot = sec.querySelector(':scope > .mrow'), scrolls = f.scrollHeight > f.clientHeight + 1; let ok = true;
+        for (let y = 0; y <= f.scrollHeight; y += 120) { f.scrollTop = y; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); ok = ok && seen(head) && seen(foot); }
+        f.scrollTop = 0; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return { ok, scrolls, lines: f.classList.contains('scrolled') || (!scrolls && f.classList.contains('more')) }; });
+      T.ok(`${vp.width}×${vp.height} ${v}: its pinned parts stay in sight as it scrolls${r.scrolls ? '' : ' (it fits)'}, no edge line at the top`, r.ok && !r.lines, JSON.stringify(r)); } }
+  await p.setViewportSize({ width: 1280, height: 800 }); await settle(p); // (the test's own size again)
   // each screen goes back to the main menu by its ‹ Menu, or Esc
   await p.keyboard.press('Escape'); await check('Esc: back to the main menu', mainShows, false);
   await menuGo(p, 'settings'); await check('Settings: sound, the buy reminder', () => !document.querySelector('section[data-screen=settings]').hidden && !!document.querySelector('#setSnd') && !!document.querySelector('#sBuyWarn'));

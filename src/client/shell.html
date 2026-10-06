@@ -44,7 +44,6 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 /* the Online tabs: the checked tab's panel shows (no script) */
 #menu .tab{display:none}
 #menu:has(#hTabs input[value=play]:checked) .tab[data-tab=play],#menu:has(#hTabs input[value=board]:checked) .tab[data-tab=board],#menu:has(#hTabs input[value=me]:checked) .tab[data-tab=me]{display:block}
-#hTabs{margin-bottom:16px}
 .opts{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .rrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);margin-bottom:8px}
 .rrow .note{margin:0}
@@ -143,7 +142,12 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .mrow{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
 /* a menu screen's actions keep their place at the menu's bottom edge, the content scrolling above them (a short window
    never puts Start out of reach) */
-.modal.menu>section>.mrow{position:sticky;bottom:-20px;z-index:3;margin:22px -20px -20px;padding:14px 20px 20px;background:#121d19;border-top:1px solid var(--line)}
+.modal.menu>section>.mrow{position:sticky;bottom:-20px;z-index:3;margin:22px -20px -20px;padding:14px 20px 20px;background:#121d19}
+/* what must stay in sight when a screen scrolls (owner, 2026-10-06): its way back and title at the top, its main action at
+   the foot, each pinned; a line marks the edge only while content runs on under it, so a screen that fits shows no bars */
+.modal.menu>section>.mhead{position:sticky;top:-20px;z-index:3;margin:-20px -20px 14px;padding:20px 20px 12px;background:#121d19}
+.mhead h2{margin-bottom:0}.mhead>.seg,.mhead>.prow{margin:10px 0 0}.mhead>.sub{margin:4px 0 0}
+.modal.menu.scrolled>section>.mhead{box-shadow:0 1px 0 var(--line)}.modal.menu.more>section>.mrow{box-shadow:0 -1px 0 var(--line)}
 .routeInfo{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5}
 .routeInfo b{color:var(--text)}
 #toast{position:fixed;left:50%;top:112px;transform:translate3d(-50%,0,0);padding:9px 16px;border-radius:11px;font-size:13.5px;z-index:45;pointer-events:none;opacity:0;transition:opacity .2s,transform .25s var(--ease)}
@@ -635,7 +639,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div class="hub" id="hub"><label data-v="local"><input type="radio" name="mode" value="local"><span>New game</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label><label data-v="settings"><input type="radio" name="mode" value="settings"><span>Settings</span></label></div>
   </section>
   <section data-screen="setup" hidden>
-    <label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>New game</h2>
+    <div class="mhead"><label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>New game</h2></div>
     <div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div></div>
     <div class="field"><label>Expedition leaders</label><div id="seats"><!--SEATS--></div><p class="note warn" id="allAI" hidden>Seat at least one human player.</p></div>
     <div class="field"><label>Course</label><div class="clist" id="sC"><!--COURSES:course--></div><div class="aiNote" id="aiNote" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div></div>
@@ -644,13 +648,11 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div class="mrow"><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
   </section>
   <section data-screen="online" hidden>
-    <label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label>
-    <div id="oOff" hidden><h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p></div>
-    <div id="oOut" hidden><h2>Play online</h2>      <p class="note warn" id="oNoG" hidden>Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>
+    <div class="mhead"><label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>Online</h2><div class="seg" id="hTabs"><label data-v="play"><input type="radio" name="otab" value="play" checked><span>Play</span></label><label data-v="board"><input type="radio" name="otab" value="board"><span>Leaderboard</span></label><label data-v="me"><input type="radio" name="otab" value="me"><span>Profile</span></label></div></div>
+    <div id="oOff" hidden><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p></div>
+    <div id="oOut" hidden><p class="note warn" id="oNoG" hidden>Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>
       <div class="field" id="oDev" hidden><label>Developer sign-in (local testing only)</label><div class="prow"><input id="devName" maxlength="16" placeholder="Name"><button type="button" class="btn" id="devGo">Sign in</button></div></div></div>
     <div id="oIn" hidden>
-      <h2>Online</h2>
-      <div class="seg" id="hTabs"><label data-v="play"><input type="radio" name="otab" value="play" checked><span>Play</span></label><label data-v="board"><input type="radio" name="otab" value="board"><span>Leaderboard</span></label><label data-v="me"><input type="radio" name="otab" value="me"><span>Profile</span></label></div>
       <div class="tab" data-tab="play">
         <div id="oPlay">
         <div class="field"><button type="button" class="btn pri" id="qGo">Quick match</button></div>
@@ -670,8 +672,8 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <p class="note warn" id="hErr"></p>
   </section>
   <section data-screen="room" hidden>
-    <h2 id="rlTitle">Room</h2><p class="sub" id="rlSub"></p>
-    <div class="prow"><input id="lkIn" readonly><button type="button" class="btn" id="lkCopy">Copy link</button></div>
+    <div class="mhead"><h2 id="rlTitle">Room</h2><p class="sub" id="rlSub"></p>
+    <div class="prow"><input id="lkIn" readonly><button type="button" class="btn" id="lkCopy">Copy link</button></div></div>
     <div class="field"><label id="rlCount">Players</label><div id="rlSeats"></div></div>
     <div class="field" id="rlAIBox" hidden><label>Add an AI player</label><div class="aiNote" id="rlAINo" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div><div class="clist ailist" id="rlAIList"><!--AILIST--></div><p class="note" id="rlFull" hidden>The room is full. Remove an AI to add another.</p></div>
     <div class="field" id="rlRatedBox" hidden><label>Rating</label><div class="seg" id="rlRated"><label data-v="1"><input type="radio" name="rlrated" value="1" checked><span>Rated</span></label><label data-v="0"><input type="radio" name="rlrated" value="0"><span>Unrated</span></label></div></div>
@@ -681,12 +683,12 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div class="mrow"><button type="button" class="btn" id="rlLeave">Leave</button><button type="button" class="btn big" id="rlNow" hidden>Start now</button><button type="button" class="btn pri big" id="rlStart" hidden>Start game</button></div>
   </section>
   <section data-screen="replays" hidden>
-    <label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>Replays</h2>
+    <div class="mhead"><label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>Replays</h2></div>
     <div class="field"><label>Your games</label><div id="rMine" class="rlist"></div></div>
     <div class="field"><label>Recent games</label><div id="rList" class="rlist"></div></div>
   </section>
   <section data-screen="settings" hidden>
-    <label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>Settings</h2>
+    <div class="mhead"><label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>Settings</h2></div>
     <div class="field"><label class="chk"><input type="checkbox" id="setSnd" checked> <span>Sound</span></label></div>
     <div class="field" id="setFullBox"><label class="chk"><input type="checkbox" id="setFull"> <span>Full screen</span></label></div>
     <div class="field"><label class="chk"><input type="checkbox" name="buywarn" id="sBuyWarn" checked> <span>Remind me if I can still buy</span></label></div>

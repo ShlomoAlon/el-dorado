@@ -122,8 +122,8 @@ const T = report('flows');
   // (pointed at by the step's own event, the mouse elsewhere: the browser's hover check after a change would otherwise
   // point again, sooner or later, and hide what the page does by itself)
   await p.mouse.move(700, 500); await settle(p);
-  const pointed = await S(() => { const e = document.querySelector('#feed .fg'); if (!e) return false; e.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })); return true; });
-  T.ok('the recap has a step to point at', pointed);
+  const pointed = await S(() => { const e = document.querySelector('#feed .fg.f-move'); if (!e) return false; e.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })); return true; });
+  T.ok('the recap has a move to point at', pointed);
   await check('pointing at a recap step shows its path on the board', () => document.querySelectorAll('#board2 path[stroke-dasharray]').length > 0);
   T.ok('the person moves', await S(() => { const E = window.__ED, h = E.S.players[E.S.cur].hand; for (const id of h) { E.onHandCard(id); const k = [...E.targets().keys()][0]; if (k) { E.doMove(k); return true; } } return false; }));
   await idle(); await p.waitForTimeout(800); // (the page's up-to-date check runs four times a second: it fails the test here if the path went later)

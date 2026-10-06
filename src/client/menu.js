@@ -46,6 +46,7 @@ export function menuInit(){
   MENU.dlg.addEventListener('keydown',e=>{if(e.key==='Escape'&&MENU.dlg.open&&!MENU.dlg.classList.contains('closing')){e.preventDefault(); // (focus can stay in the menu once it has closed: Esc then is the game's)
   if(menuDismissible())continueGame();else if(MODE[MENU.screen]&&MENU.screen!=='main')showMain();}}); // (Esc: back to the game, or from a screen back to the main menu)
   MENU.dlg.addEventListener('click',e=>{if(e.target===MENU.dlg&&menuDismissible())continueGame();}); // the backdrop
+  MENU.f.addEventListener('scroll',menuEdges,{passive:true});addEventListener('resize',menuEdges);
   setupSync();
   const d=MENU.dlg;
   if(document.documentElement.classList.contains('resume'))d.close(); // a saved game or a link opens instead (boot decides)
@@ -78,14 +79,16 @@ function mainRender(){
    yet is joined */
 function continueGame(){if(awayOnline()){joinRoom(NET.active);return;}menuClose();aiKick();}
 
-/* show a screen (opening the dialog if it isn't open) */
-/* checks: a menu screen's actions (its last row: Start expedition, Leave, Start game) are on screen without scrolling,
-   measured once the screen is painted */
-function menuReach(){
-  if(!MENU.dlg.open)return;const sec=MENU.f.querySelector(`section[data-screen="${MENU.screen}"]`),row=sec&&sec.querySelector(':scope > .mrow');
-  if(!row||!row.offsetHeight)return;const r=row.getBoundingClientRect(),f=MENU.f.getBoundingClientRect();
-  assert(r.top>=f.top-1&&r.bottom<=f.bottom+1,"view: a menu screen's actions are on screen without scrolling ("+MENU.screen+': '+Math.round(r.bottom-f.bottom)+' px below)');
+/* a screen that scrolls: its pinned header and foot get a line while content runs on under them (none when it all fits).
+   checks: the pinned parts are in sight wherever the screen is scrolled to (owner, 2026-10-06: what must be seen, always is) */
+function menuEdges(){
+  const f=MENU.f,top=f.scrollTop>0,more=f.scrollTop+f.clientHeight<f.scrollHeight-1;
+  f.classList.toggle('scrolled',top);f.classList.toggle('more',more);
+  if(!CHECKS||!MENU.dlg.open)return;const sec=f.querySelector(`section[data-screen="${MENU.screen}"]`),fr=f.getBoundingClientRect();
+  for(const el of sec?sec.querySelectorAll(':scope > .mhead, :scope > .mrow'):[]){if(!el.offsetHeight)continue;const r=el.getBoundingClientRect();
+    assert(r.top>=fr.top-1&&r.bottom<=fr.bottom+1,"view: a menu screen's pinned parts stay in sight as it scrolls ("+MENU.screen+' '+el.className+': '+Math.round(r.top-fr.top)+'..'+Math.round(r.bottom-fr.bottom)+')');}
 }
+/* show a screen (opening the dialog if it isn't open) */
 function menuOpen(screen){watchFlash();diag('menu: '+screen+(MENU.dlg.open?'':' (opened)'));if(MENU.screen!==screen||!MENU.dlg.open)expectMenu(); // (another screen, or the menu opened: its layout is new)
   $('#overlay').innerHTML=''; // one window at a time: the menu replaces results, rules or a pile (never left underneath it)
   const d=MENU.dlg,g=gameOn();
@@ -101,7 +104,7 @@ function menuOpen(screen){watchFlash();diag('menu: '+screen+(MENU.dlg.open?'':' 
     // opened during a game (the Menu button): it comes in like a window, fading in and rising into place with a window's
     // timing (owner, 2026-10-03; the page's first menu stays instant)
     if(g&&!reduceMotion){d.animate([{opacity:0},{opacity:1}],{duration:250,easing:'ease'});MENU.f.animate([{transform:'translateY(14px) scale(.98)',opacity:0},{transform:'none',opacity:1}],{duration:350,easing:EASE});}}
-  if(CHECKS)requestAnimationFrame(()=>requestAnimationFrame(menuReach));
+  requestAnimationFrame(()=>requestAnimationFrame(menuEdges)); // (once the screen is laid out)
   render(); // (the layer that dims the game follows: dialogs.js coverPart)
 }
 export function menuClose(){watchFlash();const d=MENU.dlg;document.documentElement.classList.remove('resume');render();if(!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
@@ -215,7 +218,7 @@ function leaveRoom(){if(!NET.code){NET.room=null;return;} // (a room still being
   if(NET.connected)netSend({t:'leave'});NET.code=null;leaveRoomSocket();setQuery({room:null,replay:null});}
 export function showHub(){if(NET.user)openLobbyWs();onlineRender();menuOpen('online');}
 function onlineRender(){
-  const u=NET.user;mq('#oOff').hidden=NET.available;mq('#oOut').hidden=!NET.available||!!u;mq('#oIn').hidden=!NET.available||!u;
+  const u=NET.user;mq('#hTabs').hidden=!NET.available||!u;mq('#oOff').hidden=NET.available;mq('#oOut').hidden=!NET.available||!!u;mq('#oIn').hidden=!NET.available||!u;
   if(!NET.available)return;
   if(!u){mq('#oNoG').hidden=!!NET.cfg.google;mq('#oDev').hidden=!NET.cfg.dev;return;}
   roomsRender();onlineTab();

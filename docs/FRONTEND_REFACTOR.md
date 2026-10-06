@@ -75,3 +75,8 @@ The rules engine (`src/engine_*.js`) is imported from `src/engine.gen.js`, which
   layout-shift check judges the menu at all times, excused only by input or `expectMenu()` (another screen, the menu
   opened, the window resized).
 - A replay returns to the screen it was opened from (Replays, Online), or to the main menu if a game is in progress.
+- What must stay in sight stays pinned when a screen scrolls (owner, 2026-10-06): each screen's header (`.mhead`: ‹ Menu and
+  its title; Online's tabs; the room's code, summary and link) sticks to the top, its main action (`.mrow`) to the foot. A
+  line marks either edge only while content runs on under it (`#mform.scrolled`, `.more`, set on scroll), so a screen that
+  fits shows no bars. menuEdges asserts the pinned parts are in sight after every scroll; menus.cjs scrolls each screen
+  through at the owner's size and on phones.
