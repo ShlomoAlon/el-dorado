@@ -101,8 +101,10 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .rlist{display:flex;flex-direction:column;gap:6px;max-height:44vh;overflow:auto}
 .rlist button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);color:var(--text);cursor:pointer;font:inherit}
 .rlist button b{font-size:14px}.rlist button span{font-size:12px;color:var(--muted)}.rlist button:hover{border-color:var(--line2)}
-.ingame{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 16px;padding:10px 12px;border-radius:10px;border:1px solid var(--gold);background:rgba(233,178,74,.1)}
-.ingame .ig-b{display:flex;gap:8px;flex-wrap:wrap}
+/* in a game the menu is that game alone: a small window (its height follows the game bar, not the tallest screen) */
+#menu.gamemenu .mframe.mmenu{height:auto}#menu.gamemenu .modal.menu{overflow-y:auto}
+.ingame{display:flex;flex-direction:column;gap:18px;font-size:16px}
+.ingame .ig-b{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .acct{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--muted)}
 .gsi{color-scheme:light}
 @media (max-width:500px){.pstats{grid-template-columns:repeat(3,1fr)}

@@ -75,7 +75,7 @@ function menuOpen(screen){watchFlash();
   $('#overlay').innerHTML=''; // one window at a time: the menu replaces results, rules or a pile (never left underneath it)
   const d=MENU.dlg,ig=screen==='game',away=ig&&awayOnline(),rs=ig&&!away?resignSeat():-1;
   assert(ig===gameOn()||screen==='room','view: in a game the menu is that game, and only then (screen '+screen+')');
-  mq('#ingame').hidden=!ig;
+  mq('#ingame').hidden=!ig;d.classList.toggle('gamemenu',ig);
   if(ig){mq('#igTxt').innerHTML=`<b>Game in progress</b>${away?'':' · round '+S.round}${away||online()?' · online':''}`;const r=mq('#sResign');r.hidden=rs<0;
     r.textContent='Resign'+(rs>=0&&!online()&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');mq('#sEnd').hidden=away||online();}
   acctRender();
