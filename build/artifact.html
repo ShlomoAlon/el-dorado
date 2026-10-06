@@ -162,6 +162,9 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #acct{min-height:32px} /* its line is there before the script fills it: nothing below moves */
 #shell{isolation:isolate} /* nothing in the game can stack above the menu, whatever its z-index */
 #shell{visibility:hidden} /* the game shows once its CSS (the late block) has arrived */
+/* (a button greyed by the page's own HTML, as the main menu's are without a game: greyed from the first paint, not once the late styles arrive) */
+.btn[disabled]{pointer-events:none;color:color-mix(in srgb,var(--text) 35%,var(--surf));background:var(--surf);border-color:color-mix(in srgb,#fff 5%,var(--surf));box-shadow:none}
+.btn.pri[disabled]{color:color-mix(in srgb,var(--goldInk) 35%,var(--surf));background:color-mix(in srgb,#e6ac3f 35%,var(--surf));border-color:color-mix(in srgb,#f5cf7c 35%,var(--surf))}
 </style>
 <style data-late>
 /* the game's CSS: a separate cached file on the site (build.mjs), inline in the artifact */
@@ -331,8 +334,6 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .bslot{pointer-events:auto} /* (the area keeps its size empty: only its buttons take a tap) */
 .bslot.s3{grid-area:s3}.bslot.s2{grid-area:s2}.bslot.p{grid-area:p}.bslot{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bslot:not(.p){padding-inline:10px}.bslot.off{visibility:hidden;transition:none}.bslot.p{padding-block:9px} /* (the big one: as tall as the others; its words fit, hud.js checkLabels) */
 /* (a disabled button is dimmed by its colours, never faded: text under an opacity is never drawn sub-pixel) */
-.btn[disabled]{pointer-events:none;color:color-mix(in srgb,var(--text) 35%,var(--surf));background:var(--surf);border-color:color-mix(in srgb,#fff 5%,var(--surf));box-shadow:none}
-.btn.pri[disabled]{color:color-mix(in srgb,var(--goldInk) 35%,var(--surf));background:color-mix(in srgb,#e6ac3f 35%,var(--surf));border-color:color-mix(in srgb,#f5cf7c 35%,var(--surf))}
 #actBtns .btn{transform:translateZ(0);box-shadow:none;border-color:var(--edge)}#actBtns .btn.pri{border-color:#f5cf7c}#actBtns .btn:active{transform:translate3d(0,1px,0)}
 #playLbl{position:absolute;right:0;top:0;z-index:11;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);pointer-events:none;transition:opacity .2s;background:var(--surf);border:1px solid var(--edge);border-radius:8px;padding:2px 7px}
 .zoomctl{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:12}
