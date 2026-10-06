@@ -64,7 +64,7 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .modal.menu::-webkit-scrollbar{width:8px}.modal.menu::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
 /* the main menu: the game in progress (Continue, Resign, End game), then where to go; a choice not open now is greyed, by its colours (sharp.js) */
 .mgame{display:grid;gap:10px;margin:6px 0 18px}.mgame .cont{display:flex;align-items:center;gap:14px}#igTxt{min-height:1.4em}
-.hrow{display:flex;gap:8px}
+.hrow{display:flex;gap:8px}.hrow .btn{white-space:nowrap} /* (a name in Resign never wraps a button onto two lines) */
 .hub{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:18px}
 .hub label{position:relative;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:12px;background:var(--surf);border:1px solid var(--line2);font-weight:800;font-size:15.5px;cursor:pointer;transition:border-color .15s}
 .hub label::after{content:'›';color:var(--muted);font-size:20px;line-height:1}
@@ -627,7 +627,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <div id="overlay"></div>
 <!-- the menu: one native dialog; every screen is written here once and shown with the hidden attribute. Choices are
      native form controls (they keep their own state); ui_menu.js reads them and fills only the data lists. -->
-<script>/* a room or replay link opens straight into it, and a saved game comes back behind its own menu (owner, 2026-10-06): no start screen first (store.js names the save's key) */try{if(/[?&](room|replay)=/.test(location.search)||localStorage.getItem('eldorado-game-v2'))document.documentElement.classList.add('resume')}catch(e){/* expected: storage unavailable; the start screen shows until the script decides */}</script>
+<script>/* a room or replay link opens straight into it: no start screen first */if(/[?&](room|replay)=/.test(location.search))document.documentElement.classList.add('resume')</script>
 <div id="dim" class="on" data-dims></div>
 <dialog id="menu" aria-label="Menu" open>
 <div class="mframe mmenu"><form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
@@ -636,9 +636,15 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
   <section data-screen="main">
     <h2>El Dorado Expedition</h2><input type="radio" name="mode" value="main" checked hidden>
     <div class="mgame" id="ingame"><div class="cont"><button type="button" class="btn pri big" id="sBack" disabled>Continue</button><span class="note" id="igTxt"></span></div>
-      <div class="hrow"><button type="button" class="btn" id="sResign" disabled>Resign</button><button type="button" class="btn" id="sEnd" disabled>End game</button></div></div>
+      <div class="hrow"><button type="button" class="btn" id="sEnd" disabled>End game</button><button type="button" class="btn" id="sResign" disabled>Resign</button></div></div>
     <div class="hub" id="hub"><label data-v="local"><input type="radio" name="mode" value="local"><span>New game</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label><label data-v="settings"><input type="radio" name="mode" value="settings"><span>Settings</span></label></div>
   </section>
+  <script>/* a game in progress on this device: its main menu, drawn at once, before the app has loaded and right after its markup (before the rest of the menu: a paint
+   can come before the page is all read) (owner, 2026-10-06: coming back
+   is instant). The save carries what the menu shows for it (state.js save; store.js names the keys); the app draws the same */
+try{var M=JSON.parse(localStorage.getItem('eldorado-menu')||'null');if(M&&localStorage.getItem('eldorado-game-v2')){var q=function(s){return document.getElementById(s)};
+  q('sBack').disabled=q('sResign').disabled=q('sEnd').disabled=false;q('sResign').textContent=M.resign;q('igTxt').textContent=M.round;
+  for(var i of document.querySelectorAll('#hub input:not([value=settings])'))i.disabled=true;}}catch(e){/* expected: storage unavailable, or a save cut short: the menu as for no game, until the app decides */}</script>
   <section data-screen="setup" hidden>
     <div class="mhead"><label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>New game</h2></div>
     <div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div></div>

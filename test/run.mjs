@@ -46,8 +46,8 @@ if (arg.includes('--gpu')) {
    desktop sizes only (owner: no Firefox for phones). An engine not in this container is fetched first, the build the installed
    Playwright names, from its download mirror */
 const enginesFile = path.join(root, 'test/engines-run.txt');
-const ENGINE_TESTS = { webkit: [['layout', 'node test/layout.cjs --quick', 60], ['flows', 'node test/flows.cjs', 40], ['taps', 'node test/taps.cjs', 15], ['play', 'node test/play.cjs', 150], ['menus', 'node test/menus.cjs', 20], ['editor', 'node test/editor.cjs', 40], ['online', 'node test/online.cjs', 200], ['firstpaint', 'node test/firstpaint.cjs', 15], ['smooth', 'node test/smooth.cjs', 45]], // (the editor 37 s in WebKit, 10 in Chrome)
-  firefox: [['layout', 'node test/layout.cjs --quick --desktop', 50], ['flows', 'node test/flows.cjs', 40], ['taps', 'node test/taps.cjs', 15], ['play', 'node test/play.cjs --desktop', 150], ['menus', 'node test/menus.cjs', 35], ['editor', 'node test/editor.cjs', 25], ['online', 'node test/online.cjs', 200], ['firstpaint', 'node test/firstpaint.cjs', 15], ['smooth', 'node test/smooth.cjs', 45]] }; // (the editor 22 s in Firefox; menus 35 s: a browser of its own for each page)
+const ENGINE_TESTS = { webkit: [['layout', 'node test/layout.cjs --quick', 60], ['flows', 'node test/flows.cjs', 40], ['taps', 'node test/taps.cjs', 15], ['play', 'node test/play.cjs', 150], ['menus', 'node test/menus.cjs', 20], ['editor', 'node test/editor.cjs', 40], ['online', 'node test/online.cjs', 200], ['firstpaint', 'node test/firstpaint.cjs', 28], ['smooth', 'node test/smooth.cjs', 45]], // (the editor 37 s in WebKit, 10 in Chrome)
+  firefox: [['layout', 'node test/layout.cjs --quick --desktop', 50], ['flows', 'node test/flows.cjs', 40], ['taps', 'node test/taps.cjs', 15], ['play', 'node test/play.cjs --desktop', 150], ['menus', 'node test/menus.cjs', 35], ['editor', 'node test/editor.cjs', 25], ['online', 'node test/online.cjs', 200], ['firstpaint', 'node test/firstpaint.cjs', 28], ['smooth', 'node test/smooth.cjs', 45]] }; // (the editor 22 s in Firefox; menus 35 s: a browser of its own for each page)
 function ensureEngine(name) {
   // (Playwright resolved through NODE_PATH, as the tests find it)
   const req = createRequire(import.meta.url), from = { paths: NODE_PATH.split(path.delimiter) }, pw = req(req.resolve('playwright', from));
@@ -87,7 +87,7 @@ const res = await pool([
   ...(online ? [['online', 'node test/online.cjs', 290]] : []),
 ], os.cpus().length);
 // the timing measurements (frame costs, wheel latency) need a quiet machine: they run once everything else has finished
-res.push(await run(['firstpaint', 'node test/firstpaint.cjs', 19])); // (timed: run alone) the start screen drawn within 100 ms of the HTML arriving
+res.push(await run(['firstpaint', 'node test/firstpaint.cjs', 34])); // (timed: run alone) the start screen drawn within 100 ms of the HTML arriving
 res.push(await run(['frames', 'node test/frames.cjs', 10]));
 // every frame given to the page during drags, fast zooms and moves (the engine-neutral measure, run in WebKit and Firefox too)
 res.push(await run(['smooth', 'node test/smooth.cjs', 12]));

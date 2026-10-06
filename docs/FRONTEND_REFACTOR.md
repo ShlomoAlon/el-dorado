@@ -68,8 +68,11 @@ The rules engine (`src/engine_*.js`) is imported from `src/engine.gen.js`, which
 - `menuOpen` asserts that a player in a game sees only the main menu, Settings or a room (`gameOn()`: a local or online game
   in progress, or the server's `NET.active`, an online game of this player's not joined in this page yet, which Continue
   joins).
-- A saved local game comes back behind the main menu (the inline script hides the menu until the script decides), and its
-  AIs wait until Continue. A room link still opens the room.
+- A saved local game comes back at once: each save also stores what the main menu shows for it (`eldorado-menu`: the round,
+  Resign's label, whose view is shown; state.js save, gameHead), and the page's first script, right after the main menu's
+  markup, draws the menu from it before the app has loaded (Continue live, New game/Online/Replays greyed). The app then
+  rebuilds the game behind it and writes the same words; its AIs wait until Continue. A room link still opens the room.
+  test/firstpaint.cjs measures the first paint with a game in progress too.
 - The room lobby has no ‹ Menu: **Leave** (or Close room, for the host) is the way out. Signing out leaves any room.
 - Data from the server fills slots that are always there (the account line, the room lists, a full room's note): the
   layout-shift check judges the menu at all times, excused only by input or `expectMenu()` (another screen, the menu

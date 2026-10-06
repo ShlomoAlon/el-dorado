@@ -3,7 +3,7 @@
 // within 100 ms on a desktop, the limit of what a person perceives as instant; aiming lower), in its final look (no fade,
 // nothing moving in).
 //   NODE_PATH=$(npm root -g) node test/firstpaint.cjs
-const { browser, ENGINE, serveStatic, openPage, report } = require('./lib.cjs');
+const { browser, ENGINE, serveStatic, openPage, report, menuGo } = require('./lib.cjs');
 const T = report('firstpaint');
 const RUNS = 5, med = a => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
 // budgets: ms from the HTML's arrival to the start screen drawn (the median of RUNS loads); the phone's is looser for now (owner).
@@ -22,9 +22,24 @@ const COMPLETE = () => { const d = document.querySelector('#menu'), vis = s => {
   { const p = await openPage(b, 'no script', { alone: true, viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25, javaScriptEnabled: false });
     await p.goto(srv.url, { waitUntil: 'load' }); await p.waitForTimeout(400);
     const miss = await p.evaluate(COMPLETE); T.ok('the first round trip alone draws the whole start screen (no script)', !miss.length, miss.join('; ')); await p.context().close(); }
-  // 2. how soon after the HTML arrives it is drawn, complete (first contentful paint, with the screen complete at that point)
-  for (const [name, cpu, budget, viewport, dpr] of PROFILES) {
-    const R = [], bad = [];
+  // 1b. with a game in progress on this device (owner, 2026-10-06: coming back to a saved game is instant too): the HTML,
+  //     its CSS and its own first script, without the app's script, draw the main menu as it is for that game: Continue
+  //     open, the round beside it, New game greyed
+  const GAME = () => { const q = s => document.querySelector(s), t = q('#igTxt'); return [!q('#sBack').disabled || 'Continue greyed', q('#hub input[value=local]').disabled || 'New game open', /^Round \d+$/.test(t.textContent) || 'round: "' + t.textContent + '"'].filter(x => x !== true); };
+  let saved; { const p = await openPage(b, 'a game', { alone: true, viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25 });
+    await p.goto(srv.url); await p.waitForFunction(() => window.__ED); await menuGo(p, 'local'); await p.click('#sGo');
+    await p.waitForFunction(() => window.__ED.S && !window.__ED.UI.preview && !document.querySelector('#menu').open);
+    saved = await p.evaluate(() => Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)]))); await p.context().close(); }
+  { const p = await openPage(b, 'no app script', { alone: true, viewport: { width: 1536, height: 639 }, deviceScaleFactor: 1.25 });
+    await p.addInitScript(kv => { if (!sessionStorage.getItem('put')) { sessionStorage.setItem('put', '1'); for (const [k, v] of Object.entries(kv)) localStorage.setItem(k, v); } }, saved);
+    await p.route(/\/app\.[0-9a-f]+\.js$/, r => r.abort());
+    await p.goto(srv.url, { waitUntil: 'load' }); await p.waitForTimeout(400);
+    const miss = [...await p.evaluate(COMPLETE), ...await p.evaluate(GAME)];
+    T.ok('a game in progress: the first round trip alone draws its main menu (no app script)', !miss.length, miss.join('; ')); await p.context().close(); }
+  // 2. how soon after the HTML arrives it is drawn, complete (first contentful paint, with the screen complete at that point),
+  //    with no game and with a game in progress
+  for (const [name0, cpu, budget, viewport, dpr] of PROFILES) for (const game of [false, true]) {
+    const name = name0 + (game ? ', a game in progress' : ''), R = [], bad = [];
     for (let i = 0; i < RUNS; i++) {
       const p = await openPage(b, 'firstpaint', { alone: true, viewport, deviceScaleFactor: dpr });
       if (cpu > 1) await (await p.context().newCDPSession(p)).send('Emulation.setCPUThrottlingRate', { rate: cpu });
@@ -32,6 +47,7 @@ const COMPLETE = () => { const d = document.querySelector('#menu'), vis = s => {
       // off by 200 ms; the paint's time is recorded by the browser either way)
       // (and in a browser already running, as a player's is: one load first. In Firefox each test page has a browser of its
       // own, just started, and its first load measured the browser's start, 240 ms, not the page's)
+      if (game) await p.addInitScript(kv => { if (!sessionStorage.getItem('put')) { sessionStorage.setItem('put', '1'); for (const [k, v] of Object.entries(kv)) localStorage.setItem(k, v); } }, saved);
       await p.goto(srv.url, { waitUntil: 'load' }); await p.goto(srv.url, { waitUntil: 'load' });
       await p.waitForFunction(() => performance.getEntriesByName('first-contentful-paint').length, null, { timeout: 15000 });
       const t = await p.evaluate(() => performance.getEntriesByName('first-contentful-paint')[0].startTime - performance.getEntriesByType('navigation')[0].responseEnd);

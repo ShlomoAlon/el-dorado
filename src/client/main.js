@@ -38,7 +38,7 @@ GAME_READY.then(() => { relabel(); document.documentElement.classList.add('gamer
 
 function boot() {
   loadMark('the app running'); boundaryInit(); debugInit(); { const inPlay = () => !!S && !UI.preview && !document.getElementById('menu').open; checksInit(inPlay); freshInit(inPlay); } sharpInit(); /* (in play: a game on show, no menu over it) */ boardLayers(); soundInit(); aimInit(); marketInit(); hudInit(); setupPanZoom(); watchGeometry(); menuInit();
-  if (!document.documentElement.classList.contains('resume')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check)
+  if (!document.documentElement.classList.contains('resume') && !load('save')) { setupSync(); prepareGame(); } // the start screen's game, at once (not after the server check; a saved game comes back instead: local, below)
   $('#deckPile').onclick = () => showPile('deck'); $('#discPile').onclick = () => showPile('discard');
   $('#rulesBtn').onclick = showRules; histInit();
   $('#vp').addEventListener('click', onBoardClick); $('#vp').addEventListener('pointermove', onBoardHover); $('#vp').addEventListener('pointerleave', () => { if (!drag) setHot(null); });

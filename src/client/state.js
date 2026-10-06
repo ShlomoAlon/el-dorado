@@ -67,9 +67,20 @@ export function loadSave() {
   if (!rec || replayCheck(rec) || typeof rec.privacy !== 'boolean') return null; // (a game recorded by an older version: dropped, as decided 2026-09-29; a save that doesn't say whether hands are hidden is one)
   try { return { rec, S: recState(rec) }; } catch (e) { console.error(e); failed(e, 'rebuilding the saved game'); return null; }
 }
+/* resign: online the server does it; locally the player whose turn it is (or, while an AI moves, the human watching) leaves.
+   Everyone else plays on; with no human left racing, the AIs finish the game quickly. */
+export function resignSeat(){if(!S||S.over||G.replay)return -1;if(online()){const i=NET.seat;return i>=0&&isActive(S.players[i])?i:-1;}
+  const i=isAI(S.cur)?viewIdx():S.cur;return isAI(i)||!isActive(S.players[i])?-1:i;}
+/* what the main menu shows for the game on show: the round, and who Resign is for (several people at one device: the name,
+   which follows whose view is shown: kept with it, so the game comes back as it was) */
+export function gameHead(){const rs=resignSeat();return{viewer:UI.viewer,round:'Round '+S.round+(online()?' · online':''),resign:'Resign'+(rs>=0&&!online()&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'')};}
+/* the saved game's own words for the menu, kept with it (null: none, or unreadable) */
+export function savedHead() { try { return JSON.parse(load('menu') || 'null'); } catch (e) { /* expected: a save cut short */ return null; } }
 export function save() {
   if (online() || G.replay || UI.preview) return; // (a game not started yet is never saved)
   store('save', G.rec ? JSON.stringify(G.rec) : null);
+  // (and what the main menu shows for it: the page's first script draws the menu from it, before the app has loaded: shell.html)
+  store('menu', G.rec && S && !S.over ? JSON.stringify(gameHead()) : null);
 }
 /* finished local games are kept on this device (newest first, up to 20) to watch again from Replays */
 export function myGames() { try { return JSON.parse(load('games') || '[]'); } catch (e) { /* expected: a list cut short (storage full while writing) */ return []; } }

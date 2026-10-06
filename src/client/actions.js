@@ -3,7 +3,7 @@
    state. The rest keeps the selection (UI) in step with the game: modes, targets, and what happens after a change. */
 import { CT, typeOf, def, coinVal, rm, payTargets, cardTargets, cantPay, buyOptions, isActive, recApply, recUndo, recCanUndo, recState, assert } from '../engine.gen.js';
 import { esc } from './dom.js';
-import { S, setS, UI, NET, G, clearSelection, cur, canAct, online, isAI, viewIdx, inGame, save, keepLocalReplay, loadSave, humanRacing, passing } from './state.js';
+import { S, setS, UI, NET, G, clearSelection, cur, canAct, online, isAI, inGame, save, keepLocalReplay, loadSave, humanRacing, passing, resignSeat, savedHead } from './state.js';
 import { showSetup, buyReminder } from './menu.js';
 import { replayTargets } from './replay.js';
 import { render, resetView, changeGen } from './frame.js';
@@ -27,7 +27,7 @@ export function showGame(){aiReset();buildBoard();resetView();fitSoon();}
    (owner, 2026-10-06: coming back always lands on the menu). Its AIs wait for Continue (aiKick). Returns false if there
    is none in progress. */
 export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
-  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);showGame();UI.mode='idle';UI.piece=firstPiece();syncMode(false);render();return true;}
+  const h=savedHead();UI.preview=false;UI.viewer=h?h.viewer:null;G.rec=g.rec;setS(g.S);showGame();UI.mode='idle';UI.piece=firstPiece();syncMode(false);render();return true;}
 /* after a bug (boundary.js): the game on show again from its source, with nothing selected. Online: a new connection
    brings the server's state. A local game: rebuilt from its record (the action that failed was never recorded) */
 export function resync(){
@@ -201,10 +201,6 @@ export function onPiece(pl,i){
   UI.piece=i;render();
 }
 
-/* resign: online the server does it; locally the player whose turn it is (or, while an AI moves, the human watching) leaves.
-   Everyone else plays on; with no human left racing, the AIs finish the game quickly. */
-export function resignSeat(){if(!S||S.over||G.replay)return -1;if(online()){const i=NET.seat;return i>=0&&isActive(S.players[i])?i:-1;}
-  const i=isAI(S.cur)?viewIdx():S.cur;return isAI(i)||!isActive(S.players[i])?-1:i;}
 export function resignLocal(){const seat=resignSeat();if(seat<0)return;
   const humans=S.players.filter((p,j)=>j!==seat&&!p.ai&&isActive(p)).length;
   modal(`<h2>Resign?</h2><p class="sub">${esc(S.players[seat].name)} leaves the expedition and finishes last among the players still racing. ${humans?'The others play on.':'The game ends here.'}</p><div class="mrow"><button class="btn" id="rsNo">Keep playing</button><button class="btn pri" id="rsYes">Resign</button></div>`,sc=>{

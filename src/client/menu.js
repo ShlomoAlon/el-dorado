@@ -4,10 +4,10 @@
    replays, the room lobby). Nothing here rebuilds a screen: a click changes only what it is about. */
 import { COLORS, COURSES, courseById, aiById, aiAllowed, aiUsesNet, recNewGame, recSecret, plural, shuffle, assert } from '../engine.gen.js';
 import { $, esc, setHTML, setQuery, reduceMotion, EASE } from './dom.js';
-import { S, setS, UI, NET, G, clearSelection, online, myId, inGame, save, myGames } from './state.js';
+import { S, setS, UI, NET, G, clearSelection, online, myId, inGame, save, myGames, resignSeat, gameHead } from './state.js';
 import { GAME_READY } from './ready.js';
 import { toast } from './dialogs.js';
-import { showGame, resignSeat, resignLocal, endLocal } from './actions.js';
+import { showGame, resignLocal, endLocal } from './actions.js';
 import { aiKick, aiNetLoad } from './ai.js';
 import { api, gsiMount, signOut, signedIn, joinRoom, newRoom, roomMade, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, roomSend, exitOnline, resignOnline } from './online.js';
 import { loadReplayId, openReplay } from './replay.js';
@@ -70,8 +70,9 @@ export function showSettings(){menuOpen('settings');}
 function mainRender(){
   const g=gameOn(),away=g&&!inGame(),rs=g&&!away?resignSeat():-1;
   mq('#sBack').disabled=!g;
-  mq('#igTxt').textContent=!g?'':away?'Online game in progress':'Round '+S.round+(online()?' · online':'');
-  const r=mq('#sResign');r.disabled=rs<0;r.textContent='Resign'+(rs>=0&&!online()&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');
+  const h=g&&!away?gameHead():null; // (the same words the page's first script shows for a saved game: state.js save)
+  mq('#igTxt').textContent=!g?'':away?'Online game in progress':h.round;
+  const r=mq('#sResign');r.disabled=rs<0;r.textContent=h?h.resign:'Resign';
   mq('#sEnd').disabled=!g||away||online();
   for(const v of['local','online','replays'])mq(`#hub input[value=${v}]`).disabled=g;
 }
