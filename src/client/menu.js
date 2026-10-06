@@ -12,13 +12,13 @@ import { aiKick, aiNetLoad } from './ai.js';
 import { api, gsiMount, signOut, signedIn, joinRoom, newRoom, roomMade, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, roomSend, exitOnline, resignOnline } from './online.js';
 import { loadReplayId, openReplay } from './replay.js';
 import { load, store } from './store.js';
-import { diag, CHECKS, watchFlash } from './debug.js';
+import { diag, CHECKS, watchFlash, expectMenu } from './debug.js';
 import { render } from './frame.js';
 /* course list: official routes first; 'random' picks one of them */
 function pickCourse(id){return id==='random'?COURSES[Math.floor(Math.random()*COURSES.length)]:courseById(id);}
 // (a room's course, as the server sends it: one this page doesn't know yet, from a newer version, shows as the first)
 function courseName(id){return id==='random'?'Random course':(courseById(id)||COURSES[0]).name;}
-export const MENU={dlg:$('#menu'),f:$('#mform'),screen:null,acct:null,closeT:0};
+export const MENU={dlg:$('#menu'),f:$('#mform'),screen:$('#mform > section:not([hidden])').dataset.screen,acct:null,closeT:0}; // (screen: the one the page's HTML shows, on screen before the script)
 const mq=s=>MENU.f.querySelector(s),mqa=s=>MENU.f.querySelectorAll(s);
 export const radio=n=>{const e=MENU.f.querySelector(`input[name="${n}"]:checked`);return e?e.value:null;};
 const setRadio=(n,v)=>{MENU.f.querySelector(`input[name="${n}"][value="${v}"]`).checked=true;};
@@ -71,11 +71,11 @@ function menuReach(){
   if(!row||!row.offsetHeight)return;const r=row.getBoundingClientRect(),f=MENU.f.getBoundingClientRect();
   assert(r.top>=f.top-1&&r.bottom<=f.bottom+1,"view: a menu screen's actions are on screen without scrolling ("+MENU.screen+': '+Math.round(r.bottom-f.bottom)+' px below)');
 }
-function menuOpen(screen){watchFlash();
+function menuOpen(screen){watchFlash();if(MENU.screen!==screen||!MENU.dlg.open)expectMenu(); // (another screen, or the menu opened: its layout is new)
   $('#overlay').innerHTML=''; // one window at a time: the menu replaces results, rules or a pile (never left underneath it)
   const d=MENU.dlg,ig=screen==='game',away=ig&&awayOnline(),rs=ig&&!away?resignSeat():-1;
   assert(ig===gameOn()||screen==='room','view: in a game the menu is that game, and only then (screen '+screen+')');
-  mq('#ingame').hidden=!ig;d.classList.toggle('gamemenu',ig);
+  mq('#ingame').hidden=!ig;
   if(ig){mq('#igTxt').innerHTML=`<b>Game in progress</b>${away?'':' · round '+S.round}${away||online()?' · online':''}`;const r=mq('#sResign');r.hidden=rs<0;
     r.textContent='Resign'+(rs>=0&&!online()&&S.players.filter(p=>!p.ai).length>1?' ('+S.players[rs].name+')':'');mq('#sEnd').hidden=away||online();}
   acctRender();
@@ -94,15 +94,22 @@ function menuOpen(screen){watchFlash();
 }
 export function menuClose(){watchFlash();const d=MENU.dlg;document.documentElement.classList.remove('resume');render();if(!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}
 // after signing in or out: the account bar and whatever depends on it
-function menuRefresh(){acctRender();if(MENU.screen==='online'){if(NET.user)openLobbyWs();onlineRender();}} // (signed in on the Online screen: its room list goes live at once)
+export function menuRefresh(){acctRender();if(MENU.screen==='online'){if(NET.user)openLobbyWs();onlineRender();}} // (signed in on the Online screen: its room list goes live at once)
 
 /* ---- the account bar (rebuilt only when who's signed in, or their numbers, change) ---- */
 function acctRender(){
-  const el=mq('#acct'),u=NET.user,key=!NET.available?'-':u?[u.id,u.name,Math.round(u.rating),u.games,u.wins].join('|'):'out';
-  if(MENU.acct===key)return;MENU.acct=key;el.hidden=!NET.available;if(!NET.available)return;
-  if(!u){const g=NET.cfg.google;el.innerHTML=`<span class="m">Not signed in</span>${g?'<div id="gsiTop" class="gsiSm gsi"></div>':''}`;if(g)gsiMount(el.querySelector('#gsiTop'),t=>toast(t,3000),menuRefresh,'medium');return;}
+  // its line is always there (a fixed slot: what the server says later only fills it). Who is signed in shows at once from
+  // this device's last answer (local first), until the server's own comes
+  const el=mq('#acct'),u=NET.user||(!NET.available&&!NET.offline&&load('token')?cachedMe():null);
+  const key=NET.offline?'off':u?[u.id,u.name,Math.round(u.rating),u.games,u.wins].join('|'):NET.available?'out':'-';
+  if(MENU.acct===key)return;MENU.acct=key;
+  if(NET.user)store('me',JSON.stringify({id:u.id,name:u.name,rating:u.rating,games:u.games,wins:u.wins}));else if(NET.available)store('me',null);
+  if(NET.offline){el.innerHTML='<span class="m">Offline</span>';return;}
+  if(!u){const g=NET.available&&NET.cfg.google;el.innerHTML=NET.available?`<span class="m">Not signed in</span>${g?'<div id="gsiTop" class="gsiSm gsi"></div>':''}`:'';if(g)gsiMount(el.querySelector('#gsiTop'),t=>toast(t,3000),menuRefresh,'medium');return;}
   el.innerHTML=`<span class="av">${esc(u.name.slice(0,1).toUpperCase())}</span><span><b>${esc(u.name)}</b> · <b class="rt">${Math.round(u.rating)}</b> · ${plural(u.games,'game')} · ${plural(u.wins,'win')}</span><span class="acb"><button type="button" class="linkbtn" id="acOut">Sign out</button></span>`;
 }
+// (the last answer saved on this device: unreadable is a save cut short, read as none)
+function cachedMe(){try{return JSON.parse(load('me')||'null');}catch(e){/* expected: a save cut short */return null;}}
 
 /* ---- every choice ---- */
 function menuChange(e){
@@ -236,16 +243,6 @@ function profileHTML(r){const u=r.user,A=u.bot&&aiById(u.bot);
 
 /* ---- the room lobby: drawn from the room the server sends; each part changes only when its data does ---- */
 export function showRoomLobby(){renderRoomLobby();menuOpen('room');}
-/* checks: the room's controls keep their place on the room screen as players join or leave (a second tap on Add AI lands
-   on the same AI). Measured as painted, in the next frame, from the top of the room screen (the menu around it is its own) */
-const roomAt={k:null,y:null,d:''};
-function roomPlace(){
-  if(!MENU.dlg.open||MENU.screen!=='room'||!NET.room){roomAt.k=null;return;}
-  const B=mq('#rlAIBox'),o=NET.room.opts,k=NET.code+'|'+(o?o.max:0),hid=B.hidden,y=B.offsetTop-B.closest('section').offsetTop,kids=[...B.closest('section').children].filter(e=>e.offsetHeight&&e.compareDocumentPosition(B)&Node.DOCUMENT_POSITION_FOLLOWING),
-    d=kids.map(e=>(e.id||e.className.split(' ')[0]||e.tagName)+'@'+e.offsetTop+':'+e.offsetHeight).join(' ');
-  if(roomAt.k===k&&!hid&&roomAt.y!=null)assert(Math.abs(y-roomAt.y)<1,"view: the room's controls keep their place as players join ("+Math.round(roomAt.y)+' -> '+Math.round(y)+'; above: '+roomAt.d+' -> '+d+')');
-  roomAt.k=k;roomAt.y=hid?null:y;roomAt.d=d;
-}
 export function renderRoomLobby(){
   const r=NET.room,o=r.opts,seats=r.seats,host=r.host===myId(),auto=!!(o&&o.auto),lobby=r.status==='lobby';
   const max=o?o.max:4,room=seats.length<max,rated=!(o&&o.rated===false),mine=seats.find(s=>s.uid===myId());
@@ -256,10 +253,11 @@ export function renderRoomLobby(){
   mq('#rlCount').textContent=`Players ${seats.length}/${max}`;
   setHTML(mq('#rlSeats'),seats.map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="seatrow"><span><i style="background:${s.color}"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note">(you)</span>':''}</span>${A?`<span class="lbp"><span class="note">${esc(A.tier)}</span>${host&&lobby?`<button type="button" class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note">${s.now?'wants to start · ':''}${s.uid===r.host&&!auto?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('')
     +(o?'<div class="seatrow open"><span class="note">Open seat</span></div>'.repeat(Math.max(0,max-seats.length)):'<p class="note">Connecting…</p>')); // (every seat the room holds has its row: a player joining fills one, and nothing below moves)
-  if(CHECKS)requestAnimationFrame(roomPlace);
   const ctl=host&&!auto&&lobby,aiOK=!!(o&&aiAllowed(o.course,o.max));
-  mq('#rlAIBox').hidden=!ctl;mq('#rlAINo').hidden=aiOK;mq('#rlAIList').hidden=!aiOK||!room;mq('#rlFull').hidden=!aiOK||room;
-  for(const b of mqa('[data-addai]'))b.disabled=!NET.connected; // (adding one is the server's: once it's connected)
+  mq('#rlAIBox').hidden=!ctl;mq('#rlAINo').hidden=aiOK;mq('#rlAIList').hidden=!aiOK;
+  // (a full room keeps the list, greyed, and its note's line is there either way: the room filling up moves nothing)
+  const fl=mq('#rlFull');fl.hidden=!aiOK;fl.style.visibility=room?'hidden':'';
+  for(const b of mqa('[data-addai]'))b.disabled=!NET.connected||!room; // (adding one is the server's: once it's connected)
   mq('#rlRatedBox').hidden=!ctl;setRadio('rlrated',rated?'1':'0');
   mq('#rlColBox').hidden=!mine;
   if(mine)for(const x of mqa('#rlCols input')){x.checked=x.value===mine.color;x.disabled=!NET.connected||seats.some(s=>s!==mine&&s.color===x.value);} // (a change is the server's to keep: once it's connected)

@@ -39,6 +39,15 @@ const T = report('online');
       await W.evaluate(() => __ED.joinRoom('ZZZZ'));
       const said = await wait(W, () => /no room/i.test(document.querySelector('#menu').textContent) && !/[?&]room=/.test(location.search), null, 3000);
       T.ok('wrong room code: said within 3 s, and the code leaves the address', said, ((Date.now() - t0) / 1000).toFixed(1) + ' s; ' + await W.evaluate(() => (__ED.NET.status || '') + ' ' + location.search)); await done(W); }
+    // ---------- 0. a hard reload: the start screen is drawn at once and stays where it is while the server answers (owner,
+    //      2026-10-06: what comes from the server, like who is signed in, fills its own place; nothing else moves). Each
+    //      request takes 1 s, signed out and signed in; the page's own layout-shift check judges the menu
+    { const slow = P => P.route('**/api/**', async r => { await new Promise(res => setTimeout(res, 1000)); await r.continue().catch(e => { if (!/already handled/.test(e.message)) throw e; }); }); // (expected: the page moved on meanwhile)
+      const R = await open('R'), still = async name => { await slow(R); await R.reload(); await R.waitForFunction(() => window.__ED && __ED.NET.available, null, { timeout: 15000 }); await R.waitForTimeout(400); await R.unroute('**/api/**');
+        T.ok(name + ': the start screen stays in place while the server answers (no layout shift in the menu)', !R.errors.length, R.errors.join(' | ')); };
+      await still('reload, signed out');
+      await R.click('#sMode label[data-v="online"]'); await R.fill('#devName', 'Rhea'); await R.click('#devGo'); await R.waitForFunction(() => __ED.NET.user); await R.click('#sMode label[data-v="local"]');
+      await still('reload, signed in'); await done(R); }
     // ---------- 0a. coming back: the screen is chosen from what this device knows at once (the server only adds), and a signed-in
     //      player's server check is one round trip, not two (every request here takes 1.5 s). Counted in round trips, not in
     //      time: the same reload is timed first with the server answering at once, and only what the slow requests add is
@@ -188,7 +197,7 @@ const T = report('online');
     await A.evaluate(() => { delete __ED.NET.ws.send; }); // (messages go at once again)
     await A.click('[data-addai="raleigh"]'); await wait(A, () => __ED.NET.room.seats.length === 3);
     T.ok('AI seats added from the room lobby', (await A.evaluate(() => __ED.NET.room.seats.map(s => s.ai || '').join())) === ',fawcett,raleigh', code2);
-    T.ok('a full room: the AI list gives way to "the room is full"', await wait(A, () => document.querySelector('#rlAIList').hidden && !document.querySelector('#rlFull').hidden));
+    T.ok('a full room: the AI list stays, greyed, and says the room is full (in its own line: nothing moves)', await wait(A, () => !document.querySelector('#rlAIList').hidden && [...document.querySelectorAll('[data-addai]')].every(b => b.disabled) && getComputedStyle(document.querySelector('#rlFull')).visibility === 'visible'));
     // the game starts in a hidden tab (no frames drawn, messages still arriving) and an AI moves before anything is drawn
     await A.evaluate(() => { window.__raf = window.requestAnimationFrame; window.__q = []; window.requestAnimationFrame = f => { window.__q.push(f); return window.__q.length; /* (as in a hidden tab: a frame is requested and waits; its id is real) */ }; });
     await A.click('#rlStart'); await wait(A, () => __ED.online());

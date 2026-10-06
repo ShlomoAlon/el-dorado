@@ -7,6 +7,7 @@ const KEYS = {
   save: 'eldorado-game-v2',     // the local game in play: its record (state.js)
   games: 'eldorado-games-v2',   // finished local games, kept to watch again (state.js)
   token: 'ed-token',            // the sign-in session (online.js)
+  me: 'ed-me',                  // who that session is, as the server last said: shown at once on the next load (menu.js)
   seats: 'eldorado-seats',      // the setup screen's AI choices (menu.js)
   buywarn: 'eldorado-buywarn',  // setting: "you can still afford" reminder (menu.js)
   market: 'eldorado-mkt',       // market shown or hidden (market.js)

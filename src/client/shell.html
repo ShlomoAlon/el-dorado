@@ -101,8 +101,6 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .rlist{display:flex;flex-direction:column;gap:6px;max-height:44vh;overflow:auto}
 .rlist button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);color:var(--text);cursor:pointer;font:inherit}
 .rlist button b{font-size:14px}.rlist button span{font-size:12px;color:var(--muted)}.rlist button:hover{border-color:var(--line2)}
-/* in a game the menu is that game alone: a small window (its height follows the game bar, not the tallest screen) */
-#menu.gamemenu .mframe.mmenu{height:auto}#menu.gamemenu .modal.menu{overflow-y:auto}
 .ingame{display:flex;flex-direction:column;gap:18px;font-size:16px}
 .ingame .ig-b{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .acct{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:var(--muted)}
@@ -121,7 +119,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 @media (max-width:520px){ /* phones: kind + colour on one line, the name (or what the AI is) under it */
   .prow.seat{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"who sws" "nm nm";gap:6px 10px;margin-bottom:12px}
   .prow.seat select.who{grid-area:who;max-width:none}.prow.seat .sws{grid-area:sws}
-  .prow.seat input,.prow.seat .ainm{grid-area:nm}.prow.seat .ainm{min-height:0;padding:0 2px}
+  .prow.seat input,.prow.seat .ainm{grid-area:nm}.prow.seat .ainm{padding:0 2px} /* (as tall as the name box it replaces: picking an AI moves nothing) */
 }
 .ailist button:disabled,.ailist button:disabled *{cursor:default;color:var(--faint);border-color:var(--line)} /* (dimmed by its colours, never faded: sharp.js) */
 .rmai{width:28px;height:28px;border-radius:50%;border:1px solid var(--line2);background:#0f1a16;color:var(--muted);font-size:17px;line-height:1;cursor:pointer;padding:0}

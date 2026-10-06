@@ -41,6 +41,12 @@ const playAt = t => { for (let i = playLog.length - 1; i >= 0; i--) if (playLog[
 export function expectLayout() { const t = expectedAt = performance.now(); expectedEnd = Infinity;
   requestAnimationFrame(() => requestAnimationFrame(() => { if (expectedAt === t) expectedEnd = performance.now(); })); }
 const expected = t => t >= expectedAt - 600 && t <= Math.max(expectedAt + 600, expectedEnd);
+/* the menu's own declared changes (another screen shown, the window resized): a change of the game's layout under it is
+   not one, so the menu is judged apart (owner, 2026-10-06: a reload keeps the whole page in place) */
+let menuAt = -1e9, menuEnd = -1e9;
+export function expectMenu() { const t = menuAt = performance.now(); menuEnd = Infinity;
+  requestAnimationFrame(() => requestAnimationFrame(() => { if (menuAt === t) menuEnd = performance.now(); })); }
+const menuExpected = t => t >= menuAt - 100 && t <= Math.max(menuAt + 300, menuEnd);
 /* checks: the screen never flashes (owner, 2026-10-03: End game in the menu flickered; a check for that one path would miss
    the next). Whatever changes the page (a frame asked for, an overlay opening or closing) starts a watch: for the next
    second every frame weighs how dark the game is under what covers it (darkness, below) and notes each time that
@@ -124,7 +130,7 @@ export function watchFlash() {
 export function checksInit(during) {
   if (CHECKS) for (const t of ['pointerdown', 'pointerup', 'keydown', 'wheel', 'input', 'change']) addEventListener(t, () => { lastInput = performance.now(); }, { capture: true, passive: true });
   if (CHECKS) addEventListener('pointermove', e => { if (e.buttons) lastInput = performance.now(); }, { capture: true, passive: true }); // (a drag)
-  if (!CHECKS) return; inPlay = during;
+  if (!CHECKS) return; inPlay = during; addEventListener('resize', expectMenu); // (the window resized: the menu's layout follows it)
   // layout shifts: an element already on screen moving because something else changed (the owner's rule: nothing moves
   // without an animation or a direct action; animations move by transform, which never counts as a shift). Every shift
   // is kept, including those just after an input (the browser's own score leaves those out)
@@ -133,7 +139,10 @@ export function checksInit(during) {
       const n = s.node, who = !n ? '?' : n.id ? '#' + n.id : n.nodeType === 1 ? n.tagName.toLowerCase() + (n.className && typeof n.className === 'string' ? '.' + n.className.split(' ')[0] : '') + (n.closest('[id]') ? ' in #' + n.closest('[id]').id : '') + (n.textContent ? ' "' + n.textContent.slice(0, 20) + '"' : '') : (n.parentElement && n.parentElement.id ? '#' + n.parentElement.id + ' text' : 'text');
       const d = `${Math.round(s.currentRect.x - s.previousRect.x)},${Math.round(s.currentRect.y - s.previousRect.y)} size ${Math.round(s.currentRect.width - s.previousRect.width)}×${Math.round(s.currentRect.height - s.previousRect.height)}`;
       shifts.push({ who, d, input: e.hadRecentInput, play: playAt(e.startTime) }); diag(`shift ${who} by ${d}${e.hadRecentInput ? ' (after input)' : ''}`);
-      if (playAt(e.startTime) && !e.hadRecentInput && !expected(e.startTime)) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ' by ' + d + '; ' + Math.round(e.startTime - expectedAt) + ' ms after the last expected change; log: ' + lines.filter(l => / (layout|market|fit)/.test(l)).slice(-5).join(' / ') + ')'); } })
+      // (judged in play, and in the menu at any time: a menu is on screen from the page's first frame, and what the server
+      // sends later (who is signed in, the lists) fills its own place; owner, 2026-10-06: "the entire page stays in place")
+      const inMenu = !!n && !!(n.nodeType === 1 ? n : n.parentElement)?.closest('#menu');
+      if (inMenu ? !e.hadRecentInput && !menuExpected(e.startTime) : playAt(e.startTime) && !e.hadRecentInput && !expected(e.startTime)) assert(false, 'view: nothing moves without an animation or a direct action (layout shift: ' + who + ' by ' + d + '; ' + Math.round(e.startTime - expectedAt) + ' ms after the last expected change; log: ' + lines.filter(l => / (layout|market|fit)/.test(l)).slice(-5).join(' / ') + ')'); } })
       .observe({ type: 'layout-shift', buffered: true });
   // churn: a frame that removes an element and adds an identical new one rebuilt what hadn't changed (CLAUDE.md: a view
   // part writes only what changed). An element moved (removed and put back) is not a rebuild; identical means the same

@@ -185,6 +185,7 @@ let note = '';
 /* ---------- laying the screen on show out on the grid ---------- */
 let editOn = false; const editing = () => editOn; // (Edit mode: off until the owner turns it on)
 function layout() {
+  ED.expectMenu(); // (the menu laid out again by the editor: a change it declares, for the page's shift check)
   show();
   const s = shown(); for (const x of sections()) if (x !== s) unlay(x);
   if (!s) { panel(); placeGlass(); return; }

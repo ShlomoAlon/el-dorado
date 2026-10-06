@@ -20,11 +20,11 @@ import { feedPart, histInit } from './feed.js';
 import { showRules, showPile, closeModal, modalOpen, coverPart } from './dialogs.js';
 import { AIX, aiThink } from './ai.js';
 import { act, targets, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, undo, resumeSaved, onPiece, onPlayCard, startDiscard, addDiscard, confirmTrash } from './actions.js';
-import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, startLocal, radio } from './menu.js';
+import { MENU, menuInit, showMenu, showSetup, showHub, setupSync, prepareGame, startLocal, radio, menuRefresh } from './menu.js';
 import { netInit, joinRoom, netSend } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
 import { soundInit } from './sound.js';
-import { debugInit, checksInit, shifts, churn, diag, diagLog, loadMark, loadTimes } from './debug.js';
+import { expectMenu, debugInit, checksInit, shifts, churn, diag, diagLog, loadMark, loadTimes } from './debug.js';
 import { boundaryInit } from './boundary.js';
 import { cam } from './board/camera.js';
 import { targetAt, spaceAt, setHot } from './board/overlays.js';
@@ -72,6 +72,7 @@ function boot() {
   const known = !rid && !room && !load('token') && radio('mode') !== 'online'; // (Online picked before the script had loaded: its screen needs the server)
   if (known) local();
   netInit().then(() => {
+    menuRefresh(); // (the account line: the server's answer fills it)
     if (known) return;
     if (rid) { loadReplayId(rid); return; }
     if (room && NET.available) { if (NET.user) { joinRoom(room); return; } NET.pendingRoom = room; showHub(); return; }
@@ -95,7 +96,7 @@ function onBoardHover(e) { if (!drag && !e.buttons && e.pointerType === 'mouse')
 // for tests and debugging: the game, the page's state and its main entry points (each call leaves the page updated, as
 // a frame would after a click)
 const now = f => (...a) => { const r = f(...a); flush(); return r; };
-window.__ED = { NET, UI, G, reshuffles, targets, walking, baking, diagLog, loadTimes, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiThink, buyOptions, coinVal, CT, // (aiThink: test/playstep.cjs lets an AI choose the person's moves, in the AI's worker, played through the calls below; the rest let it choose a purchase of its own)
+window.__ED = { expectMenu, NET, UI, G, reshuffles, targets, walking, baking, diagLog, loadTimes, geo, get S() { return S }, get MAP() { return MAP }, layout, canAct, online, joinRoom, netSend, assert, shifts, churn, aiThink, buyOptions, coinVal, CT, // (aiThink: test/playstep.cjs lets an AI choose the person's moves, in the AI's worker, played through the calls below; the rest let it choose a purchase of its own)
   render() { render(); flush(); },
   aiPace(k) { AIX.pace = k; }, fitCheck, // (test/play.cjs: the board check, judged at once on a settled page) // (test/play.cjs: shorter pauses between the AIs' moves)
   showCourse(C, seed) { setMAP(buildCourse(typeof C === 'string' ? courseById(C) : C, seed || 1)); buildBoard(); fit(); return MAP; },

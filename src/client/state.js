@@ -30,7 +30,7 @@ export function clearSelection() { UI.mode = 'idle'; UI.card = null; UI.picks = 
 /* Any change to NET asks for a frame (render): its flags (busy, connected, canUndo, status, …) are written in many places
    (messages, timers, the socket), and the page shows them; none of those places has to remember to redraw. A value written
    again unchanged asks nothing. (The view never writes NET while drawing, so this can't loop.) */
-export const NET = new Proxy({ available: false, cfg: null, user: null, token: null, ws: null, lobbyWs: null, room: null, S: null, shown: null, seat: -1, connected: false, clockEnd: null,
+export const NET = new Proxy({ available: false, offline: false, cfg: null, user: null, token: null, ws: null, lobbyWs: null, room: null, S: null, shown: null, seat: -1, connected: false, clockEnd: null,
   canUndo: false, busy: false, seq: Date.now(), pending: [], roomS: null, roomPending: [], heard: 0, status: '', rooms: [], active: null, code: null, pendingRoom: null, viewUser: null, leaving: false }, // leaving: resigned, going to the Online screen once the server has it
   { set: written });
 /* rec: the local game's record (engine recNewGame; saved with the game, kept as a replay once it's over).
