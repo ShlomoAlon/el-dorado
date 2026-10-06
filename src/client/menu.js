@@ -130,7 +130,7 @@ function menuClick(e){
     case'cGo':{const o={max:+radio('max'),turn:+radio('turn'),course:radio('ocourse'),pub:radio('pub')==='1',rated:radio('rated')==='1'};
       // (its lobby at once; its code when the server has made it. Not made: back to the Online screen, which says why)
       const r=newRoom(o);api('/api/rooms',{method:'POST',body:JSON.stringify(o)}).then(j=>roomMade(r,j.code),x=>{if(NET.room===r&&!NET.code){NET.room=null;showHub();}err(x.message);});return;}
-    case'jGo':{const c=mq('#jCode').value.toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length<4){err('Enter the 5-letter room code.');return;}joinRoom(c);return;}
+    case'jGo':{const c=mq('#jCode').value.toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length<4){mq('#jCode').focus();return;}joinRoom(c);return;}
     case'pfBack':NET.viewUser=null;setRadio('otab','board');onlineTab();return;
     case'meSave':run(async()=>{const r=await api('/api/me',{method:'PATCH',body:JSON.stringify({name:mq('#meName').value})});NET.user=r.user;toast('Saved as '+r.user.name);acctRender();});return;
     case'lkCopy':{const i=mq('#lkIn');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value).then(()=>toast('Link copied')).catch(()=>{/* expected: clipboard refused; the link stays selected to copy by hand */});return;}
@@ -151,7 +151,7 @@ export function showSetup(){closeLobbyWs();setupSync();prepareGame();menuOpen('s
 // what the choices allow: seats shown, AI only where it plays, one colour per seat, at least one person
 export function setupSync(){
   const n=+radio('np'),aiOK=aiAllowed(radio('course'),n),rows=[...mqa('#seats .seat')];
-  mq('#n2note').hidden=n!==2;mq('#aiNote').hidden=aiOK;
+  mq('#aiNote').hidden=aiOK;
   const col=r=>r.querySelector('.sws input:checked').value;
   rows.forEach((r,i)=>{r.hidden=i>=n;const sel=r.querySelector('select');
     for(const o of sel.querySelectorAll('optgroup option'))o.disabled=!aiOK;if(!aiOK&&sel.value)sel.value='';
@@ -250,8 +250,8 @@ export function renderRoomLobby(){
   const r=NET.room,o=r.opts,seats=r.seats,host=r.host===myId(),auto=!!(o&&o.auto),lobby=r.status==='lobby';
   const max=o?o.max:4,room=seats.length<max,rated=!(o&&o.rated===false),mine=seats.find(s=>s.uid===myId());
   mq('#rlTitle').textContent='Room '+(NET.code||'…'); // (a room being made: its code comes with the server's answer)
-  mq('#rlSub').textContent=(auto?`Quick match: the game starts as soon as ${o.max} players are here, or earlier if everyone here presses “Start now”.`:host?'Share the code or link. Start when everyone is here.':'Waiting for the host to start.')
-    +(o?` ${courseName(o.course)} · ${auto?'':(o.pub===false?'private · ':'public · ')+o.max+' players max · '}${o.turn}s per turn · ${rated?'rated':'unrated'}`:'');
+  mq('#rlSub').textContent=(auto&&o?`Starts when ${o.max} players are in. `:host||auto?'':'Waiting for the host to start. ')
+    +(o?`${courseName(o.course)} · ${auto?'':(o.pub===false?'private · ':'public · ')+o.max+' players max · '}${o.turn}s per turn · ${rated?'rated':'unrated'}`:'');
   mq('#lkIn').value=NET.code?location.origin+location.pathname+'?room='+NET.code:'';
   mq('#rlCount').textContent=`Players ${seats.length}/${max}`;
   setHTML(mq('#rlSeats'),seats.map(s=>{const A=s.ai&&aiById(s.ai);return`<div class="seatrow"><span><i style="background:${s.color}"></i><b>${esc(s.name)}</b>${A?'<span class="aitag">AI</span>':''}${s.uid===myId()?' <span class="note">(you)</span>':''}</span>${A?`<span class="lbp"><span class="note">${esc(A.tier)}</span>${host&&lobby?`<button type="button" class="rmai" data-rmai="${esc(s.uid)}" aria-label="Remove ${esc(s.name)}" title="Remove">×</button>`:''}</span>`:`<span class="note">${s.now?'wants to start · ':''}${s.uid===r.host&&!auto?'host · ':''}${s.online?'here':'away'}</span>`}</div>`;}).join('')

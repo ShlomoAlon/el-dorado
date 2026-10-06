@@ -44,11 +44,10 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 /* the Online tabs: the checked tab's panel shows (no script) */
 #menu .tab{display:none}
 #menu:has(#hTabs input[value=play]:checked) .tab[data-tab=play],#menu:has(#hTabs input[value=board]:checked) .tab[data-tab=board],#menu:has(#hTabs input[value=me]:checked) .tab[data-tab=me]{display:block}
-#menu:has(input[name=pub][value="1"]:checked) .if-priv,#menu:has(input[name=pub][value="0"]:checked) .if-pub,#menu:has(input[name=rated][value="1"]:checked) .if-unrated,#menu:has(input[name=rated][value="0"]:checked) .if-rated{display:none}
 #hTabs{margin-bottom:16px}
 .opts{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
-.boxrow,.rrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);margin-bottom:8px}
-.boxrow .note,.rrow .note{margin:0}
+.rrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);margin-bottom:8px}
+.rrow .note{margin:0}
 .note.warn{color:#f3c98b}
 .lb{display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums;margin-bottom:12px}.lb .m{color:var(--muted)}
 .lbp{display:flex;align-items:center;gap:7px;min-width:0}.lbp .note,.seatrow .note,.pfh .note{margin:0}.lbn.me{color:var(--gold2)}
@@ -622,30 +621,28 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
   <div class="ingame" id="ingame" hidden><span id="igTxt"></span><span class="ig-b"><button type="button" class="btn" id="sResign">Resign</button><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn pri" id="sBack">Continue</button></span></div>
   <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>This device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label></div>
   <section data-screen="setup">
-    <h2>El Dorado Expedition</h2><p class="sub">Race through the jungle to the golden city. Build your expedition deck, tear down blockades, and be first to reach El Dorado.</p>
-    <div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div><p class="note" id="n2note" hidden>Two players each lead two explorers. Both must reach El Dorado.</p></div>
+    <h2>El Dorado Expedition</h2>
+    <div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div></div>
     <div class="field"><label>Expedition leaders</label><div id="seats"><!--SEATS--></div><p class="note warn" id="allAI" hidden>Seat at least one human player.</p></div>
     <div class="field"><label>Course</label><div class="clist" id="sC"><!--COURSES:course--></div><div class="aiNote" id="aiNote" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><label data-v="1"><input type="radio" name="full" value="1" checked><span>When all but one arrive</span></label><label data-v="0"><input type="radio" name="full" value="0"><span>At the first arrival (official)</span></label></div></div>
-    <div class="field"><label class="chk"><input type="checkbox" name="priv" id="sPriv"> <span>Hide each hand until its player taps “Reveal” (for pass-and-play with others)</span></label></div>
-    <div class="field"><label>Settings</label><label class="chk"><input type="checkbox" name="buywarn" id="sBuyWarn" checked> <span>Before I end my turn, remind me if I can still buy a card</span></label></div>
+    <div class="field"><label class="chk"><input type="checkbox" name="priv" id="sPriv"> <span>Pass-and-play: hide hands between turns</span></label></div>
+    <div class="field"><label>Settings</label><label class="chk"><input type="checkbox" name="buywarn" id="sBuyWarn" checked> <span>Remind me if I can still buy</span></label></div>
     <div class="mrow"><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
   </section>
   <section data-screen="online" hidden>
     <div id="oOff" hidden><h2>Play online</h2><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p></div>
-    <div id="oOut" hidden><h2>Play online</h2><p class="sub">Sign in (top of this screen) so your rating follows you. Rated games move your Elo rating, and you can play against people, the AIs, or both.</p>
-      <p class="note warn" id="oNoG" hidden>Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>
+    <div id="oOut" hidden><h2>Play online</h2>      <p class="note warn" id="oNoG" hidden>Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>
       <div class="field" id="oDev" hidden><label>Developer sign-in (local testing only)</label><div class="prow"><input id="devName" maxlength="16" placeholder="Name"><button type="button" class="btn" id="devGo">Sign in</button></div></div></div>
     <div id="oIn" hidden>
       <h2>Online</h2>
       <div class="seg" id="hTabs"><label data-v="play"><input type="radio" name="otab" value="play" checked><span>Play</span></label><label data-v="board"><input type="radio" name="otab" value="board"><span>Leaderboard</span></label><label data-v="me"><input type="radio" name="otab" value="me"><span>Profile</span></label></div>
       <div class="tab" data-tab="play">
         <div id="oPlay">
-        <div class="field"><label>Quick match</label><div class="boxrow"><span class="note">Join the next public game. It starts as soon as 3 players are in (90 s added per turn, unused time carries over, rated).</span><button type="button" class="btn pri" id="qGo">Quick match</button></div></div>
+        <div class="field"><button type="button" class="btn pri" id="qGo">Quick match</button></div>
         <div class="field"><label>Create a room</label>
           <div class="opts"><div class="seg"><label data-v="1"><input type="radio" name="pub" value="1" checked><span>Public</span></label><label data-v="0"><input type="radio" name="pub" value="0"><span>Private</span></label></div><div class="seg"><label data-v="2"><input type="radio" name="max" value="2"><span>2 players</span></label><label data-v="3"><input type="radio" name="max" value="3" checked><span>3 players</span></label><label data-v="4"><input type="radio" name="max" value="4"><span>4 players</span></label></div><div class="seg"><label data-v="1"><input type="radio" name="rated" value="1" checked><span>Rated</span></label><label data-v="0"><input type="radio" name="rated" value="0"><span>Unrated</span></label></div><div class="seg"><label data-v="60"><input type="radio" name="turn" value="60"><span>60s</span></label><label data-v="90"><input type="radio" name="turn" value="90" checked><span>90s</span></label><label data-v="120"><input type="radio" name="turn" value="120"><span>2 min</span></label><label data-v="180"><input type="radio" name="turn" value="180"><span>3 min</span></label></div></div>
           <div class="clist" id="cCourse"><!--COURSES:ocourse--></div>
-          <p class="note"><span class="if-pub">Public rooms are listed below for anyone to join.</span><span class="if-priv">Private rooms are not listed; share the code or link.</span> <span class="if-rated">Rated: the result changes everyone’s rating, AIs included.</span><span class="if-unrated">Unrated: a friendly game, ratings stay as they are.</span> You can add AI players in the room. Clock: each turn adds the chosen time to your clock, and time you don't use carries over to your next turns. When it runs out the turn ends automatically; missing 3 turns in a row forfeits.</p>
           <div class="mrow left"><button type="button" class="btn pri big" id="cGo">Create room</button></div></div>
         <div class="field"><label>Join with a code</label><div class="prow"><input id="jCode" maxlength="5" placeholder="e.g. K7Q2M" autocomplete="off"><button type="button" class="btn" id="jGo">Join</button></div></div>
         <div class="field"><label>Open rooms</label><div id="roomsOpen"></div></div>
@@ -670,7 +667,7 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
     <div class="mrow"><button type="button" class="btn" id="rlLeave">Leave</button><button type="button" class="btn big" id="rlNow" hidden>Start now</button><button type="button" class="btn pri big" id="rlStart" hidden>Start game</button></div>
   </section>
   <section data-screen="replays" hidden>
-    <h2>Replays</h2><p class="sub">Every finished game can be watched again move by move.</p>
+    <h2>Replays</h2>
     <div class="field"><label>Your games</label><div id="rMine" class="rlist"></div></div>
     <div class="field"><label>Recent games</label><div id="rList" class="rlist"></div></div>
   </section>

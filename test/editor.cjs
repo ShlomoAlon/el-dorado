@@ -44,16 +44,17 @@ const T = report('editor');
   await p.evaluate(() => { const m = document.querySelector('#mform'); m.scrollTop = 300; });
   T.ok('a block goes into the top bar, which stays at the screen\'s top as it scrolls', await p.evaluate(k => { const e = document.querySelector(`[data-edk="${CSS.escape(k)}"]`), bar = e.parentElement, m = document.querySelector('#mform').getBoundingClientRect();
     return bar.classList.contains('ed-bar-top') && Math.abs(bar.getBoundingClientRect().top - m.top) < 2; }, bl[0].k));
-  await p.evaluate(() => document.querySelector('#mform').scrollTop = 0); bl = await blocks(); await p.mouse.click(bl[3].x, bl[3].y); await p.click('#edPanel [data-act=fold]');
+  await p.evaluate(() => document.querySelector('#sFull').scrollIntoView({ block: 'center' })); bl = await blocks(); // (the block folded: Game ends, named by what it holds)
+  const fk = await p.evaluate(() => document.querySelector('#sFull').closest('.ed-item').dataset.edk), fb = bl.find(x => x.k === fk); await p.mouse.click(fb.x, fb.y); await p.click('#edPanel [data-act=fold]');
   await p.click('#edPanel [data-act=editmode]'); // (Stop editing: the menu works)
-  T.ok('a folded block is behind More options', await p.evaluate(k => getComputedStyle(document.querySelector(`[data-edk="${CSS.escape(k)}"]`)).display === 'none' && !!document.querySelector('.ed-more'), bl[3].k));
+  T.ok('a folded block is behind More options', await p.evaluate(k => getComputedStyle(document.querySelector(`[data-edk="${CSS.escape(k)}"]`)).display === 'none' && !!document.querySelector('.ed-more'), fb.k), await p.evaluate(k => k + ': ' + getComputedStyle(document.querySelector(`[data-edk="${CSS.escape(k)}"]`)).display + ', More options ' + !!document.querySelector('.ed-more'), fb.k));
   await p.evaluate(() => { const m = document.querySelector('#mform'); m.scrollTop = m.scrollHeight; }); // (scrolled to its foot: nothing under the bottom bar)
-  await p.click('.ed-more'); T.ok('More options shows it', await p.evaluate(k => getComputedStyle(document.querySelector(`[data-edk="${CSS.escape(k)}"]`)).display !== 'none', bl[3].k));
+  await p.click('.ed-more'); T.ok('More options shows it', await p.evaluate(k => getComputedStyle(document.querySelector(`[data-edk="${CSS.escape(k)}"]`)).display !== 'none', fb.k));
   // words: a double-click, typing, Enter
   await p.click('#edPanel [data-act=editmode]'); await p.evaluate(() => document.querySelector('#mform').scrollTop = 0);
-  const h = await p.evaluate(() => { const e = document.querySelector('#mform > section[data-screen=setup] .sub'), r = e.getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; });
+  const h = await p.evaluate(() => { const e = document.querySelector('#mform > section[data-screen=setup] h2'), r = e.getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; });
   await p.mouse.dblclick(h.x, h.y); await p.keyboard.type('A new line of words'); await p.keyboard.press('Enter');
-  T.ok('text is changed by a double-click and typing', await p.evaluate(() => document.querySelector('#mform > section[data-screen=setup] .sub').textContent === 'A new line of words'));
+  T.ok('text is changed by a double-click and typing', await p.evaluate(() => document.querySelector('#mform > section[data-screen=setup] h2').textContent === 'A new line of words'));
   // a button's kind: the Start button chosen, made a link, then Plain, then back to Main (its own: nothing kept)
   { await p.evaluate(() => document.querySelector('#sGo').scrollIntoView({ block: 'center' }));
     const r = await p.evaluate(() => { const q = document.querySelector('#sGo').getBoundingClientRect(); return { x: q.left + 20, y: q.top + q.height / 2 }; });
