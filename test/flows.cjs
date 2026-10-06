@@ -125,7 +125,10 @@ const T = report('flows');
   const pointed = await S(() => { const e = document.querySelector('#feed .fg.f-move'); if (!e) return false; e.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })); return true; });
   T.ok('the recap has a move to point at', pointed);
   await check('pointing at a recap step shows its path on the board', () => document.querySelectorAll('#board2 path[stroke-dasharray]').length > 0);
-  T.ok('the person moves', await S(() => { const E = window.__ED, h = E.S.players[E.S.cur].hand; for (const id of h) { E.onHandCard(id); const k = [...E.targets().keys()][0]; if (k) { E.doMove(k); return true; } } return false; }));
+  // (with a card that moves: the hand dealt may have none, then an Explorer is added the way the engine makes a card, as step
+  // 11 does)
+  T.ok('the person moves', await S(() => { const E = window.__ED, S = E.S, h = S.players[S.cur].hand, go = () => { for (const id of h) { E.onHandCard(id); const k = [...E.targets().keys()][0]; if (k) { E.doMove(k); return true; } } return false; };
+    if (go()) return true; const id = 'c' + (S.nid++); S.cards[id] = 'explorer'; h.push(id); E.render(); return go(); }));
   await idle(); await p.waitForTimeout(800); // (the page's up-to-date check runs four times a second: it fails the test here if the path went later)
   await p.click('#menuBtn'); await check('menu opens over the game', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden);
   await p.click('#sBack'); await check('back to the game', () => !document.querySelector('#menu').open);

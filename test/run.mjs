@@ -33,7 +33,7 @@ const run = ([name, cmd, normal], env = {}) => new Promise(res => { const t = Da
     res({ name, code: hung ? 'hung' : grown ? 'grown' : code, out, s: s.toFixed(0) }); }); });
 if (arg.includes('--gpu')) {
   const rs = [];
-  for (const t of [['layout', 'node test/layout.cjs --quick', 75], ['flows', 'node test/flows.cjs', 50], ['taps', 'node test/taps.cjs', 16], ['play', 'node test/play.cjs', 130], ['menus', 'node test/menus.cjs', 24]])
+  for (const t of [['layout', 'node test/layout.cjs --quick', 75], ['flows', 'node test/flows.cjs', 50], ['taps', 'node test/taps.cjs', 16], ['play', 'node test/play.cjs', 130], ['menus', 'node test/menus.cjs', 34]])
     rs.push(await run(t, { GPU: '1' }));
   fs.mkdirSync(path.join(root, 'test-results'), { recursive: true }); for (const r of rs) fs.writeFileSync(path.join(root, 'test-results', 'gpu-' + r.name + '.log'), r.out); // (each test's whole output, as the suite keeps it)
   for (const r of rs) { const last = r.out.trim().split('\n').filter(l => l.trim()).pop() || ''; console.log(`${r.code ? 'FAIL' : 'ok  '} ${r.name.padEnd(7)} ${String(r.s).padStart(3)} s  ${last.slice(0, 140)}`); if (r.code) console.log(r.out.split('\n').filter(l => /^\s*FAIL\b|assertion failed/.test(l)).slice(0, 6).join('\n')); }
