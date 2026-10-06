@@ -116,6 +116,17 @@ const T = report('flows');
     await p.mouse.move(700, 500); }
   await p.click('#histBtn'); await check('history: hidden', () => document.querySelector('#lside').hidden && document.querySelector('#feed').hidden);
   await p.click('#histBtn'); await check('history: back under the prompt', () => document.querySelector('#lside').hidden && !document.querySelector('#feed').hidden && localStorage.getItem('eldorado-hist') === 'center');
+  // a step of the AI's recap pointed at (its path on the board), then the person moves: the recap gives way to their own
+  // turn, and the path pointed at goes with it in that same frame (the page's up-to-date check fails a frame with nothing
+  // new that still changes the board; 2026-10-06, seen when the menu's Continue button left the pointer over the recap).
+  // (pointed at by the step's own event, the mouse elsewhere: the browser's hover check after a change would otherwise
+  // point again, sooner or later, and hide what the page does by itself)
+  await p.mouse.move(700, 500); await settle(p);
+  const pointed = await S(() => { const e = document.querySelector('#feed .fg'); if (!e) return false; e.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })); return true; });
+  T.ok('the recap has a step to point at', pointed);
+  await check('pointing at a recap step shows its path on the board', () => document.querySelectorAll('#board2 path[stroke-dasharray]').length > 0);
+  T.ok('the person moves', await S(() => { const E = window.__ED, h = E.S.players[E.S.cur].hand; for (const id of h) { E.onHandCard(id); const k = [...E.targets().keys()][0]; if (k) { E.doMove(k); return true; } } return false; }));
+  await idle(); await p.waitForTimeout(800); // (the page's up-to-date check runs four times a second: it fails the test here if the path went later)
   await p.click('#menuBtn'); await check('menu opens over the game', () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden);
   await p.click('#sBack'); await check('back to the game', () => !document.querySelector('#menu').open);
   // 10. replay: step forward (a move animates), then exit back to the game

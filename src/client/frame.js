@@ -68,7 +68,9 @@ export function freshInit(during) {
     const stale = mo.takeRecords().filter(r => { const n = r.target.nodeType === 1 ? r.target : r.target.parentElement; if (!n || n.closest('#turnTimer')) return false;
       return r.type === 'childList' ? true : r.type === 'attributes' ? r.target.getAttribute(r.attributeName) !== r.oldValue : r.target.data !== r.oldValue; });
     mo.disconnect();
-    if (stale.length) assert(false, 'view: the page is up to date (a frame with nothing new still changed ' + who(stale[0]) + ')');
+    // (what changed, so a failure says it: an attribute from and to, or the elements added and removed)
+    const what = r => r.type === 'attributes' ? r.attributeName + ' ' + r.oldValue + ' → ' + r.target.getAttribute(r.attributeName) : r.type === 'childList' ? '+' + [...r.addedNodes].map(n => (n.outerHTML || n.data || '').slice(0, 60)).join('|') + ' −' + [...r.removedNodes].map(n => (n.outerHTML || n.data || '').slice(0, 60)).join('|') : r.oldValue + ' → ' + r.target.data;
+    if (stale.length) assert(false, 'view: the page is up to date (a frame with nothing new still changed ' + who(stale[0]) + ': ' + what(stale[0]) + ')');
     // and it rests: a frame with nothing new asks for no other (one that did would draw again, and again: a page that never idles)
     assert(!raf, 'view: the page rests (a frame with nothing new asked for another frame)');
   };

@@ -186,8 +186,12 @@ function update(){
   if(!S){hide();setTrail([],'');return;}
   // the newest turn in the journal: an opponent's as they play it, kept as a recap until you act, then your own
   const t=LATEST=turnsOf(S.log).filter(t=>!t.sys).pop()||null,watched=!!t&&feedWatch(t.pl);
-  if(HOVER&&!HOVER.el.isConnected)HOVER=null; // (the step pointed at is gone)
+  rowUpdate(F,t,watched,hide);
+  // the trail last, once the row is as it will be: a step pointed at that this update removed shows its path no more
+  if(HOVER&&!HOVER.el.isConnected)HOVER=null;
   if(HOVER)setTrail(HOVER.paths,HOVER.color);else setTrail(watched&&MODE!=='off'?t.steps.flatMap(g=>g.paths):[],t?S.players[t.pl].color:'');
+}
+function rowUpdate(F,t,watched,hide){
   if(G.replay||passing()||MODE!=='center'||!geo.recapFits){hide();return;} // (no room for six cards: owner, 2026-10-01, hidden rather than squeezed)
   if(!F.firstElementChild)F.innerHTML='<div class="frow"></div>'; // (nothing played yet: the row keeps its place, so the box doesn't change size)
   const row=F.firstElementChild;
