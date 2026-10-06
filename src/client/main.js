@@ -52,7 +52,7 @@ function boot() {
     const sync = () => { const on = !!fsOn(); fb.classList.toggle('full', on); fb.title = fb.ariaLabel = on ? 'Exit full screen' : 'Full screen'; };
     document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
   }
-  // Menu: the start screen, without ending the game in progress (S,it offers Back to game and Resign)
+  // Menu: during a game, that game's menu (Continue, Resign, End game); else the start screen
   $('#menuBtn').onclick = () => { if (G.replay) exitReplay(); else showMenu(); };
   window.addEventListener('keydown', e => {
     if (replayKeys(e)) return; if (e.target.tagName === 'INPUT') return;
@@ -64,8 +64,9 @@ function boot() {
   // the server, and so does a signed-in player (an online game of theirs may be running); anyone else's screen is decided
   // here, from this device, at once, and the server check only adds to it
   const q = new URLSearchParams(location.search), rid = (q.get('replay') || '').replace(/[^a-z0-9]/g, ''), room = (q.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // a game in progress comes back behind its menu (owner, 2026-10-06: coming back starts at the menu, not in the game)
   const local = () => {
-    if (resumeSaved()) return;
+    if (resumeSaved()) { showMenu(); return; }
     showSetup(); if ($('#sGo').dataset.q) { delete $('#sGo').dataset.q; startLocal(); } // Start pressed before the script had loaded
   };
   const known = !rid && !room && !load('token') && radio('mode') !== 'online'; // (Online picked before the script had loaded: its screen needs the server)
@@ -74,7 +75,7 @@ function boot() {
     if (known) return;
     if (rid) { loadReplayId(rid); return; }
     if (room && NET.available) { if (NET.user) { joinRoom(room); return; } NET.pendingRoom = room; showHub(); return; }
-    if (NET.user && NET.active) { showHub(); return; }
+    if (NET.user && NET.active) { showMenu(); return; }
     if (radio('mode') === 'online') { showHub(); return; }
     local();
   });

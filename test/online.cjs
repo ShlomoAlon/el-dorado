@@ -46,9 +46,9 @@ const T = report('online');
     //      for a round trip, nor hide one
     { const RT = 1500, slow = P => P.route('**/api/**', async r => { await new Promise(res => setTimeout(res, RT)); await r.continue().catch(e => { if (!/already handled/.test(e.message)) throw e; }); }); // (expected: the page moved on meanwhile)
       const reload = async P => { const t0 = Date.now(); await P.reload({ waitUntil: 'commit' });
-        await P.waitForFunction(() => window.__ED && __ED.S && !__ED.UI.preview && !document.querySelector('#menu').open && document.documentElement.classList.contains('boardready'), null, { timeout: 15000 });
+        await P.waitForFunction(() => window.__ED && __ED.S && !__ED.UI.preview && document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.documentElement.classList.contains('boardready'), null, { timeout: 15000 }); // (the game, behind its menu)
         return Date.now() - t0; };
-      const back = async (P, signed) => { // (a local game started and saved; then the page is opened again: at once, then with slow requests)
+      const back = async (P, signed) => { // (a local game started and saved; then the page is opened again: at once, then with slow requests; it comes back behind its menu)
         if (signed) await signIn(P, 'Ulla'); await P.click('label:has(input[name=mode][value=local])'); await P.waitForSelector('#sGo', { state: 'visible' });
         await P.click('#sGo'); await P.waitForFunction(() => __ED.S && !__ED.UI.preview && !document.querySelector('#menu').open);
         const base = await reload(P); await slow(P); const ms = await reload(P); await P.unroute('**/api/**'); return { base, ms, added: ms - base }; };
@@ -81,13 +81,13 @@ const T = report('online');
     await B.fill('#jCode', code); await B.click('#jGo');
     await C.goto(srv.url + '?room=' + code);
     T.ok('room: joined by code and by link', await wait(A, () => __ED.NET.room && __ED.NET.room.seats.length === 3), code);
-    T.ok('room lobby: no tabs or Profile link to wander off with (Leave is the way out)', await B.evaluate(() => document.querySelector('#sMode').hidden && getComputedStyle(document.querySelector('#acProfile')).display === 'none'));
+    T.ok('room lobby: no tabs to wander off with (Leave is the way out)', await B.evaluate(() => document.querySelector('#sMode').hidden));
     await A.click('#rlStart');
     const started = await Promise.all([A, B, C].map(p => wait(p, () => __ED.online() && !document.querySelector('#menu').open)));
     T.ok('start: every player is in the game, menu closed', started.every(Boolean));
     // the menu during an online game: the Online screen with the game bar only (no second game to start, no tabs)
     await B.click('#menuBtn');
-    T.ok('menu during an online game: Back to game, nothing that would leave it', await wait(B, () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.querySelector('#sMode').hidden && document.querySelector('#oPlay').hidden && !document.querySelector('#oBusy').hidden));
+    T.ok('menu during an online game: that game only (Continue, Resign; no tabs, no screen that would start or join another)', await wait(B, () => document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.querySelector('#sMode').hidden && [...document.querySelectorAll('#menu section[data-screen]')].every(s => s.hidden) && document.querySelector('#sEnd').hidden));
     await B.click('#sBack');
     T.ok('back to the online game, still connected', await wait(B, () => !document.querySelector('#menu').open && __ED.NET.connected && !!__ED.S));
     // a connection that dies silently (a phone asleep, a dropped network): noticed when the page comes back, and replaced
@@ -150,14 +150,20 @@ const T = report('online');
       if (d && d.open && r && !r.hidden && getComputedStyle(d).display !== 'none') window.__lobbyShown = true; }, 5); });
     await C.reload(); const backIn = await wait(C, () => window.__ED && __ED.online() && !document.querySelector('#menu').open, null, 15000);
     T.ok('reload during a game: straight back to it, no lobby on the way', backIn && !(await C.evaluate(() => window.__lobbyShown)), 'back: ' + backIn);
+    // coming back without the room's link (the site opened again): the game's menu first, nothing else on it; Continue joins
+    await C.goto(srv.url);
+    T.ok('opened again without the link: the online game in progress, behind its menu', await wait(C, () => window.__ED && !__ED.online() && document.querySelector('#menu').open && !document.querySelector('#ingame').hidden && document.querySelector('#sMode').hidden && [...document.querySelectorAll('#menu section[data-screen]')].every(s => s.hidden), null, 15000),
+      await C.evaluate(() => JSON.stringify({ S: !!__ED.S, user: !!__ED.NET.user, active: __ED.NET.active, open: document.querySelector('#menu').open, ingame: !document.querySelector('#ingame').hidden, screens: [...document.querySelectorAll('#menu section[data-screen]:not([hidden])')].map(s => s.dataset.screen), url: location.href })));
+    await C.click('#sBack');
+    T.ok('Continue: back in the online game', await wait(C, () => __ED.online() && !!__ED.S && !__ED.S.over && !document.querySelector('#menu').open, null, 15000));
     // two resign: the game is over for the third, rated
     // B leaves through the menu (Resign, then Leave game): the Online screen comes up as soon as the server has it
     await B.click('#menuBtn'); await B.click('#sResign'); await B.click('#rsYes');
     T.ok('resign from the menu: out of the game, on the Online screen', await wait(B, () => !__ED.S && document.querySelector('#menu').open && !document.querySelector('section[data-screen="online"]').hidden));
-    // the others play on without B: B is out of that room (no Rejoin; Quick match doesn't send B back into it)
+    // the others play on without B: B is out of that room (no Continue; Quick match doesn't send B back into it)
     const bActive = () => B.evaluate(async () => (await (await fetch('/api/me', { headers: { authorization: 'Bearer ' + __ED.NET.token } })).json()).active);
     let bIn = await bActive(); for (let i = 0; i < 20 && bIn; i++) { await B.waitForTimeout(250); bIn = await bActive(); }
-    T.ok('a resigned player is out of the room (no Rejoin, no quick match back into it)', bIn === null && await B.evaluate(() => document.querySelector('#rejoin').hidden), bIn);
+    T.ok('a resigned player is out of the room (no game menu to continue it, no quick match back into it)', bIn === null && await B.evaluate(() => document.querySelector('#ingame').hidden && !__ED.NET.active), bIn);
     await C.evaluate(() => __ED.netSend({ t: 'act', a: { t: 'resign' } }));
     T.ok('game over after two resign', await wait(A, () => __ED.S.over && __ED.NET.room.results));
     const res = await A.evaluate(() => __ED.NET.room.results), lb1 = await board(A);

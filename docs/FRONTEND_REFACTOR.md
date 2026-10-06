@@ -60,11 +60,16 @@ The rules engine (`src/engine_*.js`) is imported from `src/engine.gen.js`, which
 ## Menu workflows (menu.js; tested by test/menus.cjs and test/online.cjs)
 
 - Three tabs: **This device** (setup), **Online** (hub: play, leaderboard, profile), **Replays**. No Back buttons: the tabs are
-  the navigation, and Esc or the backdrop closes the menu when a game is on.
-- `showMenu()` (the Menu button) opens what fits: an online game in progress → Online, with only the game bar (Back to game,
-  Resign) and a note instead of create/join/quick match, and no tabs (one game at a time); a finished online game → its room
-  is left, Online; otherwise the start screen (with the game bar over a local game).
-- The room lobby has no tabs and no Profile link: **Leave** (or Close room, for the host) is the way out, so nobody wanders
-  off while still seated. Signing out leaves any room (`leaveRoom()`).
-- A replay returns to the menu screen it was opened from (Replays, Online) when closed; a local game in progress comes back
-  behind it. Replays can't be opened during an online game in progress (it would leave it).
+  the navigation.
+- In a game, the menu is that game and nothing else (owner, 2026-10-06: "if you're in a game, you're in a game"): `showMenu()`
+  opens the pseudo-screen `'game'`: every section hidden, no tabs, no Sign out, only the game bar (Continue, Resign, End game
+  for a local game). No new game, no room, no replays until it ends. Esc or the backdrop is Continue. `menuOpen` asserts the
+  menu is the game's exactly when there is a game (`gameOn()`: a local or online game in progress, or the server's
+  `NET.active`, an online game of this player's not joined in this page yet, which Continue joins).
+- Coming back (a reload, the site opened again) starts at that menu, not in the game: a saved local game is rebuilt behind it
+  (the inline script hides the start screen while one is saved), and its AIs wait until Continue. A room link still opens
+  the room.
+- A finished online game: its room is left, to Online. The room lobby has no tabs: **Leave** (or Close room, for the host) is
+  the way out. Signing out leaves any room (`leaveRoom()`).
+- A replay returns to the menu screen it was opened from (Replays, Online) when closed, or to the game's menu if a game is
+  in progress.

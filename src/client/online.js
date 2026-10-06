@@ -69,6 +69,7 @@ export function roomMade(r,code){if(NET.room!==r||NET.code)return;r.code=code;jo
 /* made: the room this page made (newRoom), already on show */
 export function joinRoom(code,made){
   closeLobbyWs();leaveRoomSocket();
+  NET.active=null; // (the game the server said was running is this page's room now: what it shows comes from the room)
   NET.room=made||{code,status:'connecting',seats:[]};NET.code=code;NET.S=null;NET.shown=null;NET.retries=0;
   setQuery({room:code,replay:null});
   connectRoom();if(made)renderRoomLobby(); // (a room just made is on show already; any other is shown once its first message says what it is)

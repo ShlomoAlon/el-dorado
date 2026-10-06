@@ -27,7 +27,7 @@ const T = report('editor');
   T.ok('the screen on show is a grid', await p.evaluate(() => getComputedStyle(document.querySelector('#mform > section[data-screen=setup]')).display === 'grid'));
   T.ok('out of Edit mode, the menu works (a click is a click)', await p.evaluate(() => { document.querySelector('#sN label[data-v="4"]').click(); return document.querySelector('#sN input[value="4"]').checked; }));
   await p.click('#edPanel [data-act=editmode]');
-  let bl = await blocks(); T.ok('a row of buttons is its buttons, each a block', bl.filter(x => x.btn).length >= 2, bl.filter(x => x.btn).map(x => x.k).join(', '));
+  let bl = await blocks(); T.ok('a row of buttons is its buttons, each a block (Start expedition, alone in its row)', bl.some(x => x.btn && x.k === '#sGo'), bl.filter(x => x.btn).map(x => x.k).join(', '));
   // a block made half width, then moved: a click, a drag
   await p.mouse.click(bl[0].x, bl[0].y); await p.click('#edPanel [data-act=w][data-v="3"]');
   T.ok('a block is made half the width', /span 3/.test(await col(bl[0].k)), await col(bl[0].k));

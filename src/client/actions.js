@@ -23,9 +23,11 @@ import { diag, directAction } from './debug.js';
 /* a different game is on show (a new deal, a loaded save, a replay, an online game): the old one's AI moves are off, its
    board and elements go, the new board is drawn and fitted */
 export function showGame(){aiReset();buildBoard();resetView();fitSoon();}
-/* continue the saved local game (first visit, or back from a replay). Returns false if there is none in progress. */
+/* the saved local game, back on show (coming back to the page, or from a replay): behind the menu, which offers Continue
+   (owner, 2026-10-06: coming back always lands on the menu). Its AIs wait for Continue (aiKick). Returns false if there
+   is none in progress. */
 export function resumeSaved(){const g=loadSave();if(!g||g.S.over)return false;
-  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);showGame();UI.mode='idle';UI.piece=firstPiece();syncMode(false);render();aiKick();return true;}
+  UI.preview=false;UI.viewer=null;G.rec=g.rec;setS(g.S);showGame();UI.mode='idle';UI.piece=firstPiece();syncMode(false);render();return true;}
 /* after a bug (boundary.js): the game on show again from its source, with nothing selected. Online: a new connection
    brings the server's state. A local game: rebuilt from its record (the action that failed was never recorded) */
 export function resync(){

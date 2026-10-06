@@ -163,7 +163,7 @@ const conf = sc => { const k = sc.includes('@') ? sc : keyFor(sc); return D.scre
 const name = el => el.dataset.edk || (el.dataset.edk = el.id ? '#' + el.id : (el.parentElement.matches('section') ? el.parentElement.dataset.screen : name(el.parentElement)) + '>' + [...el.parentElement.children].indexOf(el));
 for (const s of sections()) for (const el of s.querySelectorAll('*')) name(el); // (named before anything moves)
 const byName = k => form.querySelector(`[data-edk="${CSS.escape(k)}"]`);
-const buttonRow = el => el.children.length > 1 && [...el.children].every(c => c.matches('button, a.btn'));
+const buttonRow = el => el.children.length > 0 && [...el.children].every(c => c.matches('button, a.btn')); // (one button alone in its row too)
 const items = s => { const out = []; for (const el of s.children) { if (el.classList.contains('ed-grid')) continue;
     if (el.classList.contains('ed-bar')) { for (const c of el.children) out.push([name(c), c]); continue; } // (the top and bottom bars' blocks)
     if (buttonRow(el)) { el.classList.add('ed-row'); for (const c of el.children) out.push([name(c), c]); } else out.push([name(el), el]); } return out; };

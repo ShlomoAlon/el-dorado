@@ -138,7 +138,8 @@ const T = report('flows');
       T.ok('an arrival at El Dorado leaves the explorers already there where they stood', await S(([there, done]) => [...document.querySelectorAll('#pieces .piece')].every((e, pl) => !done[pl] || e.style.transform === there[pl]), [there, done]), 'arrived before: ' + done.map((x, pl) => x ? pl : null).filter(x => x !== null).join(',')); } }
   await check('replay: the strongest AI\'s turn from here', () => !!document.querySelector('#rside .rplan li') && /Fawcett/.test(document.querySelector('#rside').textContent), null, 15000);
   await p.click('#menuBtn');
-  await check('replay exit resumes the game', () => !window.__ED.G.replay && !!window.__ED.S && !window.__ED.S.over && document.querySelectorAll('#cards .card').length > 0);
+  await check('replay exit: the game comes back, behind its menu', () => !window.__ED.G.replay && !!window.__ED.S && !window.__ED.S.over && document.querySelectorAll('#cards .card').length > 0 && document.querySelector('#menu').open && !document.querySelector('#ingame').hidden);
+  await settle(p); await p.click('#sBack'); await check('Continue: in the game', () => !document.querySelector('#menu').open);
   // 11. a removal still to choose (Travel Log): the market stays closed until it's answered (a tap there says why, it
   //     doesn't open a purchase), Escape keeps the question up, and once answered buying works again
   //     (a Travel Log put in the hand for the test: the saved game can't be replayed after this, so it comes last)
