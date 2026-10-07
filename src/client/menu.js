@@ -44,7 +44,7 @@ export function menuInit(){
   // thousands included, restyled each time it opens and closes, a 15-20 ms frame); it covers the screen, so a click
   // never reaches the game, and Esc is ours
   MENU.dlg.addEventListener('keydown',e=>{if(e.key==='Escape'&&MENU.dlg.open&&!MENU.dlg.classList.contains('closing')){e.preventDefault(); // (focus can stay in the menu once it has closed: Esc then is the game's)
-  if(menuDismissible())continueGame();else if(MODE[MENU.screen]&&MENU.screen!=='main')showMain();}}); // (Esc: back to the game, or from a screen back to the main menu)
+  if(menuDismissible())continueGame();else if(MENU.screen==='replays')showSettings();}}); // (Esc: back to the game, or from Replays back to Settings)
   MENU.dlg.addEventListener('click',e=>{if(e.target===MENU.dlg&&menuDismissible())continueGame();}); // the backdrop
   MENU.f.addEventListener('scroll',menuEdges,{passive:true});addEventListener('resize',menuEdges);
   setupSync();
@@ -52,29 +52,28 @@ export function menuInit(){
   if(document.documentElement.classList.contains('resume'))d.close(); // a saved game or a link opens instead (boot decides)
   else if(d.open)MENU.f.focus({preventScroll:true});
 }
-const menuDismissible=()=>inGame()&&(MENU.screen==='main'||MENU.screen==='settings');
+const menuDismissible=()=>inGame()&&MENU.screen!=='room';
 /* a game in progress, on show or not: this device's (on show behind the menu once the page is back), or an online one the
    player is in, though this page isn't connected to it yet (coming back to the page while it runs) */
 const awayOnline=()=>!!NET.user&&!!NET.active; // (an online game of this player's, not joined in this page yet: joinRoom clears it)
 const gameOn=()=>inGame()||awayOnline();
-const MODE={main:'main',setup:'local',online:'online',replays:'replays',settings:'settings'};
-const AWAY=['main','settings','room']; // (the screens a player in a game can be on)
-/* the Menu button, and coming back to the page: the main menu (an online game just finished: its room is left first) */
-export function showMenu(){if(online()&&S.over)exitOnline();showMain();}
-/* the main menu: the same buttons every time (owner, 2026-10-06: it directs to the other screens, and loads the same way
-   whether or not a game is on). In a game: Continue, Resign, End game, and nothing that would start or join another ("if
-   you're in a game, you're in a game"): New game, Online and Replays are greyed. Out of one, the game about to start is
-   made behind it */
-export function showMain(){closeLobbyWs();if(!S){setupSync();prepareGame();}menuOpen('main');}
+const MODE={setup:'local',online:'online',settings:'settings',replays:'settings'}; // (Replays is a screen of Settings: its tab stays lit)
+/* the Menu button, and coming back to the page: the This device screen, which during a game is greyed under the game's bar
+   (an online game just finished: its room is left first) */
+export function showMenu(){if(online()&&S.over)exitOnline();showSetup();}
 export function showSettings(){menuOpen('settings');}
-function mainRender(){
-  const g=gameOn(),away=g&&!inGame(),rs=g&&!away?resignSeat():-1;
-  mq('#sBack').disabled=!g;
-  const h=g&&!away?gameHead():null; // (the same words the page's first script shows for a saved game: state.js save)
+/* the menu during a game (owner, 2026-10-07: the menu as ever, everything greyed but the game's bar and Settings; "if you're
+   in a game, you're in a game"): the bar with Continue, End game (a game on this device) and Resign; the New game and Online
+   screens greyed and taking no clicks, Replays too. The page's first script does the same for a saved game before the app has
+   loaded (shell.html), from the same words (state.js gameHead) */
+function gameRender(){
+  const g=gameOn(),away=g&&!inGame(),rs=g&&!away?resignSeat():-1,h=g&&!away?gameHead():null;
+  if(mq('#ingame').hidden===g)expectMenu(); // (a game begun or over, or the server correcting this device's memory of one: the bar comes or goes, declared)
+  MENU.dlg.classList.toggle('ingame',g);mq('#ingame').hidden=!g;
+  for(const f of mqa('fieldset.lock'))f.disabled=g;mq('#sReplays').disabled=g;mq('#sGo').disabled=g||!mq('#allAI').hidden;
   mq('#igTxt').textContent=!g?'':away?'Online game in progress':h.round;
   const r=mq('#sResign');r.disabled=rs<0;r.textContent=h?h.resign:'Resign';
-  mq('#sEnd').disabled=!g||away||online();
-  for(const v of['local','online','replays'])mq(`#hub input[value=${v}]`).disabled=g;
+  mq('#sEnd').hidden=away||online();
 }
 /* back to the game in progress: the menu goes, and its AIs play on (they wait while the page was away); one not connected
    yet is joined */
@@ -82,21 +81,21 @@ function continueGame(){if(awayOnline()){joinRoom(NET.active);return;}menuClose(
 
 /* a screen that scrolls: its pinned header and foot get a line while content runs on under them (none when it all fits).
    checks: the pinned parts are in sight wherever the screen is scrolled to (owner, 2026-10-06: what must be seen, always is) */
-function menuEdges(){
+function menuEdges(){ // (in a room the top isn't pinned: the room's header is)
   const f=MENU.f,top=f.scrollTop>0,more=f.scrollTop+f.clientHeight<f.scrollHeight-1;
   f.classList.toggle('scrolled',top);f.classList.toggle('more',more);
   if(!CHECKS||!MENU.dlg.open)return;const sec=f.querySelector(`section[data-screen="${MENU.screen}"]`),fr=f.getBoundingClientRect();
-  for(const el of sec?sec.querySelectorAll(':scope > .mhead, :scope > .mrow'):[]){if(!el.offsetHeight)continue;const r=el.getBoundingClientRect();
+  for(const el of[mq('#mtop'),...(sec?sec.querySelectorAll(':scope > .mhead, :scope > .mrow'):[])]){if(!el.offsetHeight||el===mq('#mtop')&&MENU.screen==='room')continue;const r=el.getBoundingClientRect();
     assert(r.top>=fr.top-1&&r.bottom<=fr.bottom+1,"view: a menu screen's pinned parts stay in sight as it scrolls ("+MENU.screen+' '+el.className+': '+Math.round(r.top-fr.top)+'..'+Math.round(r.bottom-fr.bottom)+')');}
 }
 /* show a screen (opening the dialog if it isn't open) */
 function menuOpen(screen){watchFlash();diag('menu: '+screen+(MENU.dlg.open?'':' (opened)'));if(MENU.screen!==screen||!MENU.dlg.open)expectMenu(); // (another screen, or the menu opened: its layout is new)
   $('#overlay').innerHTML=''; // one window at a time: the menu replaces results, rules or a pile (never left underneath it)
   const d=MENU.dlg,g=gameOn();
-  assert(!g||AWAY.includes(screen),'view: in a game the menu offers that game only (screen '+screen+')');
-  mainRender();acctRender();
-  if(MODE[screen])setRadio('mode',MODE[screen]);
-  mq('#acct').classList.toggle('ingame',g); // (signing out would leave the game)
+  assert(!g||screen!=='replays','view: in a game the menu offers that game only (screen '+screen+')');
+  gameRender();acctRender();
+  if(MODE[screen])setRadio('mode',MODE[screen]);mq('#sMode').hidden=screen==='room';d.classList.toggle('inroom',screen==='room'); // (in a room, Leave is the way out)
+  mq('#acct').classList.toggle('locked',g); // (signing out would leave the game)
   if(MENU.screen!==screen){for(const s of mqa('section[data-screen]'))s.hidden=s.dataset.screen!==screen;MENU.screen=screen;MENU.f.scrollTop=0;}
   clearTimeout(MENU.closeT);d.classList.remove('closing');document.documentElement.classList.remove('resume');
   // (the page opens the dialog as plain HTML, before any script: already on screen, it only takes the focus)
@@ -130,7 +129,7 @@ function cachedMe(){try{return JSON.parse(load('me')||'null');}catch(e){/* expec
 /* ---- every choice ---- */
 function menuChange(e){
   const n=e.target.name||e.target.id;
-  if(n==='mode'){({main:showMain,local:showSetup,online:showHub,replays:showReplays,settings:showSettings})[e.target.value]();return;}
+  if(n==='mode'){({local:showSetup,online:showHub,settings:showSettings})[e.target.value]();return;}
   if(n==='np'||n==='course'||n==='full'||n==='priv'||/^(who|col|nm)\d$/.test(n)){setupSync();prepareGame();
     if(/^who\d$/.test(n))store('seats',JSON.stringify([...mqa('#seats select')].map(s=>s.value))); return;}
   if(n==='buywarn'){store('buywarn',e.target.checked?'1':'0');return;}
@@ -140,11 +139,15 @@ function menuChange(e){
   if(n==='rlcol'){roomSend({t:'color',color:e.target.value});return;}
 }
 function menuClick(e){
+  // (the Settings tab, from Replays: its radio is already the chosen one, so no change comes; the tap still goes back)
+  if(MENU.screen==='replays'&&e.target.closest('#sMode label[data-v=settings]')){showSettings();return;}
   const b=e.target.closest('button');if(!b||b.disabled)return;
   const err=t=>{hubErr(t);};
   const run=f=>Promise.resolve().then(f).catch(x=>err(x.message));
   switch(b.id){
     case'sBack':continueGame();return;
+    case'sReplays':showReplays();return;
+    case'rBack':showSettings();return;
     case'sResign':menuClose();online()?resignOnline():resignLocal();return;
     case'sEnd':menuClose();endLocal();return;
     case'sGo':delete b.dataset.q;startLocal();return;
@@ -183,7 +186,7 @@ export function setupSync(){
     if(A){nm.title=A.desc;nm.firstChild.textContent=A.desc;}
     if(i<n&&rows.slice(0,i).some(q=>col(q)===col(r))){const free=COLORS.find(c=>!rows.slice(0,n).some(q=>q!==r&&col(q)===c.id));r.querySelector(`.sws input[value="${free.id}"]`).checked=true;}}); // (4 colours, at most 4 seats: one is free)
   rows.forEach((r,i)=>{for(const x of r.querySelectorAll('.sws input'))x.disabled=rows.slice(0,n).some((q,j)=>j!==i&&col(q)===x.value);});
-  const allAI=rows.slice(0,n).every(r=>r.querySelector('select').value);mq('#allAI').hidden=!allAI;mq('#sGo').disabled=allAI;
+  const allAI=rows.slice(0,n).every(r=>r.querySelector('select').value);mq('#allAI').hidden=!allAI;mq('#sGo').disabled=allAI||gameOn(); // (as gameRender: no new game during one)
 }
 /* The start screen's background IS the game about to start: made from the current choices (this deal's seed) and laid
    out exactly as it will be played (board, pieces, hand, top bar). A changed choice remakes it behind the menu; Start

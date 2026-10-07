@@ -122,6 +122,10 @@ const T = report('flows');
   // (pointed at by the step's own event, the mouse elsewhere: the browser's hover check after a change would otherwise
   // point again, sooner or later, and hide what the page does by itself)
   await p.mouse.move(700, 500); await settle(p);
+  // (a recap with a move in it: an AI's turn can be all buying; then the turns go round until the AI's latest has one)
+  for (let k = 0; k < 6 && !await S(() => !!document.querySelector('#feed .fg.f-move')); k++) {
+    await idle(); await S(() => { window.__ED.act({ t: 'end', keep: [] }); }); await until(() => { const E = window.__ED; return !E.S.players[E.S.cur].ai; }, null, 30000);
+    if (await aiJustPlayed()) await idle(); }
   const pointed = await S(() => { const e = document.querySelector('#feed .fg.f-move'); if (!e) return false; e.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })); return true; });
   T.ok('the recap has a move to point at', pointed);
   await check('pointing at a recap step shows its path on the board', () => document.querySelectorAll('#board2 path[stroke-dasharray]').length > 0);

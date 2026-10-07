@@ -120,10 +120,9 @@ function cpuMeter(rootPid) {
   const iv = setInterval(tick, 200);
   return () => { tick(); clearInterval(iv); let t = 0; for (const [p, c] of seen) t += c - (base.get(p) || 0); return t / tck; };
 }
-/* the menu, as a player goes through it: from wherever it is, back to the main menu (its ‹ Menu link) and on to a screen
-   (v: local, the New game screen; online; replays; settings) */
+/* the menu, as a player goes through it: a tab (v: local, the This device screen; online; settings), or Replays, from Settings */
 async function menuGo(page, v) {
-  if (await page.evaluate(() => document.querySelector('#menu section[data-screen=main]').hidden)) await page.click('#menu section[data-screen]:not([hidden]) .mback');
-  await page.click(`#hub label[data-v="${v}"]`);
+  if (v === 'replays') { await menuGo(page, 'settings'); await page.click('#sReplays'); return; }
+  await page.click(`#sMode label[data-v="${v}"]`);
 }
 module.exports = { chromium, browser, ENGINE, serveStatic, startServer, openPage, settle, report, cpuMeter, menuGo, ROOT };

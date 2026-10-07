@@ -26,7 +26,7 @@ export async function netInit(){
   // (both asked at once: one round trip; who's signed in doesn't depend on the server's settings)
   NET.token=load('token');const cfg=api('/api/config'),me=NET.token?api('/api/me'):null;
   try{NET.cfg=await cfg;NET.available=true;}catch(e){NET.available=false;NET.offline=true;if(me)me.catch(()=>{/* expected: the server is out of reach (its config failed too) */});return;}
-  if(NET.token){try{const r=await me;NET.user=r.user;NET.active=r.active;loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));}catch(e){if(e.status===401){NET.token=null;store('token',null);}}}
+  if(NET.token){try{const r=await me;NET.user=r.user;NET.active=r.active;store('active',r.active||null);loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));}catch(e){if(e.status===401){NET.token=null;store('token',null);store('active',null);}}}
 }
 export function signedIn(r,after){
   NET.token=r.token;NET.user=r.user;store('token',r.token);loadProfile(r.user.id).catch(e=>diag('profile: '+e.message));
@@ -38,7 +38,7 @@ export function signedIn(r,after){
 export function gsiMount(el,err,after,size){
   loadGsi().then(()=>{google.accounts.id.initialize({client_id:NET.cfg.google,callback:async r=>{try{signedIn(await api('/api/auth/google',{method:'POST',body:JSON.stringify({credential:r.credential})}),after);}catch(e){err(e.message);}}});
     if(el.isConnected)google.accounts.id.renderButton(el,{theme:'filled_black',size:size||'large',shape:'pill',text:'signin_with'});}).catch(()=>err('Could not load Google sign-in.'));}
-export function signOut(then){NET.token=null;NET.user=null;store('token',null);closeLobbyWs();(then||showHub)();}
+export function signOut(then){NET.token=null;NET.user=null;store('token',null);store('active',null);closeLobbyWs();(then||showHub)();}
 let gsiLoading=null;
 function loadGsi(){if(window.google&&google.accounts)return Promise.resolve();if(!gsiLoading)gsiLoading=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;s.onload=res;s.onerror=rej;document.head.appendChild(s);});return gsiLoading;}
 function wsUrl(path){return(location.protocol==='https:'?'wss://':'ws://')+location.host+path+(path.includes('?')?'&':'?')+'t='+encodeURIComponent(NET.token);}
@@ -189,6 +189,8 @@ function onRoomMsg(m){
   if(m.t==='room'){serverRoom(m);if(m.room.status==='closed'){NET.code=null;leaveRoomSocket();toast('The host closed the room.');showHub();return;}if(m.room.status==='lobby')roomScreen();else renderRoomLobby();return;}
   if(m.t==='state'){NET.room=m.room;NET.roomS=m.room;NET.roomPending=[];NET.seat=m.seat;NET.canUndo=!!m.undo;NET.clockEnd=m.left==null?null:Date.now()+m.left;
     serverState(m);
+    // (this device remembers the online game it is in, still racing: the page's first script shows its menu at once next time, shell.html)
+    store('active',!m.S.over&&m.seat>=0&&!m.S.players[m.seat].resigned?NET.code:null);
     if(NET.leaving&&m.S.players[m.seat].resigned){NET.leaving=false;closeModal();exitOnline();showHub();}} // (left the game: to the Online screen once the server has it)
 }
 /* a state on show (the server's, or ours ahead of it), with the events that led to it */

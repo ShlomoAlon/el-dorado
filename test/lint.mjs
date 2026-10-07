@@ -38,8 +38,8 @@ for (const f of scan) if (f.includes(path.sep + 'client' + path.sep)) readFileSy
 // no code inside a comment (in every source, test and tool file): a statement written after a // comment on the same line is part of the comment and never runs
 // (the turn timer's 'low' toggle, months dead behind its line's comment; 2026-10-05). A call ending a statement (a name, its arguments in brackets, a semicolon)
 // in a line comment is code, not prose
-// (a call ending a statement, an arrow, a closing call, a return or an await: shapes of code, not prose)
-const INCOMMENT = /(^|[^:'"`\\])\/\/.*([A-Za-z_$]\([^()]*\)\s*;|=>|\}\)\s*;|\breturn\b[^;]*;|\bawait [\w$])/;
+// (shapes of code, not prose: a call ending a statement, an arrow, a closing call, a returned value, an awaited call, a declaration)
+const INCOMMENT = /(^|[^:'"`\\])\/\/.*([A-Za-z_$]\([^()]*\)\s*;|=>|\}\)\s*;|\breturn\b[^;]*;|\bawait [\w$]|\b(const|let) [\w$]+\s*=[^=])/;
 for (const f of scan) readFileSync(f, 'utf8').split('\n').forEach((l, i) => { if (INCOMMENT.test(l)) { silent++; console.log(`error ${path.relative(root, f)}:${i + 1} code after a line comment: it is part of the comment and never runs (put it before the comment, or on its own line)`); } });
 if (!ESLint) { console.log('lint: ESLint is not installed (npm i -g eslint): the module check could not run'); process.exit(1); }
 const files = []; const walk = d => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) walk(p); else if (/\.js$/.test(f.name) && !/^ui_/.test(f.name)) files.push(p); } }; walk(dir);

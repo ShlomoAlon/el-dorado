@@ -20,7 +20,7 @@ import { feedPart, histInit } from './feed.js';
 import { showRules, showPile, closeModal, modalOpen, coverPart } from './dialogs.js';
 import { AIX, aiThink } from './ai.js';
 import { act, targets, playEvents, onHandCard, doMove, pickFromMarket, confirmBuy, startEndTurn, finishTurn, cancelMode, undo, resumeSaved, onPiece, onPlayCard, startDiscard, addDiscard, confirmTrash } from './actions.js';
-import { MENU, menuInit, showMenu, showMain, showSetup, showSettings, showReplays, showHub, setupSync, prepareGame, startLocal, radio, menuRefresh } from './menu.js';
+import { MENU, menuInit, showMenu, showSetup, showSettings, showHub, setupSync, prepareGame, startLocal, radio, menuRefresh } from './menu.js';
 import { netInit, joinRoom, netSend } from './online.js';
 import { replayPart, replayKeys, openReplay, loadReplayId, exitReplay } from './replay.js';
 import { soundInit } from './sound.js';
@@ -69,7 +69,7 @@ function boot() {
   // a game in progress comes back behind its menu (owner, 2026-10-06: coming back starts at the menu, not in the game)
   const local = () => {
     if (resumeSaved()) { showMenu(); return; }
-    ({ local: showSetup, replays: showReplays, settings: showSettings }[radio('mode')] || showMain)(); // (a screen chosen before the script had loaded)
+    (radio('mode') === 'settings' ? showSettings : showSetup)(); // (a tab chosen before the script had loaded)
     if ($('#sGo').dataset.q) { delete $('#sGo').dataset.q; startLocal(); } // Start pressed before the script had loaded
   };
   const known = !rid && !room && !load('token') && radio('mode') !== 'online'; // (Online picked before the script had loaded: its screen needs the server)

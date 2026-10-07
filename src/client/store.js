@@ -6,6 +6,7 @@ import { assert } from '../engine.gen.js';
 const KEYS = {
   save: 'eldorado-game-v2',     // the local game in play: its record (state.js)
   games: 'eldorado-games-v2',   // finished local games, kept to watch again (state.js)
+  active: 'eldorado-active',   // the online game this device's player is racing in (its room's code): its menu drawn at once (shell.html)
   menu: 'eldorado-menu',       // what the main menu shows for the saved game (round, Resign): drawn by shell.html's first script
   token: 'ed-token',            // the sign-in session (online.js)
   me: 'ed-me',                  // who that session is, as the server last said: shown at once on the next load (menu.js)

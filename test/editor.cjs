@@ -17,8 +17,6 @@ const T = report('editor');
   const fx = require('fs').readFileSync(require('path').join(__dirname, 'fixtures/replay.json'), 'utf8');
   await p.goto(srv.url); await p.evaluate(fx => { const g = JSON.parse(fx); localStorage.setItem('eldorado-games-v2', JSON.stringify(Array.from({ length: 8 }, (_, i) => ({ ...g, created: Date.now() - i * 864e5 })))); }, fx);
   await p.goto(srv.url + '?edit'); await p.waitForFunction(() => window.__ED && document.querySelector('#menu').open);
-  T.ok('the menu opens on the main menu', await p.evaluate(() => !document.querySelector('#mform > section[data-screen=main]').hidden));
-  await p.click('#hub label[data-v=local]'); // (laid out below: the New game screen)
   T.ok('?edit: the editor opens', await p.waitForSelector('#edPanel .ed-head', { timeout: 8000 }).then(() => true, () => false));
   const blocks = () => p.evaluate(() => [...document.querySelectorAll('#mform > section[data-screen]:not([hidden]) .ed-item')].map(e => { const r = e.getBoundingClientRect(); return { x: r.left + Math.min(30, r.width / 2), y: r.top + r.height / 2, r: r.right, k: e.dataset.edk, btn: e.matches('button') }; }));
   const col = k => p.evaluate(k => document.querySelector(`[data-edk="${CSS.escape(k)}"]`).style.gridColumn, k);
@@ -90,14 +88,14 @@ const T = report('editor');
   T.ok('Delete deletes the chosen block; Ctrl+Z brings it back', gone && await p.evaluate(k => getComputedStyle(document.querySelector(`[data-edk="${CSS.escape(k)}"]`)).display !== 'none', dk));
   await p.click('#edPanel [data-act=editmode]');
   // a list that scrolls, cut to its first 5 (Replays: the games kept here)
-  await p.evaluate(() => document.querySelector('#hub label[data-v="replays"]').click()); await p.waitForTimeout(300);
+  await p.evaluate(() => document.querySelector('#sReplays').click()); await p.waitForTimeout(300);
   const lst = await p.evaluate(() => { const l = document.querySelector('#rMine'), b = l && l.closest('.ed-item'); if (!b) return null; const r = b.getBoundingClientRect();
     return { x: r.left + 20, y: r.top + 8, n: l.children.length, scrolls: l.scrollHeight > l.clientHeight }; });
   T.ok('Replays: "Your games" is a list that scrolls', !!lst && lst.n === 8 && lst.scrolls, lst && `${lst.n} games, scrolls ${lst.scrolls}`);
   if (lst) { await p.click('#edPanel [data-act=editmode]'); await p.mouse.click(lst.x, lst.y); await p.click('#edPanel [data-act=list][data-v="5"]');
     T.ok('the list cut to its first 5 shows 5 and scrolls no more (the screen does)', await p.evaluate(() => { const l = document.querySelector('#rMine'); return l.dataset.edList === '5' && getComputedStyle(l).overflowY === 'visible' && [...l.children].filter(c => getComputedStyle(c).display !== 'none').length === 5; }));
     await p.click('#edPanel [data-act=editmode]'); }
-  await p.evaluate(() => document.querySelector('#hub label[data-v="local"]').click());
+  await p.evaluate(() => document.querySelector('#sMode label[data-v="local"]').click());
   // flow: full screen; the default flowchart; a box laid out; a reload keeps the editor where it was
   if (await p.$('#edPanel.editing')) await p.click('#edPanel [data-act=editmode]');
   const before = await onShow();
@@ -160,7 +158,7 @@ const T = report('editor');
   T.ok('a menu renamed: every box of it', await p.evaluate(() => [...document.querySelectorAll('#edPanel .ed-node[data-node^="room@"] .m')].every(t => /Lobby!/.test(t.textContent))));
   answers.push('Watching a replay'); await p.click('#edPanel [data-act=fl-addstate]');
   T.ok('a state added, and offered for boxes', await p.evaluate(() => [...document.querySelectorAll('#flState option')].some(o => o.textContent === 'Watching a replay')));
-  await p.click('#edPanel [data-tab=layout]'); await p.evaluate(() => { const l = document.querySelector('#hub label[data-v="local"]'); l.click(); });
+  await p.click('#edPanel [data-tab=layout]'); await p.evaluate(() => { const l = document.querySelector('#sMode label[data-v="local"]'); l.click(); });
   // options in a game
   await p.click('#edPanel [data-tab=options]'); await p.click('#edPanel [data-act=opt][data-area=colors][data-v=b]'); await p.click('#edPanel [data-act=opt][data-area=reshuffle][data-v=c]');
   await p.click('#edPanel [data-act=opt][data-area="b.acc"][data-v="3"]'); await p.click('#edPanel [data-act=opt-reset][data-v=look]');

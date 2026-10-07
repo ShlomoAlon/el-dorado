@@ -59,27 +59,26 @@ The rules engine (`src/engine_*.js`) is imported from `src/engine.gen.js`, which
 
 ## Menu workflows (menu.js; tested by test/menus.cjs and test/online.cjs)
 
-- The main menu (owner, 2026-10-06: "an indirection that directs you to the other screens"): Continue, Resign, End game,
-  then New game, Online, Replays, Settings. It is the same every time; what can't be used now is greyed (disabled), never
-  hidden: without a game, Continue, Resign and End game; in a game ("if you're in a game, you're in a game"), New game,
-  Online and Replays (and End game online). The menu opens on it, the Menu button opens it, and coming back to the page
-  (a reload, the site opened again) starts at it. Each screen has ‹ Menu at its top (a radio of the same `mode` group, so it
-  works before the script), and Esc goes back too; in a game, Esc or the backdrop on the main menu is Continue.
-- `menuOpen` asserts that a player in a game sees only the main menu, Settings or a room (`gameOn()`: a local or online game
-  in progress, or the server's `NET.active`, an online game of this player's not joined in this page yet, which Continue
-  joins).
-- A saved local game comes back at once: each save also stores what the main menu shows for it (`eldorado-menu`: the round,
-  Resign's label, whose view is shown; state.js save, gameHead), and the page's first script, right after the main menu's
-  markup, draws the menu from it before the app has loaded (Continue live, New game/Online/Replays greyed). The app then
-  rebuilds the game behind it and writes the same words; its AIs wait until Continue. A room link still opens the room.
-  test/firstpaint.cjs measures the first paint with a game in progress too.
-- The room lobby has no ‹ Menu: **Leave** (or Close room, for the host) is the way out. Signing out leaves any room.
+- Three tabs (owner, 2026-10-07: the old menu, with the night's improvements): **This device** (setup, the screen the menu
+  opens on), **Online**, **Settings** (sound, full screen, the buy reminder, and **Replays**, a screen of its own with
+  ‹ Settings at its top; Esc goes back too).
+- During a game ("if you're in a game, you're in a game"): the same menu with the game's bar on top (Continue, End game for
+  a game on this device, Resign), and everything that would start or join another greyed and locked (`fieldset.lock`
+  disabled, #menu.ingame): the New game form and Start, Online, Replays. Settings stays. Esc or the backdrop is Continue.
+  `menuOpen` asserts no Replays during a game; `gameOn()`: a local or online game in progress, or the server's `NET.active`
+  (an online game of this player's not joined in this page yet, which Continue joins).
+- Coming back is instant (local first): each save stores what the bar shows (`eldorado-menu`: round, Resign's label, whose
+  view is shown; state.js save, gameHead), and this device remembers the online game it races in (`eldorado-active`); the
+  page's first script, right after the menu's top, shows the bar and greys the rest before the app has loaded. The app
+  then writes the same; a bar that comes or goes because a game began, ended or the server corrected the memory is a
+  declared change. A room link still opens the room.
+- The room lobby has no tabs: **Leave** (or Close room, for the host) is the way out. Signing out leaves any room.
 - Data from the server fills slots that are always there (the account line, the room lists, a full room's note): the
   layout-shift check judges the menu at all times, excused only by input or `expectMenu()` (another screen, the menu
-  opened, the window resized).
-- A replay returns to the screen it was opened from (Replays, Online), or to the main menu if a game is in progress.
-- What must stay in sight stays pinned when a screen scrolls (owner, 2026-10-06): each screen's header (`.mhead`: ‹ Menu and
-  its title; Online's tabs; the room's code, summary and link) sticks to the top, its main action (`.mrow`) to the foot. A
-  line marks either edge only while content runs on under it (`#mform.scrolled`, `.more`, set on scroll), so a screen that
-  fits shows no bars. menuEdges asserts the pinned parts are in sight after every scroll; menus.cjs scrolls each screen
-  through at the owner's size and on phones.
+  opened, the window resized, the game bar coming or going).
+- A replay returns to the screen it was opened from (Replays, Online), or to the game's menu if a game is in progress.
+- What must stay in sight stays pinned when a screen scrolls (owner, 2026-10-06): the menu's top (`#mtop`: the account
+  line, the game's bar, the tabs) sticks to the top, each screen's main action (`.mrow`) to the foot; in a room the room's
+  own header is pinned instead. A line marks either edge only while content runs on under it (`#mform.scrolled`, `.more`),
+  so a screen that fits shows no bars. menuEdges asserts the pinned parts are in sight after every scroll; menus.cjs
+  scrolls each screen through at the owner's size and on phones.

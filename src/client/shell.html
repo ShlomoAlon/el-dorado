@@ -39,7 +39,7 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 [hidden]{display:none!important} /* hidden always means hidden: no display rule may override it (one rule, not one per element) */
 #menu .modal:focus{outline:none}
 /* option groups are native radio buttons, drawn as segmented buttons, cards and swatches */
-.seg input,.clist input,.sws input,.hub input,.mback input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.seg input,.clist input,.sws input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
 .seg label:has(input:focus-visible),.clist label:has(input:focus-visible),.sws label:has(input:focus-visible){outline:2px solid var(--gold);outline-offset:2px}
 /* the Online tabs: the checked tab's panel shows (no script) */
 #menu .tab{display:none}
@@ -62,15 +62,6 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .mframe.mmenu{animation:none;width:min(620px,calc(100% - 32px));height:min(860px,calc(100% - 32px));max-height:none}
 .modal.menu{overflow-y:scroll;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent} /* (its scrollbar always there: the content's width never changes as it grows. Not scrollbar-gutter:stable, under which Chrome draws every menu's text without sub-pixel smoothing, fuzzy on a 1080p screen: test/sharp.cjs) */
 .modal.menu::-webkit-scrollbar{width:8px}.modal.menu::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
-/* the main menu: the game in progress (Continue, Resign, End game), then where to go; a choice not open now is greyed, by its colours (sharp.js) */
-.mgame{display:grid;gap:10px;margin:6px 0 18px}.mgame .cont{display:flex;align-items:center;gap:14px}#igTxt{min-height:1.4em}
-.hrow{display:flex;gap:8px}.hrow .btn{white-space:nowrap} /* (a name in Resign never wraps a button onto two lines) */
-.hub{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:18px}
-.hub label{position:relative;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:12px;background:var(--surf);border:1px solid var(--line2);font-weight:800;font-size:15.5px;cursor:pointer;transition:border-color .15s}
-.hub label::after{content:'›';color:var(--muted);font-size:20px;line-height:1}
-.hub label:hover{border-color:var(--gold)}
-.hub label:has(input:disabled){color:var(--faint);border-color:var(--line);cursor:default}.hub label:has(input:disabled)::after{color:var(--faint)}
-.mback{position:relative;display:inline-flex;align-items:center;color:var(--muted);font-size:14px;font-weight:700;cursor:pointer;margin:0 0 8px}.mback:hover{color:var(--text)}
 .lbn{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;text-align:left}.lbn:hover{text-decoration:underline}
 .pfh{display:flex;align-items:center;gap:12px;margin:4px 0 12px}.pfh h3{margin:0;font-size:18px}
 .av.big{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(233,178,74,.18);color:var(--gold2);font-weight:800;font-size:18px;flex:none}
@@ -134,7 +125,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .rmai:hover{color:var(--text);border-color:var(--gold)}
 .aitag{font-size:9.5px;font-weight:800;letter-spacing:.08em;color:var(--gold2);border:1px solid rgba(233,178,74,.55);border-radius:5px;padding:0 4px;line-height:14px}
 .sws{display:flex;gap:5px}
-.sws label{position:relative;box-sizing:border-box}.sws button,.sws label{width:24px;height:24px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:var(--c);padding:0;transition:transform .12s}
+.sws label{position:relative;box-sizing:border-box;flex:none} /* (never squeezed by its row: four dots, always their size) */ .sws button,.sws label{width:24px;height:24px;border-radius:50%;border:2px solid transparent;cursor:pointer;background:var(--c);padding:0;transition:transform .12s}
 .sws button.on,.sws label:has(input:checked){border-color:#fff;transform:scale(1.1)}
 .sws label:has(input:disabled){opacity:.2;cursor:default}
 .chk{display:flex;gap:10px;align-items:flex-start;cursor:pointer;line-height:1.4}
@@ -145,9 +136,25 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .modal.menu>section>.mrow{position:sticky;bottom:-20px;z-index:3;margin:22px -20px -20px;padding:14px 20px 20px;background:#121d19}
 /* what must stay in sight when a screen scrolls (owner, 2026-10-06): its way back and title at the top, its main action at
    the foot, each pinned; a line marks the edge only while content runs on under it, so a screen that fits shows no bars */
-.modal.menu>section>.mhead{position:sticky;top:-20px;z-index:3;margin:-20px -20px 14px;padding:20px 20px 12px;background:#121d19}
+/* the menu's top (who is signed in, the game in progress, the tabs) stays in sight while a screen scrolls; in a room it is
+   only the account line, and the room's own header is pinned instead */
+.mtop{position:sticky;top:-20px;z-index:4;margin:-20px -20px 0;padding:20px 20px 0;background:#121d19}#menu.inroom .mtop{position:static}
+.modal.menu.scrolled .mtop{box-shadow:0 1px 0 var(--line)}#menu.inroom .modal.menu.scrolled .mtop{box-shadow:none}
+.seg.modes{margin:0 0 14px;display:grid;grid-template-columns:repeat(3,1fr);text-align:center}.seg.modes label{padding-inline:4px;white-space:nowrap}
+.ingame{display:grid;gap:10px;margin:0 0 14px;padding:12px;border-radius:12px;border:1px solid var(--gold);background:#1d1d14}.ingame .cont{display:flex;align-items:center;gap:14px}
+.hrow{display:flex;gap:8px}.hrow .btn{white-space:nowrap} /* (a name in Resign never wraps a button onto two lines) */
+/* during a game, what would start or join another is greyed (by its colours: sharp.js) and takes no clicks; the game's own
+   bar and Settings stay (owner, 2026-10-07). #menu.ingame is set by the page's first script for a saved game, then by menu.js */
+fieldset.lock{display:contents} /* (only greys and locks what it holds: its fields lay out as the screen's own) */
+#menu.ingame fieldset.lock{pointer-events:none}#menu.ingame fieldset.lock *{color:var(--faint)!important;border-color:var(--line)!important}
+#menu.ingame :is(#sGo,#sReplays){pointer-events:none}#menu.ingame fieldset.lock .sws label{opacity:.2} /* (as a taken colour: the same look the app gives it, from the first paint) */
+.srow{width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:12px;background:var(--surf);border:1px solid var(--line2);color:var(--text);font:inherit;font-weight:800;font-size:15px;cursor:pointer}
+.srow::after{content:'›';color:var(--muted);font-size:20px;line-height:1}.srow:hover{border-color:var(--gold)}
+#menu.ingame .srow,.srow:disabled{color:var(--faint);border-color:var(--line)}
+.mback{display:block;margin:0 0 6px;color:var(--muted)}
+.modal.menu>section[data-screen=room]>.mhead{position:sticky;top:-20px;z-index:3;margin:-20px -20px 14px;padding:20px 20px 12px;background:#121d19}
 .mhead h2{margin-bottom:0}.mhead>.seg,.mhead>.prow{margin:10px 0 0}.mhead>.sub{margin:4px 0 0}
-.modal.menu.scrolled>section>.mhead{box-shadow:0 1px 0 var(--line)}.modal.menu.more>section>.mrow{box-shadow:0 -1px 0 var(--line)}
+.modal.menu.scrolled>section[data-screen=room]>.mhead{box-shadow:0 1px 0 var(--line)}.modal.menu.more>section>.mrow{box-shadow:0 -1px 0 var(--line)}
 .routeInfo{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5}
 .routeInfo b{color:var(--text)}
 #toast{position:fixed;left:50%;top:112px;transform:translate3d(-50%,0,0);padding:9px 16px;border-radius:11px;font-size:13.5px;z-index:45;pointer-events:none;opacity:0;transition:opacity .2s,transform .25s var(--ease)}
@@ -164,7 +171,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 #shell{visibility:hidden} /* the game shows once its CSS (the late block) has arrived */
 /* (a button greyed by the page's own HTML, as the main menu's are without a game: greyed from the first paint, not once the late styles arrive) */
 .btn[disabled]{pointer-events:none;color:color-mix(in srgb,var(--text) 35%,var(--surf));background:var(--surf);border-color:color-mix(in srgb,#fff 5%,var(--surf));box-shadow:none}
-.btn.pri[disabled]{color:color-mix(in srgb,var(--goldInk) 35%,var(--surf));background:color-mix(in srgb,#e6ac3f 35%,var(--surf));border-color:color-mix(in srgb,#f5cf7c 35%,var(--surf))}
+.btn.pri[disabled],#menu.ingame #sGo{color:color-mix(in srgb,var(--goldInk) 35%,var(--surf));background:color-mix(in srgb,#e6ac3f 35%,var(--surf));border-color:color-mix(in srgb,#f5cf7c 35%,var(--surf))}
 </style>
 <style data-late>
 /* the game's CSS: a separate cached file on the site (build.mjs), inline in the artifact */
@@ -313,7 +320,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
 .sclose{width:28px;height:28px;border-radius:8px;border:1px solid var(--line2);background:rgba(0,0,0,.35);cursor:pointer;display:grid;place-items:center;font-size:15px;color:var(--muted)}
 .sclose:hover{color:var(--text)}
 #menu.closing{opacity:0;transition:opacity .16s;pointer-events:none} /* (closing, it takes the pointer no more, as a closing overlay: what is under it answers at once, not once it is gone) */
-.acct.ingame .acb{display:none}.acct .acb{margin-left:auto;display:flex;gap:14px;white-space:nowrap}.acct>span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct.locked .acb{display:none}.acct .acb{margin-left:auto;display:flex;gap:14px;white-space:nowrap}.acct>span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .scrim.plain{background:rgba(4,8,7,.7)}
 
 /* ---------- bottom controls */
@@ -631,31 +638,30 @@ html.gameready.boardready #shell{visibility:visible} /* once the game's fonts ar
 <div id="dim" class="on" data-dims></div>
 <dialog id="menu" aria-label="Menu" open>
 <div class="mframe mmenu"><form class="modal menu" id="mform" autocomplete="off" tabindex="-1">
-  <div class="acct" id="acct"></div>
-  <!-- the main menu: the same buttons every time; what can't be used now (a new game during one) is greyed (owner, 2026-10-06) -->
-  <section data-screen="main">
-    <h2>El Dorado Expedition</h2><input type="radio" name="mode" value="main" checked hidden>
-    <div class="mgame" id="ingame"><div class="cont"><button type="button" class="btn pri big" id="sBack" disabled>Continue</button><span class="note" id="igTxt"></span></div>
-      <div class="hrow"><button type="button" class="btn" id="sEnd" disabled>End game</button><button type="button" class="btn" id="sResign" disabled>Resign</button></div></div>
-    <div class="hub" id="hub"><label data-v="local"><input type="radio" name="mode" value="local"><span>New game</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="replays"><input type="radio" name="mode" value="replays"><span>Replays</span></label><label data-v="settings"><input type="radio" name="mode" value="settings"><span>Settings</span></label></div>
-  </section>
-  <script>/* a game in progress on this device: its main menu, drawn at once, before the app has loaded and right after its markup (before the rest of the menu: a paint
-   can come before the page is all read) (owner, 2026-10-06: coming back
-   is instant). The save carries what the menu shows for it (state.js save; store.js names the keys); the app draws the same */
+  <!-- the menu's top, pinned while a screen scrolls: who is signed in, the game in progress (Continue, End game, Resign: only
+       during one), the three tabs. During a game everything below is greyed but Settings (owner, 2026-10-07) -->
+  <div class="mtop" id="mtop"><div class="acct" id="acct"></div>
+    <div class="ingame" id="ingame" hidden><div class="cont"><button type="button" class="btn pri big" id="sBack">Continue</button><span class="note" id="igTxt"></span></div>
+      <div class="hrow"><button type="button" class="btn" id="sEnd">End game</button><button type="button" class="btn" id="sResign">Resign</button></div></div>
+    <div class="seg modes" id="sMode"><label data-v="local"><input type="radio" name="mode" value="local" checked><span>This device</span></label><label data-v="online"><input type="radio" name="mode" value="online"><span>Online</span></label><label data-v="settings"><input type="radio" name="mode" value="settings"><span>Settings</span></label></div></div>
+  <script>/* a game in progress on this device: its menu drawn at once, before the app has loaded and right after the menu's top
+   (a paint can come before the page is all read; owner, 2026-10-06: coming back is instant). The save carries what the menu
+   shows for it (state.js save; store.js names the keys); the app draws the same, and greys the rest the same way (menu.js) */
 try{var M=JSON.parse(localStorage.getItem('eldorado-menu')||'null');if(M&&localStorage.getItem('eldorado-game-v2')){var q=function(s){return document.getElementById(s)};
-  q('sBack').disabled=q('sResign').disabled=q('sEnd').disabled=false;q('sResign').textContent=M.resign;q('igTxt').textContent=M.round;
-  for(var i of document.querySelectorAll('#hub input:not([value=settings])'))i.disabled=true;}}catch(e){/* expected: storage unavailable, or a save cut short: the menu as for no game, until the app decides */}</script>
-  <section data-screen="setup" hidden>
-    <div class="mhead"><label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>New game</h2></div>
+  q('ingame').hidden=false;q('sResign').textContent=M.resign;q('igTxt').textContent=M.round;document.getElementById('menu').classList.add('ingame');}
+  else if(localStorage.getItem('eldorado-active')&&localStorage.getItem('ed-token')){q=function(s){return document.getElementById(s)};
+    q('ingame').hidden=false;q('sEnd').hidden=true;q('sResign').disabled=true;q('igTxt').textContent='Online game in progress';document.getElementById('menu').classList.add('ingame');}}catch(e){/* expected: storage unavailable, or a save cut short: the menu as for no game, until the app decides */}</script>
+  <section data-screen="setup">
+    <h2>El Dorado Expedition</h2><fieldset class="lock">
     <div class="field"><label>Players</label><div class="seg" id="sN"><label data-v="2"><input type="radio" name="np" value="2"><span>2</span></label><label data-v="3"><input type="radio" name="np" value="3" checked><span>3</span></label><label data-v="4"><input type="radio" name="np" value="4"><span>4</span></label></div></div>
     <div class="field"><label>Expedition leaders</label><div id="seats"><!--SEATS--></div><p class="note warn" id="allAI" hidden>Seat at least one human player.</p></div>
     <div class="field"><label>Course</label><div class="clist" id="sC"><!--COURSES:course--></div><div class="aiNote" id="aiNote" hidden>AI players are available on First Expedition with 3 or 4 players for now.</div></div>
     <div class="field"><label>Game ends</label><div class="seg" id="sFull"><label data-v="1"><input type="radio" name="full" value="1" checked><span>When all but one arrive</span></label><label data-v="0"><input type="radio" name="full" value="0"><span>At the first arrival (official)</span></label></div></div>
     <div class="field"><label class="chk"><input type="checkbox" name="priv" id="sPriv"> <span>Pass-and-play: hide hands between turns</span></label></div>
-    <div class="mrow"><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
+    </fieldset><div class="mrow"><button type="button" class="btn pri big" id="sGo" onclick="this.dataset.q=1">Start expedition</button></div>
   </section>
   <section data-screen="online" hidden>
-    <div class="mhead"><label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>Online</h2><div class="seg" id="hTabs"><label data-v="play"><input type="radio" name="otab" value="play" checked><span>Play</span></label><label data-v="board"><input type="radio" name="otab" value="board"><span>Leaderboard</span></label><label data-v="me"><input type="radio" name="otab" value="me"><span>Profile</span></label></div></div>
+    <h2>Online</h2><fieldset class="lock"><div class="seg" id="hTabs"><label data-v="play"><input type="radio" name="otab" value="play" checked><span>Play</span></label><label data-v="board"><input type="radio" name="otab" value="board"><span>Leaderboard</span></label><label data-v="me"><input type="radio" name="otab" value="me"><span>Profile</span></label></div>
     <div id="oOff" hidden><p class="sub">Online play runs from the game's own website. This copy can't reach the game server.</p></div>
     <div id="oOut" hidden><p class="note warn" id="oNoG" hidden>Google sign-in isn’t configured on the server yet (GOOGLE_CLIENT_ID).</p>
       <div class="field" id="oDev" hidden><label>Developer sign-in (local testing only)</label><div class="prow"><input id="devName" maxlength="16" placeholder="Name"><button type="button" class="btn" id="devGo">Sign in</button></div></div></div>
@@ -676,7 +682,7 @@ try{var M=JSON.parse(localStorage.getItem('eldorado-menu')||'null');if(M&&localS
       <div class="tab" data-tab="me"><button type="button" class="linkbtn" id="pfBack" hidden>‹ Leaderboard</button><div id="pf"><p class="note">Loading…</p></div>
         <div class="field" id="meNameBox"><label>Display name</label><div class="prow"><input id="meName" maxlength="16"><button type="button" class="btn" id="meSave">Save</button></div></div></div>
     </div>
-    <p class="note warn" id="hErr"></p>
+    </fieldset><p class="note warn" id="hErr"></p>
   </section>
   <section data-screen="room" hidden>
     <div class="mhead"><h2 id="rlTitle">Room</h2><p class="sub" id="rlSub"></p>
@@ -690,15 +696,16 @@ try{var M=JSON.parse(localStorage.getItem('eldorado-menu')||'null');if(M&&localS
     <div class="mrow"><button type="button" class="btn" id="rlLeave">Leave</button><button type="button" class="btn big" id="rlNow" hidden>Start now</button><button type="button" class="btn pri big" id="rlStart" hidden>Start game</button></div>
   </section>
   <section data-screen="replays" hidden>
-    <div class="mhead"><label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>Replays</h2></div>
+    <button type="button" class="linkbtn mback" id="rBack">‹ Settings</button><h2>Replays</h2>
     <div class="field"><label>Your games</label><div id="rMine" class="rlist"></div></div>
     <div class="field"><label>Recent games</label><div id="rList" class="rlist"></div></div>
   </section>
   <section data-screen="settings" hidden>
-    <div class="mhead"><label class="mback"><input type="radio" name="mode" value="main">‹ Menu</label><h2>Settings</h2></div>
+    <h2>Settings</h2>
     <div class="field"><label class="chk"><input type="checkbox" id="setSnd" checked> <span>Sound</span></label></div>
     <div class="field" id="setFullBox"><label class="chk"><input type="checkbox" id="setFull"> <span>Full screen</span></label></div>
     <div class="field"><label class="chk"><input type="checkbox" name="buywarn" id="sBuyWarn" checked> <span>Remind me if I can still buy</span></label></div>
+    <div class="field"><button type="button" class="srow" id="sReplays"><span>Replays</span></button></div>
   </section>
 </form></div>
 </dialog>
