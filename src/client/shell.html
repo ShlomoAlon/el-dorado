@@ -53,7 +53,6 @@ html.resume #menu{display:none} /* a saved game or a link is about to open: no s
 .note.warn{color:#f3c98b}
 .lb{display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 14px;font-size:14px;font-variant-numeric:tabular-nums;margin-bottom:12px}.lb .m{color:var(--muted)}
 .lbp{display:flex;align-items:center;gap:7px;min-width:0}.lbp .note,.seatrow .note,.pfh .note{margin:0}.lbn.me{color:var(--gold2)}
-.mrow.left{justify-content:flex-start;margin-top:10px}
 #jCode{text-transform:uppercase;letter-spacing:.15em;font-weight:700}
 .seatrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 12px;border-radius:10px;background:#0c1512;border:1px solid var(--line);min-height:48px;box-sizing:border-box;margin-bottom:8px}
 .seatrow.open{border-style:dashed;background:none}.seatrow.open .note{color:color-mix(in srgb,var(--muted) 70%,#121d19)} /* (dimmed by its colour, never faded: sharp.js) */
@@ -147,7 +146,7 @@ select.who option,select.who optgroup{background:#121d19;color:var(--text)}
    bar and Settings stay (owner, 2026-10-07). #menu.ingame is set by the page's first script for a saved game, then by menu.js */
 fieldset.lock{display:contents} /* (only greys and locks what it holds: its fields lay out as the screen's own) */
 #menu.ingame fieldset.lock{pointer-events:none}#menu.ingame fieldset.lock *{color:var(--faint)!important;border-color:var(--line)!important}
-#menu.ingame :is(#sGo,#sReplays){pointer-events:none}#menu.ingame fieldset.lock .sws label{opacity:.2} /* (as a taken colour: the same look the app gives it, from the first paint) */
+#menu.ingame :is(#sGo,#sReplays,#cGo){pointer-events:none}#menu.ingame fieldset.lock .sws label{opacity:.2} /* (as a taken colour: the same look the app gives it, from the first paint) */
 .srow{width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:12px;background:var(--surf);border:1px solid var(--line2);color:var(--text);font:inherit;font-weight:800;font-size:15px;cursor:pointer}
 .srow::after{content:'›';color:var(--muted);font-size:20px;line-height:1}.srow:hover{border-color:var(--gold)}
 #menu.ingame .srow,.srow:disabled{color:var(--faint);border-color:var(--line)}
@@ -171,7 +170,7 @@ fieldset.lock{display:contents} /* (only greys and locks what it holds: its fiel
 #shell{visibility:hidden} /* the game shows once its CSS (the late block) has arrived */
 /* (a button greyed by the page's own HTML, as the main menu's are without a game: greyed from the first paint, not once the late styles arrive) */
 .btn[disabled]{pointer-events:none;color:color-mix(in srgb,var(--text) 35%,var(--surf));background:var(--surf);border-color:color-mix(in srgb,#fff 5%,var(--surf));box-shadow:none}
-.btn.pri[disabled],#menu.ingame #sGo{color:color-mix(in srgb,var(--goldInk) 35%,var(--surf));background:color-mix(in srgb,#e6ac3f 35%,var(--surf));border-color:color-mix(in srgb,#f5cf7c 35%,var(--surf))}
+.btn.pri[disabled],#menu.ingame :is(#sGo,#cGo){color:color-mix(in srgb,var(--goldInk) 35%,var(--surf));background:color-mix(in srgb,#e6ac3f 35%,var(--surf));border-color:color-mix(in srgb,#f5cf7c 35%,var(--surf))}
 </style>
 <style data-late>
 /* the game's CSS: a separate cached file on the site (build.mjs), inline in the artifact */
@@ -671,8 +670,7 @@ try{var M=JSON.parse(localStorage.getItem('eldorado-menu')||'null');if(M&&localS
         <div class="field"><button type="button" class="btn pri" id="qGo">Quick match</button></div>
         <div class="field"><label>Create a room</label>
           <div class="opts"><div class="seg"><label data-v="1"><input type="radio" name="pub" value="1" checked><span>Public</span></label><label data-v="0"><input type="radio" name="pub" value="0"><span>Private</span></label></div><div class="seg"><label data-v="2"><input type="radio" name="max" value="2"><span>2 players</span></label><label data-v="3"><input type="radio" name="max" value="3" checked><span>3 players</span></label><label data-v="4"><input type="radio" name="max" value="4"><span>4 players</span></label></div><div class="seg"><label data-v="1"><input type="radio" name="rated" value="1" checked><span>Rated</span></label><label data-v="0"><input type="radio" name="rated" value="0"><span>Unrated</span></label></div><div class="seg"><label data-v="60"><input type="radio" name="turn" value="60"><span>60s</span></label><label data-v="90"><input type="radio" name="turn" value="90" checked><span>90s</span></label><label data-v="120"><input type="radio" name="turn" value="120"><span>2 min</span></label><label data-v="180"><input type="radio" name="turn" value="180"><span>3 min</span></label></div></div>
-          <div class="clist" id="cCourse"><!--COURSES:ocourse--></div>
-          <div class="mrow left"><button type="button" class="btn pri big" id="cGo">Create room</button></div></div>
+          <div class="clist" id="cCourse"><!--COURSES:ocourse--></div></div>
         <div class="field"><label>Join with a code</label><div class="prow"><input id="jCode" maxlength="5" placeholder="e.g. K7Q2M" autocomplete="off"><button type="button" class="btn" id="jGo">Join</button></div></div>
         <div class="field"><label>Open rooms</label><div id="roomsOpen" class="slist"></div></div>
         <div class="field" id="liveBox"><label>Games in progress</label><div id="roomsLive" class="slist"></div></div>
@@ -683,6 +681,7 @@ try{var M=JSON.parse(localStorage.getItem('eldorado-menu')||'null');if(M&&localS
         <div class="field" id="meNameBox"><label>Display name</label><div class="prow"><input id="meName" maxlength="16"><button type="button" class="btn" id="meSave">Save</button></div></div></div>
     </div>
     </fieldset><p class="note warn" id="hErr"></p>
+    <div class="mrow" id="cGoRow" hidden><button type="button" class="btn pri big" id="cGo">Create room</button></div> <!-- (at the foot, where Start expedition is on This device: owner, 2026-10-08) -->
   </section>
   <section data-screen="room" hidden>
     <div class="mhead"><h2 id="rlTitle">Room</h2><p class="sub" id="rlSub"></p>

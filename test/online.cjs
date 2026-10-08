@@ -85,6 +85,10 @@ const T = report('online');
     const A = await open('A'), B = await open('B'), C = await open('C');
     const ids = [await signIn(A, 'Alice'), await signIn(B, 'Bob'), await signIn(C, 'Cara')];
     T.ok('sign in: the account bar shows the name', await A.evaluate(() => document.querySelector('#acct').textContent.includes('Alice')));
+    // Create room sits where Start expedition does on This device: the foot of the screen, on the right (owner, 2026-10-08)
+    { const at = sel => A.evaluate(s => { const r = document.querySelector(s).getBoundingClientRect(); return [r.right, r.bottom].map(Math.round).join(','); }, sel);
+      await settle(A); const create = await at('#cGo'); await menuGo(A, 'local'); await settle(A); const start = await at('#sGo'); await menuGo(A, 'online'); await settle(A);
+      T.ok('Create room sits where Start expedition does (the foot, on the right)', create === start, `${create} vs ${start}`); }
     const lb0 = await board(A);
     const code = await mkRoom(A, { max: 3, turn: 20, course: 'first' }); // (a short turn clock, so the timeout step doesn't wait long, yet long enough for the steps before it on a busy machine: developer servers allow it)
     await B.fill('#jCode', code); await B.click('#jGo');

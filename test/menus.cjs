@@ -50,7 +50,7 @@ const T = report('menus'), LOG = JSON.parse(fs.readFileSync(path.join(__dirname,
     for (const v of ['local', 'online', 'replays', 'settings']) { await menuGo(p, v); await settle(p);
       const r = await p.evaluate(async () => { const f = document.querySelector('#mform'), sec = f.querySelector('section[data-screen]:not([hidden])'), fr = () => f.getBoundingClientRect();
         const seen = el => { if (!el) return true; const a = el.getBoundingClientRect(), b = fr(); return a.top >= b.top - 1 && a.bottom <= b.bottom + 1; };
-        const head = sec.querySelector(':scope > .mhead') || document.querySelector('#mtop'), foot = sec.querySelector(':scope > .mrow'), scrolls = f.scrollHeight > f.clientHeight + 1; let ok = true;
+        const head = sec.querySelector(':scope > .mhead') || document.querySelector('#mtop'), foot = sec.querySelector(':scope > .mrow:not([hidden])'), scrolls = f.scrollHeight > f.clientHeight + 1; let ok = true;
         for (let y = 0; y <= f.scrollHeight; y += 120) { f.scrollTop = y; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); ok = ok && seen(head) && seen(foot); }
         f.scrollTop = 0; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         return { ok, scrolls, lines: f.classList.contains('scrolled') || (!scrolls && f.classList.contains('more')) }; });

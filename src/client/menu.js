@@ -70,7 +70,7 @@ function gameRender(){
   const g=gameOn(),away=g&&!inGame(),rs=g&&!away?resignSeat():-1,h=g&&!away?gameHead():null;
   if(mq('#ingame').hidden===g)expectMenu(); // (a game begun or over, or the server correcting this device's memory of one: the bar comes or goes, declared)
   MENU.dlg.classList.toggle('ingame',g);mq('#ingame').hidden=!g;
-  for(const f of mqa('fieldset.lock'))f.disabled=g;mq('#sReplays').disabled=g;mq('#sGo').disabled=g||!mq('#allAI').hidden;
+  for(const f of mqa('fieldset.lock'))f.disabled=g;mq('#sReplays').disabled=g;mq('#cGo').disabled=g;mq('#sGo').disabled=g||!mq('#allAI').hidden;
   mq('#igTxt').textContent=!g?'':away?'Online game in progress':h.round;
   const r=mq('#sResign');r.disabled=rs<0;r.textContent=h?h.resign:'Resign';
   mq('#sEnd').hidden=away||online();
@@ -222,7 +222,7 @@ function leaveRoom(){if(!NET.code){NET.room=null;return;} // (a room still being
   if(NET.connected)netSend({t:'leave'});NET.code=null;leaveRoomSocket();setQuery({room:null,replay:null});}
 export function showHub(){if(NET.user)openLobbyWs();onlineRender();menuOpen('online');}
 function onlineRender(){
-  const u=NET.user;mq('#hTabs').hidden=!NET.available||!u;mq('#oOff').hidden=NET.available;mq('#oOut').hidden=!NET.available||!!u;mq('#oIn').hidden=!NET.available||!u;
+  createRow();const u=NET.user;mq('#hTabs').hidden=!NET.available||!u;mq('#oOff').hidden=NET.available;mq('#oOut').hidden=!NET.available||!!u;mq('#oIn').hidden=!NET.available||!u;
   if(!NET.available)return;
   if(!u){mq('#oNoG').hidden=!!NET.cfg.google;mq('#oDev').hidden=!NET.cfg.dev;return;}
   roomsRender();onlineTab();
@@ -246,8 +246,10 @@ function fetchOnce(key,url,done,what){const t=FETCHED[key];if(t&&(t.busy||Date.n
   api(url).then(r=>{FETCHED[key]={at:Date.now()};if(fetchErr===key){fetchErr=null;hubErr('');}done(r);},
     e=>{FETCHED[key]={at:Date.now()};fetchErr=key;hubErr('Could not refresh '+what+': '+e.message+' What is shown was loaded before.');});}
 export function loadProfile(id){return api('/api/users/'+encodeURIComponent(id)).then(r=>{PROFILES[id]=r;});}
+/* Create room, at the foot of the Online screen: where the room it makes is chosen (signed in, on Play) */
+const createRow=()=>{mq('#cGoRow').hidden=!(NET.available&&NET.user&&radio('otab')==='play');};
 function onlineTab(){
-  if(!NET.user)return;const t=radio('otab');
+  createRow();if(!NET.user)return;const t=radio('otab');
   if(t==='board')fetchOnce('lb','/api/leaderboard',r=>setHTML(mq('#lbList'),lbHTML(r.players)),'the leaderboard');
   if(t==='me'){const id=NET.viewUser||myId(),own=id===myId();mq('#pfBack').hidden=own;mq('#meNameBox').hidden=!own;
     if(own&&document.activeElement!==mq('#meName'))mq('#meName').value=NET.user.name;
