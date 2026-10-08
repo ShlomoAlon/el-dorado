@@ -288,6 +288,16 @@ Playwright can't tap elements outside the viewport when `overflow: clip` is set;
 5. Possible abuse vectors to keep in mind: room codes are guessable (fine for friends), names are user-chosen
    (sanitized, unique), rate limiting is minimal.
 6. Accessibility: keyboard play of cards/targets is limited (Esc / Ctrl+Z only).
+7. Open findings from 2026-10-06/07 (menus):
+   - A push can fail to start a Workers Build (ef3deb7, 2026-10-07: no build on GitHub or in the dashboard): check that the
+     live page serves the new `app.<hash>.js` after every push; the next push builds everything up to it.
+   - firstpaint's desktop time sits at its 100 ms budget on the test machine, which swings 66-149 ms for the same build
+     (the start screen is the full New game form); a timing with less noise is wanted before tightening anything.
+   - Under the full suite's load only, a phone first load showed a menu element moved once (seat colours, a button's arrow,
+     Start expedition), each as the app's first layout came; not reproduced alone (20+ loads). Lead: the web font
+     arriving late changes text widths. The colour dots' case is fixed (they no longer shrink).
+   - WebKit: the menu → Resign window sometimes un-dims for a moment (the flash check), since the menus test presses Esc,
+     Menu, Resign quickly (ce7b173); known menu → window flash (ledger #59/#74).
 
 ## 10. Style of work that went well
 
