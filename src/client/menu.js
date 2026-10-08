@@ -12,7 +12,7 @@ import { aiKick, aiNetLoad } from './ai.js';
 import { api, gsiMount, signOut, signedIn, joinRoom, newRoom, roomMade, leaveRoomSocket, openLobbyWs, closeLobbyWs, netSend, roomSend, exitOnline, resignOnline } from './online.js';
 import { loadReplayId, openReplay } from './replay.js';
 import { load, store } from './store.js';
-import { diag, CHECKS, watchFlash, expectMenu } from './debug.js';
+import { diag, CHECKS, watchFlash, expectMenu, afterFrame } from './debug.js';
 import { render } from './frame.js';
 import { setSound } from './sound.js';
 /* course list: official routes first; 'random' picks one of them */
@@ -46,7 +46,14 @@ export function menuInit(){
   MENU.dlg.addEventListener('keydown',e=>{if(e.key==='Escape'&&MENU.dlg.open&&!MENU.dlg.classList.contains('closing')){e.preventDefault(); // (focus can stay in the menu once it has closed: Esc then is the game's)
   if(menuDismissible())continueGame();else if(MENU.screen==='replays')showSettings();}}); // (Esc: back to the game, or from Replays back to Settings)
   MENU.dlg.addEventListener('click',e=>{if(e.target===MENU.dlg&&menuDismissible())continueGame();}); // the backdrop
-  MENU.f.addEventListener('scroll',menuEdges,{passive:true});addEventListener('resize',menuEdges);
+  // the edge lines follow what decides them: the scroll, and the sizes of the form and its parts (a screen shown, content
+  // filled in, the window resized), judged after layout and before the frame is drawn
+  MENU.f.addEventListener('scroll',menuEdges,{passive:true});{const ro=new ResizeObserver(menuEdges);ro.observe(MENU.f);for(const c of MENU.f.children)ro.observe(c);}
+  if(CHECKS){ // (the edge lines follow the screen however it changes: judged once each change to the menu is drawn)
+    let due=false;const judge=()=>{due=false;if(!MENU.dlg.open)return;const[top,more]=edges(MENU.f);
+      assert(MENU.f.classList.contains('scrolled')===top&&MENU.f.classList.contains('more')===more,"view: a menu screen's edge lines say whether more runs on under its pinned parts ("+MENU.screen+': more above '+top+', below '+more+', lines '+MENU.f.className+')');};
+    const soon=()=>{if(!due){due=true;afterFrame(judge);}};
+    new MutationObserver(soon).observe(MENU.dlg,{subtree:true,childList:true,attributes:true,characterData:true});addEventListener('resize',soon);}
   setupSync();
   const d=MENU.dlg;
   if(document.documentElement.classList.contains('resume'))d.close(); // a saved game or a link opens instead (boot decides)
@@ -81,8 +88,9 @@ function continueGame(){if(awayOnline()){joinRoom(NET.active);return;}menuClose(
 
 /* a screen that scrolls: its pinned header and foot get a line while content runs on under them (none when it all fits).
    checks: the pinned parts are in sight wherever the screen is scrolled to (owner, 2026-10-06: what must be seen, always is) */
+const edges=f=>[f.scrollTop>0,f.scrollTop+f.clientHeight<f.scrollHeight-1]; // (more above, more below)
 function menuEdges(){ // (in a room the top isn't pinned: the room's header is)
-  const f=MENU.f,top=f.scrollTop>0,more=f.scrollTop+f.clientHeight<f.scrollHeight-1;
+  const f=MENU.f,[top,more]=edges(f);
   f.classList.toggle('scrolled',top);f.classList.toggle('more',more);
   if(!CHECKS||!MENU.dlg.open)return;const sec=f.querySelector(`section[data-screen="${MENU.screen}"]`),fr=f.getBoundingClientRect();
   for(const el of[mq('#mtop'),...(sec?sec.querySelectorAll(':scope > .mhead, :scope > .mrow'):[])]){if(!el.offsetHeight||el===mq('#mtop')&&MENU.screen==='room')continue;const r=el.getBoundingClientRect();
@@ -104,7 +112,6 @@ function menuOpen(screen){watchFlash();diag('menu: '+screen+(MENU.dlg.open?'':' 
     // opened during a game (the Menu button): it comes in like a window, fading in and rising into place with a window's
     // timing (owner, 2026-10-03; the page's first menu stays instant)
     if(g&&!reduceMotion){d.animate([{opacity:0},{opacity:1}],{duration:250,easing:'ease'});MENU.f.animate([{transform:'translateY(14px) scale(.98)',opacity:0},{transform:'none',opacity:1}],{duration:350,easing:EASE});}}
-  requestAnimationFrame(()=>requestAnimationFrame(menuEdges)); // (once the screen is laid out)
   render(); // (the layer that dims the game follows: dialogs.js coverPart)
 }
 export function menuClose(){watchFlash();const d=MENU.dlg;document.documentElement.classList.remove('resume');render();if(!d.open)return;d.classList.add('closing');clearTimeout(MENU.closeT);MENU.closeT=setTimeout(()=>{d.close();d.classList.remove('closing');},160);}

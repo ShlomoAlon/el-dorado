@@ -65,7 +65,7 @@ const darkness = () => { let l = 0; darkBy = ''; for (const e of dimmers || (dim
 // (a change is the player's if a tap, a key or a server message came after the dimming started to move: two events, two changes)
 // (read once a frame has been drawn, in a task right after it: the styles are up to date then, so reading an opacity costs
 // nothing; read during a frame, it made the browser work out the styles early, up to 10 ms of a frame in the tests)
-const afterFrame = f => requestAnimationFrame(() => { const c = new MessageChannel(); c.port1.onmessage = f; c.port2.postMessage(0); });
+export const afterFrame = f => requestAnimationFrame(() => { const c = new MessageChannel(); c.port1.onmessage = f; c.port2.postMessage(0); });
 const darkLog = []; // (the last readings, [time, how dark, by what]: a failure shows what the screen did, not only that it flashed)
 function flashStep() {
   const t = performance.now(), l = darkness(), side = l >= .6;
